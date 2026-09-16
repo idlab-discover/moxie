@@ -22,6 +22,6 @@ examples and `tests/` contains correctness checks. Build outputs live in
 `builds/`. Benchmarks, profiling, research notes, and reference source checkouts
 stay in ignored local directories.
 
-The shared starting point is tagged `scaffold-v1`. Derivatives retain its Git
+The shared starting point is tagged `scaffold-v1.1`. Derivatives retain its Git
 history and record the baseline commit in `SCAFFOLD_BASE`. Each family uses the
 same `moxie` namespace, so modules can eventually be integrated without renaming.

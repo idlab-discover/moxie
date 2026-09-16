@@ -131,7 +131,7 @@ trait SampleScorer(InputEstimator):
 
 
 trait DensityMixin(SampleScorer, UnsupervisedEstimator):
-    """Score is mean log likelihood; score_samples returns per-sample values."""
+    """Score aggregation follows the estimator; score_samples is per sample."""
 
     def score(
         self, X: Self.Input, y: Optional[Self.Target] = None

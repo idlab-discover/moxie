@@ -27,7 +27,7 @@ recorded revision when adding algorithms; upstream main may have changed.
 | Decision values | `DecisionFunction` | Shape/sign follow the individual estimator |
 | Transformation | `TransformerMixin`, `FitTransformer`, `InverseTransformer` | Independently opt into each capability |
 | Clustering | `ClusterMixin` | `fit_predict`; unseen-data prediction is separate |
-| Density | `DensityMixin` | `score_samples` and mean log-likelihood `score` |
+| Density | `DensityMixin` | `score_samples`; `score` aggregation follows the estimator |
 | Outliers | `OutlierMixin` | +1 inliers, -1 outliers; zero decision boundary |
 | Weighted fit | `WeightedSupervisedEstimator` | Explicit opt-in overload |
 | Incremental learning | `IncrementalClassifier`, `IncrementalRegressor`, `IncrementalTransformer` | Preserve state according to estimator rules |
@@ -46,10 +46,16 @@ an optional composition helper for ordinary nonempty tabular inputs. It records
 feature counts only after successful validation, checks inference dimensions,
 and can reset. Estimators with different validation rules need their own checks.
 
+Density scoring is estimator-specific: `KernelDensity.score` sums sample log
+likelihoods, while mixture models average them. Their common trait must not
+change that distinction.
+
 Normal fit replaces learned state. `partial_fit` and `warm_start` are separate,
 explicit capabilities. Inference must reject unfitted state unless the original
 estimator is stateless. A parameter copy contains no fitted buffers. Clone must
 recursively clone nested estimators instead of copying their learned state.
+Explicit reference exceptions such as `FrozenEstimator` preserve fitted state
+through their own `__sklearn_clone__` implementation.
 
 ## Explicit Mojo differences
 

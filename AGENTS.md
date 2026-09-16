@@ -18,7 +18,7 @@ capability or raise a clear error; never return plausible placeholder results.
 
 ## Scaffold first, algorithms second
 
-Moxie is the shared foundation. The `scaffold-v1` tag identifies its frozen
+Moxie is the shared foundation. The `scaffold-v1.1` tag identifies its frozen
 starting point. Family repositories derive from that exact commit; algorithm
 work derives from the appropriate family. Keep shared contracts unchanged in
 family work. A required shared change belongs in moxie as a reviewed, tested,

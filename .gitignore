@@ -9,3 +9,6 @@ builds/
 benchmarks/
 profiling/
 docs/private/
+
+# Algorithm comparison sources (at any nesting depth)
+references/

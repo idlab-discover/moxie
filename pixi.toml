@@ -6,8 +6,9 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
-start = "mojo run src/main.mojo"
-build = "mkdir -p builds && mojo build src/main.mojo -o builds/moxie"
+start = "mojo run -I src examples/estimator.mojo"
+build = "mkdir -p builds && mojo precompile src/moxie -o builds/moxie.mojoc && mojo build -I src examples/estimator.mojo -o builds/example"
+test = "mojo run -I src -I examples tests/test_contracts.mojo && mojo run -I src tests/test_capabilities.mojo && bash tests/check_compile_fail.sh"
 
 [dependencies]
 mojo = "*"

@@ -283,7 +283,7 @@
         "LICENSES/NumPy.txt": "1be1df33863f97a7bc1c4d67980bd6c69c9a6fef0a5ee76e6ad6cb91e56e8491",
         "LICENSES/scikit-learn.txt": "50d6a9d340f19ab355609917993114daf5f47e3161067bcf34955bbd05cd9cb0",
         "src/moxie/__init__.mojo": "7701cf97b8e700cbdd4fdd1d79acf9309128ada14812f4b7d652fe64c0f6ee47",
-        "src/moxie/_random.mojo": "13515bf8dcc432c62cfb39dc9bd903b21adfc6387c14d7fa87ee62734a887988"
+        "src/moxie/_random.mojo": "56b89cb2ed8809588e5bf1d0044efbe8848cf7728e5761d68218cefceea42e81"
       },
       "id": "random",
       "modules": {

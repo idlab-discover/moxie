@@ -164,6 +164,44 @@ struct RandomState(Copyable, Movable):
                 if _log(u) < 0.5 * x * x + b * (1.0 - v + _log(v)):
                     return b * v
 
+    def poisson(mut self, lam: Float64 = 1) raises -> Int:
+        """Legacy NumPy Poisson draw, multiplication below 10 and PTRS above."""
+        var maximum = 9223372036854775807.0 - 10.0 * sqrt(Float64(9223372036854775807.0))
+        if not (0.0 <= lam <= maximum):
+            raise Error("ValueError: poisson lam must be nonnegative and within the int64 safety limit")
+        if lam == 0:
+            return 0
+        if lam < 10:
+            var threshold = _exp(-lam)
+            var product = Float64(1)
+            var count = 0
+            while True:
+                product *= self.random_sample()
+                if product <= threshold:
+                    return count
+                count += 1
+        var b = 0.931 + 2.53 * sqrt(lam)
+        var a = -0.059 + 0.02483 * b
+        var inverse_alpha = 1.1239 + 1.1328 / (b - 3.4)
+        var vr = 0.9277 - 3.6224 / (b - 2.0)
+        var log_lam = _log(lam)
+        while True:
+            var u = self.random_sample() - 0.5
+            var v = self.random_sample()
+            var us = 0.5 - abs(u)
+            if us == 0:
+                continue
+            var candidate = floor((2.0 * a / us + b) * u + lam + 0.43)
+            if candidate < 0 or candidate >= 9223372036854775808.0:
+                continue
+            var k = Int(candidate)
+            if us >= 0.07 and v <= vr:
+                return k
+            if us < 0.013 and v > us:
+                continue
+            if _log(v) + _log(inverse_alpha) - _log(a / (us * us) + b) <= -lam + Float64(k) * log_lam - _poisson_loggam(Float64(k) + 1.0):
+                return k
+
     def _binomial_inversion(mut self, n: Int, p: Float64) -> Int:
         var q = 1.0 - p
         var qn = _exp(Float64(n) * _log(q))
@@ -544,3 +582,28 @@ def _choice_size(a: Int, size: Int, replace: Bool) raises:
 def _vector_value[dtype: DType](a: NDArray[dtype], i: Int) raises -> Scalar[dtype]:
     # NuMojo's single-Int item overload ignores strides on rank-one views.
     return a.unsafe_get(i * Int(a.strides[0]))
+
+
+def _poisson_loggam(x: Float64) -> Float64:
+    # NumPy random_loggam; preserve its polynomial and evaluation order for
+    # rejection decisions rather than substituting a different lgamma routine.
+    if x == 1 or x == 2:
+        return 0
+    var n = Int(7.0 - x) if x < 7 else 0
+    var x0 = x + Float64(n)
+    var x2 = (1.0 / x0) * (1.0 / x0)
+    var g = Float64(-1.39243221690590)
+    g = g * x2 + 1.796443723688307e-1
+    g = g * x2 - 2.955065359477124e-2
+    g = g * x2 + 6.410256410256410e-3
+    g = g * x2 - 1.917526917526918e-3
+    g = g * x2 + 8.417508417508418e-4
+    g = g * x2 - 5.952380952380952e-4
+    g = g * x2 + 7.936507936507937e-4
+    g = g * x2 - 2.777777777777778e-3
+    g = g * x2 + 8.333333333333333e-2
+    var result = g / x0 + 0.5 * 1.8378770664093453 + (x0 - 0.5) * _log(x0) - x0
+    for _ in range(n):
+        result -= _log(x0 - 1.0)
+        x0 -= 1.0
+    return result

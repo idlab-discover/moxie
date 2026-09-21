@@ -21,6 +21,7 @@ def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
     elif mode=='gamma': want=r.gamma(n/1000000,k/1000000,size=count)
     elif mode=='standard_gamma': want=r.standard_gamma(n/1000000,size=count)
     elif mode=='integer': want=r.randint(n,k,size=count)
+    elif mode=='poisson': want=r.poisson(n/k,size=count)
     elif mode=='binomial': want=r.binomial(n,k/1000000,size=count)
     elif mode in ['choice','choice_weighted']:
         want=r.choice(n,size=count,replace=bool(k),p=p if mode=='choice_weighted' else None)
@@ -36,7 +37,7 @@ def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
     elif mode=='sample': want=sample(n,k,method=method,random_state=r)
     elif mode=='mixed':
         want=[]
-        for _ in range(count): want.extend([r.standard_normal(),r.randint(-100,500),r.random_sample(),r.binomial(1000,.2),r.gamma(100,.01),r.gamma(.3,2)])
+        for _ in range(count): want.extend([r.standard_normal(),r.randint(-100,500),r.random_sample(),r.binomial(1000,.2),r.gamma(100,.01),r.gamma(.3,2),r.poisson(4.5),r.poisson(25)])
     got,state=probe(mode,seed,count,n,k,method,p)
     label=(mode,seed,count,n,k,method,p)
     if mode in ['gamma','standard_gamma']:
@@ -75,8 +76,12 @@ for seed in [0,1,42,5489,4294967295,123456789]:
         for count in range(sum(x>0 for x in p)+1):
             compare('choice_weighted',seed,n=len(p),p=p,k=0,count=count)
         compare('choice_weighted',seed,n=len(p),p=p,k=1,count=513)
+    for lam,denom in [(0,1),(1,1000000),(1,10),(1,1),(45,10),(9999999,1000000),
+                      (10,1),(10000001,1000000),(25,1),(1000,1),(10**6,1),
+                      (10**12,1),(10**18,1),(9223372006484770000,1)]:
+        compare('poisson',seed,n=lam,k=denom,count=1001)
     compare('mixed',seed,count=501)
-    for mode in ['raw','uniform','normal','integer','binomial','categorical','multinomial','mixed','gamma','standard_gamma']:
+    for mode in ['raw','uniform','normal','integer','binomial','categorical','multinomial','mixed','gamma','standard_gamma','poisson']:
         compare(mode,seed,count=0,n=0,k=1,p=[.2,.3,.5])
     for n in [-10,-1,0,1,2,17,1000]: compare('permutation',seed,n=n)
     for n,k in [(0,0),(1,0),(1,1),(10,0),(100,1),(100,2),(100,19),(100,20),(100,98),(100,99),(100,100),(1001,10)]:

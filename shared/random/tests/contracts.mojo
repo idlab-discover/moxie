@@ -139,6 +139,7 @@ def main() raises:
     for i in range(17):
         assert_equal(result.item(i,0) + result.item(i,1) + result.item(i,2), 100)
     test_choice_shuffle()
+    test_poisson()
     print("PASS native random contracts")
 
 
@@ -219,3 +220,25 @@ def test_choice_shuffle() raises:
     with assert_raises():
         rng.shuffle(overlap)
     assert_equal(rng.next_uint32(), snapshot.next_uint32())
+
+
+def test_poisson() raises:
+    var rng = RandomState(42)
+    assert_equal(rng.poisson(0), 0)
+    assert_equal(rng.poisson(copysign(Float64(0), Float64(-1))), 0)
+    assert_equal(rng.state_position(), 624)
+    var copy = rng.copy()
+    for _ in range(100):
+        assert_equal(rng.poisson(), copy.poisson(1))
+    _ = rng.standard_normal()
+    copy = rng.copy()
+    for lam in [Float64(0.1), 9.999999, 10.0, 100.0, 1e6]:
+        for _ in range(100):
+            assert_equal(rng.poisson(lam), copy.poisson(lam))
+    assert_equal(rng.standard_normal(), copy.standard_normal())
+    var infinity = Float64(1.7976931348623157e308) * 2
+    for bad in [Float64(-1), infinity, -infinity, infinity-infinity, 9223372036854775808.0]:
+        with assert_raises():
+            _ = rng.poisson(bad)
+    for _ in range(625):
+        assert_equal(rng.next_uint32(), copy.next_uint32())

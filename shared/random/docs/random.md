@@ -51,6 +51,7 @@ one mutable state concurrently is outside this serial borrowing contract.
 | `randint(high)` / `randint(low, high)` | Native signed Int (64 bits on supported platform), high excluded; width 1 consumes no words |
 | `standard_normal()` / `normal(loc=0, scale=1)` | Float64 polar normal with cached second result; scale 0 still consumes the normal stream |
 | `standard_gamma(shape)` / `gamma(shape, scale=1)` | Scalar Float64 legacy gamma; shape 0 consumes no draws, scale 0 still consumes the gamma stream |
+| `poisson(lam=1)` | Scalar native Int; zero mean consumes no draws; NumPy int64 safety limit |
 | `binomial(n, p)` | Legacy inversion and BTPE, including endpoint draw consumption |
 | `categorical(p)` | Integer class index, NumPy `choice(p=p)` cumulative-distribution protocol |
 | `multinomial(n, p, size=1)` | NuMojo Int64 array `(size, classes)`, including size=1; final class receives remaining mass |
@@ -193,3 +194,10 @@ layouts not demonstrably disjoint by row or column stride are rejected.
 Shuffle consumes no draws for empty arrays. Matrix permutation still
 permutes row indices when rows have zero columns, matching NumPy. Shuffle
 mutates borrowed storage; permutation copies it. Higher ranks are explicitly unsupported.
+
+Poisson uses NumPy's multiplication algorithm below mean 10 and Hoermann's
+transformed rejection (PTRS) at or above 10. The mean must be finite,
+nonnegative and at most `float64(INT64_MAX) - 10*sqrt(float64(INT64_MAX))`.
+Negative zero is accepted. The legacy log-gamma polynomial is retained for
+rejection decisions. Tests compare integer samples and subsequent RNG state
+exactly, including means around 10 and near the int64 safety limit.

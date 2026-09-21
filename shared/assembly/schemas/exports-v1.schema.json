@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Moxie export manifest v1",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "packages": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "packages"
+  ],
+  "additionalProperties": false
+}

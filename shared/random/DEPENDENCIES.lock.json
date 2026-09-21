@@ -253,7 +253,7 @@
         "EXPORTS.json": "29b0364eb33019b68290be3a25192024aff7e4614443174089811572c9b4ec68",
         "schemas/assembly-v1.schema.json": "57ac2d90f990cac7c9c2a9e42373e131b71914dead175391cf34052b807d7da8",
         "schemas/exports-v1.schema.json": "8c677d50e45c5adcd6e69b27b0bde1d811224c11c9481abfd52bf30556a8c31b",
-        "tools/assemble.py": "c95aff4d406355e8c4076e12f33da28cc48eed0277a7e1dd85ed2e01ff95180c",
+        "tools/assemble.py": "840e71455eb2905290e3dc6938846291f9f1bdd44f788b2b59f34fe480fa3c5f",
         "tools/consume.py": "198781650ff1063c1561f18be197c2f90d072c693ec5065306dac46c487fa3a8"
       },
       "id": "assembly",
@@ -283,7 +283,7 @@
         "LICENSES/NumPy.txt": "1be1df33863f97a7bc1c4d67980bd6c69c9a6fef0a5ee76e6ad6cb91e56e8491",
         "LICENSES/scikit-learn.txt": "50d6a9d340f19ab355609917993114daf5f47e3161067bcf34955bbd05cd9cb0",
         "src/moxie/__init__.mojo": "7701cf97b8e700cbdd4fdd1d79acf9309128ada14812f4b7d652fe64c0f6ee47",
-        "src/moxie/_random.mojo": "56b89cb2ed8809588e5bf1d0044efbe8848cf7728e5761d68218cefceea42e81"
+        "src/moxie/_random.mojo": "ade3935c89092c210d2ef697bf5df59c2d4f0c3fbb14d90bf61c29db35ddab06"
       },
       "id": "random",
       "modules": {
@@ -293,6 +293,41 @@
       },
       "path": ".",
       "revision": "786a5ee9423df5b21a9e9bb0bc16a708271b462e"
+    },
+    {
+      "assets": {
+        "mojo_linalg/__init__.mojo": "src/mojo_linalg/__init__.mojo",
+        "mojo_linalg/_determinant.mojo": "src/mojo_linalg/_determinant.mojo",
+        "mojo_linalg/_spectral.mojo": "src/mojo_linalg/_spectral.mojo",
+        "mojo_linalg/_storage.mojo": "src/mojo_linalg/_storage.mojo",
+        "mojo_linalg/cholesky.mojo": "src/mojo_linalg/cholesky.mojo",
+        "mojo_linalg/indefinite.mojo": "src/mojo_linalg/indefinite.mojo",
+        "mojo_linalg/qr.mojo": "src/mojo_linalg/qr.mojo",
+        "mojo_linalg/svd.mojo": "src/mojo_linalg/svd.mojo",
+        "mojo_linalg/symmetric.mojo": "src/mojo_linalg/symmetric.mojo",
+        "mojo_linalg/triangular.mojo": "src/mojo_linalg/triangular.mojo"
+      },
+      "exports": null,
+      "files": {
+        "docs/api.md": "e0295a0ced5675861782c5dd531a57265ccaa02a1dfc6784b8992ee11bd723b8",
+        "pixi.lock": "54877f688b5eb093dc0c351f22b6239f2f4fa8016de249ef993cce2c5ca04670",
+        "pixi.toml": "9c9933af862c59a352ff28299acb4c4008bee2a752126103af600f039ef89af5",
+        "src/mojo_linalg/__init__.mojo": "e60b401ea8ab2368eb439913aeab163ef0cca4808f188fceb06e2cd703ae9123",
+        "src/mojo_linalg/_determinant.mojo": "cd2552083c4c74411763ddf41944f8c01769b8738cfbfa2d6fbc87b51ec132fb",
+        "src/mojo_linalg/_spectral.mojo": "7941544be202ff41916b93155d81838099c023d32798216660b440ead9daab25",
+        "src/mojo_linalg/_storage.mojo": "db16a9e651598b618555f68027aac7e1d6deccc37bdba6ef0e62aaee8d1390db",
+        "src/mojo_linalg/cholesky.mojo": "e432f085d63c86e6d65e6e6b07a62497b6f2e3f80c432998537254a55ab04a1f",
+        "src/mojo_linalg/indefinite.mojo": "0393c89a6b5e051a0de7234734022d760ba1ad62f0b207d8966820aef4a5c306",
+        "src/mojo_linalg/qr.mojo": "d86788a935c3c25269734360ace997ca5026e08d80bf97f9df4599bf4ebf0b71",
+        "src/mojo_linalg/svd.mojo": "5a62e9127dd855a6c251338bceb15d3dcec9ab6ee0488667f05ab63ca43f434a",
+        "src/mojo_linalg/symmetric.mojo": "f7c70388d3d2f8b53024a258ec7d5c1d0af251d37b7228c63b00bf873157e886",
+        "src/mojo_linalg/triangular.mojo": "6f9e8969810b081349624c4a3021e8a88de3afc64288c7ffe73eaa2d02d3fc93",
+        "tools/sources.lock.json": "96b5c0e36eb66916def3a8a394c4eb7855681314f231be23637ee4c587c69bff"
+      },
+      "id": "mojo-linalg",
+      "modules": {},
+      "path": "../../../mojo-linalg",
+      "revision": "d89dd6a1a2508a7767dab415f841121b9941b9d3"
     }
   ],
   "schema": 1

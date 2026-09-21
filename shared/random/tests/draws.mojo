@@ -1,6 +1,7 @@
 from moxie._random import RandomState, NativeRandom
 from std.random import seed, random_float64
 from std.sys import argv
+from moxie._random import _covariance_transform
 import numojo as nm
 from numojo import Shape, Item
 
@@ -39,6 +40,36 @@ def main() raises:
     elif mode == "integer":
         for _ in range(count):
             print(state.randint(n, k))
+    elif mode == "multivariate" or mode == "multivariate_factor":
+        var mean = nm.zeros[DType.float64](Shape(n))
+        var cov = nm.zeros[DType.float64](Shape(n,n))
+        for i in range(n):
+            mean[Item(i)] = Float64(i) - 1.5
+            for j in range(n):
+                var value = Float64(0)
+                if k == 0 and i == j:
+                    value = 1
+                elif k == 1 and i == j:
+                    value = Float64(i+1)
+                elif k == 2:
+                    value = 1
+                elif k == 3:
+                    if i == j:
+                        value = 2
+                    elif i == j+1 or j == i+1:
+                        value = 0.5
+                elif k == 5 and i == j:
+                    value = 1
+                    for _ in range(i):
+                        value *= 0.0001
+                cov[Item(i,j)] = value
+        var result = nm.zeros[DType.float64](Shape(0,0))
+        if mode == "multivariate":
+            result = state.multivariate_normal(mean, cov, count)
+        else:
+            result = _covariance_transform(cov, 1e-8)
+        for i in range(result.size):
+            print(result.unsafe_get(i))
     elif mode == "poisson":
         for _ in range(count):
             print(state.poisson(Float64(n) / Float64(k)))

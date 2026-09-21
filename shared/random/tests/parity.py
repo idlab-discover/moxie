@@ -10,7 +10,7 @@ def probe(mode, seed, count=100, n=0, k=1, method='auto', p=()):
     out=subprocess.check_output([ROOT/'builds/draws',mode,str(seed),str(count),str(n),str(k),method,*[str(int(round(x*1000000))) for x in p]],text=True)
     values, state=out.split('STATE\n')
     state=state.splitlines()
-    dtype = float if mode in ['uniform','normal','mixed','gamma','standard_gamma'] else np.int64
+    dtype = float if mode in ['uniform','normal','mixed','gamma','standard_gamma','multivariate','multivariate_factor'] else np.int64
     return np.array(values.splitlines(), dtype=dtype),(int(state[0]),int(state[1]),float(state[2]),np.array(state[3:],dtype=np.uint32))
 def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
     global CASES
@@ -21,6 +21,14 @@ def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
     elif mode=='gamma': want=r.gamma(n/1000000,k/1000000,size=count)
     elif mode=='standard_gamma': want=r.standard_gamma(n/1000000,size=count)
     elif mode=='integer': want=r.randint(n,k,size=count)
+    elif mode=='multivariate':
+        mean,cov=multivariate_inputs(n,k)
+        factor,_=probe('multivariate_factor',seed,0,n,k)
+        factor=factor.reshape(n,n)
+        np.testing.assert_allclose(factor.T@factor,cov,rtol=2e-12,atol=2e-12)
+        np.testing.assert_allclose(np.linalg.svd(factor,compute_uv=False)**2,
+                                   np.linalg.svd(cov,compute_uv=False),rtol=2e-12,atol=2e-12)
+        want=(r.standard_normal((count,n))@factor+mean).ravel()
     elif mode=='poisson': want=r.poisson(n/k,size=count)
     elif mode=='binomial': want=r.binomial(n,k/1000000,size=count)
     elif mode in ['choice','choice_weighted']:
@@ -40,7 +48,9 @@ def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
         for _ in range(count): want.extend([r.standard_normal(),r.randint(-100,500),r.random_sample(),r.binomial(1000,.2),r.gamma(100,.01),r.gamma(.3,2),r.poisson(4.5),r.poisson(25)])
     got,state=probe(mode,seed,count,n,k,method,p)
     label=(mode,seed,count,n,k,method,p)
-    if mode in ['gamma','standard_gamma']:
+    if mode=='multivariate':
+        np.testing.assert_allclose(got,want,rtol=2e-12,atol=2e-12,err_msg=str(label))
+    elif mode in ['gamma','standard_gamma']:
         np.testing.assert_allclose(got,want,rtol=2e-14,atol=5e-324,err_msg=str(label))
     elif mode in ['normal','mixed']: np.testing.assert_allclose(got,want,rtol=2e-14,atol=2e-14,err_msg=str(label))
     else: np.testing.assert_array_equal(got,want,err_msg=str(label))
@@ -49,6 +59,18 @@ def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
     np.testing.assert_allclose(state[2],oracle[4],rtol=2e-14,atol=2e-14,err_msg=str(label))
     np.testing.assert_array_equal(state[3],oracle[1],err_msg=str(label))
     CASES+=1
+
+def multivariate_inputs(n,kind):
+    mean=np.arange(n,dtype=float)-1.5
+    if kind==0: cov=np.eye(n)
+    elif kind==1: cov=np.diag(np.arange(1,n+1,dtype=float))
+    elif kind==2: cov=np.ones((n,n))
+    elif kind==3:
+        cov=2*np.eye(n)
+        for i in range(n-1): cov[i,i+1]=cov[i+1,i]=.5
+    elif kind==4: cov=np.zeros((n,n))
+    else: cov=np.diag(np.array([.0001**i for i in range(n)]))
+    return mean,cov
 
 for seed in [0,1,42,5489,4294967295,123456789]:
     compare('raw',seed,count=2000)
@@ -80,6 +102,9 @@ for seed in [0,1,42,5489,4294967295,123456789]:
                       (10,1),(10000001,1000000),(25,1),(1000,1),(10**6,1),
                       (10**12,1),(10**18,1),(9223372006484770000,1)]:
         compare('poisson',seed,n=lam,k=denom,count=1001)
+    for n in [0,1,3,5]:
+        for kind in range(6):
+            for count in [0,1,7]: compare('multivariate',seed,n=n,k=kind,count=count)
     compare('mixed',seed,count=501)
     for mode in ['raw','uniform','normal','integer','binomial','categorical','multinomial','mixed','gamma','standard_gamma','poisson']:
         compare(mode,seed,count=0,n=0,k=1,p=[.2,.3,.5])
@@ -137,3 +162,17 @@ for name in ['a','b']:
     actual=np.array(subprocess.check_output([ROOT/'tests/consumers'/name/'builds/probe'],text=True).splitlines(),float)
     np.testing.assert_array_equal(actual,np.random.RandomState(42).random_sample(2))
 print(f'PASS {CASES} differential cases: values, all 624 state words, position and Gaussian cache; pinned sklearn Cython and Dummy bodies')
+
+# Independent distribution check on a correlated, non-diagonal covariance.
+mean,cov=multivariate_inputs(3,3)
+samples,state=probe('multivariate',42,100000,3,3)
+samples=samples.reshape(-1,3)
+np.testing.assert_allclose(samples.mean(axis=0),mean,rtol=0,atol=.02)
+np.testing.assert_allclose(np.cov(samples,rowvar=False),cov,rtol=0,atol=.035)
+reference=np.random.RandomState(42)
+reference.multivariate_normal(mean,cov,size=100000)
+expected_state=reference.get_state()
+assert state[:2]==expected_state[2:4]
+np.testing.assert_array_equal(state[3],expected_state[1])
+np.testing.assert_allclose(state[2],expected_state[4],rtol=2e-14,atol=2e-14)
+print('PASS multivariate covariance reconstruction, normal-stream transform, empirical moments and NumPy draw consumption; SVD-dependent samples need not equal NumPy')

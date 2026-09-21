@@ -2,13 +2,14 @@
 
 MT19937, legacy distribution and sklearn sampling adaptations: see LICENSES.
 """
-from std.math import sqrt, floor, abs, copysign
+from std.math import sqrt, floor, abs, copysign, isfinite
 from std.sys import llvm_intrinsic
 from std.random import Random as Philox
 from std.time import perf_counter_ns
 from std.collections import Set
 import numojo as nm
 from numojo import NDArray, Shape, Item
+from mojo_linalg import svd, NumericalError
 
 
 struct NativeRandom(Copyable, Movable):
@@ -201,6 +202,45 @@ struct RandomState(Copyable, Movable):
                 continue
             if _log(v) + _log(inverse_alpha) - _log(a / (us * us) + b) <= -lam + Float64(k) * log_lam - _poisson_loggam(Float64(k) + 1.0):
                 return k
+
+    def multivariate_normal[mean_dtype: DType, cov_dtype: DType](
+        mut self, mean: NDArray[mean_dtype], cov: NDArray[cov_dtype],
+        size: Int = 1, tol: Float64 = 1e-8,
+    ) raises -> NDArray[DType.float64]:
+        """Dense (size, features) draws via native SVD; see backend parity limits."""
+        comptime assert mean_dtype == DType.float32 or mean_dtype == DType.float64
+        comptime assert cov_dtype == DType.float32 or cov_dtype == DType.float64
+        if mean.ndim != 1 or cov.ndim != 2:
+            raise Error("ValueError: mean must be a vector and cov a matrix")
+        var n = mean.size
+        if cov.shape[0] != n or cov.shape[1] != n or size < 0:
+            raise Error("ValueError: incompatible covariance shape or negative size")
+        if not (0.0 <= tol <= 1.7976931348623157e308):
+            raise Error("ValueError: tol must be finite and nonnegative")
+        for i in range(n):
+            if not isfinite(_vector_value(mean, i)):
+                raise Error("ValueError: mean must be finite")
+        var covariance = nm.zeros[DType.float64](Shape(n, n))
+        for i in range(n):
+            for j in range(n):
+                var value = Float64(cov.item(i, j))
+                if not isfinite(value):
+                    raise Error("ValueError: covariance must be finite")
+                covariance[Item(i,j)] = value
+        # Validate and factor before consuming state. This deliberately raises
+        # for invalid covariance rather than NumPy's warning-and-continuing default.
+        var transform = _covariance_transform(covariance, tol)
+        var z = nm.zeros[DType.float64](Shape(size, n))
+        if n == 0 or size == 0:
+            return z^
+        for i in range(size):
+            for j in range(n):
+                z[Item(i,j)] = self.standard_normal()
+        var result = z @ transform
+        for i in range(size):
+            for j in range(n):
+                result[Item(i,j)] = result.item(i,j) + Float64(_vector_value(mean, j))
+        return result^
 
     def _binomial_inversion(mut self, n: Int, p: Float64) -> Int:
         var q = 1.0 - p
@@ -607,3 +647,35 @@ def _poisson_loggam(x: Float64) -> Float64:
         result -= _log(x0 - 1.0)
         x0 -= 1.0
     return result
+
+
+def _covariance_transform(cov: NDArray[DType.float64], tol: Float64) raises -> NDArray[DType.float64]:
+    try:
+        return _covariance_transform_impl(cov, tol)
+    except error:
+        raise Error("ValueError: multivariate_normal covariance: " + String(error))
+
+
+def _covariance_transform_impl(cov: NDArray[DType.float64], tol: Float64) raises NumericalError -> NDArray[DType.float64]:
+    var n = cov.shape[0]
+    if n == 0:
+        return nm.zeros[DType.float64](Shape(0, 0))
+    var factor = svd(cov)
+    var singular = factor.singular_values()
+    var vectors = factor.vt()
+    var weighted = nm.zeros[DType.float64](Shape(n, n))
+    for i in range(n):
+        for j in range(n):
+            weighted[Item(i,j)] = singular.item(i) * vectors.item(i,j)
+    var transpose = vectors.T()
+    var reconstructed = transpose @ weighted
+    for i in range(n):
+        for j in range(n):
+            var actual = reconstructed.item(i,j)
+            var expected = cov.item(i,j)
+            if not isfinite(actual) or abs(actual - expected) > tol + tol * abs(expected):
+                raise NumericalError("not_positive_semidefinite", "multivariate_normal", i)
+    for i in range(n):
+        for j in range(n):
+            weighted[Item(i,j)] = sqrt(singular.item(i)) * vectors.item(i,j)
+    return weighted^

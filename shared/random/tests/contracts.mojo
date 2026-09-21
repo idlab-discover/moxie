@@ -140,6 +140,7 @@ def main() raises:
         assert_equal(result.item(i,0) + result.item(i,1) + result.item(i,2), 100)
     test_choice_shuffle()
     test_poisson()
+    test_multivariate()
     print("PASS native random contracts")
 
 
@@ -242,3 +243,82 @@ def test_poisson() raises:
             _ = rng.poisson(bad)
     for _ in range(625):
         assert_equal(rng.next_uint32(), copy.next_uint32())
+
+
+def test_multivariate() raises:
+    var rng = RandomState(42)
+    _ = rng.standard_normal()
+    var snapshot = rng.copy()
+    var mean = nm.zeros[DType.float64](Shape(3))
+    var cov = nm.zeros[DType.float64](Shape(3,3))
+    for i in range(3):
+        mean[Item(i)] = Float64(i)
+        cov[Item(i,i)] = Float64(i+1)
+    var draws = rng.multivariate_normal(mean,cov,5)
+    var repeated = snapshot.multivariate_normal(mean,cov,5)
+    assert_equal(draws.ndim,2)
+    assert_equal(draws.shape[0],5)
+    assert_equal(draws.shape[1],3)
+    for i in range(15):
+        assert_equal(draws.unsafe_get(i),repeated.unsafe_get(i))
+    assert_equal(rng.standard_normal(),snapshot.standard_normal())
+    assert_equal(rng.next_uint32(),snapshot.next_uint32())
+    # Float32 and mixed-dtype inputs, singular covariance and shifted means.
+    var mean32 = mean.astype[DType.float32]()
+    var cov32 = cov.astype[DType.float32]()
+    draws = rng.multivariate_normal(mean32,cov32)
+    assert_equal(draws.shape[0],1)
+    draws = rng.multivariate_normal(mean32,cov)
+    var zero = nm.zeros[DType.float64](Shape(3,3))
+    draws = rng.multivariate_normal(mean,zero,5)
+    for i in range(5):
+        for j in range(3):
+            assert_equal(draws.item(i,j),mean.item(j))
+    # A strided mean and a transposed covariance have the same logical values.
+    var backing = nm.zeros[DType.float64](Shape(6))
+    for i in range(3):
+        backing[Item(2*i)] = mean.item(i)
+    var mean_view = backing.view_with_layout(Shape(3),nm.NDArrayStrides(2),0)
+    var cov_view = cov.view_with_layout(Shape(3,3),nm.NDArrayStrides(1,3),0)
+    snapshot = rng.copy()
+    draws = rng.multivariate_normal(mean_view,cov_view,4)
+    repeated = snapshot.multivariate_normal(mean,cov,4)
+    for i in range(12):
+        assert_equal(draws.unsafe_get(i),repeated.unsafe_get(i))
+    snapshot = rng.copy()
+    with assert_raises():
+        _ = rng.multivariate_normal(cov,cov)
+    with assert_raises():
+        _ = rng.multivariate_normal(mean,mean)
+    with assert_raises():
+        _ = rng.multivariate_normal(mean,cov,-1)
+    with assert_raises():
+        _ = rng.multivariate_normal(mean,cov,1,-1)
+    var wrong = nm.zeros[DType.float64](Shape(2,2))
+    with assert_raises():
+        _ = rng.multivariate_normal(mean,wrong)
+    cov[Item(0,0)] = -1
+    with assert_raises():
+        _ = rng.multivariate_normal(mean,cov)
+    cov[Item(0,0)] = 1
+    cov[Item(0,1)] = 1
+    with assert_raises():
+        _ = rng.multivariate_normal(mean,cov)
+    cov[Item(0,1)] = 0
+    var infinity = Float64(1.7976931348623157e308)*2
+    for bad in [infinity, infinity-infinity]:
+        mean[Item(0)] = bad
+        with assert_raises():
+            _ = rng.multivariate_normal(mean,cov)
+        mean[Item(0)] = 0
+        cov[Item(0,0)] = bad
+        with assert_raises():
+            _ = rng.multivariate_normal(mean,cov)
+        cov[Item(0,0)] = 1
+        with assert_raises():
+            _ = rng.multivariate_normal(mean,cov,1,bad)
+    for _ in range(625):
+        assert_equal(rng.next_uint32(),snapshot.next_uint32())
+    for i in range(3):
+        assert_equal(mean.item(i),Float64(i))
+        assert_equal(cov.item(i,i),Float64(i+1))

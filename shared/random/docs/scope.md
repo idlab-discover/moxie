@@ -2,7 +2,7 @@
 
 This owner implements the private shared `moxie._random` engine. There are no
 public estimators. Supported operations are scalar integer-seeded MT19937,
-Float64 uniform/normal/gamma draws, int64-bounded integers, binomial (inversion/BTPE),
+Float64 uniform/normal/gamma and multivariate-normal draws, int64-bounded integers, binomial (inversion/BTPE),
 Poisson, categorical and multinomial draws, uniform/weighted choice, vector/matrix
 shuffle and permutation, and all four sklearn
 sampling-without-replacement methods. NuMojo provides dense probability and

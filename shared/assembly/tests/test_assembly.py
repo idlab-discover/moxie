@@ -135,6 +135,14 @@ class AssemblyTests(unittest.TestCase):
             ['git', '-C', project['path'], 'rev-parse', 'HEAD^'], text=True).strip()
         self.fails('revision drift')
 
+    def test_pinned_linalg_asset_namespace(self):
+        project = self.local()
+        project['assets'] = {'mojo_linalg/probe.mojo': 'module.mojo'}
+        self.assertEqual(self.execute()['mojo_linalg/probe.mojo'],
+                         (self.root / 'module.mojo').read_bytes())
+        project['assets'] = {'unexpected/probe.mojo': 'module.mojo'}
+        self.fails('unsupported asset namespace')
+
     def test_git_revision_drift(self):
         self.project('numerics')['revision'] = '0' * 40
         self.fails('revision drift')

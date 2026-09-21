@@ -51,6 +51,7 @@ one mutable state concurrently is outside this serial borrowing contract.
 | `randint(high)` / `randint(low, high)` | Native signed Int (64 bits on supported platform), high excluded; width 1 consumes no words |
 | `standard_normal()` / `normal(loc=0, scale=1)` | Float64 polar normal with cached second result; scale 0 still consumes the normal stream |
 | `standard_gamma(shape)` / `gamma(shape, scale=1)` | Scalar Float64 legacy gamma; shape 0 consumes no draws, scale 0 still consumes the gamma stream |
+| `multivariate_normal(mean, cov, size=1, tol=1e-8)` | Float64 `(size, features)` result from Float32/Float64 inputs; native SVD covariance factor |
 | `poisson(lam=1)` | Scalar native Int; zero mean consumes no draws; NumPy int64 safety limit |
 | `binomial(n, p)` | Legacy inversion and BTPE, including endpoint draw consumption |
 | `categorical(p)` | Integer class index, NumPy `choice(p=p)` cumulative-distribution protocol |
@@ -201,3 +202,33 @@ nonnegative and at most `float64(INT64_MAX) - 10*sqrt(float64(INT64_MAX))`.
 Negative zero is accepted. The legacy log-gamma polynomial is retained for
 rejection decisions. Tests compare integer samples and subsequent RNG state
 exactly, including means around 10 and near the int64 safety limit.
+
+Multivariate normal uses the pinned `mojo-linalg.svd` and NuMojo matrix product:
+`Z @ (sqrt(s)[:, None] * Vt) + mean`. The mean is a vector, covariance a square
+matrix of matching order, and both must be finite. Float32 and Float64 inputs,
+including strided views and mixed mean/covariance dtypes, produce Float64 output.
+Singular positive-semidefinite covariance is supported. Symmetry and positive
+semidefiniteness are checked using the SVD reconstruction with absolute and
+relative tolerance `tol` (default 1e-8).
+
+The native API always returns `(size, features)`, including size 1; arbitrary
+size tuples are not accepted. Size zero and zero features produce empty results.
+Invalid covariance raises before consuming RNG state. This deliberately differs
+from NumPy's default `check_valid="warn"` and its failure-time state advancement;
+warning/ignore policies are not exposed.
+
+A seeded call is reproducible with the pinned backend, and consumes exactly the
+same normal stream as NumPy for supported valid inputs. **Individual samples are
+not promised equal to NumPy**: NumPy uses LAPACK SVD, while this dependency uses
+Jacobi SVD with potentially different vector signs and bases in repeated singular
+subspaces. Both produce the requested covariance. Tests independently check
+factor reconstruction, singular values, the seeded normal-to-sample transform,
+empirical moments, copies, strided inputs and complete RNG state. This method's
+numerical comparison tolerance is 2e-12; discrete sampling parity remains exact.
+
+Numax SVD was evaluated first: its current Array/Tensor entry points require
+compile-time dimensions, and its MAX 26.6 lock differs from this owner's 26.5
+lock. The fallback `mojo-linalg` revision and complete source hashes are in
+`DEPENDENCIES.lock.json`; it uses the same pinned NuMojo storage and Mojo/MAX
+versions. The shared assembler materializes this verified dependency, with no
+Python or foreign numerical runtime in sampling.

@@ -11,6 +11,15 @@ def owner(root, consumer, ident, modules, files):
     return dict(id=ident,path=os.path.relpath(root,consumer),revision=head(root),
                 files={p:sha(root/p) for p in files},modules=modules,assets={},
                 exports={'schema':1,'packages':{'moxie':{}}})
+def linalg_project(consumer):
+    source = ROOT.parents[2] / 'mojo-linalg'
+    sources = sorted(str(p.relative_to(source)) for p in (source/'src/mojo_linalg').glob('*.mojo'))
+    files = sources + ['pixi.toml', 'pixi.lock', 'tools/sources.lock.json', 'docs/api.md']
+    contribution = owner(source, consumer, 'mojo-linalg', {}, files)
+    contribution['assets'] = {str(Path(p).relative_to('src')): p for p in sources}
+    contribution['exports'] = None
+    return contribution
+
 def main():
     original=ASSEMBLY/'tests/fixtures/consumer_a/DEPENDENCIES.lock.json'
     base=json.loads(original.read_text())['projects']
@@ -22,6 +31,7 @@ def main():
             p['path']=os.path.relpath(source,consumer)
             # Preserve completed pins. Current repository HEAD is the source revision.
             p['revision']=head(source)
+        projects.append(linalg_project(consumer))
         modules={'moxie._random':{'file':'src/moxie/_random.mojo'}}
         files=['src/moxie/_random.mojo','src/moxie/__init__.mojo','EXPORTS.json']
         if consumer!=ROOT: files+=['DEPENDENCIES.lock.json','pixi.lock','docs/random.md','docs/scope.md']

@@ -1,5 +1,6 @@
 from moxie._random import RandomState, NativeRandom, entropy_state
 from std.random import Random as Philox
+from std.math import copysign
 from std.testing import assert_equal, assert_true, assert_raises
 import numojo as nm
 from numojo import Shape, Item
@@ -28,6 +29,25 @@ def main() raises:
         _ = a.randint(0)
     with assert_raises():
         _ = a.normal(0, -1)
+    # Gamma copies retain the shared normal cache and advance independently.
+    var gamma_rng = RandomState(42)
+    _ = gamma_rng.standard_normal()
+    var gamma_copy = gamma_rng.copy()
+    for shape in [Float64(0), 0.01, 0.3, 1.0, 1.000001, 100.0]:
+        for _ in range(100):
+            assert_equal(gamma_rng.gamma(shape), gamma_copy.standard_gamma(shape))
+    assert_equal(gamma_rng.standard_normal(), gamma_copy.standard_normal())
+    for _ in range(625):
+        assert_equal(gamma_rng.next_uint32(), gamma_copy.next_uint32())
+    var zero = RandomState(42)
+    assert_equal(zero.gamma(0.0), 0.0)
+    assert_equal(zero.state_position(), 624)
+    var zero_copy = zero.copy()
+    assert_equal(zero.gamma(100.0, 0.0), 0.0)
+    _ = zero_copy.gamma(100.0)
+    assert_equal(zero.standard_normal(), zero_copy.standard_normal())
+    for _ in range(625):
+        assert_equal(zero.next_uint32(), zero_copy.next_uint32())
     var negative_permutation = a.permutation(-1)
     assert_equal(negative_permutation.size, 0)
     with assert_raises():
@@ -97,6 +117,15 @@ def main() raises:
     p[Item(0)] = p.item(0) - p.item(0)
     with assert_raises():
         _ = a.multinomial(1, p)
+    var infinity = Float64.MAX * 2.0
+    var negative_zero = copysign(Float64(0), Float64(-1))
+    for invalid in [Float64(-1), negative_zero, infinity, -infinity, infinity - infinity]:
+        with assert_raises():
+            _ = a.standard_gamma(invalid)
+        with assert_raises():
+            _ = a.gamma(invalid)
+        with assert_raises():
+            _ = a.gamma(100.0, invalid)
     # All validation failures precede consumption.
     for _ in range(625):
         assert_equal(a.next_uint32(), before.next_uint32())

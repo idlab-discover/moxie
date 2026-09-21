@@ -2,7 +2,7 @@
 
 MT19937, legacy distribution and sklearn sampling adaptations: see LICENSES.
 """
-from std.math import sqrt, floor, abs
+from std.math import sqrt, floor, abs, copysign
 from std.sys import llvm_intrinsic
 from std.random import Random as Philox
 from std.time import perf_counter_ns
@@ -117,6 +117,52 @@ struct RandomState(Copyable, Movable):
         if scale < 0:
             raise Error("ValueError: scale must be nonnegative")
         return loc + scale * self.standard_normal()
+
+    def standard_gamma(mut self, shape: Float64) raises -> Float64:
+        """Legacy NumPy gamma draw with unit scale; finite nonnegative shape."""
+        _gamma_parameter(shape)
+        return self._standard_gamma(shape)
+
+    def gamma(mut self, shape: Float64, scale: Float64 = 1) raises -> Float64:
+        """Scalar Float64 gamma draw; zero scale still consumes a gamma draw."""
+        _gamma_parameter(shape)
+        _gamma_parameter(scale)
+        return scale * self._standard_gamma(shape)
+
+    def _standard_gamma(mut self, shape: Float64) -> Float64:
+        # NumPy legacy-distributions.c, legacy_standard_gamma (see LICENSES).
+        # Preserve rejection order and the shared polar-normal cache.
+        if shape == 1.0:
+            return -_log(1.0 - self.random_sample())
+        elif shape == 0.0:
+            return 0.0
+        elif shape < 1.0:
+            while True:
+                var u = self.random_sample()
+                var v = -_log(1.0 - self.random_sample())
+                if u <= 1.0 - shape:
+                    var x = _pow(u, 1.0 / shape)
+                    if x <= v:
+                        return x
+                else:
+                    var y = -_log((1.0 - u) / shape)
+                    var x = _pow(1.0 - shape + shape * y, 1.0 / shape)
+                    if x <= v + y:
+                        return x
+        else:
+            var b = shape - 1.0 / 3.0
+            var c = 1.0 / sqrt(9.0 * b)
+            while True:
+                var x = self.standard_normal()
+                var v = 1.0 + c * x
+                if v <= 0.0:
+                    continue
+                v = v * v * v
+                var u = self.random_sample()
+                if u < 1.0 - 0.0331 * (x * x) * (x * x):
+                    return b * v
+                if _log(u) < 0.5 * x * x + b * (1.0 - v + _log(v)):
+                    return b * v
 
     def _binomial_inversion(mut self, n: Int, p: Float64) -> Int:
         var q = 1.0 - p
@@ -366,3 +412,14 @@ def _log(x: Float64) -> Float64:
 
 def _exp(x: Float64) -> Float64:
     return llvm_intrinsic["llvm.exp", Float64, has_side_effect=False](x)
+
+
+def _pow(x: Float64, y: Float64) -> Float64:
+    return llvm_intrinsic["llvm.pow", Float64, has_side_effect=False](x, y)
+
+
+def _gamma_parameter(value: Float64) raises:
+    # NumPy rejects negative zero too. Nonfinite parameters are explicitly
+    # unsupported here, avoiding nonterminating legacy rejection loops.
+    if not (0.0 <= value <= 1.7976931348623157e308) or copysign(Float64(1), value) < 0:
+        raise Error("ValueError: gamma shape and scale must be finite and nonnegative")

@@ -30,6 +30,12 @@ def main() raises:
     elif mode == "normal":
         for _ in range(count):
             print(state.normal(Float64(n), Float64(k)))
+    elif mode == "gamma" or mode == "standard_gamma":
+        for _ in range(count):
+            if mode == "gamma":
+                print(state.gamma(Float64(n) / 1000000.0, Float64(k) / 1000000.0))
+            else:
+                print(state.standard_gamma(Float64(n) / 1000000.0))
     elif mode == "integer":
         for _ in range(count):
             print(state.randint(n, k))
@@ -58,6 +64,8 @@ def main() raises:
             print(state.randint(-100, 500))
             print(state.random_sample())
             print(state.binomial(1000, 0.2))
+            print(state.gamma(100.0, 0.01))
+            print(state.gamma(0.3, 2.0))
     elif mode == "dummy_multi_stratified":
         var q = nm.zeros[DType.float64](Shape(2))
         q[Item(0)] = 0.7

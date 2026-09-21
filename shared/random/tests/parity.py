@@ -10,7 +10,7 @@ def probe(mode, seed, count=100, n=0, k=1, method='auto', p=()):
     out=subprocess.check_output([ROOT/'builds/draws',mode,str(seed),str(count),str(n),str(k),method,*[str(int(round(x*1000000))) for x in p]],text=True)
     values, state=out.split('STATE\n')
     state=state.splitlines()
-    dtype = float if mode in ['uniform','normal','mixed'] else np.int64
+    dtype = float if mode in ['uniform','normal','mixed','gamma','standard_gamma'] else np.int64
     return np.array(values.splitlines(), dtype=dtype),(int(state[0]),int(state[1]),float(state[2]),np.array(state[3:],dtype=np.uint32))
 def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
     global CASES
@@ -18,6 +18,8 @@ def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
     if mode=='raw': want=r.randint(0,2**32,size=count,dtype=np.uint32)
     elif mode=='uniform': want=r.uniform(n,k,size=count)
     elif mode=='normal': want=r.normal(n,k,size=count)
+    elif mode=='gamma': want=r.gamma(n/1000000,k/1000000,size=count)
+    elif mode=='standard_gamma': want=r.standard_gamma(n/1000000,size=count)
     elif mode=='integer': want=r.randint(n,k,size=count)
     elif mode=='binomial': want=r.binomial(n,k/1000000,size=count)
     elif mode=='categorical': want=r.choice(len(p),size=count,p=p)
@@ -26,10 +28,12 @@ def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
     elif mode=='sample': want=sample(n,k,method=method,random_state=r)
     elif mode=='mixed':
         want=[]
-        for _ in range(count): want.extend([r.standard_normal(),r.randint(-100,500),r.random_sample(),r.binomial(1000,.2)])
+        for _ in range(count): want.extend([r.standard_normal(),r.randint(-100,500),r.random_sample(),r.binomial(1000,.2),r.gamma(100,.01),r.gamma(.3,2)])
     got,state=probe(mode,seed,count,n,k,method,p)
     label=(mode,seed,count,n,k,method,p)
-    if mode in ['normal','mixed']: np.testing.assert_allclose(got,want,rtol=2e-14,atol=2e-14,err_msg=str(label))
+    if mode in ['gamma','standard_gamma']:
+        np.testing.assert_allclose(got,want,rtol=2e-14,atol=5e-324,err_msg=str(label))
+    elif mode in ['normal','mixed']: np.testing.assert_allclose(got,want,rtol=2e-14,atol=2e-14,err_msg=str(label))
     else: np.testing.assert_array_equal(got,want,err_msg=str(label))
     oracle=r.get_state()
     assert state[:2]==oracle[2:4],(label,state[:2],oracle[2:4])
@@ -49,8 +53,12 @@ for seed in [0,1,42,5489,4294967295,123456789]:
     for p in [[],[1],[0,1],[1,0,0],[.2,.3,.5],[0,.1,.9],[.999999,.000001]]:
         if p: compare('categorical',seed,p=p)
         for n in [0,1,5,1000]: compare('multinomial',seed,n=n,p=p,count=101)
+    for shape in [0,1,1000,100000,300000,999999,1000000,1000001,2000000,100000000,1000000000000]:
+        compare('standard_gamma',seed,n=shape,count=513)
+        for scale in [0,10000,1000000,3000000]:
+            compare('gamma',seed,n=shape,k=scale,count=513)
     compare('mixed',seed,count=501)
-    for mode in ['raw','uniform','normal','integer','binomial','categorical','multinomial','mixed']:
+    for mode in ['raw','uniform','normal','integer','binomial','categorical','multinomial','mixed','gamma','standard_gamma']:
         compare(mode,seed,count=0,n=0,k=1,p=[.2,.3,.5])
     for n in [-10,-1,0,1,2,17,1000]: compare('permutation',seed,n=n)
     for n,k in [(0,0),(1,0),(1,1),(10,0),(100,1),(100,2),(100,19),(100,20),(100,98),(100,99),(100,100),(1001,10)]:

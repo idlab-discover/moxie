@@ -276,18 +276,18 @@
         "schema": 1
       },
       "files": {
-        "DEPENDENCIES.lock.json": "1508511d5d124d2ca1e2aae9ee345fc036bbf57ccf68e217aa557fb2dc9226fe",
+        "DEPENDENCIES.lock.json": "065fa0f97eb15f6a1351b66491fde4cb9ec43016f55a8076194aaada3d765b4c",
         "EXPORTS.json": "b7f504c133c7d3445d31b5e51cc4e8101319ed7aca17b240d8c46e5de9ab69c6",
         "LICENSES/MT19937.txt": "0e111337b25494a773106695f0e799f642b8567aaacca4f116a74a8177179156",
         "LICENSES/NumPy-distributions.md": "469778be8f33d54e1bcaab28c281cc472916d2d273f835e55bc487d30503face",
         "LICENSES/NumPy-random.md": "103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f",
         "LICENSES/NumPy.txt": "1be1df33863f97a7bc1c4d67980bd6c69c9a6fef0a5ee76e6ad6cb91e56e8491",
         "LICENSES/scikit-learn.txt": "50d6a9d340f19ab355609917993114daf5f47e3161067bcf34955bbd05cd9cb0",
-        "docs/random.md": "ae35d582461417b5d651d2a60738b71d4a0b51e6d461807b6c157680cb952d6e",
-        "docs/scope.md": "c8d450b1b4628727cdc22733b6504eae8c9460291c5a2eae75f03e81590dd5f2",
+        "docs/random.md": "fc902366fd60046869d87fc1b4118057349eb9b3fad3657b8930b7c8a2e9774e",
+        "docs/scope.md": "f431d553e38d9255e2d7d5ee274b7fb39cdd6588e2b66a69040ddd1e703e0c09",
         "pixi.lock": "0457ec8b774905df97ac285a944e92ed6672dc5595406740b470e2e5bb96affa",
         "src/moxie/__init__.mojo": "7701cf97b8e700cbdd4fdd1d79acf9309128ada14812f4b7d652fe64c0f6ee47",
-        "src/moxie/_random.mojo": "f918d4c54c7542ecb537ffb2728ee2f0a40e7ac3ef0ca3cf8e6522dc068625ce"
+        "src/moxie/_random.mojo": "46f3ead8eae5f4ce6c3daa738e1ef770506896cf99cb2d36eb6fa5c1083559d7"
       },
       "id": "random",
       "modules": {

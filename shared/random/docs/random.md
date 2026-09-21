@@ -11,6 +11,7 @@ from moxie._random import RandomState
 var rng = RandomState(42)
 var uniform = rng.random_sample()
 var normal = rng.standard_normal()
+var topic_weight = rng.gamma(100.0, 0.01)
 var selected = rng.sample_without_replacement(100, 5)
 var independent_snapshot = rng.copy()
 ```
@@ -49,6 +50,7 @@ one mutable state concurrently is outside this serial borrowing contract.
 | `uniform(low=0, high=1)` | Scalar Float64; zero width still consumes a draw |
 | `randint(high)` / `randint(low, high)` | Native signed Int (64 bits on supported platform), high excluded; width 1 consumes no words |
 | `standard_normal()` / `normal(loc=0, scale=1)` | Float64 polar normal with cached second result; scale 0 still consumes the normal stream |
+| `standard_gamma(shape)` / `gamma(shape, scale=1)` | Scalar Float64 legacy gamma; shape 0 consumes no draws, scale 0 still consumes the gamma stream |
 | `binomial(n, p)` | Legacy inversion and BTPE, including endpoint draw consumption |
 | `categorical(p)` | Integer class index, NumPy `choice(p=p)` cumulative-distribution protocol |
 | `multinomial(n, p, size=1)` | NuMojo Int64 array `(size, classes)`, including size=1; final class receives remaining mass |
@@ -57,9 +59,14 @@ one mutable state concurrently is outside this serial borrowing contract.
 
 Probability inputs are one-dimensional NuMojo `NDArray[DType.float64]`; results
 use the accepted NuMojo storage rather than a new generic container. Scalar
-uniform/normal outputs can be explicitly cast to Float32 by a consumer; there
-is no promise of a distinct NumPy float32 generation protocol. Arbitrary Python
-`size` tuples, array-valued distribution parameters and dynamic dtype dispatch
+uniform/normal/gamma outputs can be explicitly cast to Float32 by a consumer; there
+is no promise of a distinct NumPy float32 generation protocol.
+
+Gamma parameters must be finite and nonnegative; negative zero is rejected,
+as in NumPy. NaN and infinity are explicitly unsupported and raise before
+consuming state. This is a narrower contract than NumPy's nonfinite handling.
+
+Arbitrary Python `size` tuples, array-valued distribution parameters and dynamic dtype dispatch
 are not exposed. Native callers loop scalar methods in NumPy traversal order.
 `multinomial` always preserves its leading sample dimension, a documented
 language adaptation from NumPy's `size=None` vector result.
@@ -157,3 +164,13 @@ runtime. This operation-specific exception avoids the pinned stdlib polynomial
 approximation's observed normal errors around 1e-9. It adds no numerical package
 or RNG implementation outside this owner. Other scalar operations and the
 explicit native Philox stream reuse the stdlib directly.
+
+Gamma follows NumPy's frozen `legacy_standard_gamma`: exponential at shape 1,
+a uniform/exponential rejection method below 1, and Marsaglia–Tsang above 1.
+It shares the normal cache with `standard_normal`. Numax inverse-CDF sampling
+would change the seeded sequence and draw consumption. Differential tests
+compare gamma values at Float64 rtol 2e-14 and atol 5e-324 (one smallest
+subnormal, for platform math rounding), with
+exact MT state words, position and cache occupancy, including mixed draws and
+LDA initialization parameters `(100, 0.01)`. Use the existing
+`--fp-mode=contract=off` build setting for this compatibility contract.

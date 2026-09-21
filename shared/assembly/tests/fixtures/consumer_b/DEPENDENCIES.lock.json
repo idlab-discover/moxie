@@ -262,7 +262,7 @@
         "EXPORTS.json": "29b0364eb33019b68290be3a25192024aff7e4614443174089811572c9b4ec68",
         "schemas/assembly-v1.schema.json": "57ac2d90f990cac7c9c2a9e42373e131b71914dead175391cf34052b807d7da8",
         "schemas/exports-v1.schema.json": "8c677d50e45c5adcd6e69b27b0bde1d811224c11c9481abfd52bf30556a8c31b",
-        "tools/assemble.py": "428389881753954036c47e678422d101dade1a71491b483c601d20fe5745d6b0",
+        "tools/assemble.py": "c95aff4d406355e8c4076e12f33da28cc48eed0277a7e1dd85ed2e01ff95180c",
         "tools/consume.py": "198781650ff1063c1561f18be197c2f90d072c693ec5065306dac46c487fa3a8"
       },
       "id": "assembly",

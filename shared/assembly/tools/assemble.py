@@ -93,7 +93,17 @@ def plan(consumer, lock_path):
         root = (lock_path.parent / project['path']).resolve()
         revision = project['revision']
         require(isinstance(revision, str) and re.fullmatch('[0-9a-f]{40}', revision), 'invalid Git revision')
-        require(git(root, 'rev-parse', 'HEAD').decode().strip() == revision, f'revision drift: {owner}')
+        head = git(root, 'rev-parse', 'HEAD').decode().strip()
+        same_repository = git(root, 'rev-parse', '--show-toplevel') == git(consumer, 'rev-parse', '--show-toplevel')
+        if same_repository:
+            # Locks within one repository cannot pin the commit containing
+            # themselves. Require provenance ancestry and exact file hashes.
+            ancestry = subprocess.run(['git', '-C', str(root), 'merge-base',
+                                      '--is-ancestor', revision, head],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            require(ancestry.returncode == 0, f'revision drift: {owner}')
+        else:
+            require(head == revision, f'revision drift: {owner}')
         owners[owner] = project
         require(isinstance(project['files'], dict), 'files must be an object')
         blobs = {}

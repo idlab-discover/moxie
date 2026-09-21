@@ -64,11 +64,16 @@ Each project contains:
 | Field | Meaning |
 | --- | --- |
 | `id` | Unique stable owner name |
-| `path`, `revision` | Source root and exact Git HEAD (40 hexadecimal characters) |
+| `path`, `revision` | Source root and Git revision (40 hexadecimal characters) |
 | `files` | Relative filename to SHA-256 map; every consumed file must be pinned |
 | `modules` | Full `moxie.*` module to `{ "file": "src/...mojo" }` |
 | `assets` | Destination to pinned source filename, for `numojo/` and `licenses/` |
 | `exports` | Embedded version-1 manifest, or null for non-Moxie assets |
+
+External repositories must be at the exact pinned HEAD. Projects in the same
+Git repository as the consumer may pin an ancestor of HEAD: a lock cannot
+contain the hash of its own commit. Every listed file still requires an exact
+SHA-256 match, so later commits never authorize source drift implicitly.
 
 The [export schema](../schemas/exports-v1.schema.json) is also usable standalone.
 An embedded manifest is explicit data, for example:

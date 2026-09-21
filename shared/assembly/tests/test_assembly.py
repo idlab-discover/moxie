@@ -122,6 +122,19 @@ class AssemblyTests(unittest.TestCase):
         (self.root / 'module.mojo').write_text('changed')
         self.fails('source drift')
 
+    def test_same_repository_ancestor_with_exact_hashes(self):
+        self.project('moxie')['revision'] = subprocess.check_output(
+            ['git', '-C', str(ROOT), 'rev-parse', '786a5ee'], text=True).strip()
+        self.execute()
+        self.project('moxie')['files']['src/moxie/base.mojo'] = '0' * 64
+        self.fails('source drift')
+
+    def test_external_repository_requires_exact_head(self):
+        project = self.project('dummy-family')
+        project['revision'] = subprocess.check_output(
+            ['git', '-C', project['path'], 'rev-parse', 'HEAD^'], text=True).strip()
+        self.fails('revision drift')
+
     def test_git_revision_drift(self):
         self.project('numerics')['revision'] = '0' * 40
         self.fails('revision drift')

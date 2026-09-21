@@ -253,7 +253,7 @@
         "EXPORTS.json": "29b0364eb33019b68290be3a25192024aff7e4614443174089811572c9b4ec68",
         "schemas/assembly-v1.schema.json": "57ac2d90f990cac7c9c2a9e42373e131b71914dead175391cf34052b807d7da8",
         "schemas/exports-v1.schema.json": "8c677d50e45c5adcd6e69b27b0bde1d811224c11c9481abfd52bf30556a8c31b",
-        "tools/assemble.py": "428389881753954036c47e678422d101dade1a71491b483c601d20fe5745d6b0",
+        "tools/assemble.py": "c95aff4d406355e8c4076e12f33da28cc48eed0277a7e1dd85ed2e01ff95180c",
         "tools/consume.py": "198781650ff1063c1561f18be197c2f90d072c693ec5065306dac46c487fa3a8"
       },
       "id": "assembly",
@@ -276,7 +276,7 @@
         "schema": 1
       },
       "files": {
-        "DEPENDENCIES.lock.json": "065fa0f97eb15f6a1351b66491fde4cb9ec43016f55a8076194aaada3d765b4c",
+        "DEPENDENCIES.lock.json": "920390736b617ffcebb0722a482ddf94fd18dd3ce0c7e2d2d10d96027f45f263",
         "EXPORTS.json": "b7f504c133c7d3445d31b5e51cc4e8101319ed7aca17b240d8c46e5de9ab69c6",
         "LICENSES/MT19937.txt": "0e111337b25494a773106695f0e799f642b8567aaacca4f116a74a8177179156",
         "LICENSES/NumPy-distributions.md": "469778be8f33d54e1bcaab28c281cc472916d2d273f835e55bc487d30503face",

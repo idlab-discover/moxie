@@ -42,6 +42,24 @@ def main() raises:
     elif mode == "binomial":
         for _ in range(count):
             print(state.binomial(n, Float64(k) / 1000000.0))
+    elif mode == "choice" or mode == "choice_weighted":
+        var result = nm.zeros[DType.int64](Shape(0))
+        if mode == "choice":
+            result = state.choice(n, count, k != 0)
+        else:
+            result = state.choice(n, p, count, k != 0)
+        for i in range(result.size):
+            print(result.item(i))
+    elif mode == "shuffle" or mode == "permutation_array":
+        var x = nm.zeros[DType.int64](Shape(n) if k == -1 else Shape(n, k))
+        for i in range(x.size):
+            x.unsafe_set(i, Int64(i * 7 + 3))
+        if mode == "shuffle":
+            state.shuffle(x)
+        else:
+            x = state.permutation(x)
+        for i in range(x.size):
+            print(x.unsafe_get(i))
     elif mode == "categorical":
         for _ in range(count):
             print(state.categorical(p))

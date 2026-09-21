@@ -22,6 +22,14 @@ def compare(mode,seed,count=100,n=0,k=1,method='auto',p=()):
     elif mode=='standard_gamma': want=r.standard_gamma(n/1000000,size=count)
     elif mode=='integer': want=r.randint(n,k,size=count)
     elif mode=='binomial': want=r.binomial(n,k/1000000,size=count)
+    elif mode in ['choice','choice_weighted']:
+        want=r.choice(n,size=count,replace=bool(k),p=p if mode=='choice_weighted' else None)
+    elif mode in ['shuffle','permutation_array']:
+        want=np.arange(n if k==-1 else n*k,dtype=np.int64)*7+3
+        want=want.reshape((n,) if k==-1 else (n,k))
+        if mode=='shuffle': r.shuffle(want)
+        else: want=r.permutation(want)
+        want=want.ravel()
     elif mode=='categorical': want=r.choice(len(p),size=count,p=p)
     elif mode=='multinomial': want=r.multinomial(n,p,size=count).ravel()
     elif mode=='permutation': want=r.permutation(n)
@@ -57,6 +65,16 @@ for seed in [0,1,42,5489,4294967295,123456789]:
         compare('standard_gamma',seed,n=shape,count=513)
         for scale in [0,10000,1000000,3000000]:
             compare('gamma',seed,n=shape,k=scale,count=513)
+    for n in [0,1,2,17,1000]:
+        for count in sorted({0,n//2,n}):
+            for replace in [0,1]: compare('choice',seed,n=n,k=replace,count=count)
+        if n: compare('choice',seed,n=n,k=1,count=n+5)
+        for k in [-1,0,1,3]:
+            for mode in ['shuffle','permutation_array']: compare(mode,seed,n=n,k=k)
+    for p in [[1.0],[0,1],[.2,.3,.5],[0,.1,.9],[.999999,.000001]]:
+        for count in range(sum(x>0 for x in p)+1):
+            compare('choice_weighted',seed,n=len(p),p=p,k=0,count=count)
+        compare('choice_weighted',seed,n=len(p),p=p,k=1,count=513)
     compare('mixed',seed,count=501)
     for mode in ['raw','uniform','normal','integer','binomial','categorical','multinomial','mixed','gamma','standard_gamma']:
         compare(mode,seed,count=0,n=0,k=1,p=[.2,.3,.5])

@@ -138,4 +138,84 @@ def main() raises:
     assert_equal(result.shape[1], 3)
     for i in range(17):
         assert_equal(result.item(i,0) + result.item(i,1) + result.item(i,2), 100)
+    test_choice_shuffle()
     print("PASS native random contracts")
+
+
+def test_choice_shuffle() raises:
+    var rng = RandomState(42)
+    var expected = rng.copy()
+    var a = nm.zeros[DType.float32](Shape(10))
+    for i in range(10):
+        a[Item(i)] = Float32(i + 10)
+    var p = nm.zeros[DType.float64](Shape(10))
+    for i in range(10):
+        p[Item(i)] = 0.1
+    var values = rng.choice(a, p, 5, False)
+    var indices = expected.choice(10, p, 5, False)
+    for i in range(5):
+        assert_equal(values.item(i), a.item(Int(indices.item(i))))
+    values = rng.choice(a, 15)
+    indices = expected.choice(10, 15)
+    for i in range(15):
+        assert_equal(values.item(i), a.item(Int(indices.item(i))))
+    # Negative-stride views mutate only the selected backing cells.
+    var view = a.view_with_layout(Shape(5), nm.NDArrayStrides(-2), 8)
+    var order = expected.permutation(5)
+    rng.shuffle(view)
+    for i in range(5):
+        assert_equal(view.unsafe_get(-2*i), Float32(18 - 2 * Int(order.item(i))))
+        assert_equal(a.item(2*i+1), Float32(11+2*i))
+    var vector_state = rng.copy()
+    var chosen = rng.choice(view, 7)
+    var chosen_indices = vector_state.choice(5, 7)
+    for i in range(7):
+        assert_equal(chosen.item(i), view.unsafe_get(-2*Int(chosen_indices.item(i))))
+    var probability_backing = nm.zeros[DType.float64](Shape(20))
+    for i in range(10):
+        probability_backing[Item(2*i)] = p.item(i)
+    var probability_view = probability_backing.view_with_layout(Shape(10), nm.NDArrayStrides(2), 0)
+    indices = rng.choice(10, probability_view, 6, False)
+    var expected_indices = vector_state.choice(10, p, 6, False)
+    for i in range(6):
+        assert_equal(indices.item(i), expected_indices.item(i))
+    var copied = rng.permutation(view)
+    assert_equal(copied.ndim, 1)
+    copied[Item(0)] = -99
+    for i in range(5):
+        assert_true(view.unsafe_get(-2*i) != -99)
+    # Transposed matrix: shuffle columns of the original backing matrix.
+    var matrix = nm.zeros[DType.int64](Shape(3, 4))
+    for i in range(12):
+        matrix.unsafe_set(i, Int64(i))
+    var transpose = matrix.view_with_layout(Shape(4, 3), nm.NDArrayStrides(1, 4), 0)
+    var snapshot = rng.copy()
+    order = snapshot.permutation(4)
+    rng.shuffle(transpose)
+    for row in range(4):
+        for col in range(3):
+            assert_equal(transpose.item(row,col), Int64(4*col+Int(order.item(row))))
+    assert_equal(rng.next_uint32(), snapshot.next_uint32())
+    snapshot = rng.copy()
+    with assert_raises():
+        _ = rng.choice(0)
+    with assert_raises():
+        _ = rng.choice(3, -1)
+    with assert_raises():
+        _ = rng.choice(3, 4, False)
+    with assert_raises():
+        _ = rng.choice(3, p)
+    with assert_raises():
+        _ = rng.choice(matrix)
+    p[Item(0)] = 1
+    for i in range(1,10):
+        p[Item(i)] = 0
+    with assert_raises():
+        _ = rng.choice(10, p, 2, False)
+    var rank3 = nm.zeros[DType.float64](Shape(2,2,2))
+    with assert_raises():
+        rng.shuffle(rank3)
+    var overlap = matrix.view_with_layout(Shape(3, 3), nm.NDArrayStrides(1, 1), 0)
+    with assert_raises():
+        rng.shuffle(overlap)
+    assert_equal(rng.next_uint32(), snapshot.next_uint32())

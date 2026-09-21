@@ -3,7 +3,8 @@
 This owner implements the private shared `moxie._random` engine. There are no
 public estimators. Supported operations are scalar integer-seeded MT19937,
 Float64 uniform/normal/gamma draws, int64-bounded integers, binomial (inversion/BTPE),
-categorical and multinomial draws, integer permutation, and all four sklearn
+categorical and multinomial draws, uniform/weighted choice, vector/matrix
+shuffle and permutation, and all four sklearn
 sampling-without-replacement methods. NuMojo provides dense probability and
 result storage. Explicit native Philox streams delegate to the pinned stdlib.
 

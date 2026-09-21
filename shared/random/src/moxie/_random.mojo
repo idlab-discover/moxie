@@ -284,12 +284,12 @@ struct RandomState(Copyable, Movable):
             var remaining_p = Float64(1)
             var remaining_n = n
             for j in range(d - 1):
-                var drawn = self.binomial(remaining_n, p.item(j) / remaining_p)
+                var drawn = self.binomial(remaining_n, _vector_value(p, j) / remaining_p)
                 result[Item(row, j)] = Int64(drawn)
                 remaining_n -= drawn
                 if remaining_n <= 0:
                     break
-                remaining_p -= p.item(j)
+                remaining_p -= _vector_value(p, j)
             if remaining_n > 0:
                 result[Item(row, d - 1)] = Int64(remaining_n)
         return result^
@@ -299,14 +299,125 @@ struct RandomState(Copyable, Movable):
         _probabilities(p, True)
         var total = Float64(0)
         for i in range(p.size):
-            total += p.item(i)
+            total += _vector_value(p, i)
         var u = self.random_sample()
         var cumulative = Float64(0)
         for i in range(p.size):
-            cumulative += p.item(i)
+            cumulative += _vector_value(p, i)
             if u < cumulative / total:
                 return i
         return p.size - 1
+
+    def choice(mut self, a: Int, size: Int = 1, replace: Bool = True) raises -> NDArray[DType.int64]:
+        """Uniform indices, always a vector; NumPy RandomState draw order."""
+        _choice_size(a, size, replace)
+        var result = nm.zeros[DType.int64](Shape(size))
+        if replace:
+            for i in range(size):
+                result[Item(i)] = Int64(self.randint(a))
+        else:
+            # NumPy choice uses a complete permutation even for size=0.
+            var shuffled = self.permutation(a)
+            for i in range(size):
+                result[Item(i)] = shuffled.item(i)
+        return result^
+
+    def choice(mut self, a: Int, p: NDArray[DType.float64], size: Int = 1, replace: Bool = True) raises -> NDArray[DType.int64]:
+        """Weighted indices; without replacement follows NumPy's batch rejection."""
+        _choice_size(a, size, replace)
+        _probabilities(p, True)
+        if p.size != a:
+            raise Error("ValueError: a and p must have the same size")
+        var positive = 0
+        for i in range(a):
+            if _vector_value(p, i) > 0:
+                positive += 1
+        if not replace and positive < size:
+            raise Error("ValueError: fewer positive probabilities than samples")
+        var result = nm.zeros[DType.int64](Shape(size))
+        var cdf = nm.zeros[DType.float64](Shape(a))
+        var selected = nm.zeros[DType.bool](Shape(a))
+        var found = 0
+        while found < size:
+            var total = Float64(0)
+            for i in range(a):
+                if not selected.item(i):
+                    total += _vector_value(p, i)
+                cdf[Item(i)] = total
+            for i in range(a):
+                cdf[Item(i)] = cdf.item(i) / total
+            var remaining = size - found
+            # Keep this CDF for the entire batch; remove selected weights only
+            # before the next batch, preserving first-occurrence order.
+            for _ in range(remaining):
+                var u = self.random_sample()
+                var low = 0
+                var high = a
+                while low < high:
+                    var mid = low + (high - low) // 2
+                    if u < cdf.item(mid):
+                        high = mid
+                    else:
+                        low = mid + 1
+                if replace or not selected.item(low):
+                    result[Item(found)] = Int64(low)
+                    found += 1
+                    if not replace:
+                        selected[Item(low)] = True
+        return result^
+
+    def choice[dtype: DType](mut self, a: NDArray[dtype], size: Int = 1, replace: Bool = True) raises -> NDArray[dtype]:
+        if a.ndim != 1:
+            raise Error("ValueError: choice population must be one dimensional")
+        var indices = self.choice(a.size, size, replace)
+        var result = nm.zeros[dtype](Shape(size))
+        for i in range(size):
+            result[Item(i)] = _vector_value(a, Int(indices.item(i)))
+        return result^
+
+    def choice[dtype: DType](mut self, a: NDArray[dtype], p: NDArray[DType.float64], size: Int = 1, replace: Bool = True) raises -> NDArray[dtype]:
+        if a.ndim != 1:
+            raise Error("ValueError: choice population must be one dimensional")
+        var indices = self.choice(a.size, p, size, replace)
+        var result = nm.zeros[dtype](Shape(size))
+        for i in range(size):
+            result[Item(i)] = _vector_value(a, Int(indices.item(i)))
+        return result^
+
+    def shuffle[dtype: DType](mut self, mut x: NDArray[dtype]) raises:
+        """Shuffle a vector or matrix's rows in place, including strided views."""
+        if x.ndim != 1 and x.ndim != 2:
+            raise Error("ValueError: shuffle supports rank one or two")
+        var rows = x.shape[0]
+        var cols = x.shape[1] if x.ndim == 2 else 1
+        if rows <= 1 or cols == 0:
+            return
+        var stride0 = Int(x.strides[0])
+        var stride1 = Int(x.strides[1]) if x.ndim == 2 else 0
+        # Admit disjoint row/column layouts, including transposed/reversed views.
+        if stride0 == 0 or (cols > 1 and (stride1 == 0 or not (
+            abs(stride0) >= cols * abs(stride1) or abs(stride1) >= rows * abs(stride0)
+        ))):
+            raise Error("ValueError: shuffle requires disjoint rows or columns")
+        for i in range(rows - 1, 0, -1):
+            var j = Int(self._interval(UInt64(i)))
+            for c in range(cols):
+                var left = i * stride0 + c * stride1
+                var right = j * stride0 + c * stride1
+                var value = x.unsafe_get(left)
+                x.unsafe_set(left, x.unsafe_get(right))
+                x.unsafe_set(right, value)
+
+    def permutation[dtype: DType](mut self, x: NDArray[dtype]) raises -> NDArray[dtype]:
+        """Return an independent shuffled vector or matrix."""
+        var result = x.copy()
+        if x.ndim == 2 and x.shape[1] == 0:
+            # NumPy permutes row indices even when each row is empty.
+            for i in range(x.shape[0] - 1, 0, -1):
+                _ = self._interval(UInt64(i))
+        else:
+            self.shuffle(result)
+        return result^
 
     def permutation(mut self, n: Int) raises -> NDArray[DType.int64]:
         if n < 0:
@@ -385,7 +496,7 @@ def _probabilities(p: NDArray[DType.float64], categorical: Bool) raises:
     var total = Float64(0)
     var correction = Float64(0)
     for i in range(p.size):
-        var value = p.item(i)
+        var value = _vector_value(p, i)
         if not (0.0 <= value <= 1.0):
             raise Error("ValueError: probabilities must be finite in [0, 1]")
         if categorical or i < p.size - 1:
@@ -423,3 +534,13 @@ def _gamma_parameter(value: Float64) raises:
     # unsupported here, avoiding nonterminating legacy rejection loops.
     if not (0.0 <= value <= 1.7976931348623157e308) or copysign(Float64(1), value) < 0:
         raise Error("ValueError: gamma shape and scale must be finite and nonnegative")
+
+
+def _choice_size(a: Int, size: Int, replace: Bool) raises:
+    if size < 0 or a < 0 or (a == 0 and size != 0) or (not replace and size > a):
+        raise Error("ValueError: invalid choice population or sample size")
+
+
+def _vector_value[dtype: DType](a: NDArray[dtype], i: Int) raises -> Scalar[dtype]:
+    # NuMojo's single-Int item overload ignores strides on rank-one views.
+    return a.unsafe_get(i * Int(a.strides[0]))

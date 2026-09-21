@@ -54,7 +54,9 @@ one mutable state concurrently is outside this serial borrowing contract.
 | `binomial(n, p)` | Legacy inversion and BTPE, including endpoint draw consumption |
 | `categorical(p)` | Integer class index, NumPy `choice(p=p)` cumulative-distribution protocol |
 | `multinomial(n, p, size=1)` | NuMojo Int64 array `(size, classes)`, including size=1; final class receives remaining mass |
-| `permutation(n)` | NuMojo Int64 vector, reverse Fisher–Yates order |
+| `choice(a, size=1, replace=True)` / `choice(a, p, size=1, replace=True)` | Int population or numeric vector; always a `(size,)` vector, including size 1; optional Float64 probabilities |
+| `shuffle(x)` | In-place vector or matrix-row shuffle, reverse Fisher–Yates order |
+| `permutation(n)` / `permutation(x)` | Int64 index vector or independent shuffled copy of a vector/matrix |
 | `sample_without_replacement(n_population, n_samples, method="auto")` | NuMojo Int64 vector; sklearn auto, tracking_selection, pool and reservoir_sampling |
 
 Probability inputs are one-dimensional NuMojo `NDArray[DType.float64]`; results
@@ -174,3 +176,20 @@ subnormal, for platform math rounding), with
 exact MT state words, position and cache occupancy, including mixed draws and
 LDA initialization parameters `(100, 0.01)`. Use the existing
 `--fp-mode=contract=off` build setting for this compatibility contract.
+
+Choice supports uniform and weighted draws with and without replacement. As
+with multinomial, omitted size means a one-element vector rather than NumPy's
+scalar. Probabilities are Float64 vectors and must match the population length.
+Unweighted choice without replacement consumes a complete permutation, even
+for size zero. Weighted choice follows NumPy's batched duplicate rejection;
+`sample_without_replacement` has a different sklearn-specific draw protocol.
+Numeric vector inputs preserve dtype. Object/string populations and arbitrary
+size tuples are outside this typed interface; callers may gather objects from
+sampled indices.
+
+Shuffle and array permutation support rank one and two on axis zero. Standard
+contiguous, transposed, sliced and reversed disjoint layouts are supported;
+layouts not demonstrably disjoint by row or column stride are rejected.
+Shuffle consumes no draws for empty arrays. Matrix permutation still
+permutes row indices when rows have zero columns, matching NumPy. Shuffle
+mutates borrowed storage; permutation copies it. Higher ranks are explicitly unsupported.

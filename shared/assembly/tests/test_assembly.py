@@ -143,6 +143,12 @@ class AssemblyTests(unittest.TestCase):
         project['assets'] = {'unexpected/probe.mojo': 'module.mojo'}
         self.fails('unsupported asset namespace')
 
+    def test_pinned_optimize_asset_namespace(self):
+        project = self.local()
+        project['assets'] = {'mojo_optimize/probe.mojo': 'module.mojo'}
+        self.assertEqual(self.execute()['mojo_optimize/probe.mojo'],
+                         (self.root / 'module.mojo').read_bytes())
+
     def test_git_revision_drift(self):
         self.project('numerics')['revision'] = '0' * 40
         self.fails('revision drift')

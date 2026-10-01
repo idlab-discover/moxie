@@ -12,7 +12,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-LEGACY_SHA256 = 'fd9ca105c451584e5b4787e16c8d28421ad641d4016fd98031b39f01e13c2e68'
+LEGACY_SHA256 = '61ba4f28586c504ad504b129ed28fad39a3c0a1b5f30fcbb4ea80b3361f673e5'
 
 
 def legacy():

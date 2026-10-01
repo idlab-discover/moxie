@@ -119,6 +119,15 @@ class FamilyAssemblyTests(unittest.TestCase):
         self.assertEqual((output / 'mojo_optimize/probe.mojo').read_bytes(),
                          (self.external / 'module.mojo').read_bytes())
 
+    def test_balsa_asset_namespace(self):
+        self.lock['projects'][1]['assets'] = {'balsa/__init__.mojo': 'module.mojo'}
+        output = self.run_assembly()
+        self.assertEqual((output / 'balsa/__init__.mojo').read_bytes(),
+                         (self.external / 'module.mojo').read_bytes())
+        self.lock['projects'][1]['assets'] = {'unexpected/probe.mojo': 'module.mojo'}
+        with self.assertRaisesRegex(ValueError, 'unsupported asset namespace'):
+            self.run_assembly()
+
     def test_two_content_versions_at_one_revision_remain_available(self):
         first = (self.external / 'module.mojo').read_bytes()
         self.run_assembly()

@@ -5,8 +5,9 @@ place of the strict v1 launchers. The original entry points are retained for
 consumers that have not adopted this policy. Pin the new launchers' hashes in the
 `assembly` entry and retain `tools/family_validator.py` beside them; the new assembler
 verifies this versioned validator against its embedded hash before importing it.
-It retains v1 checks and accepts both existing Numax and mojo-optimize asset
-namespaces. The strict v1 tools remain unchanged for unadopted consumers.
+It retains v1 checks and accepts the existing Numax and mojo-optimize asset
+namespaces, plus the native Treelite codec namespace `balsa/`. The strict v1
+tools remain unchanged for unadopted consumers.
 
 The version-1 ownership manifest remains valid. Source projects in the same Git
 repository as the consumer use current working files, with actual hashes in the

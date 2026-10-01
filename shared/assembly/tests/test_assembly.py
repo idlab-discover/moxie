@@ -143,6 +143,14 @@ class AssemblyTests(unittest.TestCase):
         project['assets'] = {'unexpected/probe.mojo': 'module.mojo'}
         self.fails('unsupported asset namespace')
 
+    def test_pinned_numax_asset_namespace(self):
+        project = self.local()
+        project['assets'] = {'numax/core/libm.mojo': 'module.mojo'}
+        self.assertEqual(self.execute()['numax/core/libm.mojo'],
+                         (self.root / 'module.mojo').read_bytes())
+        project['files']['module.mojo'] = '0' * 64
+        self.fails('source drift')
+
     def test_git_revision_drift(self):
         self.project('numerics')['revision'] = '0' * 40
         self.fails('revision drift')

@@ -253,7 +253,7 @@
         "EXPORTS.json": "29b0364eb33019b68290be3a25192024aff7e4614443174089811572c9b4ec68",
         "schemas/assembly-v1.schema.json": "57ac2d90f990cac7c9c2a9e42373e131b71914dead175391cf34052b807d7da8",
         "schemas/exports-v1.schema.json": "8c677d50e45c5adcd6e69b27b0bde1d811224c11c9481abfd52bf30556a8c31b",
-        "tools/assemble.py": "840e71455eb2905290e3dc6938846291f9f1bdd44f788b2b59f34fe480fa3c5f",
+        "tools/assemble.py": "f0e021d6fece9a260cfd2b0346fd688aeb7db7af6473698745d1ba6ebbaf8f78",
         "tools/consume.py": "198781650ff1063c1561f18be197c2f90d072c693ec5065306dac46c487fa3a8"
       },
       "id": "assembly",
@@ -307,7 +307,7 @@
         "schema": 1
       },
       "files": {
-        "DEPENDENCIES.lock.json": "7dec9c4466114ffec8449a4ac5ae65a5b125c7ae241c65a5f671aafb2154a9bf",
+        "DEPENDENCIES.lock.json": "140eaba23ea2bfd27d3219f844aacf2185ac4319d51b969978a076552a27e7f3",
         "EXPORTS.json": "b7f504c133c7d3445d31b5e51cc4e8101319ed7aca17b240d8c46e5de9ab69c6",
         "LICENSES/scikit-learn.txt": "50d6a9d340f19ab355609917993114daf5f47e3161067bcf34955bbd05cd9cb0",
         "docs/linalg.md": "5e7bcb2eab8dc367bc85b6bbba306c479651a335881a18b80392f550a97f34bf",

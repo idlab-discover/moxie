@@ -67,7 +67,7 @@ Each project contains:
 | `path`, `revision` | Source root and Git revision (40 hexadecimal characters) |
 | `files` | Relative filename to SHA-256 map; every consumed file must be pinned |
 | `modules` | Full `moxie.*` module to `{ "file": "src/...mojo" }` |
-| `assets` | Destination to pinned source filename, for `numojo/`, `mojo_linalg/` and `licenses/` |
+| `assets` | Destination to pinned source filename, for `numojo/`, `mojo_linalg/`, `numax/` and `licenses/` |
 | `exports` | Embedded version-1 manifest, or null for non-Moxie assets |
 
 External repositories must be at the exact pinned HEAD. Projects in the same

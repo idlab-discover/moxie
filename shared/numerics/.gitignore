@@ -1,0 +1,11 @@
+.pixi/
+.venv/
+build/
+builds/
+benchmarks/
+profiling/
+docs/private/
+references/
+__pycache__/
+*.pyc
+*.mojoc

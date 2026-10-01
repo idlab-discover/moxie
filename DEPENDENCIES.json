@@ -25,6 +25,9 @@
         },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
+        },
+        "moxie._categorical": {
+          "file": "src/moxie/_categorical.mojo"
         }
       },
       "assets": {

@@ -45,6 +45,7 @@ def test():
         run(executable(source))
     run('bash', ROOT / 'tests/check_compile_fail.sh')
     run(sys.executable, ROOT / 'tests/serialization_wire.py')
+    run(sys.executable, ROOT / 'tests/categorical_parity.py')
     for name in ['contracts', 'dtypes', 'serialization']:
         run(executable(ROOT / f'tests/dummy/{name}.mojo'))
     for name, message in [('sparse', '_sparse'), ('incremental', 'partial_fit')]:

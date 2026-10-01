@@ -47,6 +47,7 @@ are in `builds/deps`. Do not edit that generated directory.
 ## Scope and validation
 
 - [Dummy native API](docs/dummy/api.md) and [dense scope](docs/dummy/scope.md)
+- [Categorical feature columns](docs/categorical.md)
 - [Model serialization](docs/serialization.md)
 - [Estimator interfaces and differences from Python](docs/interfaces.md)
 - [Family repositories](docs/families.md) and [contribution rules](AGENTS.md)

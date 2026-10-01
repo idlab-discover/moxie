@@ -32,14 +32,16 @@ not reset it or copy it implicitly. This matters during prediction as well as
 fit: Dummy's integer-seeded prediction repeats, while its mutable-state
 prediction advances. Explicit state copies model snapshots, not shared aliases.
 
-The native equivalent of `None` is an application-owned context initialized
-with `entropy_state()` once and subsequently passed by mutable reference to all
-consumers sharing that context. This is an explicit adaptation of NumPy's
-implicit global singleton. The factory uses monotonic-clock seed bits; it does
-not promise NumPy's OS-entropy initialization, cross-run sequences or unique
-seeds for simultaneous initialization. Retain one context rather than calling
-the factory per draw. An integer seed is required for reproducibility. Sharing
-one mutable state concurrently is outside this serial borrowing contract.
+`check_random_state()` and `check_random_state(None)` lease a process-wide
+MT19937 stream, shared across Moxie consumers. It is initialized once using the
+existing `entropy_state()` policy. The factory uses monotonic-clock seed bits;
+it does not promise NumPy's OS-entropy initialization, cross-run sequences or
+unique seeds across simultaneous processes. Use `seed_global_random_state(seed)`
+to reset this default stream reproducibly, including its cached normal.
+
+The Moxie singleton is separate from both NumPy and std.random's Philox stream.
+`entropy_state()` remains available for application-owned independent contexts.
+Native global ownership and synchronization are described below.
 
 ## Operations and shapes
 
@@ -253,3 +255,63 @@ Consumers keep sklearn's algorithm-specific seed initialization and draw order.
 Parity compiles a test bridge to the unmodified pinned `_random.pxd` and checks
 both output and full state exactly across boundary seeds and long sequences.
 The BSD-3-Clause notice is retained in `LICENSES/scikit-learn.txt`.
+
+
+## Normalizing random_state
+
+`check_random_state` returns a move-only `RandomStateHandle`. It provides the
+same generator methods through `handle[]`, or a scoped pointer in a `with` block:
+
+```mojo
+from moxie._random import RandomState, check_random_state, seed_global_random_state
+
+def main() raises:
+    seed_global_random_state(42)
+    with check_random_state() as rng:
+        print(rng[].standard_normal())
+    with check_random_state(None) as rng:
+        print(rng[].standard_normal())  # continues the same stream and cache
+    with check_random_state(42) as rng:
+        print(rng[].standard_normal())  # fresh stream on each normalization
+    var shared = RandomState(42)
+    with check_random_state(shared) as rng:
+        print(rng[].standard_normal())  # advances shared, without copying
+```
+
+| Argument | Ownership and repeat calls |
+| --- | --- |
+| omitted or `None` | Exclusive handle to the process default stream; advances across calls |
+| `Int` | Fresh owned state; repeats the seed's sequence on each normalization |
+| `mut RandomState` | Borrows the same state; advances it and preserves its normal cache |
+| `Optional[Int]` | Present seed means fresh owned state; empty means the default stream |
+
+Supported integer range is unchanged: 0 through 2**32-1. Invalid integer seeds
+raise before changing any existing stream. `seed_global_random_state` resets
+only the default stream; independently owned and borrowed states are unaffected.
+
+This is a native ownership adaptation of sklearn's `check_random_state`, not a
+Python object identity API. Float/string seeds, NumPy module objects and NumPy
+Generator objects have no overload. The handle cannot be copied. Borrowed state must remain alive, and conflicting
+mutable arguments are rejected by the compiler. Sequential calls through the
+original state or the handle access the same stream. A reference obtained
+through the handle cannot outlive it. Call `.copy()` explicitly on the
+underlying RandomState only when an independent snapshot is wanted.
+
+The default handle holds a nonblocking exclusive lease for its lifetime.
+Nested or concurrent acquisition and reseeding while a lease is outstanding
+raise `RuntimeError`-prefixed errors instead of racing or deadlocking. Nested
+algorithms should pass the active `rng[]` as a borrowed RandomState. Lease
+release occurs on destruction, including exception unwinding and after moving
+the handle to another function. Prefer `with check_random_state(...) as rng`
+for operation-sized lifetimes. If a handle is stored in a variable, it retains
+its lease for its lifetime, including across repeated `with` uses.
+
+The standard-library `_Global` owns process storage and teardown; `Atomic`
+protects initialization and access. No parallel draw ordering, shared Python
+singleton, fork reseeding, or serialized global-state format is promised.
+
+Validation compares repeated normalized calls and complete state against the
+original pinned sklearn normalizer. Compile-failure tests enforce borrowing,
+noncopyability and reference lifetimes. Independent compiled consumers verify
+that their module calls and main code share one stream. Existing RNG tests
+continue to establish draw-sequence behavior, including FP contraction settings.

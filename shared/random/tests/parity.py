@@ -189,3 +189,6 @@ assert state[:2]==expected_state[2:4]
 np.testing.assert_array_equal(state[3],expected_state[1])
 np.testing.assert_allclose(state[2],expected_state[4],rtol=2e-14,atol=2e-14)
 print('PASS multivariate covariance reconstruction, normal-stream transform, empirical moments and NumPy draw consumption; SVD-dependent samples need not equal NumPy')
+
+from normalization_parity import run as normalization_parity
+normalization_parity(check)

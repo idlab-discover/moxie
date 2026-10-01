@@ -283,7 +283,7 @@
         "LICENSES/NumPy.txt": "1be1df33863f97a7bc1c4d67980bd6c69c9a6fef0a5ee76e6ad6cb91e56e8491",
         "LICENSES/scikit-learn.txt": "50d6a9d340f19ab355609917993114daf5f47e3161067bcf34955bbd05cd9cb0",
         "src/moxie/__init__.mojo": "7701cf97b8e700cbdd4fdd1d79acf9309128ada14812f4b7d652fe64c0f6ee47",
-        "src/moxie/_random.mojo": "09f896386e0a2e1e39cdc13a780db03c3a00d015d07d443ca5187d56f6ce809b"
+        "src/moxie/_random.mojo": "3ed41592ea621832387cbe99e66ca4cd618a50ff1571b2da180fe1f471e2d72c"
       },
       "id": "random",
       "modules": {
@@ -292,7 +292,7 @@
         }
       },
       "path": ".",
-      "revision": "786a5ee9423df5b21a9e9bb0bc16a708271b462e"
+      "revision": "27c65049f31285e3a6bcca3d48048b057d2c6b52"
     },
     {
       "assets": {

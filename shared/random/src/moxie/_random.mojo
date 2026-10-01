@@ -7,6 +7,10 @@ from std.sys import llvm_intrinsic
 from std.random import Random as Philox
 from std.time import perf_counter_ns
 from std.collections import Set
+from std.atomic import Atomic
+from std.ffi import _Global
+from std.memory import Pointer
+from std.utils import Variant
 import numojo as nm
 from numojo import NDArray, Shape, Item
 from mojo_linalg import svd, NumericalError
@@ -691,3 +695,109 @@ def _covariance_transform_impl(cov: NDArray[DType.float64], tol: Float64) raises
         for j in range(n):
             weighted[Item(i,j)] = sqrt(singular.item(i)) * vectors.item(i,j)
     return weighted^
+
+
+struct _GlobalRandomStorage(Movable):
+    var state: Optional[RandomState]
+    var active: Atomic[DType.int32]
+
+    def __init__(out self):
+        self.state = Optional[RandomState]()
+        self.active = Atomic[DType.int32](0)
+
+
+def _init_global_random_storage() -> _GlobalRandomStorage:
+    return _GlobalRandomStorage()
+
+
+# Distinct from std.random's Philox singleton. The compiler runtime owns and
+# destroys this storage; the atomic lease protects initialization and all draws.
+comptime _global_mt19937 = _Global["moxie.random.mt19937.v1", _init_global_random_storage]
+
+
+struct _GlobalRandomLease(Movable):
+    var storage: Pointer[_GlobalRandomStorage, MutUntrackedOrigin]
+
+    def __init__(out self) raises:
+        var storage = _global_mt19937.get_or_create_ptr()
+        var expected = Int32(0)
+        if not storage[].active.compare_exchange(expected, Int32(1)):
+            raise Error("RuntimeError: global RandomState is already borrowed; use the active state or an independent stream")
+        self.storage = storage
+
+    def __deinit__(deinit self):
+        self.storage[].active.store(Int32(0))
+
+
+struct RandomStateHandle[origin: MutOrigin](Movable):
+    """Move-only normalized RNG; access with handle[] or a scoped with block.
+
+    An owned seed creates fresh state. A borrowed pointer retains the caller's
+    origin. A default stream additionally holds an exclusive process-wide lease.
+    """
+    var _state: Variant[RandomState, Pointer[RandomState, Self.origin]]
+    var _lease: Optional[_GlobalRandomLease]
+
+    def __init__(out self, var state: RandomState):
+        self._state = Variant[RandomState, Pointer[RandomState, Self.origin]](state^)
+        self._lease = Optional[_GlobalRandomLease]()
+
+    def __init__(out self, state: Pointer[RandomState, Self.origin]):
+        self._state = Variant[RandomState, Pointer[RandomState, Self.origin]](state)
+        self._lease = Optional[_GlobalRandomLease]()
+
+    def __init__(out self, state: Pointer[RandomState, Self.origin], var lease: _GlobalRandomLease):
+        self._state = Variant[RandomState, Pointer[RandomState, Self.origin]](state)
+        self._lease = Optional[_GlobalRandomLease](lease^)
+
+    def __getitem__(mut self) -> ref[origin_of(self, Self.origin)] RandomState:
+        # Narrow, never extend, the referent's lifetime. Owned state belongs to
+        # self; a borrowed origin parameter outlives self; global state is leased
+        # for self's lifetime. No raw untracked pointer escapes this boundary.
+        if self._state.isa[RandomState]():
+            return Pointer(to=self._state[RandomState]).unsafe_origin_cast[origin_of(self, Self.origin)]()[]
+        return self._state[Pointer[RandomState, Self.origin]].unsafe_origin_cast[origin_of(self, Self.origin)]()[]
+
+    def __enter__(mut self) -> Pointer[RandomState, origin_of(self, Self.origin)]:
+        return Pointer(to=self[])
+
+    def __exit__(mut self):
+        # Fields are destroyed on both normal and exceptional scope exit.
+        pass
+
+
+def check_random_state(seed: Int) raises -> RandomStateHandle[MutUntrackedOrigin]:
+    """Normalize an integer to a fresh, owned MT19937 stream."""
+    return RandomStateHandle[MutUntrackedOrigin](RandomState(seed))
+
+
+def check_random_state(mut state: RandomState) -> RandomStateHandle[origin_of(state)]:
+    """Borrow an existing stream without copying or resetting it."""
+    return RandomStateHandle[origin_of(state)](Pointer(to=state))
+
+
+def check_random_state(seed: NoneType = None) raises -> RandomStateHandle[MutUntrackedOrigin]:
+    """Lease the process default stream; initialize once on first use."""
+    var lease = _GlobalRandomLease()
+    if not lease.storage[].state:
+        lease.storage[].state = entropy_state()
+    var state = Pointer(to=lease.storage[].state.value())
+    return RandomStateHandle[MutUntrackedOrigin](state, lease^)
+
+
+def check_random_state(seed: Optional[Int]) raises -> RandomStateHandle[MutUntrackedOrigin]:
+    """Normalize an optional integer configuration; an empty value means None."""
+    if seed:
+        return check_random_state(seed.value())
+    return check_random_state()
+
+
+def seed_global_random_state(seed: Int) raises:
+    """Reset the process default MT19937, including its Gaussian cache.
+
+    Invalid seeds or an outstanding default-stream lease leave it unchanged.
+    This does not seed std.random, NumPy, or any independently owned state.
+    """
+    var state = RandomState(seed)
+    var lease = _GlobalRandomLease()
+    lease.storage[].state = state^

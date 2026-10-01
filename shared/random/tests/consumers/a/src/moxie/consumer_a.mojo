@@ -1,4 +1,4 @@
-from moxie._random import RandomState
+from moxie._random import RandomState, check_random_state
 
 def evaluate(mut state: RandomState) -> Float64:
     return state.random_sample()
@@ -16,3 +16,8 @@ struct SeededProbe(Copyable, Movable):
         self.learned_ = state.random_sample()
     def clone(self) -> Self:
         return Self(self.seed)
+
+
+def evaluate_default() raises -> Float64:
+    with check_random_state() as rng:
+        return rng[].random_sample()

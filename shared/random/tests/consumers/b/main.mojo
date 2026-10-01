@@ -1,5 +1,5 @@
-from moxie._random import RandomState, our_rand_r
-from moxie.consumer_b import evaluate, SeededProbe
+from moxie._random import RandomState, our_rand_r, check_random_state, seed_global_random_state
+from moxie.consumer_b import evaluate, evaluate_default, SeededProbe
 from std.testing import assert_equal, assert_true
 
 def main() raises:
@@ -21,3 +21,10 @@ def main() raises:
     cloned.seed = 43
     cloned.fit()
     assert_true(cloned.learned_ != estimator.learned_)
+
+    seed_global_random_state(42)
+    var reference = RandomState(42)
+    assert_equal(evaluate_default(), reference.random_sample())
+    with check_random_state() as default_state:
+        assert_equal(default_state[].random_sample(), reference.random_sample())
+    assert_equal(evaluate_default(), reference.random_sample())

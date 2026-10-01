@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p builds
-if mojo build -I src tests/compile_fail/missing_predict.mojo -o builds/invalid-predictor > builds/missing-predict.log 2>&1; then
+if mojo build -I builds/deps tests/compile_fail/missing_predict.mojo -o builds/invalid-predictor > builds/missing-predict.log 2>&1; then
     echo 'ERROR: compiler accepted a Predictor without predict' >&2
     exit 1
 fi

@@ -2,7 +2,9 @@
 
 Each sibling `moxie-<module>` repository starts from moxie tag `scaffold-v1.1`.
 Public imports stay under `moxie.<module>`, matching the scikit-learn module
-structure. These are interface scaffolds, not implemented estimators. Each
+structure. The family table records the original interface scaffolds. Dense Dummy
+estimators have since been integrated into this repository; see the
+[Dummy API](dummy/api.md). Other families continue to develop independently. Each
 repository contains its own Pixi environment, Git history, family contracts,
 compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 

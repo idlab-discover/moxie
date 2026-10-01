@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "projects": [
+    {
+      "id": "moxie",
+      "path": ".",
+      "modules": {
+        "moxie._dummy_contracts": {
+          "file": "src/moxie/_dummy_contracts.mojo"
+        },
+        "moxie.base": {
+          "file": "src/moxie/base.mojo"
+        },
+        "moxie.dummy": {
+          "file": "src/moxie/dummy.mojo"
+        },
+        "moxie.dummy_serialization": {
+          "file": "src/moxie/dummy_serialization.mojo"
+        },
+        "moxie.serialization": {
+          "file": "src/moxie/serialization.mojo"
+        },
+        "moxie.serialization_snappy": {
+          "file": "src/moxie/serialization_snappy.mojo"
+        },
+        "moxie.utils.validation": {
+          "file": "src/moxie/utils/validation.mojo"
+        }
+      },
+      "assets": {
+        "licenses/scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {
+            "BaseEstimator": "moxie.base",
+            "ClassifierMixin": "moxie.base",
+            "Predictor": "moxie.base",
+            "RegressorMixin": "moxie.base",
+            "SupervisedEstimator": "moxie.base",
+            "TransformerMixin": "moxie.base",
+            "UnsupervisedEstimator": "moxie.base",
+            "clone": "moxie.base",
+            "DummyClassifier": "moxie.dummy",
+            "DummyRegressor": "moxie.dummy",
+            "DummyClassifierSchema": "moxie.dummy_serialization",
+            "DummyRegressorSchema": "moxie.dummy_serialization"
+          },
+          "moxie.utils": {
+            "FittedState": "moxie.utils.validation",
+            "check_is_fitted": "moxie.utils.validation"
+          }
+        },
+        "schema": 1
+      }
+    },
+    {
+      "assets": {
+        "licenses/NuMojo-LICENSE": "LICENSE",
+        "numojo/__init__.mojo": "numojo/__init__.mojo",
+        "numojo/core/__init__.mojo": "numojo/core/__init__.mojo",
+        "numojo/core/accelerator/__init__.mojo": "numojo/core/accelerator/__init__.mojo",
+        "numojo/core/accelerator/device.mojo": "numojo/core/accelerator/device.mojo",
+        "numojo/core/accelerator/kernels/__init__.mojo": "numojo/core/accelerator/kernels/__init__.mojo",
+        "numojo/core/accelerator/kernels/binary_ops.mojo": "numojo/core/accelerator/kernels/binary_ops.mojo",
+        "numojo/core/accelerator/kernels/reduction_ops.mojo": "numojo/core/accelerator/kernels/reduction_ops.mojo",
+        "numojo/core/accelerator/kernels/unary_ops.mojo": "numojo/core/accelerator/kernels/unary_ops.mojo",
+        "numojo/core/accelerator_ndarray.mojo": "numojo/core/accelerator_ndarray.mojo",
+        "numojo/core/complex/__init__.mojo": "numojo/core/complex/__init__.mojo",
+        "numojo/core/complex/complex_ndarray.mojo": "numojo/core/complex/complex_ndarray.mojo",
+        "numojo/core/complex/complex_simd.mojo": "numojo/core/complex/complex_simd.mojo",
+        "numojo/core/dtype/__init__.mojo": "numojo/core/dtype/__init__.mojo",
+        "numojo/core/dtype/complex_dtype.mojo": "numojo/core/dtype/complex_dtype.mojo",
+        "numojo/core/dtype/default_dtype.mojo": "numojo/core/dtype/default_dtype.mojo",
+        "numojo/core/dtype/utility.mojo": "numojo/core/dtype/utility.mojo",
+        "numojo/core/error.mojo": "numojo/core/error.mojo",
+        "numojo/core/indexing/__init__.mojo": "numojo/core/indexing/__init__.mojo",
+        "numojo/core/indexing/index_buffer.mojo": "numojo/core/indexing/index_buffer.mojo",
+        "numojo/core/indexing/item.mojo": "numojo/core/indexing/item.mojo",
+        "numojo/core/indexing/offset.mojo": "numojo/core/indexing/offset.mojo",
+        "numojo/core/indexing/slicing.mojo": "numojo/core/indexing/slicing.mojo",
+        "numojo/core/indexing/traversal.mojo": "numojo/core/indexing/traversal.mojo",
+        "numojo/core/indexing/utility.mojo": "numojo/core/indexing/utility.mojo",
+        "numojo/core/indexing/validation.mojo": "numojo/core/indexing/validation.mojo",
+        "numojo/core/layout/__init__.mojo": "numojo/core/layout/__init__.mojo",
+        "numojo/core/layout/array_methods.mojo": "numojo/core/layout/array_methods.mojo",
+        "numojo/core/layout/flags.mojo": "numojo/core/layout/flags.mojo",
+        "numojo/core/layout/ndshape.mojo": "numojo/core/layout/ndshape.mojo",
+        "numojo/core/layout/ndstrides.mojo": "numojo/core/layout/ndstrides.mojo",
+        "numojo/core/memory/__init__.mojo": "numojo/core/memory/__init__.mojo",
+        "numojo/core/memory/data_container.mojo": "numojo/core/memory/data_container.mojo",
+        "numojo/core/memory/dlpack.mojo": "numojo/core/memory/dlpack.mojo",
+        "numojo/core/memory/storage.mojo": "numojo/core/memory/storage.mojo",
+        "numojo/core/ndarray.mojo": "numojo/core/ndarray.mojo",
+        "numojo/core/traits/__init__.mojo": "numojo/core/traits/__init__.mojo",
+        "numojo/core/traits/array_like.mojo": "numojo/core/traits/array_like.mojo",
+        "numojo/core/traits/backend.mojo": "numojo/core/traits/backend.mojo",
+        "numojo/core/traits/buffered.mojo": "numojo/core/traits/buffered.mojo",
+        "numojo/core/traits/indexer_collection_element.mojo": "numojo/core/traits/indexer_collection_element.mojo",
+        "numojo/core/type_aliases.mojo": "numojo/core/type_aliases.mojo",
+        "numojo/prelude.mojo": "numojo/prelude.mojo",
+        "numojo/routines/__init__.mojo": "numojo/routines/__init__.mojo",
+        "numojo/routines/bitwise.mojo": "numojo/routines/bitwise.mojo",
+        "numojo/routines/constants.mojo": "numojo/routines/constants.mojo",
+        "numojo/routines/creation.mojo": "numojo/routines/creation.mojo",
+        "numojo/routines/functional.mojo": "numojo/routines/functional.mojo",
+        "numojo/routines/indexing.mojo": "numojo/routines/indexing.mojo",
+        "numojo/routines/io/__init__.mojo": "numojo/routines/io/__init__.mojo",
+        "numojo/routines/io/files.mojo": "numojo/routines/io/files.mojo",
+        "numojo/routines/io/formatting.mojo": "numojo/routines/io/formatting.mojo",
+        "numojo/routines/linalg/__init__.mojo": "numojo/routines/linalg/__init__.mojo",
+        "numojo/routines/linalg/decompositions.mojo": "numojo/routines/linalg/decompositions.mojo",
+        "numojo/routines/linalg/misc.mojo": "numojo/routines/linalg/misc.mojo",
+        "numojo/routines/linalg/norms.mojo": "numojo/routines/linalg/norms.mojo",
+        "numojo/routines/linalg/products.mojo": "numojo/routines/linalg/products.mojo",
+        "numojo/routines/linalg/solving.mojo": "numojo/routines/linalg/solving.mojo",
+        "numojo/routines/logic/__init__.mojo": "numojo/routines/logic/__init__.mojo",
+        "numojo/routines/logic/comparison.mojo": "numojo/routines/logic/comparison.mojo",
+        "numojo/routines/logic/contents.mojo": "numojo/routines/logic/contents.mojo",
+        "numojo/routines/logic/logical_ops.mojo": "numojo/routines/logic/logical_ops.mojo",
+        "numojo/routines/logic/truth.mojo": "numojo/routines/logic/truth.mojo",
+        "numojo/routines/manipulation.mojo": "numojo/routines/manipulation.mojo",
+        "numojo/routines/math/__init__.mojo": "numojo/routines/math/__init__.mojo",
+        "numojo/routines/math/arithmetic.mojo": "numojo/routines/math/arithmetic.mojo",
+        "numojo/routines/math/differences.mojo": "numojo/routines/math/differences.mojo",
+        "numojo/routines/math/exponents.mojo": "numojo/routines/math/exponents.mojo",
+        "numojo/routines/math/extrema.mojo": "numojo/routines/math/extrema.mojo",
+        "numojo/routines/math/floating.mojo": "numojo/routines/math/floating.mojo",
+        "numojo/routines/math/hyper.mojo": "numojo/routines/math/hyper.mojo",
+        "numojo/routines/math/misc.mojo": "numojo/routines/math/misc.mojo",
+        "numojo/routines/math/products.mojo": "numojo/routines/math/products.mojo",
+        "numojo/routines/math/rounding.mojo": "numojo/routines/math/rounding.mojo",
+        "numojo/routines/math/sums.mojo": "numojo/routines/math/sums.mojo",
+        "numojo/routines/math/trig.mojo": "numojo/routines/math/trig.mojo",
+        "numojo/routines/operations/__init__.mojo": "numojo/routines/operations/__init__.mojo",
+        "numojo/routines/operations/backend.mojo": "numojo/routines/operations/backend.mojo",
+        "numojo/routines/random.mojo": "numojo/routines/random.mojo",
+        "numojo/routines/searching.mojo": "numojo/routines/searching.mojo",
+        "numojo/routines/sorting.mojo": "numojo/routines/sorting.mojo",
+        "numojo/routines/statistics/__init__.mojo": "numojo/routines/statistics/__init__.mojo",
+        "numojo/routines/statistics/averages.mojo": "numojo/routines/statistics/averages.mojo"
+      },
+      "exports": null,
+      "id": "numojo",
+      "modules": {},
+      "path": "../../NuMojo"
+    },
+    {
+      "assets": {
+        "licenses/random-MT19937.txt": "LICENSES/MT19937.txt",
+        "licenses/random-NumPy-distributions.md": "LICENSES/NumPy-distributions.md",
+        "licenses/random-NumPy-random.md": "LICENSES/NumPy-random.md",
+        "licenses/random-NumPy.txt": "LICENSES/NumPy.txt",
+        "licenses/random-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "random",
+      "modules": {
+        "moxie._random": {
+          "file": "src/moxie/_random.mojo"
+        }
+      },
+      "path": "shared/random"
+    },
+    {
+      "assets": {
+        "mojo_linalg/__init__.mojo": "src/mojo_linalg/__init__.mojo",
+        "mojo_linalg/_determinant.mojo": "src/mojo_linalg/_determinant.mojo",
+        "mojo_linalg/_spectral.mojo": "src/mojo_linalg/_spectral.mojo",
+        "mojo_linalg/_storage.mojo": "src/mojo_linalg/_storage.mojo",
+        "mojo_linalg/cholesky.mojo": "src/mojo_linalg/cholesky.mojo",
+        "mojo_linalg/indefinite.mojo": "src/mojo_linalg/indefinite.mojo",
+        "mojo_linalg/qr.mojo": "src/mojo_linalg/qr.mojo",
+        "mojo_linalg/svd.mojo": "src/mojo_linalg/svd.mojo",
+        "mojo_linalg/symmetric.mojo": "src/mojo_linalg/symmetric.mojo",
+        "mojo_linalg/triangular.mojo": "src/mojo_linalg/triangular.mojo"
+      },
+      "exports": null,
+      "id": "mojo-linalg",
+      "modules": {},
+      "path": "../mojo-linalg"
+    },
+    {
+      "id": "mojo-snappy",
+      "path": "../../mojo-snappy",
+      "modules": {},
+      "assets": {
+        "mojo_snappy/__init__.mojo": "src/mojo_snappy/__init__.mojo",
+        "mojo_snappy/codec.mojo": "src/mojo_snappy/codec.mojo",
+        "licenses/mojo-snappy-LICENSE": "LICENSE",
+        "licenses/mojo-snappy-THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    }
+  ],
+  "overrides": []
+}

@@ -1,4 +1,4 @@
-"""Pure Mojo estimator contracts. No learning algorithms are implemented yet."""
+"""Pure Mojo estimator contracts and dense Dummy estimators."""
 from .base import BaseEstimator, SupervisedEstimator, UnsupervisedEstimator
 from .base import (
     Predictor,
@@ -7,3 +7,6 @@ from .base import (
     TransformerMixin,
     clone,
 )
+
+from .dummy import DummyClassifier, DummyRegressor
+from .dummy_serialization import DummyClassifierSchema, DummyRegressorSchema

@@ -16,7 +16,7 @@ family explicitly defines forward-compatible behavior.
 from moxie.serialization import save_model, load_model
 from moxie.dummy_serialization import DummyRegressorSchema
 
-# Requires the dummy family's assembled namespace.
+# Compile against Moxie's builds/deps after pixi run build.
 save_model[DummyRegressorSchema](model, "baseline.moxie")
 var restored = load_model[DummyRegressorSchema]("baseline.moxie")
 var predictions = restored.predict(X)
@@ -57,13 +57,11 @@ payloads. Compression is per array, opt-in, and used only when it reduces bytes.
 The manifest stays uncompressed. No speed or universal size benefit is promised.
 
 The optional codec uses the current local `../../mojo-snappy/src` checkout.
-Include `-I ../../mojo-snappy/src` when importing the codec, precompiling the
-whole package, or consuming that precompiled package (Mojo resolves its recorded
-codec dependency eagerly). There is no source hash lock or cached snapshot.
-The core `serialization` module can be imported from source without Snappy.
-mojo-snappy's license and upstream notices remain in its source repository;
-family assembly includes those license assets alongside the codec. The tested
-toolchain remains Mojo 1.0.0.
+Moxie's build assembles it with the package through `DEPENDENCIES.json`;
+compile consumers with `-I builds/deps` after `pixi run build`. License assets
+are retained in `builds/deps/licenses`. There is no source hash lock or cached
+snapshot. The tested toolchain remains Mojo 1.0.0. Raw serialization does not
+use the codec at runtime; package builds include it so both APIs are available.
 
 ## Wire format, version 1
 
@@ -108,4 +106,4 @@ Run `pixi run build` and `pixi run test`. Tests cover byte-exact round trips,
 all supported dtypes, empty arrays, malformed structure with recomputed checksums,
 truncation at every offset, corruption at every byte, limits, codec rejection,
 Snappy round trips and an independent Python struct/zlib wire oracle. Python is
-validation/build tooling only. Dummy owns its real estimator round-trip tests.
+validation/build tooling only. Real Dummy estimator round-trip tests live in `tests/dummy/serialization.mojo`.

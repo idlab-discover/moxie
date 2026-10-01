@@ -12,6 +12,7 @@ from std.time import perf_counter_ns
 from std.sys import num_logical_cores
 from std.memory import Pointer
 from max.algorithm import parallelize
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut, InputFeatureCount
 from moxie.base import BaseEstimator, FitTransformer, TransformerMixin, UnsupervisedEstimator, clone
 from moxie.utils.validation import check_is_fitted
 from moxie.compose._base import ColumnComposer
@@ -706,6 +707,8 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
             return
         comptime if conforms_to(Self.E, FeatureNamesOut):
             groups.append((self.name, _names_out(self.fitted_.value(), selected)))
+        elif conforms_to(Self.E, NativeFeatureNamesOut):
+            groups.append((self.name, self.fitted_.value().get_feature_names_out(Optional[List[String]](selected^))))
         else:
             raise Error(String("AttributeError: Transformer ", self.name, " (type ", _type_label[Self.E](),
                                ") does not provide get_feature_names_out."))
@@ -1000,7 +1003,7 @@ comptime _CONSTRUCTOR_PARAMS: List[String] = [
 ]
 
 
-struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dtype]](ColumnComposer, Copyable):
+struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dtype]](ColumnComposer, Copyable, NativeFeatureNamesOut, InputFeatureCount):
     """Applies transformers to columns of a dense array and concatenates the results.
 
     `ColumnTransformer(ColumnEntry("num", Scaler(), [0, 1]), ColumnEntry("raw", "passthrough", [3]),
@@ -1539,20 +1542,28 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
 
     # -- fitted attributes ----------------------------------------------------
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_n_features_in(self) raises -> Int:
+        check_is_fitted(self)
+        return self.n_features_in_.value()
+
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
+        """Borrow a supplied list, including an explicitly empty list."""
+        return self.get_feature_names_out(Optional[List[String]](input_features.copy()))
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         """Output feature names; `x0, x1, ...` input names when none are given."""
         check_is_fitted(self)
         var n = self.n_features_in_.value()
         var names = List[String]()
-        if len(input_features) > 0:
-            if len(input_features) != n:
+        if input_features:
+            if len(input_features.value()) != n:
                 raise Error(String("ValueError: input_features should have length equal to number of features (",
-                                   n, "), got ", len(input_features)))
+                                   n, "), got ", len(input_features.value())))
             if self.feature_names_in_:
                 for i in range(n):
-                    if input_features[i] != self.feature_names_in_.value()[i]:
+                    if input_features.value()[i] != self.feature_names_in_.value()[i]:
                         raise Error("ValueError: input_features is not equal to feature_names_in_")
-            names = input_features.copy()
+            names = input_features.value().copy()
         elif self.feature_names_in_:
             names = self.feature_names_in_.value().copy()
         else:

@@ -5,6 +5,8 @@ import os
 import subprocess
 import sys
 
+import pipeline_checks
+
 ROOT = Path(__file__).resolve().parents[1]
 DEPS = ROOT / 'builds/deps'
 
@@ -33,12 +35,13 @@ def build():
     sources = sorted((ROOT / 'tests').glob('*.mojo'))
     sources += sorted((ROOT / 'tests/dummy').glob('*.mojo'))
     sources += compose_sources()
+    sources += pipeline_checks.sources()
     sources += sorted((ROOT / 'examples').glob('*.mojo'))
     for source in sources:
         binary = executable(source)
         binary.parent.mkdir(parents=True, exist_ok=True)
         run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,
-            '-I', ROOT / 'examples', '-I', ROOT / 'tests/compose/support', source, '-o', binary)
+            '-I', ROOT / 'tests/pipeline', '-I', ROOT / 'examples', '-I', ROOT / 'tests/compose/support', source, '-o', binary)
 
 
 def compose_sources():
@@ -70,6 +73,8 @@ def compose_test():
 
 
 def parity():
+    for name in ["parity.py", "union_parity.py", "compose_parity.py"]:
+        run(sys.executable, ROOT / "tests/pipeline" / name)
     run(sys.executable, ROOT / 'tests/dummy/parity.py')
     for relative in ['columns/parity.py', 'columns/named_parity.py', 'target/parity.py',
                      'models/parity.py', 'pipeline/parity.py']:
@@ -77,6 +82,7 @@ def parity():
 
 
 def test():
+    pipeline_checks.test(run, executable)
     compose_test()
     for source in sorted((ROOT / 'tests').glob('*.mojo')):
         run(executable(source))

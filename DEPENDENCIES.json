@@ -46,6 +46,30 @@
         },
         "moxie.compose._target": {
           "file": "src/moxie/compose/_target.mojo"
+        },
+        "moxie._pipeline_api_types": {
+          "file": "src/moxie/_pipeline_api_types.mojo"
+        },
+        "moxie._pipeline_api": {
+          "file": "src/moxie/_pipeline_api.mojo"
+        },
+        "moxie._pipeline_contracts": {
+          "file": "src/moxie/_pipeline_contracts.mojo"
+        },
+        "moxie._pipeline_sequential": {
+          "file": "src/moxie/_pipeline_sequential.mojo"
+        },
+        "moxie._pipeline_union": {
+          "file": "src/moxie/_pipeline_union.mojo"
+        },
+        "moxie.pipeline": {
+          "file": "src/moxie/pipeline.mojo"
+        },
+        "moxie._pipeline": {
+          "file": "src/moxie/_pipeline.mojo"
+        },
+        "moxie._feature_metadata": {
+          "file": "src/moxie/_feature_metadata.mojo"
         }
       },
       "assets": {
@@ -335,40 +359,6 @@
           }
         },
         "schema": 1
-      }
-    },
-    {
-      "id": "pipeline",
-      "path": "../moxie-pipeline",
-      "modules": {
-        "moxie._pipeline_api_types": {
-          "file": "src/moxie/_pipeline_api_types.mojo"
-        },
-        "moxie._pipeline_api": {
-          "file": "src/moxie/_pipeline_api.mojo"
-        },
-        "moxie._pipeline_contracts": {
-          "file": "src/moxie/_pipeline_contracts.mojo"
-        },
-        "moxie._pipeline_sequential": {
-          "file": "src/moxie/_pipeline_sequential.mojo"
-        },
-        "moxie._pipeline_union": {
-          "file": "src/moxie/_pipeline_union.mojo"
-        },
-        "moxie.pipeline": {
-          "file": "src/moxie/pipeline.mojo"
-        },
-        "moxie._pipeline": {
-          "file": "src/moxie/_pipeline.mojo"
-        }
-      },
-      "assets": {},
-      "exports": {
-        "schema": 1,
-        "packages": {
-          "moxie": {}
-        }
       }
     }
   ],

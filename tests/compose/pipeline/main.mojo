@@ -36,6 +36,7 @@ def check[dtype: DType, multi: Bool]() raises:
     with assert_raises():
         _ = pipe.predict(Z)
     pipe.fit(X, y)
+    assert_equal(pipe.n_features_in_(), X.shape[1])
     assert_true(pipe.__sklearn_is_fitted__())
     assert_true(pipe.transformer.__sklearn_is_fitted__())
     assert_equal(pipe.estimator.n_features_in_.value(), 4)
@@ -53,6 +54,8 @@ def check[dtype: DType, multi: Bool]() raises:
     var fresh = clone(pipe)
     assert_false(fresh.__sklearn_is_fitted__())
     assert_false(fresh.transformer.__sklearn_is_fitted__())
+    with assert_raises():
+        _ = fresh.n_features_in_()
     with assert_raises():
         _ = fresh.predict(Z)
     var params = fresh.get_params()

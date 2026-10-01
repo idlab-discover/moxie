@@ -6,6 +6,9 @@ Pure Mojo estimator contracts and dense scikit-learn-style baseline estimators.
 constant strategies. Both support sample weights, cloning and experimental
 native model persistence. Dense `ColumnTransformer`, `make_column_transformer`,
 `make_column_selector`, and `TransformedTargetRegressor` are also implemented.
+Typed supervised `Pipeline` and dense `FeatureUnion` are integrated; see the
+[Pipeline API](docs/pipeline/sequential.md) and [FeatureUnion API](docs/pipeline/feature-union.md).
+Their `make_pipeline` and `make_union` factories remain explicit scaffolds.
 
 ```sh
 pixi install --locked
@@ -26,6 +29,7 @@ from moxie.dummy import DummyClassifier, DummyRegressor
 from moxie.dummy_serialization import DummyClassifierSchema, DummyRegressorSchema
 from moxie.serialization import save_model, load_model
 from moxie.compose import ColumnTransformer, TransformedTargetRegressor
+from moxie.pipeline import Pipeline, FeatureUnion
 ```
 
 The Dummy estimator and schema types are also exported from `moxie`. Implementation
@@ -33,9 +37,9 @@ sources live in `src/moxie`; shared random state stays in `shared/random`.
 Builds assemble one namespace with the current local sources declared in
 `DEPENDENCIES.json`, including NuMojo, mojo-linalg (used by NuMojo), and the
 optional Snappy codec. Keep those checkouts at the declared paths. Missing
-sources and module ownership conflicts fail explicitly. The `moxie-dummy`
-and `moxie-compose` checkouts are not required to build or use Moxie.
-Compose consumes `../moxie-pipeline`, the LinearRegression subset of
+sources and module ownership conflicts fail explicitly. The `moxie-dummy`,
+`moxie-compose`, and `moxie-pipeline` checkouts are not required to build or use Moxie.
+Integrated composition tests consume the LinearRegression subset of
 `../moxie-linear_model`, and its existing NNLS dependency at
 `../.worktrees/mojo-optimize-linear_model`. These remain separately owned live
 source dependencies; this integration does not import their entire families.

@@ -25,7 +25,7 @@ def main():
         'threads':'serial RNG, OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=1','seed':42,'affinity':cpu,
         'boundary':'whole process, native contracts, allocation, numerical work and stdout; compilation excluded',
         'array_memory':'counts 6*k Float64; draws n*k Int64; total O(n*k), k<=3; RNG 624 UInt32 words',
-        'pins':{str(c.relative_to(ROOT)):hashlib.sha256((c/'DEPENDENCIES.lock.json').read_bytes()).hexdigest() for c in CONSUMERS}}
+        'manifests':{str(c.relative_to(ROOT)):hashlib.sha256((c/'DEPENDENCIES.lock.json').read_bytes()).hexdigest() for c in CONSUMERS}}
     (out/'metadata.json').write_text(json.dumps(metadata,indent=2))
     print(out)
 if __name__=='__main__': main()

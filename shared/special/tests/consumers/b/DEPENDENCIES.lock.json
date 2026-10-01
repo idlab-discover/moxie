@@ -22,14 +22,6 @@
         },
         "schema": 1
       },
-      "files": {
-        "docs/families.md": "21973693e4deea159db7fe2c24f04c14f0d5327b0106ab3c8c717940b66a0f55",
-        "docs/interfaces.md": "a043dd4901192693f1668fbc9ff0a6affce7a9f23b68cb4763ea4c927ec8890d",
-        "src/moxie/__init__.mojo": "474dbf695fa06d9a7224ef99c723734b9255a5430fdb594280249e12e98a625f",
-        "src/moxie/base.mojo": "840bca6c867ad373bf4cbec2509be09010ca251cd19fc721d8d35d0097c3ec9b",
-        "src/moxie/utils/__init__.mojo": "f7854152077a8cd7b3c7c8a569867d45cfcc04ed2c54f9c1d79aedfb75a23c36",
-        "src/moxie/utils/validation.mojo": "b40d3588a36d9895f1e216adf646f829a07e237b813e4e698476c8d9aad0b44d"
-      },
       "id": "moxie",
       "modules": {
         "moxie.base": {
@@ -41,8 +33,7 @@
           "file": "src/moxie/utils/validation.mojo"
         }
       },
-      "path": "../../../../..",
-      "revision": "786a5ee9423df5b21a9e9bb0bc16a708271b462e"
+      "path": "../../../../.."
     },
     {
       "assets": {},
@@ -50,17 +41,9 @@
         "packages": {},
         "schema": 1
       },
-      "files": {
-        "EXPORTS.json": "29b0364eb33019b68290be3a25192024aff7e4614443174089811572c9b4ec68",
-        "schemas/assembly-v1.schema.json": "57ac2d90f990cac7c9c2a9e42373e131b71914dead175391cf34052b807d7da8",
-        "schemas/exports-v1.schema.json": "8c677d50e45c5adcd6e69b27b0bde1d811224c11c9481abfd52bf30556a8c31b",
-        "tools/assemble.py": "f0e021d6fece9a260cfd2b0346fd688aeb7db7af6473698745d1ba6ebbaf8f78",
-        "tools/consume.py": "198781650ff1063c1561f18be197c2f90d072c693ec5065306dac46c487fa3a8"
-      },
       "id": "assembly",
       "modules": {},
-      "path": "../../../../assembly",
-      "revision": "f65608f3f0ae16309d30eb472366e1f3a1bcb5c2"
+      "path": "../../../../assembly"
     },
     {
       "assets": {
@@ -182,128 +165,9 @@
         "numax/stats/statistics.mojo": "numax/stats/statistics.mojo"
       },
       "exports": null,
-      "files": {
-        "LICENSE": "93aeeb749eac2add33bc81d16210ce6a669e666ecc01a5f1aa7d3b414f3ddc61",
-        "numax/__init__.mojo": "5cf3760261a0c742e1353f917377e5275258e245453110d458f911c21594ace8",
-        "numax/core/__init__.mojo": "2ce1298b7012b51b484cc1f962777282f53b27c0de09764f106a3ea0508afeac",
-        "numax/core/_drive.mojo": "cd54e7671e5bb67d2b2c03ec54b6d160e0d82e6f72323adb38f788bca5c5bf83",
-        "numax/core/array.mojo": "6c96aaac871fbf99fa3e55b4cd4555818804966ace3a94dfefdd164cfd469b76",
-        "numax/core/compensated.mojo": "6039ec75ef43c240a8a284ff5f7fe37817a2eb0ead17db31bda5d4a750be1e8c",
-        "numax/core/complex.mojo": "2d555b4633cf0f486093020b2a58036c6f98cc2cc3a04a8346a51c5906da1c19",
-        "numax/core/constants.mojo": "26722f010ca23d0c383970ba78226f4d61649f0151ceb74b933fc6374f60cf44",
-        "numax/core/decimal.mojo": "3bbd295d1782a6cc47350bd730dc9b46d41af769e05548b9de01bd073c9801d5",
-        "numax/core/dtypes.mojo": "321e01432bed929b36e3e150db48d6db6cbf8f35de4edc2aab25afda73d50139",
-        "numax/core/dual.mojo": "60ebf172ba7333c880677264955ee1ef9ef1e6b7c3b4326e0d16f2cc62664b5a",
-        "numax/core/elementwise.mojo": "397d744aae59b7061b573186764f6a620e129627a30035594f80dd6e75e47a69",
-        "numax/core/gradient.mojo": "2124bd75f89ed9fd389024a6c803ed42c0cdf27ecb7dfa56152d2b8b0720e0f5",
-        "numax/core/interval.mojo": "1b97926393424c4d8e416f7797d2f20c59a67d1978f259e41855190042d7d263",
-        "numax/core/libm.mojo": "a215d06408d0ae9316932d2361802ca60c198b700c07908e63da0676bc28edaa",
-        "numax/core/logic.mojo": "05716090f943eff3b6eecc72cbce35f0f2ee137ea8d9140767556e3bd41e15bd",
-        "numax/core/numeric.mojo": "6ebc48106307e2fc813a4a2d68781ff5d96c0d76672cc4117c0c5d61408b33bc",
-        "numax/core/ops.mojo": "e30dc438c7839ec7982c8c656b7294378adda26dbcebe23e619719529985d412",
-        "numax/core/plain.mojo": "50e14d878fee1d72d0f61d07b320dfdb626c2c0d095b456ad1ff0979a2eca365",
-        "numax/core/rowwise.mojo": "039d3e985ea65b711d08707c7e1bd5a4d49e4ca47bfb917b6d10f3f5b4311b21",
-        "numax/core/sorting.mojo": "380dce4d593fc823ae108972f826109ce65a3200d05a72410206e243f110010a",
-        "numax/core/tensor.mojo": "4990c446bcc2e530955019cf606f8992fbebdd7bc6cbf0fdd70d89a11420eae9",
-        "numax/core/tensorlike.mojo": "c90c16a7e904a91a4878a2544ca8170d6bc848d65cf46a2aaaab51343ee5cea1",
-        "numax/fft/__init__.mojo": "beeed671745ce4c435235a5e453961a54a07d04b59c8635a59fd388fd38bf08d",
-        "numax/fft/array/__init__.mojo": "04da9dce0ed046ae4eaa2d36550692acacb4485b6610f96f030d20e0287e5e84",
-        "numax/fft/array/fft.mojo": "a5d4737061fb9b9a006aa2e55cad2d1b98bf08ff1ecfc7ba69ac0473bd35d640",
-        "numax/fft/fft.mojo": "4c7f3c98fad5ebddae75f623751688b8bd3217c6496edfacfbdbcf68602235a9",
-        "numax/fft/trig.mojo": "ac4655273b8a5e3b91d0ad2e17ca395280c076e566e8863301a6db0a06220215",
-        "numax/integrate/__init__.mojo": "674c040b9593f580a557e2fc810794a96838bdbce9b001b8b9539a15c9b8273f",
-        "numax/integrate/array/__init__.mojo": "611e6103e910e0cc0151976e0d22c444b4c58e40a54d888e34d2fff2f034e6a9",
-        "numax/integrate/array/ode.mojo": "991840973cb72befb277606b02c8d76b2f53d571e5f97234aecc4aa25af0ab68",
-        "numax/integrate/array/quadrature.mojo": "0dc495d9708e29dcc4d945f82f96464f87c327195561d791677e4b100e67d1fb",
-        "numax/integrate/integrate.mojo": "87e80d7104aa7eebaa11569e3abeb5c6a53f18796180e7c620bb8ff12c87e53f",
-        "numax/integrate/ode.mojo": "59c8788b714e9a9b20f94ec163d0a181bce0a4afdd57ca4bd25a8100338e7d2a",
-        "numax/integrate/quadrature.mojo": "0a13120d7371254058fe0a9283884069dda010dac821a7184296fca75197582b",
-        "numax/interpolate/__init__.mojo": "a067d27a6bb10751e598600d55972928bfb19c902db4a8db7992c5e2a9f64708",
-        "numax/interpolate/array/__init__.mojo": "897f1272caa337ee2e755f0e3f7ccdad06ac64d67dd0949576a3418890f678d9",
-        "numax/interpolate/array/interp.mojo": "c0532599ec204d02ee5f87643014ef9a6fd19ed194dbf756607fe169ca6de8ae",
-        "numax/interpolate/chebyshev.mojo": "6e07826cc4af1f62358ef0c04b8d74a13e1360028e776e9a4b021569a15b7a52",
-        "numax/interpolate/grid.mojo": "ab15565fd38641230a0b47f488c52865a1bddef1b7c80928eaa1c219eeb5b779",
-        "numax/interpolate/interp.mojo": "b3291418757ebcb693a445a93b2178f1cf6ae42a810a9c96d4d1c82726e42c32",
-        "numax/interpolate/spline.mojo": "96da8748d1adbb805f594d7104c3d65165fc45594e3bad23ba57f1e94f95a597",
-        "numax/io/__init__.mojo": "bb76eb1f3496b49cecae4c3e4ed0fa689bc2948dd72b217338fb9deecc287ce2",
-        "numax/io/io.mojo": "25c38c151980249bdb0d581da1363657438273ad3882b7d1d721a95a3a873889",
-        "numax/io/npy.mojo": "50cdce320f89e309f5981cacd33cdab6318cee53b0505e0032ef76d9b2b2a489",
-        "numax/linalg/__init__.mojo": "06c1a32270d170970ffc6b6e9d321e1b3551f96d3d514ea682fcbe040d4ffcdf",
-        "numax/linalg/array/__init__.mojo": "f89a2b00f55a9d9e08e7bd35a7e4844200c1a17ab372e2d2915e5e904054e69f",
-        "numax/linalg/array/basic.mojo": "7bbd9cb0cf2ab0772ae63d3dd49dbb355a4fbdb4cb421fdb1de4ef665d0d2b8d",
-        "numax/linalg/array/blas.mojo": "5c1d3bb11d2305cc3bf6594c62be94dcb2f2809ba3ea11df9ba44d72eb51635e",
-        "numax/linalg/array/cholesky.mojo": "69fc31c0571f4cd81bb363298a2d39b00a3bd672326e2ccf42edbfb8e1640a48",
-        "numax/linalg/array/eigen.mojo": "930e031286ac75944e8a04f9d127cfcf6b83c292f931515d78622ed2ed5c7edd",
-        "numax/linalg/array/lu.mojo": "4bcf3a46895428a080a926b051f9bc56a7ba31ec5bdaa4638e53ca02bf70c715",
-        "numax/linalg/array/matfuncs.mojo": "e1b6330bb8f7aceee7bba143691d58c17204a273a3d9c755713d0bc061a6bf6a",
-        "numax/linalg/array/misc.mojo": "6d8e3bc42cfaba02f53c87dff270c7b71f92c8c3446ba6250239219024715d0d",
-        "numax/linalg/array/qr.mojo": "cc8e30a324bf306964003d89a204e2c29de01e160c705f79e8492870ddad035d",
-        "numax/linalg/array/triangular.mojo": "9ac9324cd7a084577cd0289ecbfea835eedf393de5e55027815c4453882050d0",
-        "numax/linalg/banded.mojo": "0c4524d74d7dcc2dfac84744b73ed70cca838784122ff2c79b2c0685cf7aab16",
-        "numax/linalg/basic.mojo": "c82c05a370938ed8189a42728566d99b2e6b41ca6a8398cffd0bb81d86a56ae8",
-        "numax/linalg/blas.mojo": "1cc857a2bed61cb70e4df9547dff8ca318a2532ced3750cb6b07ddc7053acce6",
-        "numax/linalg/cholesky.mojo": "bd781b8cb28a7617f5c74bd491bafde233caf9434a72e70c054ebdebec18906c",
-        "numax/linalg/common.mojo": "da0b70f886d8aa23557babc3ba0271fda8fd97d41df882c8ca2dc9ccbf7d6758",
-        "numax/linalg/eigen.mojo": "5fb742b8e8d6b9616d59511c9ce26ce7f61b6584e7c6910664339a95cf4863c0",
-        "numax/linalg/lu.mojo": "8425f8dccad609c3833e19ee8fd523ed56185712ae6009e77fbb84ca724bd9af",
-        "numax/linalg/matfuncs.mojo": "a319bd8d97ae54cba0da540baf29304980ba28b20a18f3a36eaef3a3a0fce26d",
-        "numax/linalg/misc.mojo": "382953c33aff9dd65bb4ac0396066d5e5bf392c50d68988712ca0f25f1c51c62",
-        "numax/linalg/panel.mojo": "5f98931d3deeafb7e4abdf05f6c04c6234316a1cd2fa600b90f4813183d70cb7",
-        "numax/linalg/qr.mojo": "c143a04ec3dd7362ef5e723311d0f832029404d13eb3b2004953518e6fc81981",
-        "numax/linalg/special_matrices.mojo": "30525584ce4230330ab3fc3c2d7cbe69458d92c6835e87addd4cd152e0a54871",
-        "numax/linalg/triangular.mojo": "091dd56a6eb4b5475290cf030f16a57247d33e52f5964b1f61c947c89b86b3b6",
-        "numax/optimize/__init__.mojo": "5982d966b956343f2764ad739bef7d41679df4e84cbb5650c33adcf302fb93dc",
-        "numax/optimize/array/__init__.mojo": "a66fb3f80699b3be9191790d09a6f584b3575cb067960199069c314fe37e7ba5",
-        "numax/optimize/array/optimize.mojo": "f9884ea0b91ca828232a43622b68f2d60cb4f2d707d578b95b0ae407e5133dff",
-        "numax/optimize/array/solve.mojo": "00a1f85ef46cb8629a933862784dd4cc6ff164123df4fc967719db7d105f2107",
-        "numax/optimize/common.mojo": "ddf8456b9a2fedf695ce27c03dc12a2abed7dce9d4af2b6c79d5d00d3896cc56",
-        "numax/optimize/least_squares.mojo": "ef6034cac24ca282242b21730be2da8eeefce1f87b77c0d05ba33082ced26e3d",
-        "numax/optimize/linear.mojo": "b52b1fef5c52d9c9ba584712805e542254120d4d70112290286f4de3f2265c58",
-        "numax/optimize/minimize.mojo": "9e1d4f87208b4425f567d2c0c1cf01f2ad1006c845564b6966f0b6a3e58149ff",
-        "numax/optimize/root.mojo": "44c127636ebeb9b31a389a9aac48b3ee2ca8d5aaf4afa059c9e135c9b272802e",
-        "numax/prelude.mojo": "a91f690506e3dbe3ba3309cee0d103f3098a7892aed79a4a64c49f36cd467848",
-        "numax/signal/__init__.mojo": "0521a7d20961b3f0d1ffe35f0701ba288acf4efb44bd1afdbc80b9465c34c23f",
-        "numax/signal/array/__init__.mojo": "7a7f61497a58169f0ca3a9805d5770fa3545355eb7813abd034e277ab7ab5908",
-        "numax/signal/array/signal.mojo": "e9bef65d638173b0b01615652c4efff5dd9db724385a4c49a04ec5cb9035b8e4",
-        "numax/signal/convolution.mojo": "545bb7387df383143ff0fb67c83787d96da4916eab763866a60993afdd03beab",
-        "numax/signal/design.mojo": "3bc71b504fe84b0ce31c071de7073c23605deea994792d1e2712f869c5765a03",
-        "numax/signal/filters.mojo": "29f523872d8e766d9a3966b6eabc283849d5600ba9ff655f37029ac080430fe0",
-        "numax/signal/peaks.mojo": "f1e4c6f8a8666906c50c7927843d74830d8b04033fdd1fff80945b7c544f54a2",
-        "numax/signal/spectral.mojo": "c5c83ae615b42dfa63f8047b5ffcbbec5c13cb97078ae789da30ddbe1b5a1b17",
-        "numax/signal/windows.mojo": "43a2787f08b96e29177db25e3ed4771000cc0d1a89588efceecd753210c6789e",
-        "numax/special/__init__.mojo": "89077603c86038d6c473758de38fb6a79475c3debc90c47bd6e2c8d5b27df541",
-        "numax/special/activations.mojo": "e9cf96df36146fb9a4e0118d3bf082f7a0274c4283b4aa59635bbf0f3653c8f7",
-        "numax/special/airy.mojo": "6d3b96fda5b37ab82bad03738a2d74003fcd821c3ec9229982883f39587d3e7e",
-        "numax/special/bessel.mojo": "22011bc7035a481229ca1bb0b4b8967f92a1d8555a13948efe3e64adf5b0ab13",
-        "numax/special/beta.mojo": "75aea94c929024263447b7b6005ef17d3584ca21ac68a4c819be57fd210cf6c6",
-        "numax/special/elliptic.mojo": "3581ba71702a11f8bdb66316c2cbaf979d20c1f22f9f594315fdec06e783a459",
-        "numax/special/erf.mojo": "6f094e191034563b518a3910b30ee15d7718bf7c3aba7318d3a2ceb9effe78b0",
-        "numax/special/expint.mojo": "f0addcaca647a8c59fde088b1159cf38572c0d34b100d4535b1fae760c56bef4",
-        "numax/special/gamma.mojo": "a6e6d4ca4eb62cbd1b4633a2bc7905b6eaae59e7e56666f8a4178fcb8d0e9fc0",
-        "numax/special/hyper.mojo": "483ad4c04de8a8cf8f807e0314ec837d46eeccf224bbced9ce652c02baf196f5",
-        "numax/special/information.mojo": "871460929ac5e33c1794975b0ec985d31737e6d539461a18520c09e4e074702f",
-        "numax/special/lambertw.mojo": "9cff82c203bd435b8a9bfe356a2807afda04f2178c623f50b2f1a569cdd31623",
-        "numax/special/legendre.mojo": "86b31fdbd4abaed5f54079396cfdb2a5ad82b2fc235d0a2de495878652d7491e",
-        "numax/special/logsumexp.mojo": "fb698fd1c879766da82dad2ae76b33a79178afa1217797d63e93040df452e799",
-        "numax/special/orthopoly.mojo": "23801117dbe57addc8e6b98e6db05b029968495a42bd8c740d98c197456f807b",
-        "numax/special/owens.mojo": "282d3f8fada65c376c2302e243b8f2f3966b82fd566747ab8a8cd532d766f0df",
-        "numax/special/struve.mojo": "f7e7cf22bc11653990b7bdf04ef946bf0d1ed54dcf80e5f7fdf7fab23c2bfb67",
-        "numax/special/zeta.mojo": "37383073457024214c84881f360a5aa955839868bc618228aae9783542c88797",
-        "numax/stats/__init__.mojo": "4c345ee946bf131c7a9ef7afc964afca42be5f08072c7b38e924f4862c51b05c",
-        "numax/stats/correlation.mojo": "05152e51bc038e38c3da46acec2d5e71ac65c7a29905de60b1c2a5313993a938",
-        "numax/stats/descriptive.mojo": "8b438d8e094eb548c2eabc87d0df248e5941f764a1634107399cf6596be5af6a",
-        "numax/stats/distributions.mojo": "44a5ae814d9130c5cce3abdd759c8925e149a059c2cbfa5d72f4a9192856fff2",
-        "numax/stats/histograms.mojo": "b9e19b905d997a28345a4c8c3d2ff7851b12a808925119d274c4d9e91f46f6eb",
-        "numax/stats/hypothesis.mojo": "aa30d98e9c9c85a57fb66ae11817a9158ab35f0a2c218863e2bdbbb20f054090",
-        "numax/stats/nanfunctions.mojo": "c0ea466dff3ae4df5e31e836258601024287d2df0eaec931eeba764e9099610c",
-        "numax/stats/quantiles.mojo": "8ca74067e1a06667b39ec58dd4ff94e1cb4450a5dd0b74451c047908b296596b",
-        "numax/stats/random.mojo": "4e60df81441951bcabfc22483aeecff54d0cff538fd11bf0a59ce67c8a84ed6f",
-        "numax/stats/statistics.mojo": "f72af5af070c1cc5fcb274f8f10d9a2340d5612e6fd9cebbe120f4ee9ac37b6e"
-      },
       "id": "numax",
       "modules": {},
-      "path": "../../../../../../numax",
-      "revision": "8fae39ae48febc240f125f9afb1721de46d86618"
+      "path": "../../../../../../numax"
     },
     {
       "assets": {
@@ -316,25 +180,13 @@
         },
         "schema": 1
       },
-      "files": {
-        "DEPENDENCIES.lock.json": "cc2f62244f4c30c44ce514c60d14191c019da36b1cb0ab54e7769ce42ab33fa1",
-        "EXPORTS.json": "b7f504c133c7d3445d31b5e51cc4e8101319ed7aca17b240d8c46e5de9ab69c6",
-        "LICENSES/fdlibm.txt": "e4f84f936fd9b9e98e00b73904e48f3bd2ec8ca334b942fa1584310ed24a7a73",
-        "LICENSES/scikit-learn.txt": "50d6a9d340f19ab355609917993114daf5f47e3161067bcf34955bbd05cd9cb0",
-        "docs/scope.md": "15e09d4414d64f4b0b456b39aa005269d755b02cde0d547f394f89627ac5bf41",
-        "docs/special.md": "16a69c42a8a614f5c23fe132c9e1d59bd5301698db5f77461a910a60c1878d69",
-        "pixi.lock": "c384d3b81b130373d7af6632c6fac10d24425f852aa04b0e11df0c5a1ccfb584",
-        "src/moxie/__init__.mojo": "eaf6adc2af336c5a0641cfb190368dfdca8c26ff290f898d92b2b7c1e46440cc",
-        "src/moxie/_special.mojo": "6c73344d26fd14e0e0847f318563424e78cc1bb0c0bcecfde27f91a970402389"
-      },
       "id": "special",
       "modules": {
         "moxie._special": {
           "file": "src/moxie/_special.mojo"
         }
       },
-      "path": "../../..",
-      "revision": "f65608f3f0ae16309d30eb472366e1f3a1bcb5c2"
+      "path": "../../.."
     }
   ],
   "schema": 1

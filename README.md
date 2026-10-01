@@ -44,6 +44,21 @@ builds/consumer
 Generated source, license assets and a receipt of the consumed source bytes
 are in `builds/deps`. Do not edit that generated directory.
 
+## Shared owners
+
+Children consume current local sources; see [development policy](docs/family-development.md).
+
+| Component | Contract |
+| --- | --- |
+| Namespace assembly | [assembly](shared/assembly/docs/assembly.md) |
+| Dense storage/reductions | [numerics](shared/numerics/docs/numerics.md) |
+| RNG/normalization | [random](shared/random/docs/random.md) |
+| Classification labels/groups | [labels](shared/labels/docs/labels.md) |
+| Covariance solves | [linalg](shared/linalg/docs/linalg.md) |
+| Incomplete gamma | [special](shared/special/docs/special.md) |
+| Nullable categorical features | [categorical](docs/categorical.md) |
+| Model persistence | [serialization](docs/serialization.md) |
+
 ## Scope and validation
 
 - [Dummy native API](docs/dummy/api.md) and [dense scope](docs/dummy/scope.md)
@@ -58,6 +73,6 @@ local `../scikit-learn` checkout at revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Sparse data, Python bindings and
 complete scikit-learn compatibility remain outside the implemented scope.
 
-The frozen starting point remains tagged `scaffold-v1.1`; integration does not
-change that baseline. Build outputs, research notes and raw validation evidence
+Children consume current Moxie HEAD; see [development policy](docs/family-development.md).
+`scaffold-v1.1` remains a historical provenance tag. Build outputs, research notes and raw validation evidence
 stay in ignored local directories.

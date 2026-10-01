@@ -34,7 +34,9 @@ Local source dependencies are live development inputs. Shared assembly reads the
 current files at each declared project path on every build; there are no source
 revision/hash gates or cached historical fallbacks. Keep dependency paths, module
 ownership, exports and license assets in `DEPENDENCIES.json`. Older v1 manifests
-remain readable, but their `revision` and `files` pins are ignored. Missing source
+remain readable, but their `revision` and `files` pins are ignored. Some shared
+projects retain the filename `DEPENDENCIES.lock.json` for consumer compatibility;
+it names a live-source manifest, not a source lock. Missing source
 checkouts or files raise an error. Generated receipts record the bytes consumed.
 
 Retain compatible Pixi toolchain locks, correctness-reference revisions and

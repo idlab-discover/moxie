@@ -1,4 +1,4 @@
-"""Compile and validate the pinned shared special-function owner."""
+"""Build current shared sources; Python is validation tooling only."""
 from pathlib import Path
 import json
 import subprocess

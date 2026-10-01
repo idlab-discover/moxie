@@ -1,4 +1,4 @@
-"""Consumer-local build and integration gate. No automatic pin refresh."""
+"""Consumer-local build and integration gate. Live shared sources."""
 from pathlib import Path
 import hashlib, json, os, subprocess, sys
 ROOT=Path(__file__).resolve().parents[1]
@@ -20,9 +20,6 @@ def run(*args, consumer=ROOT, capture=False):
         check=True,capture_output=capture,text=True)
 
 def assemble(consumer):
-    lock=json.loads((consumer/'DEPENDENCIES.lock.json').read_text())
-    tool=next(p for p in lock['projects'] if p['id']=='assembly')
-    assert sha(ASSEMBLY/'tools/consume.py')==tool['files']['tools/consume.py']
     run(sys.executable,ASSEMBLY/'tools/consume.py','--consumer',consumer,
         '--lock',consumer/'DEPENDENCIES.lock.json','--tool',ASSEMBLY/'tools/assemble.py',consumer=consumer)
 
@@ -79,19 +76,19 @@ def test():
         assert sha(c/'builds/deps/moxie/_dense.mojo')==sha(ROOT.parent/'numerics/src/moxie/_dense.mojo')
         assert not (c/'builds/deps').is_symlink()
     assert (CONSUMERS[0]/'builds/deps/moxie/_random.mojo').stat().st_ino != (CONSUMERS[1]/'builds/deps/moxie/_random.mojo').stat().st_ino
-    # A corrupt consumer lock must fail without changing the valid output.
+    # A missing source must fail without changing valid output.
     c=CONSUMERS[0]; lock=json.loads((c/'DEPENDENCIES.lock.json').read_text())
-    next(p for p in lock['projects'] if p['id']=='random')['files']['src/moxie/_random.mojo']='0'*64
+    next(p for p in lock['projects'] if p['id']=='random')['modules']['moxie._random']['file']='src/moxie/missing_for_test.mojo'
     badlock=c/'bad-lock.json'
     before=sha(c/'builds/deps/ASSEMBLY.json')
     try:
         badlock.write_text(json.dumps(lock))
         proc=subprocess.run([sys.executable,str(ASSEMBLY/'tools/consume.py'),'--consumer',str(c),
             '--lock',str(badlock),'--tool',str(ASSEMBLY/'tools/assemble.py')],env=environment(c),capture_output=True,text=True)
-        assert proc.returncode and 'drift' in proc.stderr.lower(),proc.stderr
+        assert proc.returncode and 'missing file' in proc.stderr.lower(),proc.stderr
         assert sha(c/'builds/deps/ASSEMBLY.json')==before
     finally: badlock.unlink(missing_ok=True)
-    print('PASS: native contracts, independent consumers, missing sparse helper and drift rejection')
+    print('PASS: native contracts, independent consumers, missing sparse helper and missing-source rejection')
 
 def main():
     action=sys.argv[1]

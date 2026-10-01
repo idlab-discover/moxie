@@ -1,4 +1,4 @@
-"""Locked assembly, compilation and validation for shared labels."""
+"""Build current shared sources; Python is validation tooling only."""
 from pathlib import Path
 import json
 import subprocess

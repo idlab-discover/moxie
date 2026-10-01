@@ -2,7 +2,7 @@
 
 `moxie._linalg` owns the shared covariance adapter over NuMojo
 `NDArray[DType.float32]` and `NDArray[DType.float64]`. Numerical factorization and
-substitution are delegated to the pinned native `mojo-linalg` implementation.
+substitution are delegated to the native `mojo-linalg` implementation.
 There is no Python, NumPy, SciPy or foreign numerical runtime in library calls.
 
 ```mojo
@@ -79,10 +79,9 @@ NuMojo's general solver exclusions remain in force.
 
 ## Consumption and validation
 
-Use the existing `shared/assembly/tools/consume.py` with the flattened
-`DEPENDENCIES.lock.json`, `EXPORTS.json`, and owned `moxie._linalg` module.
-External dependency pins are retained; no published baseline tag changes.
-Families adopt the validated closure deliberately. Covariance estimation,
+Use current `shared/assembly/tools/consume.py`, the dependency manifest and
+`EXPORTS.json` under the [live-source policy](../../../docs/family-development.md).
+Backend revisions above identify evaluated evidence, not build gates. Covariance estimation,
 sample normalization, metric evaluation and estimator APIs remain with their
 respective owners. In particular, sklearn's automatic Mahalanobis covariance
 uses sample covariance (`ddof=1`); this adapter takes an already computed V.

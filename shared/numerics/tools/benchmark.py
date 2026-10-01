@@ -16,7 +16,7 @@ def measure(loops,dtype,mode,rows,cols,layout):
 
 if __name__=='__main__':
     runner=pyperf.Runner()
-    runner.metadata.update({'timing':'native perf_counter_ns region; allocation of output included; construction excluded','compiler':'Mojo 1.0.0 -O3','seed':'deterministic modular integers / 8','threads':'CPU affinity; see pyperf metadata','storage':'NuMojo 0.10.0 pinned source'})
+    runner.metadata.update({'timing':'native perf_counter_ns region; allocation of output included; construction excluded','compiler':'Mojo 1.0.0 -O3','seed':'deterministic modular integers / 8','threads':'CPU affinity; see pyperf metadata','storage':'NuMojo live source; see assembly receipt'})
     for dtype in ('f32','f64'):
         for rows,cols in ((2,4),(64,32),(256,256)):
             for layout in ('C','S'):

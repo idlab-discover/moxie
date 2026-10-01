@@ -10,5 +10,5 @@ pixi run test
 pixi run parity
 ```
 
-Consume `moxie._linalg` through the shared verified assembler. Family adoption
-is deliberate; this project does not change the frozen parent scaffold.
+Consume `moxie._linalg` through current shared assembly; follow
+[live-source policy](../../docs/family-development.md).

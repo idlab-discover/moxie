@@ -85,11 +85,10 @@ with this engine; column IDs must not substitute for its row keys.
 ## Consumption and checks
 
 The owner is `shared/labels`; its module is `moxie._labels`. Use the existing
-`shared/assembly/tools/consume.py` and this project's verified flattened lock.
-`EXPORTS.json` keeps the package root empty. External pins are inherited without
-repinning: Mojo 1.0.0, MAX 26.5.0, NuMojo
-`515fb2856f0ecf3d2740a34d958fe168183e1129`. The native runtime is pure Mojo.
-No new numerical dependency or parent scaffold change is introduced.
+`shared/assembly/tools/consume.py` with current local sources under the
+[live-source policy](../../../docs/family-development.md). `EXPORTS.json` keeps
+the package root empty. Pixi locks specify compatible Mojo/MAX; NuMojo supplies
+numeric storage. Runtime remains pure Mojo.
 
 Run `pixi install --locked`, `pixi run build`, `pixi run test`, and
 `pixi run parity`. Two isolated consumers cover classifier decoding and splitter

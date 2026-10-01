@@ -20,7 +20,7 @@ with a `ValueError` prefix. This explicit validation differs from SciPy's ufunc
 NaN/limit conventions outside this domain. No broadcasting or array overload is
 provided: dense consumers can apply this scalar operation over NuMojo storage.
 
-The CPU implementation uses pinned Numax `core.libm.exp/log`, standard-library
+The CPU implementation uses Numax `core.libm.exp/log`, standard-library
 `lgamma/expm1`, an adaptive positive series
 and an upper-tail continued fraction. A Stirling correction stabilizes the
 prefactor near x=a. Underflow rounds to zero. Iteration is bounded at 100000
@@ -30,7 +30,8 @@ asymptotic expansion or promise to evaluate every finite Float64 pair.
 
 This operation allocates no arrays and changes no input or RNG state. KDE's
 normal draws, selection order, bandwidth scaling and sampling API belong to the
-neighbors family. Adopting this owner requires an explicit dependency repin.
+neighbors family. Consume current sources under the
+[live-source policy](../../../docs/family-development.md).
 
 Run `pixi install --locked`, `pixi run build`, `pixi run test`, and
 `pixi run parity`. See tests for the reproducible SciPy and sklearn comparisons.

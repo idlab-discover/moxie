@@ -9,4 +9,4 @@ Not supplied: covariance estimation, general matrix inversion, indefinite or
 rank-deficient solves, pseudoinverses, jitter, implicit dtype promotion,
 condition estimates, GPU execution, or family integration. Numax toolchain and
 storage integration remain a separate adoption task; the current fallback is
-pinned and explicitly justified for this runtime-sized CPU contract.
+explicitly justified for this runtime-sized CPU contract.

@@ -29,6 +29,8 @@ Consumers with their own old-tool bootstrap must switch to the live tool.
 Missing dependency directories or source files fail explicitly; there is no
 fallback to a cached revision. Compatible Pixi toolchain locks are unchanged.
 
+Family workflow: [canonical development policy](../../../docs/family-development.md).
+
 ## Ownership and validation
 
 Export manifests map each public symbol to its owning module. Every package

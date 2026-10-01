@@ -22,14 +22,6 @@
         },
         "schema": 1
       },
-      "files": {
-        "docs/families.md": "21973693e4deea159db7fe2c24f04c14f0d5327b0106ab3c8c717940b66a0f55",
-        "docs/interfaces.md": "a043dd4901192693f1668fbc9ff0a6affce7a9f23b68cb4763ea4c927ec8890d",
-        "src/moxie/__init__.mojo": "474dbf695fa06d9a7224ef99c723734b9255a5430fdb594280249e12e98a625f",
-        "src/moxie/base.mojo": "840bca6c867ad373bf4cbec2509be09010ca251cd19fc721d8d35d0097c3ec9b",
-        "src/moxie/utils/__init__.mojo": "f7854152077a8cd7b3c7c8a569867d45cfcc04ed2c54f9c1d79aedfb75a23c36",
-        "src/moxie/utils/validation.mojo": "b40d3588a36d9895f1e216adf646f829a07e237b813e4e698476c8d9aad0b44d"
-      },
       "id": "moxie",
       "modules": {
         "moxie.base": {
@@ -41,8 +33,7 @@
           "file": "src/moxie/utils/validation.mojo"
         }
       },
-      "path": "../../../../..",
-      "revision": "786a5ee9423df5b21a9e9bb0bc16a708271b462e"
+      "path": "../../../../.."
     },
     {
       "assets": {},
@@ -50,20 +41,13 @@
         "packages": {},
         "schema": 1
       },
-      "files": {
-        "DEPENDENCIES.lock.json": "fb3c715b75048263f9825838f43764b3f7b929e83be18cb31563fcba1489642f",
-        "docs/numerics.md": "8d7e31876905075c84df58fc7911f0a2b7f8b94ec41b671256aeb23754105b47",
-        "pixi.lock": "203858397dfd048f93fcd57991933d9ce4ed4a04f400da5bff6e119e6dcb2bf2",
-        "src/moxie/_dense.mojo": "0c4d543077d05b658763297f0ea30e0b4de25075cc64ce76429117bc6cf08446"
-      },
       "id": "numerics",
       "modules": {
         "moxie._dense": {
           "file": "src/moxie/_dense.mojo"
         }
       },
-      "path": "../../../../numerics",
-      "revision": "786a5ee9423df5b21a9e9bb0bc16a708271b462e"
+      "path": "../../../../numerics"
     },
     {
       "assets": {
@@ -152,96 +136,9 @@
         "numojo/routines/statistics/averages.mojo": "numojo/routines/statistics/averages.mojo"
       },
       "exports": null,
-      "files": {
-        "LICENSE": "20a31b0e0190190e1f8bf2fe3258973c73fe33f22abc9838ec21978d1c4f6ab2",
-        "numojo/__init__.mojo": "776a26f4c8f0a5c149ddea2cd069a88a61c135fe71e11f5d629af6595044fd94",
-        "numojo/core/__init__.mojo": "30b7ed1c1a8b63e1db7d7bacffb9783e1c99d4a0d0e3db26cb390ff7d48ff375",
-        "numojo/core/accelerator/__init__.mojo": "634d7b802d891f9400e83bcdf3b8fb4af2584b531bfea38b6aaa173ea293e449",
-        "numojo/core/accelerator/device.mojo": "ef69a0617bce0de3d2ab965576b4b78d491763590d35657cd68fbf27cbe4c98e",
-        "numojo/core/accelerator/kernels/__init__.mojo": "5ad0609bfbefaab35d661d48f3074f9e587c228d3736a999802ec72129ea2617",
-        "numojo/core/accelerator/kernels/binary_ops.mojo": "c5514491ce63379cda46687e01410c27920ec3ebdc901debdda63fd115f32fee",
-        "numojo/core/accelerator/kernels/reduction_ops.mojo": "773514ab6391ec70500caaee91fc849cecc696fa20a7d814ca0116f59db3c085",
-        "numojo/core/accelerator/kernels/unary_ops.mojo": "e900671a6952d3491135db543b4b3089c773ee2492568ec74422da453ccdc720",
-        "numojo/core/accelerator_ndarray.mojo": "fcdab6c91cb37202bc7457be0efdf9c336d4b5544ec37f09fc3093a36a889634",
-        "numojo/core/complex/__init__.mojo": "02656d406f43aa2f6e4deded23f6b7ad6db99d3e3f8131e9144c02bfcae29135",
-        "numojo/core/complex/complex_ndarray.mojo": "96731d38c3e53058fae9abb5cd853ed0f96569407afa87db4609b8e48fb154e7",
-        "numojo/core/complex/complex_simd.mojo": "35590f6b6031ff602d217748a674bed1ee0fb06af2e8c063be6ad69d2636ec26",
-        "numojo/core/dtype/__init__.mojo": "b82538ccaa0fc1c77776cd57d6d9d0f902a1d97c7225eb4dde84564fb97ffa58",
-        "numojo/core/dtype/complex_dtype.mojo": "cd5e3142872db3d01b3aa975c1075c127dfc6da743666efb4bd277162867bfbb",
-        "numojo/core/dtype/default_dtype.mojo": "7e4085f3c3fe436a7e7b642c2e95ceccba8e24e3f106417bfb7e2d3e1e82c74a",
-        "numojo/core/dtype/utility.mojo": "bf90d649d004a1ed4eff9ce4f9d2388bee07be916cbfd775e70bbec94d284201",
-        "numojo/core/error.mojo": "4e23a764bc9f7675cebd3e995138796eafa4482f93a4ff5ada01bd5d6c3a3ce0",
-        "numojo/core/indexing/__init__.mojo": "0de66fe87a2bd7ad73074f2034b0e8a8d80bab31cb5eff5527470507e607eb36",
-        "numojo/core/indexing/index_buffer.mojo": "191edfd1e469cfe0f8cd5054d8d57c603d7ec900565d5fbf07344ba84bd17de6",
-        "numojo/core/indexing/item.mojo": "6337aa979925341431146d6e4298a850db0e9877407fea32993f194fae9e38ea",
-        "numojo/core/indexing/offset.mojo": "3ee293484f6bb5ef625c535a4a5cad74439ed2c11fcce57c765c27558af36103",
-        "numojo/core/indexing/slicing.mojo": "93f9da04d6fc8e6ca1e1261d93beadeb80fe9b9e9e3d79d077b6708b7836dab5",
-        "numojo/core/indexing/traversal.mojo": "735be06e9889e6844148a788df45e5a506584e3482debb80fa88ebf662d888c6",
-        "numojo/core/indexing/utility.mojo": "fd8a1f08b0715deb47170dd9b028001bc10145f69f219993f23be95206e04ce9",
-        "numojo/core/indexing/validation.mojo": "3002682a2cbf361242af340920c1ebf53c14cd71664c9eefe672f1dd90138a60",
-        "numojo/core/layout/__init__.mojo": "89444d19b52a13aa21e3ba5211d2532d9939d54a5d6226d9c64a9ec24e8e8b47",
-        "numojo/core/layout/array_methods.mojo": "8d946f0f75f4f18fb4d6a311dfea6dc39c7b024177657eb6fb9055b813e0ae8f",
-        "numojo/core/layout/flags.mojo": "95fe98d1c61830766f4a4771be47b1f09a20bdfe43417f93e728b6ef8e0e9e80",
-        "numojo/core/layout/ndshape.mojo": "46ac03af6e83fcc559fc6332bcc7576c7398883b6a25c82331c955953663741c",
-        "numojo/core/layout/ndstrides.mojo": "2ad1731c3d84e3d86f499b8a6913b8f918d2ae8b84e0820264d28ade3e0906f5",
-        "numojo/core/memory/__init__.mojo": "7d50f060432976253b3032835f3eb37f56624bc491bf3e681493cfc96bb03ea8",
-        "numojo/core/memory/data_container.mojo": "531ef035d39ef7fc6e7a62b5766520b4d34d11a0e8e0237104fc59f0df2e48b2",
-        "numojo/core/memory/dlpack.mojo": "44cefb07e15b22a1877e0fba7e7c970c2594e47e39a27de7c9027c7a666e68a7",
-        "numojo/core/memory/storage.mojo": "bc62ae79e87cb8c3f22cb11d4243738713343f4ea23d9c10341e831ccd676ba2",
-        "numojo/core/ndarray.mojo": "cfc10d447e193aa8fdb4539ba8ba72ac5aaab7a8c8b9bd6e5d768e0d98984430",
-        "numojo/core/traits/__init__.mojo": "5d5de12ff4a2d356b4a6f267f222bd8fcdf9a017edc34440700dd5d97915c6f2",
-        "numojo/core/traits/array_like.mojo": "fa6583356c2fc4db7580184a07e0f84d50b202b44d5337e817b96187f507dcde",
-        "numojo/core/traits/backend.mojo": "9c44ed3bf43dec71f0902f200066ddce93109724af1376a056fd8c63842e3df2",
-        "numojo/core/traits/buffered.mojo": "785f43c6d2aa711dbd0e2042aef8a9da80de1790255573dfafa56d9097c7b435",
-        "numojo/core/traits/indexer_collection_element.mojo": "e1e8eab1a875d8b6fe2ea0c183e5a3566312b90148894885963610d430e8be82",
-        "numojo/core/type_aliases.mojo": "aa565c3c6c68d1e24e8d9d3f00f5e27c31f5731dc76293d46c70b9b5ed3e9a02",
-        "numojo/prelude.mojo": "e024171e7228a60a71ffb911d7677f9b3e6c018621d6a532ef17d9a35b1f751f",
-        "numojo/routines/__init__.mojo": "550fe3775d9a72324c6ff81e4d5cac5db3936f16ded9e58d01db8a99fbcec604",
-        "numojo/routines/bitwise.mojo": "322eb227c15d4c911d891fe37b254d7b2a0f7c60780fa047a8c548a61898e702",
-        "numojo/routines/constants.mojo": "5a99fc1e4e416fd52c5de7f712ad0e93768d11362d401b0761d7fad2f1a13955",
-        "numojo/routines/creation.mojo": "2411f1588ec561ee86d82fa6ce1f97e9b734ffbba8f88a9cd3d3bca3b8af0a49",
-        "numojo/routines/functional.mojo": "2f45346c5ea8dbefef19539df16cdbf192858a13a65af576a7d613602f95f546",
-        "numojo/routines/indexing.mojo": "4121c6424ac55eadbdef374733f2bfae7a25669ac065ab9dc5503fd6bdcb9f89",
-        "numojo/routines/io/__init__.mojo": "d69c262486b90adffd05b2a10ba150dda565a764fc4dea4418788e2a7936c7be",
-        "numojo/routines/io/files.mojo": "8f1cc5667f06784fd3f424b5a28765950d2a29528a0d0aacc6b216b8a479fd59",
-        "numojo/routines/io/formatting.mojo": "88389508ba4d9259ef3bcbed18eaad2ec6fb6fd2ed545094274260c8e30367da",
-        "numojo/routines/linalg/__init__.mojo": "739de5b1bf97124b5e7687bfc6748bb84834f951fb9a6300a78fa576a852c266",
-        "numojo/routines/linalg/decompositions.mojo": "77db568aa817b922a64c3d1d57b1b54a2f96386674173d337c01bd668feaa31e",
-        "numojo/routines/linalg/misc.mojo": "a09369e24b568b602456028903ebcb90208e77641d75fcc381ef8aea14c8a064",
-        "numojo/routines/linalg/norms.mojo": "83ef8e940d8409acbd0fb394b542b8ad16689d6c5b1f2a7b78a58a40cc04ce77",
-        "numojo/routines/linalg/products.mojo": "3f9f904e43270aee2d052ffa4dfcb601a2ae2e5e1a86ac6f2af8819be115b5a3",
-        "numojo/routines/linalg/solving.mojo": "37cacdcba2c42c34c307c6f959ed1f83b88dfec8faeb5575b1c811d1230715f1",
-        "numojo/routines/logic/__init__.mojo": "49699b246b49f2d1bc55d00b3121156b116befc421ab5798780d5a04d33b35f1",
-        "numojo/routines/logic/comparison.mojo": "3587f09a2becb7fbb97f4b73a468eb2d96578252687e73033c1163549484731b",
-        "numojo/routines/logic/contents.mojo": "efc5018ef2b4e65848c014cf1e3281adbb4ee350caf50fb201df7a9f4982105a",
-        "numojo/routines/logic/logical_ops.mojo": "7a8d4f3a9aa8495a2b7716b60f4028bda54e811e8840b00dfd41d09e2d8dcbd5",
-        "numojo/routines/logic/truth.mojo": "8c3d61b97d3637291d095bcdc6c8d152f3df1bd4fec7af35a8cd6f969be276f1",
-        "numojo/routines/manipulation.mojo": "805eccf48ba1cbd5534bc03e160a5b4e6a5008936d224fd3b7543dd6c39c9f28",
-        "numojo/routines/math/__init__.mojo": "16ab74b5ad2aaa31c4db25cb62fbbeedbe278b591cbb7bcedd854711ed62fcde",
-        "numojo/routines/math/arithmetic.mojo": "7b7460b8a57fcb90d4a445c9a26096e18659bf40462f329539a7fe5d48db3263",
-        "numojo/routines/math/differences.mojo": "2037f65401c81518e8b17615a8e7272b9c0c88d9c0bdbe804cddeb0c9ff15f8e",
-        "numojo/routines/math/exponents.mojo": "99aa3b9e0eb1bd985a861367160f9e430a46fb71a301576ca015933b1b446f0d",
-        "numojo/routines/math/extrema.mojo": "dd27107f12a36be03bdd7701e1d3e9faf7072f6cd0446962d579b4619810ef94",
-        "numojo/routines/math/floating.mojo": "d7c62b859f827753f6d4077be592a2ec25edeaa1e76d9f52a4dba8181f2841ae",
-        "numojo/routines/math/hyper.mojo": "3425cbcfd18336a9d0fb94e7d7f274d9ceb30b905c5a8940d11f5ddffcaf8fb0",
-        "numojo/routines/math/misc.mojo": "db342baf64d80805a7e572ff693f73e2887e3262200f01b9c8209fe27ecbea48",
-        "numojo/routines/math/products.mojo": "f96767c6adcb3f8e57fed13898c8d2d0ed1aa9c3eb0d6afefb0d103f61445a59",
-        "numojo/routines/math/rounding.mojo": "b1b60c07df2213347ff002a102fdadea77ee9de5869a007afb777bccb7bbf09c",
-        "numojo/routines/math/sums.mojo": "cbe4000a559f4f923208f2c2088bf3ea2ebc794033f5eb11f789d7a5d1499564",
-        "numojo/routines/math/trig.mojo": "fea9d1f5bb20ad31a00dbef9138c0434f95fd723e6afc8849e835e5e3b3fdac7",
-        "numojo/routines/operations/__init__.mojo": "1a2e35fdb4282ea881827346cca49faa6c1fb85716345034f2c576d9f38269a4",
-        "numojo/routines/operations/backend.mojo": "7d9363bc502e15d375c2fff475557cddddc7c28b7a50fc637964e2eb78134339",
-        "numojo/routines/random.mojo": "f8beb2e615e21feb87dbffbae5d56d7ff082e8bf9c552b55e056bd8e03e0375b",
-        "numojo/routines/searching.mojo": "cb2b37f033fb00c8ed598f92fc2651cdcc1f500ec6309e784d70f2cff08c15b3",
-        "numojo/routines/sorting.mojo": "c64b10bd05636f32b382eeeac74cc12b487a674525599e944f9f8d405543dfd6",
-        "numojo/routines/statistics/__init__.mojo": "9043e0eb9e1f415a9660677f20060a06c03b5e4a01bcb12ee0687b32a7bd3346",
-        "numojo/routines/statistics/averages.mojo": "8c5c8640a6d52b1e968ae64f8e658dfb806ae4686c2b6ead3c78618f31f05017",
-        "pixi.toml": "c71b7d7022742c457528e6fc1a1a881a1bee5426cbf2614b8368933da4224d3c"
-      },
       "id": "numojo",
       "modules": {},
-      "path": "../../../../../../../NuMojo",
-      "revision": "515fb2856f0ecf3d2740a34d958fe168183e1129"
+      "path": "../../../../../../../NuMojo"
     },
     {
       "assets": {},
@@ -249,17 +146,9 @@
         "packages": {},
         "schema": 1
       },
-      "files": {
-        "EXPORTS.json": "29b0364eb33019b68290be3a25192024aff7e4614443174089811572c9b4ec68",
-        "schemas/assembly-v1.schema.json": "57ac2d90f990cac7c9c2a9e42373e131b71914dead175391cf34052b807d7da8",
-        "schemas/exports-v1.schema.json": "8c677d50e45c5adcd6e69b27b0bde1d811224c11c9481abfd52bf30556a8c31b",
-        "tools/assemble.py": "428389881753954036c47e678422d101dade1a71491b483c601d20fe5745d6b0",
-        "tools/consume.py": "198781650ff1063c1561f18be197c2f90d072c693ec5065306dac46c487fa3a8"
-      },
       "id": "assembly",
       "modules": {},
-      "path": "../../../../assembly",
-      "revision": "786a5ee9423df5b21a9e9bb0bc16a708271b462e"
+      "path": "../../../../assembly"
     },
     {
       "assets": {
@@ -275,28 +164,13 @@
         },
         "schema": 1
       },
-      "files": {
-        "DEPENDENCIES.lock.json": "1508511d5d124d2ca1e2aae9ee345fc036bbf57ccf68e217aa557fb2dc9226fe",
-        "EXPORTS.json": "b7f504c133c7d3445d31b5e51cc4e8101319ed7aca17b240d8c46e5de9ab69c6",
-        "LICENSES/MT19937.txt": "0e111337b25494a773106695f0e799f642b8567aaacca4f116a74a8177179156",
-        "LICENSES/NumPy-distributions.md": "469778be8f33d54e1bcaab28c281cc472916d2d273f835e55bc487d30503face",
-        "LICENSES/NumPy-random.md": "103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f",
-        "LICENSES/NumPy.txt": "1be1df33863f97a7bc1c4d67980bd6c69c9a6fef0a5ee76e6ad6cb91e56e8491",
-        "LICENSES/scikit-learn.txt": "50d6a9d340f19ab355609917993114daf5f47e3161067bcf34955bbd05cd9cb0",
-        "docs/random.md": "ae35d582461417b5d651d2a60738b71d4a0b51e6d461807b6c157680cb952d6e",
-        "docs/scope.md": "c8d450b1b4628727cdc22733b6504eae8c9460291c5a2eae75f03e81590dd5f2",
-        "pixi.lock": "0457ec8b774905df97ac285a944e92ed6672dc5595406740b470e2e5bb96affa",
-        "src/moxie/__init__.mojo": "7701cf97b8e700cbdd4fdd1d79acf9309128ada14812f4b7d652fe64c0f6ee47",
-        "src/moxie/_random.mojo": "f918d4c54c7542ecb537ffb2728ee2f0a40e7ac3ef0ca3cf8e6522dc068625ce"
-      },
       "id": "random",
       "modules": {
         "moxie._random": {
           "file": "src/moxie/_random.mojo"
         }
       },
-      "path": "../../../../random",
-      "revision": "786a5ee9423df5b21a9e9bb0bc16a708271b462e"
+      "path": "../../../../random"
     },
     {
       "assets": {},
@@ -305,15 +179,6 @@
           "moxie": {}
         },
         "schema": 1
-      },
-      "files": {
-        "DEPENDENCIES.lock.json": "70988d0ebe39a3e1389afb2ae17ccdc1307094e4226fca2d259916fe1f6aa334",
-        "EXPORTS.json": "f16888d195030c69a7f490ac2b97146b77696a1ac7271de4d3c79d6d58a00d86",
-        "docs/readiness.md": "cb8d37404e4e1ad9b2a2f0e85e4b7c2b091fce6fb3e6e16e28f7f2cc43b0aea7",
-        "docs/scope.md": "d1adfb1fb02a9e8832efa50a2b574fb1248cb3313dbd08f80b36546df5cfaab5",
-        "pixi.lock": "0457ec8b774905df97ac285a944e92ed6672dc5595406740b470e2e5bb96affa",
-        "src/moxie/__init__.mojo": "965155d80582714b16523782b060e2d0f3f82f5ee4607750ca69bf94568f39b4",
-        "src/moxie/_readiness.mojo": "606c777b88bd035e6bb7c1976fb424b6f3082a8883210c2d89bec54f471d7e3c"
       },
       "id": "readiness",
       "modules": {
@@ -321,8 +186,7 @@
           "file": "src/moxie/_readiness.mojo"
         }
       },
-      "path": "../../..",
-      "revision": "786a5ee9423df5b21a9e9bb0bc16a708271b462e"
+      "path": "../../.."
     },
     {
       "assets": {},
@@ -332,17 +196,31 @@
         },
         "schema": 1
       },
-      "files": {
-        "src/moxie/consumer_b.mojo": "1df74199f5a3a47c42285cbbd9ee875a8a7afa4c4b31162b96cf78c52d8bdccb"
-      },
       "id": "consumer",
       "modules": {
         "moxie.consumer_b": {
           "file": "src/moxie/consumer_b.mojo"
         }
       },
-      "path": ".",
-      "revision": "786a5ee9423df5b21a9e9bb0bc16a708271b462e"
+      "path": "."
+    },
+    {
+      "assets": {
+        "mojo_linalg/__init__.mojo": "src/mojo_linalg/__init__.mojo",
+        "mojo_linalg/_determinant.mojo": "src/mojo_linalg/_determinant.mojo",
+        "mojo_linalg/_spectral.mojo": "src/mojo_linalg/_spectral.mojo",
+        "mojo_linalg/_storage.mojo": "src/mojo_linalg/_storage.mojo",
+        "mojo_linalg/cholesky.mojo": "src/mojo_linalg/cholesky.mojo",
+        "mojo_linalg/indefinite.mojo": "src/mojo_linalg/indefinite.mojo",
+        "mojo_linalg/qr.mojo": "src/mojo_linalg/qr.mojo",
+        "mojo_linalg/svd.mojo": "src/mojo_linalg/svd.mojo",
+        "mojo_linalg/symmetric.mojo": "src/mojo_linalg/symmetric.mojo",
+        "mojo_linalg/triangular.mojo": "src/mojo_linalg/triangular.mojo"
+      },
+      "exports": null,
+      "id": "mojo-linalg",
+      "modules": {},
+      "path": "../../../../../../mojo-linalg"
     }
   ],
   "schema": 1

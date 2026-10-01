@@ -13,10 +13,10 @@ import numpy as np
 from scipy import sparse
 
 ROOT = Path(__file__).resolve().parents[1]
-lock = json.loads((ROOT/'DEPENDENCIES.lock.json').read_text())
-sk = (ROOT/lock['sklearn']['path']).resolve()
-assert subprocess.check_output(['git','-C',str(sk),'rev-parse','HEAD'], text=True).strip() == lock['sklearn']['revision']
-for name,digest in lock['sklearn']['files'].items():
+lock = json.loads((ROOT/'tests/reference.json').read_text())
+sk = (ROOT/lock['path']).resolve()
+assert subprocess.check_output(['git','-C',str(sk),'rev-parse','HEAD'], text=True).strip() == lock['revision']
+for name,digest in lock['files'].items():
     assert hashlib.sha256((sk/name).read_bytes()).hexdigest()==digest, f'Reference drift: {name}'
 source = sk/'sklearn/utils/extmath.py'
 assert not subprocess.check_output(['git','-C',str(sk),'diff','HEAD','--',str(source)],text=True)

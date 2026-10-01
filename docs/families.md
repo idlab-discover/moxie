@@ -1,47 +1,48 @@
 # Family repositories
 
-Each sibling `moxie-<module>` repository starts from moxie tag `scaffold-v1.1`.
+Sibling `moxie-<module>` repositories consume current Moxie HEAD under the
+[family policy](family-development.md). `scaffold-v1.1` records their origin.
 Public imports stay under `moxie.<module>`, matching the scikit-learn module
-structure. The family table records the original interface scaffolds. Dense Dummy
+structure. Family APIs live in their own current docs. Dense Dummy
 estimators have since been integrated into this repository; see the
 [Dummy API](dummy/api.md). Other families continue to develop independently. Each
 repository contains its own Pixi environment, Git history, family contracts,
 compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 
-| Repository | Reference module | Family contract traits |
-| --- | --- | --- |
-| `moxie-linear_model` | `sklearn/linear_model` | `LinearRegressor`, `LinearClassifier`, `ProbabilisticLinearClassifier`, `OnlineLinearRegressor`, `OnlineLinearClassifier` |
-| `moxie-svm` | `sklearn/svm` | `SupportVectorClassifier`, `ProbabilisticSVC`, `SupportVectorRegressor`, `OneClassSupportVector` |
-| `moxie-neighbors` | `sklearn/neighbors` | `KNeighborsQuery`, `RadiusNeighborsQuery`, `KNeighborsClassifierAPI`, `KNeighborsRegressorAPI`, `RadiusNeighborsClassifierAPI`, `RadiusNeighborsRegressorAPI`, `NeighborDensity`, `NoveltyDetector` |
-| `moxie-tree` | `sklearn/tree` | `TreeInspection`, `DecisionTreeClassifierAPI`, `DecisionTreeRegressorAPI` |
-| `moxie-ensemble` | `sklearn/ensemble` | `EnsembleClassifier`, `EnsembleRegressor`, `ProbabilisticEnsemble`, `DecisionEnsemble`, `ForestInspection`, `StagedPredictor`, `IsolationDetector` |
-| `moxie-naive_bayes` | `sklearn/naive_bayes.py` | `NaiveBayesClassifier` |
-| `moxie-discriminant_analysis` | `sklearn/discriminant_analysis.py` | `DiscriminantClassifier`, `LinearDiscriminantTransformer` |
-| `moxie-gaussian_process` | `sklearn/gaussian_process` | `GaussianProcessClassifierAPI`, `GaussianProcessRegressorAPI`, `GaussianProcessPosterior`, `GaussianUncertainty` |
-| `moxie-neural_network` | `sklearn/neural_network` | `MLPClassifierAPI`, `MLPRegressorAPI`, `RBMTransformer` |
-| `moxie-kernel_ridge` | `sklearn/kernel_ridge.py` | `KernelRidgeRegressor` |
-| `moxie-dummy` | `sklearn/dummy.py` | `BaselineClassifier`, `BaselineRegressor` |
-| `moxie-semi_supervised` | `sklearn/semi_supervised` | `SemiSupervisedClassifier` |
-| `moxie-multiclass` | `sklearn/multiclass.py` | `MulticlassClassifier`, `MulticlassDecision`, `MulticlassProbability` |
-| `moxie-multioutput` | `sklearn/multioutput.py` | `MultiOutputClassifierAPI`, `MultiOutputRegressorAPI`, `MultiOutputProbability` |
-| `moxie-calibration` | `sklearn/calibration.py` | `CalibratedClassifier` |
-| `moxie-cluster` | `sklearn/cluster` | `Clusterer`, `PredictiveClusterer`, `ClusterDistanceTransformer`, `IncrementalClusterer`, `Biclusterer` |
-| `moxie-mixture` | `sklearn/mixture` | `MixtureDensity`, `InformationCriteria` |
-| `moxie-covariance` | `sklearn/covariance` | `CovarianceEstimator`, `RobustCovarianceDetector` |
-| `moxie-decomposition` | `sklearn/decomposition` | `DecompositionTransformer`, `InvertibleDecomposition`, `IncrementalDecomposition` |
-| `moxie-cross_decomposition` | `sklearn/cross_decomposition` | `CrossDecompositionTransformer`, `PLSPredictor` |
-| `moxie-manifold` | `sklearn/manifold` | `EmbeddingEstimator`, `OutOfSampleEmbedding` |
-| `moxie-preprocessing` | `sklearn/preprocessing` | `Preprocessor`, `InvertiblePreprocessor`, `OnlinePreprocessor`, `TargetPreprocessor` |
-| `moxie-impute` | `sklearn/impute` | `Imputer` |
-| `moxie-feature_selection` | `sklearn/feature_selection` | `FeatureSelector`, `SupervisedSelector`, `UnsupervisedSelector` |
-| `moxie-feature_extraction` | `sklearn/feature_extraction` | `FeatureExtractor` |
-| `moxie-kernel_approximation` | `sklearn/kernel_approximation.py` | `KernelFeatureMap` |
-| `moxie-random_projection` | `sklearn/random_projection.py` | `RandomProjector` |
-| `moxie-isotonic` | `sklearn/isotonic.py` | `IsotonicRegressorAPI` |
-| `moxie-pipeline` | `sklearn/pipeline.py` | `PipelineEstimator`, `PredictivePipeline`, `TransformingPipeline` |
-| `moxie-compose` | `sklearn/compose` | `ColumnComposer`, `TransformedTargetRegressorAPI` |
-| `moxie-model_selection` | `sklearn/model_selection` | `SearchEstimator`, `PredictiveSearch`, `CrossValidator` |
-| `moxie-frozen` | `sklearn/frozen` | `FrozenEstimatorAPI` |
+| Repository | Reference module |
+| --- | --- |
+| `moxie-linear_model` | `sklearn/linear_model` |
+| `moxie-svm` | `sklearn/svm` |
+| `moxie-neighbors` | `sklearn/neighbors` |
+| `moxie-tree` | `sklearn/tree` |
+| `moxie-ensemble` | `sklearn/ensemble` |
+| `moxie-naive_bayes` | `sklearn/naive_bayes.py` |
+| `moxie-discriminant_analysis` | `sklearn/discriminant_analysis.py` |
+| `moxie-gaussian_process` | `sklearn/gaussian_process` |
+| `moxie-neural_network` | `sklearn/neural_network` |
+| `moxie-kernel_ridge` | `sklearn/kernel_ridge.py` |
+| `moxie-dummy` | `sklearn/dummy.py` |
+| `moxie-semi_supervised` | `sklearn/semi_supervised` |
+| `moxie-multiclass` | `sklearn/multiclass.py` |
+| `moxie-multioutput` | `sklearn/multioutput.py` |
+| `moxie-calibration` | `sklearn/calibration.py` |
+| `moxie-cluster` | `sklearn/cluster` |
+| `moxie-mixture` | `sklearn/mixture` |
+| `moxie-covariance` | `sklearn/covariance` |
+| `moxie-decomposition` | `sklearn/decomposition` |
+| `moxie-cross_decomposition` | `sklearn/cross_decomposition` |
+| `moxie-manifold` | `sklearn/manifold` |
+| `moxie-preprocessing` | `sklearn/preprocessing` |
+| `moxie-impute` | `sklearn/impute` |
+| `moxie-feature_selection` | `sklearn/feature_selection` |
+| `moxie-feature_extraction` | `sklearn/feature_extraction` |
+| `moxie-kernel_approximation` | `sklearn/kernel_approximation.py` |
+| `moxie-random_projection` | `sklearn/random_projection.py` |
+| `moxie-isotonic` | `sklearn/isotonic.py` |
+| `moxie-pipeline` | `sklearn/pipeline.py` |
+| `moxie-compose` | `sklearn/compose` |
+| `moxie-model_selection` | `sklearn/model_selection` |
+| `moxie-frozen` | `sklearn/frozen` |
 
 ## Porting scope
 
@@ -50,9 +51,8 @@ feature preparation and estimator composition. `metrics`, `datasets`,
 `inspection`, `utils`, `exceptions`, `callback`, configuration, and experimental
 enablement are shared/supporting work, not duplicate algorithm-family repos.
 Third-party `externals` and build internals are reference infrastructure rather
-than Mojo algorithms to translate literally. The shared scaffold currently
-implements only its documented validation helper; these supporting modules
-remain future work.
+than Mojo algorithms to translate literally. Current shared owners are indexed in
+[README](../README.md); check their contracts before requesting new helpers.
 
 Derive concrete algorithms inside the corresponding family, keeping the
 reference class names and module locations. Family traits express shared

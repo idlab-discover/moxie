@@ -1,7 +1,7 @@
 # Shared random state
 
 Import the private engine from `moxie._random`. All families consume this owner
-through the pinned assembly tool. Library execution is pure Mojo; Python,
+through current shared assembly. Library execution is pure Mojo; Python,
 NumPy and Cython are validation/build tools only. Use the locked Mojo 1.0.0,
 MAX 26.5.0 and NuMojo environment.
 
@@ -106,13 +106,11 @@ library runtime.
 
 ## Dependency consumption and validation
 
-`EXPORTS.json` declares an empty root initializer: private types are imported
-from `moxie._random`, not exported as public estimators. The lock maps module
-ownership explicitly. Consumers pin this project's module, export manifest,
-lock and transitive inputs, then invoke `../assembly/tools/consume.py` with their
-own lock and output directory. The two isolated examples under
-`tests/consumers/a` and `b` call the same hashed implementation through separate
-assembled namespaces. Builds stop on pinned source drift.
+Import private types from `moxie._random`. Follow
+[live-source policy](../../../docs/family-development.md); module/export
+manifests define ownership, Pixi locks define compatible toolchains. Invoke
+current `../assembly/tools/consume.py`. Consumer probes under `tests/consumers/`
+compile separate namespaces from the same current implementation.
 
 Run `pixi run build`, `pixi run test`, and `pixi run parity`. Parity compiles the
 **unedited** local sklearn `_random.pyx` and its `.pxd` dependencies in an ignored
@@ -148,21 +146,9 @@ permutation allocation for small and larger batches. These are different
 workloads, not a claim that one RNG is a faster compatible replacement. Raw
 results and GNU time RSS measurements belong under ignored `benchmarks/`.
 
-The initial serial baseline on an AMD Ryzen 9 5950X measured 10,000 uniforms
-in about 196 µs, 10,000 normals in 414 µs, and a 10,000-element permutation in
-1.56 ms. Two pyperf processes, three values and one warmup give a small baseline;
-short samples emitted stability warnings. The scalar logarithm primitive used
-for compatibility took 40.6 µs per 10,000 evaluations versus 52.9 µs for the
-pinned stdlib approximation on the same input grid. This local result does not
-establish performance on other hardware or numerical domains. The primitive
-was chosen to meet the numerical contract, not to promise a speedup.
-
-Whole-process GNU time peak RSS was approximately 21,232 KiB for a 16-element
-permutation, 23,356 KiB for 10,000 elements, and 31,300 KiB for 1,000,000 elements.
-This includes runtime overhead. Result storage is O(n); the generator holds 624
-UInt32 words plus position/cache metadata. Run `pixi run python tools/memory.py`
-to repeat those measurements. `benchmarks/random-final.json` records pyperf
-results, compiler flags, tool versions, seeds and source/lock hashes.
+Use `tools/memory.py` for process RSS. Retain measurements with versions,
+flags, hardware, seeds and consumed-source receipts; old timings are not current
+guarantees. Result storage is O(n); MT state holds 624 UInt32 words plus metadata.
 
 Compatibility scalar log/exp use `std.sys.llvm_intrinsic` (`llvm.log` and
 `llvm.exp`), standard compiler math primitives lowered to the CPU platform math
@@ -205,7 +191,7 @@ Negative zero is accepted. The legacy log-gamma polynomial is retained for
 rejection decisions. Tests compare integer samples and subsequent RNG state
 exactly, including means around 10 and near the int64 safety limit.
 
-Multivariate normal uses the pinned `mojo-linalg.svd` and NuMojo matrix product:
+Multivariate normal uses `mojo-linalg.svd` and NuMojo matrix product:
 `Z @ (sqrt(s)[:, None] * Vt) + mean`. The mean is a vector, covariance a square
 matrix of matching order, and both must be finite. Float32 and Float64 inputs,
 including strided views and mixed mean/covariance dtypes, produce Float64 output.
@@ -219,7 +205,7 @@ Invalid covariance raises before consuming RNG state. This deliberately differs
 from NumPy's default `check_valid="warn"` and its failure-time state advancement;
 warning/ignore policies are not exposed.
 
-A seeded call is reproducible with the pinned backend, and consumes exactly the
+A seeded call is reproducible with the same backend and toolchain, and consumes exactly the
 same normal stream as NumPy for supported valid inputs. **Individual samples are
 not promised equal to NumPy**: NumPy uses LAPACK SVD, while this dependency uses
 Jacobi SVD with potentially different vector signs and bases in repeated singular
@@ -230,10 +216,9 @@ numerical comparison tolerance is 2e-12; discrete sampling parity remains exact.
 
 Numax SVD was evaluated first: its current Array/Tensor entry points require
 compile-time dimensions, and its MAX 26.6 lock differs from this owner's 26.5
-lock. The fallback `mojo-linalg` revision and complete source hashes are in
-`DEPENDENCIES.lock.json`; it uses the same pinned NuMojo storage and Mojo/MAX
-versions. The shared assembler materializes this verified dependency, with no
-Python or foreign numerical runtime in sampling.
+lock. The fallback `mojo-linalg` uses NuMojo storage and the compatible Mojo/MAX
+toolchain. Shared assembly consumes its current local source and records output
+hashes as receipts. Sampling uses no Python or foreign numerical runtime.
 
 ## sklearn XorShift primitive
 

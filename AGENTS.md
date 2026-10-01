@@ -1,129 +1,86 @@
-## Current family development policy
+# Moxie contributor rules
 
-Implement each family independently in its own repository beside
-`../scikit-learn`, the reference for correctness and public API surface.
-Import the current `../moxie` HEAD for genuinely global framework components,
-even while it is unstable; keep family-specific implementation and builds local.
+## Ownership and current sources
 
-For family work, read [docs/family-development.md](docs/family-development.md).
-The whole family repository is the development boundary. That policy supersedes
-older child-only containment, immutable family-helper, local source repinning
-and blanket no-commit rules in inherited instructions and historical prompts.
-Preserve global framework compatibility and the correctness requirements below.
+- Read [family development](docs/family-development.md) for family/child work.
+  Each family owns its whole sibling repository: APIs, algorithms, helpers,
+  tests and builds. Global framework components belong in Moxie.
+- Children consume current Moxie HEAD, including live working edits, even when
+  unstable. No source repinning or stable-release gate. Preserve compatible
+  toolchain locks, scikit-learn oracle revisions and historical baseline tags.
+- This policy supersedes inherited child-only containment, immutable helpers,
+  separate-session requirements and blanket no-commit rules.
+- Preserve unrelated work. Coordinate overlapping edits. Shared additions can
+  be requested through `COMMON-FAMILY-REQUIREMENTS.md`. That request log is not
+  an availability catalog; current owner contracts define implemented support.
 
-# Moxie: rules for Astra and other contributors
+## Reference and API
 
-## Mission and fixed interface
+Port scikit-learn to pure Mojo. Local `../scikit-learn` is correctness/API
+reference; [interfaces](docs/interfaces.md) records its revision. Before changing
+an estimator interface, read that contract. Before starting a family, read
+[families](docs/families.md). Inspect relevant source, tests, math and papers
+before implementing algorithms.
 
-Port all of scikit-learn to pure Mojo, preserving its familiar estimator
-ergonomics and public module organization. Read `docs/interfaces.md` before
-changing an estimator interface and `docs/families.md` before starting a family.
-The local `../scikit-learn` checkout is the reference; its revision is recorded
-in `docs/interfaces.md`. Inspect the relevant source, tests, mathematical
-documentation, and cited papers before implementing an algorithm.
+Preserve module layout under `src/moxie`, class names, constructor defaults,
+parameter meanings, learned `_` attributes, shapes, dtype, class ordering,
+fit/predict/transform behavior and scoring. Document language-driven differences;
+cover each with contract tests. Unsupported capabilities: omit or raise clearly.
+Never return plausible placeholders.
 
-Preserve scikit-learn names, constructor defaults, parameter meanings, learned
-attributes ending in `_`, fit/predict/transform behavior, output shapes, class
-ordering, and scoring semantics. Implementation strategies may differ. Every
-language-driven interface difference must be explicit in the public docs and
-covered by a contract test. Treat unsupported capabilities honestly: omit the
-capability or raise a clear error; never return plausible placeholder results.
+Keep constructor configuration separate from learned state. Clone configuration
+into an unfitted estimator; fitted copies are separate. Ordinary fit replaces
+state. Warm starts and partial fits follow each estimator's contract. Require
+optional capabilities only where supported. Family contracts refine shared
+contracts; algorithm details stay local. Shared contract changes belong in Moxie
+with review/tests. Preserve scaffold provenance; historical tags are not build
+pins. Cross-family integration is separate work.
 
-## Scaffold first, algorithms second
+## Native implementation and evidence
 
-Preserve the derivation chain: Moxie mirrors scikit-learn's fundamental API;
-each family copies that scaffold and refines only its family's contracts; each
-algorithm starts from its family's scaffold and develops in a self-contained
-project. Retain explicit provenance and compatible public interfaces so they
-can be integrated later; integration is separate work. Shared engines serve
-concrete reuse needs; algorithm-specific implementation details belong in the
-algorithm.
+Learning/prediction: pure Mojo. Python, sklearn, NumPy, SciPy and subprocesses:
+validation/tooling only, including NuMojo Python conversion/I/O helpers.
 
-Moxie is the shared foundation. The `scaffold-v1.1` tag records historical
-scaffold provenance; current child development consumes Moxie HEAD under
-`docs/family-development.md`. Keep shared contracts unchanged in family work.
-A required shared change belongs in Moxie with review and tests, and children
-validate against the current shared implementation. Preserve published baseline
-tags as historical records.
+Before numerical work, read `../session-plan/NUMERICS.md` and
+[shared numerical policy](shared/numerics/docs/numerics.md). Inspect libraries
+actually consumed by the build. Prefer Numax CPU kernels; use Mojo stdlib,
+NuMojo and MAX primitives. Use mojo-linalg when Numax cannot meet the contract.
+Other numerical runtime dependencies require a user decision.
 
-Mirror scikit-learn's package/module layout under `src/moxie`. Group related
-algorithms through their real shared capabilities. Do not impose probability,
-incremental fitting, transformation, or sample-weight support on estimators
-that lack it. Keep constructor parameters separate from learned state. Clone
-constructor configuration into an unfitted estimator; copying a fitted object
-is a different operation. A normal fit replaces learned state; warm starts and
-partial fits follow the individual estimator's documented rules.
-
-## Model serialization
-
-Native model serialization is available through `moxie.serialization` once a
-family implements its estimator's `ModelSchema`. Keep schema adapters, state
-versions, reconstruction rules and round-trip tests in the family's own folder
-or repository. The shared save/load engine lives in Moxie; families call
-`save_model[Schema]` and `load_model[Schema]` rather than duplicate the container
-or codec machinery.
-
-Before adding persistence to an estimator, read
-[docs/serialization.md](docs/serialization.md). Validate the family schema and
-restore constructor configuration and learned state without refitting. Cover
-fitted/unfitted round trips and invalid state in family-local tests. Serialization
-support is opt-in per estimator; the current format remains experimental.
-
-## Implementation and evidence
-
-Library code and algorithm kernels must be pure Mojo. Maximize reuse of Mojo's
-standard library, NuMojo, and MAX before writing equivalent numerical code:
-standard math/SIMD/algorithm primitives, NuMojo `NDArray` storage and suitable
-array operations, and `max.algorithm` reductions and execution/parallelism. These
-are authorized native runtime dependencies.
-
-Before implementing a numerical operation or reporting a missing capability,
-read `../session-plan/NUMERICS.md` and the shared numerical project's tested
-operation policy, then inspect the libraries consumed by the build for complete
-operations and composable primitives. Prefer a direct library call, then a bounded-memory
-composition, then the smallest custom kernel needed for the remaining semantics.
-Keep custom kernels on shared storage in their assigned owner. Record exact
+Prefer direct library operations, then bounded-memory compositions, then minimal
+custom kernels in their shared owner. Use accepted NuMojo storage. Record exact
 APIs considered and concrete correctness, allocation or performance reasons for
-exceptions; a missing convenience function or absent whitelist entry alone is
-not evidence that library reuse is impossible. Validate new compositions in the
-owning project; preserve operation-specific exclusions until evidence resolves
-them. Reuse must meet the task's dtype, NaN, reduction-order, stride and memory
-contracts. Enable SIMD/parallel execution where those contracts and measured
-workloads support it.
+exceptions. Missing convenience functions or whitelist entries prove no blocker.
+Preserve dtype, NaN, reduction-order, stride, ownership and memory contracts.
+Validate new compositions at their owner; retain operation exclusions until
+resolved by evidence. Enable SIMD/parallelism where contracts and measurements
+support it. Use mojo-syntax skill; compile every changed Mojo module.
 
-Python, scikit-learn, NumPy, SciPy, and subprocesses are validation/tooling only;
-they must not execute the library's learning or prediction. NuMojo's optional
-Python conversion/I/O helpers are subject to the same restriction. Additional
-third-party numerical runtime dependencies require a new user decision.
-Use the mojo-syntax skill when writing Mojo and compile every changed module.
+Before algorithm implementation, collect references/comparison sources under
+local `docs/private/<algorithm>/` or ignored `references/`. Record URLs, exact
+revisions, licenses and comparison commands; retain license notices.
 
-Before implementing an algorithm, gather its mathematical references and useful
-specialized open-source implementations in the most specific local algorithm
-directory, under `docs/private/<algorithm>/` or an ignored `references/` folder.
-Record source URLs, exact revisions, licenses, and comparison commands there.
-Retain third-party license notices. Use the local scikit-learn source first;
-fetch other implementations when they provide an actual comparison target.
+Validate against sklearn: shapes/dtypes/order, invalid inputs, unfitted errors,
+repeat fits, parameter changes, clone, determinism and numerical edges. Explain
+tolerances. Performance claims require correctness and repeatable measurements:
+pyperf, perf, Valgrind, Callgrind. Retain versions, flags, hardware, seeds, thread
+settings, commands and raw results. Do not build substitute profiling tools.
 
-Validate observable behavior against scikit-learn: shapes, dtypes, ordering,
-invalid inputs, unfitted errors, repeat fits, parameter changes, cloning,
-determinism, and numerical edge cases. State tolerances and why they are valid.
-Performance claims require correctness evidence and repeatable measurements.
-Use existing tools: pyperf for benchmarks, perf for CPU profiling, Valgrind for
-memory checks, and Callgrind for call costs. Keep tool versions, compiler flags,
-hardware, seeds, thread settings, commands, and raw results with the local run.
-Do not build replacements for these tools as part of the ML library.
+## Persistence
 
-## Repository hygiene and completion
+Read [serialization](docs/serialization.md) before adding persistence.
+Families own `ModelSchema`, state versions, validation, reconstruction and tests.
+Call shared `save_model[Schema]` / `load_model[Schema]`; restore configuration and
+learned state without refitting. Test fitted/unfitted round trips and invalid
+state. Support is opt-in; format remains experimental.
 
-`builds/`, `benchmarks/`, `profiling/`, `docs/private/`, and `references/` are
-local working areas and must remain Git-ignored. Keep downloads, source mirrors,
-papers, exploratory notes, raw measurements, and generated binaries there.
-Tracked documentation must help users use or extend the library. Supply clear,
-human-friendly examples and reproducible correctness tests. Keep development
-worklogs and bulk research out of tracked docs.
+## Completion
 
-Commit atomically: one completed, validated piece of work per commit, with only
-its related files. Stage explicit paths and inspect the staged diff. Preserve
-unrelated work. Run the project's build and contract tests before committing
-code. Never present a scaffold or test double as an implemented algorithm, and
-never claim full scikit-learn parity from compilation or a smoke test.
+Keep `builds/`, `benchmarks/`, `profiling/`, `docs/private/`, `references/` ignored.
+Tracked docs: current usage, extension contracts, reproducible tests/examples.
+Research, downloads, raw measurements and worklogs stay untracked.
+
+Commit completed, validated changes atomically. Stage explicit paths; inspect
+staged diff. Run relevant build/contracts before committing code; parity for
+changed numerical/estimator behavior. Compilation or smoke tests establish no
+full sklearn parity. Scaffolds/test doubles are not implemented algorithms.

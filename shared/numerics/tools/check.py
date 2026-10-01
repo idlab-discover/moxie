@@ -1,35 +1,24 @@
-"""Verify the pinned candidate before any native build; no parent assembly."""
+"""Build current shared numerical sources with the locked toolchain."""
 from pathlib import Path
-import hashlib
 import json
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCK = json.loads((ROOT / 'DEPENDENCIES.lock.json').read_text())
+ASSEMBLY = ROOT.parent / 'assembly'
 
 def verify():
     (ROOT / 'docs/private/numojo').mkdir(parents=True, exist_ok=True)
     for metadata in Path(sys.prefix, 'conda-meta').glob('max-core-*.json'):
-        if json.loads(metadata.read_text())['version'] != LOCK['toolchain']['max-core']:
+        if json.loads(metadata.read_text())['version'] != '26.5.0':
             raise RuntimeError('MAX toolchain mismatch')
         break
     else:
         raise RuntimeError('Locked max-core package is missing')
-    dep = LOCK['numojo']
-    source = (ROOT / dep['path']).resolve()
-    head = subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip()
-    if head != dep['revision']:
-        raise RuntimeError('NuMojo revision drift')
     target = ROOT / 'builds/deps'
-    for name, digest in dep['files'].items():
-        data = (source / name).read_bytes()
-        if hashlib.sha256(data).hexdigest() != digest:
-            raise RuntimeError(f'NuMojo source drift: {name}')
-        dest = target / name
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        if not dest.exists() or dest.read_bytes() != data:
-            dest.write_bytes(data)
+    subprocess.run([sys.executable, str(ASSEMBLY / 'tools/assemble.py'),
+                    '--consumer', str(ROOT), '--lock', str(ROOT / 'DEPENDENCIES.lock.json'),
+                    '--output', str(target)], check=True)
     version = subprocess.check_output(['mojo', '--version'], text=True)
     if '1.0.0' not in version:
         raise RuntimeError(f'Compiler mismatch: {version}')
@@ -38,7 +27,7 @@ def verify():
 def build():
     deps = verify()
     for source in sorted((ROOT / 'tests').glob('*.mojo')) + sorted((ROOT / 'examples').glob('*.mojo')):
-        subprocess.run(['mojo', 'build', '-O3', '-I', str(deps), '-I', str(ROOT/'src'), '-I', str(ROOT/'tests'), str(source), '-o', str(ROOT/'builds'/source.stem)], check=True)
+        subprocess.run(['mojo', 'build', '-O3', '-I', str(deps), '-I', str(ROOT/'tests'), str(source), '-o', str(ROOT/'builds'/source.stem)], check=True)
 
 if __name__ == '__main__':
     action = sys.argv[1]

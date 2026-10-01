@@ -1,0 +1,14 @@
+{
+  "path": "../../../scikit-learn",
+  "revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "files": {
+    "sklearn/utils/extmath.py": "c017bee38f6ead6ae29051b0a4a48861bf17d79cb1e3c7050ede026b5c0e4bae",
+    "sklearn/utils/validation.py": "d7c9e061aa6b8888e1d2a5027c21d9b76094008564f03a4f1a700daef224287c",
+    "sklearn/metrics/pairwise.py": "107ff1274aec5e9a1cbc6648ff7e7931dafe74c40548d33cce0919637a995d8b",
+    "sklearn/utils/tests/test_extmath.py": "c8fc634b87f0a6e8b824545738095f8b93cc55996c4bad3f7600cec0e4b7ce7a",
+    "sklearn/utils/tests/test_validation.py": "ab60e101f812cdbbcf65a5ee339b1cf70663b74148a05b794c571f0e5dd0584d",
+    "sklearn/metrics/tests/test_pairwise.py": "cd522c32919470230146764655760703bce1cd60f25cbb85f0a73cbf84e4d4bf",
+    "doc/modules/metrics.rst": "20a83d6e60ccb8304c0a7c1ada53aca6e5f7bbd43fa34f64c2911e652cda9242",
+    "COPYING": "50d6a9d340f19ab355609917993114daf5f47e3161067bcf34955bbd05cd9cb0"
+  }
+}

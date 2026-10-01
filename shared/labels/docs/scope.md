@@ -8,8 +8,8 @@ See [labels.md](labels.md) for exact signatures and differences from sklearn.
 
 Deferred: public preprocessing estimators, sparse/ragged/object/nullable targets,
 row-string serialization specific to StratifiedShuffleSplit, warning routing,
-Python bindings and downstream family adoption. No family is repinned by this
-project and no missing capability returns a placeholder.
+Python bindings and downstream estimator integration. Missing capabilities
+return no placeholders. Nullable features use [categorical columns](../../../docs/categorical.md).
 
 Numerical storage remains the accepted NuMojo NDArray. Standard-library sorting
 and comparisons supply the core primitives; this project owns label semantics

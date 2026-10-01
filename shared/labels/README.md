@@ -10,6 +10,6 @@ pixi run test
 pixi run parity
 ```
 
-Consumers import `moxie._labels` through the existing verified shared assembler.
+Consumers import `moxie._labels` through the current shared assembler.
 This project provides private helpers; public preprocessing estimators and
 family adoption remain separate work.

@@ -78,7 +78,7 @@ through their own `__sklearn_clone__` implementation.
 - The weighted-fit trait requires an explicit `sample_weight` value on its
   overload. Score accepts optional weights. Incremental weight support and
   estimator-specific extra fit arguments are added by the concrete algorithm.
-- Python reflection, serialization, rich repr, pandas output, metadata routing,
+- Python reflection, rich repr, pandas output, metadata routing,
   full sklearn tags, and Python bindings are outside this scaffold. They must
   be designed and tested before claiming compatibility with those facilities.
 
@@ -96,3 +96,7 @@ variation rather than methods that raise on most algorithms.
 
 Mojo language references: [traits](https://mojolang.org/docs/manual/traits/)
 and [reference lifetimes](https://mojolang.org/docs/manual/values/lifetimes/).
+
+Experimental native persistence is an opt-in `ModelSchema` adapter, separate
+from estimator traits; see [serialization](serialization.md). It does not imply
+Python pickle compatibility or automatic persistence for existing families.

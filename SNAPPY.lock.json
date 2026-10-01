@@ -1,0 +1,12 @@
+{
+  "path": "../../mojo-snappy",
+  "revision": "1bb71bec224d3d262d6a542dd872da7f2a665b9c",
+  "version": "0.2.0",
+  "mojo": "1.0.0",
+  "files": {
+    "src/mojo_snappy/__init__.mojo": "ef7a80d632b8633944da174bfa304a66ce1048536f508869f174745bb1bbeb7d",
+    "src/mojo_snappy/codec.mojo": "d06e1c2ce9dd5ed7273555a40bdecdd93328a64db72d3f36cd3781d891d798d7",
+    "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "THIRD_PARTY_NOTICES.md": "131bc2e30a2ed43e3cc584be9f51ca62c75fecb78b6f5565124befea5dbff830"
+  }
+}

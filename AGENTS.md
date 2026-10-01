@@ -55,6 +55,21 @@ constructor configuration into an unfitted estimator; copying a fitted object
 is a different operation. A normal fit replaces learned state; warm starts and
 partial fits follow the individual estimator's documented rules.
 
+## Model serialization
+
+Native model serialization is available through `moxie.serialization` once a
+family implements its estimator's `ModelSchema`. Keep schema adapters, state
+versions, reconstruction rules and round-trip tests in the family's own folder
+or repository. The shared save/load engine lives in Moxie; families call
+`save_model[Schema]` and `load_model[Schema]` rather than duplicate the container
+or codec machinery.
+
+Before adding persistence to an estimator, read
+[docs/serialization.md](docs/serialization.md). Validate the family schema and
+restore constructor configuration and learned state without refitting. Cover
+fitted/unfitted round trips and invalid state in family-local tests. Serialization
+support is opt-in per estimator; the current format remains experimental.
+
 ## Implementation and evidence
 
 Library code and algorithm kernels must be pure Mojo. Maximize reuse of Mojo's

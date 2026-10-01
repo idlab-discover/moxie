@@ -1,0 +1,22 @@
+[workspace]
+authors = ["Str-Gen <20303842+Str-Gen@users.noreply.github.com>"]
+channels = ["https://conda.modular.com/max", "conda-forge"]
+name = "foundation-linalg"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+build = "python tools/check.py build"
+test = "python tools/check.py test"
+parity = "python tools/check.py parity"
+
+[dependencies]
+mojo = "==1.0.0"
+max-core = "==26.5.0"
+python = ">=3.14.7,<3.15"
+numpy = ">=2.5.3,<3"
+scipy = ">=1.18.1,<2"
+pyperf = ">=2.10.0,<3"
+time = ">=1.10,<2"
+cython = ">=3.2,<4"
+setuptools = ">=80"

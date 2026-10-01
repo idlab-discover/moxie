@@ -8,7 +8,7 @@ version = "0.1.0"
 [tasks]
 build = "python tools/check.py build"
 test = { cmd = "python tools/check.py test", depends-on = ["build"] }
-parity = { cmd = "python tests/dummy/parity.py", depends-on = ["build"], env = { OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", PYTHONDONTWRITEBYTECODE = "1" } }
+parity = { cmd = "python tools/check.py parity", depends-on = ["build"], env = { OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", PYTHONDONTWRITEBYTECODE = "1" } }
 start = { cmd = "builds/examples/dummy", depends-on = ["build"] }
 scaffold-start = { cmd = "builds/examples/estimator", depends-on = ["build"] }
 
@@ -23,3 +23,4 @@ time = ">=1.10,<2"
 cython = ">=3.2,<4"
 setuptools = ">=80"
 scikit-learn = ">=1.9.1,<2"
+pandas = ">=3,<4"

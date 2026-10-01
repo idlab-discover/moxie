@@ -32,15 +32,52 @@ def build():
     run('mojo', 'precompile', DEPS / 'moxie', '-I', DEPS, '-o', ROOT / 'builds/moxie.mojoc')
     sources = sorted((ROOT / 'tests').glob('*.mojo'))
     sources += sorted((ROOT / 'tests/dummy').glob('*.mojo'))
+    sources += compose_sources()
     sources += sorted((ROOT / 'examples').glob('*.mojo'))
     for source in sources:
         binary = executable(source)
         binary.parent.mkdir(parents=True, exist_ok=True)
         run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,
-            '-I', ROOT / 'examples', source, '-o', binary)
+            '-I', ROOT / 'examples', '-I', ROOT / 'tests/compose/support', source, '-o', binary)
+
+
+def compose_sources():
+    return [source for source in sorted((ROOT / 'tests/compose').rglob('*.mojo'))
+            if not {'support', 'negative'}.intersection(source.parts)]
+
+
+def compose_test():
+    receipt = json.loads((DEPS / 'ASSEMBLY.json').read_text())
+    for module, owners in receipt['modules'].items():
+        if module.startswith('moxie.compose.'):
+            assert owners == ['moxie'], (module, owners)
+    for source in compose_sources():
+        if not source.stem.endswith('parity_driver'):
+            run(executable(source))
+    for name in ['compose_contracts', 'column_transformer', 'transformed_target']:
+        run(executable(ROOT / f'examples/{name}.mojo'))
+    for name, message in [('missing_predict', "required function 'predict'"),
+                          ('missing_blocks', 'concatenate')]:
+        result = subprocess.run(
+            ['mojo', 'build', '-I', str(DEPS),
+             str(ROOT / f'tests/compose/negative/{name}.mojo'),
+             '-o', str(ROOT / 'builds/invalid-compose')],
+            cwd=ROOT, capture_output=True, text=True,
+        )
+        (ROOT / f'builds/compose-{name}.log').write_text(result.stderr)
+        if result.returncode == 0 or message not in result.stderr:
+            raise RuntimeError(f'Unexpected negative compilation result: {result.stderr}')
+
+
+def parity():
+    run(sys.executable, ROOT / 'tests/dummy/parity.py')
+    for relative in ['columns/parity.py', 'columns/named_parity.py', 'target/parity.py',
+                     'models/parity.py', 'pipeline/parity.py']:
+        run(sys.executable, ROOT / 'tests/compose' / relative)
 
 
 def test():
+    compose_test()
     for source in sorted((ROOT / 'tests').glob('*.mojo')):
         run(executable(source))
     run('bash', ROOT / 'tests/check_compile_fail.sh')
@@ -66,5 +103,7 @@ if __name__ == '__main__':
         build()
     elif action == 'test':
         test()
+    elif action == 'parity':
+        parity()
     else:
         raise ValueError(action)

@@ -28,6 +28,24 @@
         },
         "moxie._categorical": {
           "file": "src/moxie/_categorical.mojo"
+        },
+        "moxie.compose._base": {
+          "file": "src/moxie/compose/_base.mojo"
+        },
+        "moxie.compose._plumbing": {
+          "file": "src/moxie/compose/_plumbing.mojo"
+        },
+        "moxie.compose._table": {
+          "file": "src/moxie/compose/_table.mojo"
+        },
+        "moxie.compose._column_keys": {
+          "file": "src/moxie/compose/_column_keys.mojo"
+        },
+        "moxie.compose._column_transformer": {
+          "file": "src/moxie/compose/_column_transformer.mojo"
+        },
+        "moxie.compose._target": {
+          "file": "src/moxie/compose/_target.mojo"
         }
       },
       "assets": {
@@ -52,6 +70,42 @@
           "moxie.utils": {
             "FittedState": "moxie.utils.validation",
             "check_is_fitted": "moxie.utils.validation"
+          },
+          "moxie.compose": {
+            "BlockLayout": "moxie.compose._plumbing",
+            "ColumnComposer": "moxie.compose._base",
+            "ColumnResolver": "moxie.compose._plumbing",
+            "ColumnSchema": "moxie.compose._table",
+            "ColumnSelection": "moxie.compose._plumbing",
+            "ColumnTable": "moxie.compose._table",
+            "DenseBlockAssembler": "moxie.compose._plumbing",
+            "FeatureNamer": "moxie.compose._plumbing",
+            "NestedComposition": "moxie.compose._plumbing",
+            "OutputSpan": "moxie.compose._plumbing",
+            "TransformedTargetRegressorAPI": "moxie.compose._base",
+            "ColumnCallable": "moxie.compose._column_transformer",
+            "ColumnComponent": "moxie.compose._column_transformer",
+            "ColumnCons": "moxie.compose._column_transformer",
+            "ColumnEntry": "moxie.compose._column_transformer",
+            "ColumnKey": "moxie.compose._column_keys",
+            "ColumnList": "moxie.compose._column_transformer",
+            "ColumnTransformer": "moxie.compose._column_transformer",
+            "ColumnTransformerParams": "moxie.compose._column_transformer",
+            "Columns": "moxie.compose._column_transformer",
+            "EndColumns": "moxie.compose._column_transformer",
+            "FeatureNameFormatter": "moxie.compose._column_transformer",
+            "FeatureNamesOut": "moxie.compose._column_transformer",
+            "FeatureNamesOutOption": "moxie.compose._column_transformer",
+            "NoTransformer": "moxie.compose._column_transformer",
+            "TransformerRecord": "moxie.compose._column_transformer",
+            "TransformerSpec": "moxie.compose._column_transformer",
+            "make_column_selector": "moxie.compose._column_keys",
+            "make_column_transformer": "moxie.compose._column_transformer",
+            "TargetFunction": "moxie.compose._target",
+            "TargetFunctionTransformer": "moxie.compose._target",
+            "TargetFunctionTransformerParams": "moxie.compose._target",
+            "TransformedTargetRegressor": "moxie.compose._target",
+            "TransformedTargetRegressorParams": "moxie.compose._target"
           }
         },
         "schema": 1
@@ -201,6 +255,120 @@
       "exports": {
         "schema": 1,
         "packages": {}
+      }
+    },
+    {
+      "id": "numerics",
+      "path": "shared/numerics",
+      "modules": {
+        "moxie._dense": {
+          "file": "src/moxie/_dense.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "packages": {},
+        "schema": 1
+      }
+    },
+    {
+      "id": "mojo-optimize",
+      "path": "../.worktrees/mojo-optimize-linear_model",
+      "modules": {},
+      "assets": {
+        "mojo_optimize/__init__.mojo": "src/mojo_optimize/__init__.mojo",
+        "mojo_optimize/_lbfgsb_core.mojo": "src/mojo_optimize/_lbfgsb_core.mojo",
+        "mojo_optimize/_vectors.mojo": "src/mojo_optimize/_vectors.mojo",
+        "mojo_optimize/contracts.mojo": "src/mojo_optimize/contracts.mojo",
+        "mojo_optimize/history.mojo": "src/mojo_optimize/history.mojo",
+        "mojo_optimize/lbfgs.mojo": "src/mojo_optimize/lbfgs.mojo",
+        "mojo_optimize/lbfgsb.mojo": "src/mojo_optimize/lbfgsb.mojo",
+        "mojo_optimize/line_search.mojo": "src/mojo_optimize/line_search.mojo",
+        "mojo_optimize/nnls.mojo": "src/mojo_optimize/nnls.mojo"
+      },
+      "exports": null
+    },
+    {
+      "id": "linear_model",
+      "path": "../moxie-linear_model",
+      "modules": {
+        "moxie.linear_model._base": {
+          "file": "src/moxie/linear_model/_base.mojo"
+        },
+        "moxie.linear_model._contracts": {
+          "file": "src/moxie/linear_model/_contracts.mojo"
+        },
+        "moxie.linear_model._linear_base": {
+          "file": "src/moxie/linear_model/_linear_base.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.linear_model": {
+            "LinearClassifier": "moxie.linear_model._base",
+            "LinearRegressor": "moxie.linear_model._base",
+            "OnlineLinearClassifier": "moxie.linear_model._base",
+            "OnlineLinearRegressor": "moxie.linear_model._base",
+            "ProbabilisticLinearClassifier": "moxie.linear_model._base"
+          }
+        },
+        "schema": 1
+      }
+    },
+    {
+      "id": "least_squares",
+      "path": "../moxie-linear_model/algorithms/least_squares",
+      "modules": {
+        "moxie.linear_model._least_squares": {
+          "file": "src/moxie/linear_model/_least_squares.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.linear_model": {
+            "LinearRegression": "moxie.linear_model._least_squares",
+            "LinearRegressionParams": "moxie.linear_model._least_squares"
+          }
+        },
+        "schema": 1
+      }
+    },
+    {
+      "id": "pipeline",
+      "path": "../moxie-pipeline",
+      "modules": {
+        "moxie._pipeline_api_types": {
+          "file": "src/moxie/_pipeline_api_types.mojo"
+        },
+        "moxie._pipeline_api": {
+          "file": "src/moxie/_pipeline_api.mojo"
+        },
+        "moxie._pipeline_contracts": {
+          "file": "src/moxie/_pipeline_contracts.mojo"
+        },
+        "moxie._pipeline_sequential": {
+          "file": "src/moxie/_pipeline_sequential.mojo"
+        },
+        "moxie._pipeline_union": {
+          "file": "src/moxie/_pipeline_union.mojo"
+        },
+        "moxie.pipeline": {
+          "file": "src/moxie/pipeline.mojo"
+        },
+        "moxie._pipeline": {
+          "file": "src/moxie/_pipeline.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {}
+        }
       }
     }
   ],

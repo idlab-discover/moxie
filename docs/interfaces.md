@@ -6,7 +6,8 @@ The reference is the local scikit-learn 1.10.dev0 checkout at
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Current Mojo
 contracts follow that reference; they do not establish complete scikit-learn
 compatibility or a universal array ABI.
-Dense Dummy estimators are implemented; see their [native API](dummy/api.md).
+Dense Dummy and Compose estimators are implemented; see the
+[Dummy API](dummy/api.md) and [Compose scope](compose/scope.md).
 
 The primary source contracts are `sklearn/base.py`,
 `doc/developers/develop.rst`, `doc/glossary.rst`,

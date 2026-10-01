@@ -1,3 +1,16 @@
+## Current family development policy
+
+Implement each family independently in its own repository beside
+`../scikit-learn`, the reference for correctness and public API surface.
+Import `../moxie` for genuinely global framework components; keep
+family-specific implementation and builds local.
+
+For family work, read [docs/family-development.md](docs/family-development.md).
+The whole family repository is the development boundary. That policy supersedes
+older child-only containment, immutable family-helper, local source repinning
+and blanket no-commit rules in inherited instructions and historical prompts.
+Preserve global framework compatibility and the correctness requirements below.
+
 # Moxie: rules for Astra and other contributors
 
 ## Mission and fixed interface

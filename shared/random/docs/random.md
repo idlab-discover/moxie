@@ -232,3 +232,24 @@ lock. The fallback `mojo-linalg` revision and complete source hashes are in
 `DEPENDENCIES.lock.json`; it uses the same pinned NuMojo storage and Mojo/MAX
 versions. The shared assembler materializes this verified dependency, with no
 Python or foreign numerical runtime in sampling.
+
+## sklearn XorShift primitive
+
+`from moxie._random import our_rand_r` exposes
+`our_rand_r(mut state: UInt32) -> UInt32` for sklearn's internal solver/tree
+stream. The caller owns the state word. Zero is repaired to one before the
+13-left, 17-right, 5-left XOR shifts, with UInt32 wrapping. The full 32-bit
+updated state is retained; the returned value is reduced modulo 2**31.
+Do not assign the returned value back to the state. This function allocates
+no buffers and does not touch `RandomState` or the global/native stream.
+
+```mojo
+var state = UInt32(1)
+var draw = our_rand_r(state)  # draw and state are both 270369 on this call
+```
+
+This is a separate compatibility primitive, not a replacement for MT19937.
+Consumers keep sklearn's algorithm-specific seed initialization and draw order.
+Parity compiles a test bridge to the unmodified pinned `_random.pxd` and checks
+both output and full state exactly across boundary seeds and long sequences.
+The BSD-3-Clause notice is retained in `LICENSES/scikit-learn.txt`.

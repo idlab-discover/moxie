@@ -26,9 +26,10 @@ def load():
     (target/'sklearn/__init__.py').write_text('')
     (package/'__init__.py').write_text('')
     (package/'validation.py').write_text('import numpy as np\nimport numbers\n'+ast.unparse(body)+'\n')
+    shutil.copyfile(ROOT/'tests/our_rand_r_oracle.pyx', target/'our_rand_r_oracle.pyx')
     setup="""from setuptools import setup, Extension
 from Cython.Build import cythonize
-setup(ext_modules=cythonize([Extension('sklearn.utils._random',['sklearn/utils/_random.pyx'])], compiler_directives={'language_level':3}))
+setup(ext_modules=cythonize([Extension('sklearn.utils._random',['sklearn/utils/_random.pyx']), Extension('our_rand_r_oracle',['our_rand_r_oracle.pyx'])], compiler_directives={'language_level':3}))
 """
     (target/'setup.py').write_text(setup)
     subprocess.run([sys.executable,'setup.py','build_ext','--inplace'],cwd=target,check=True,stdout=subprocess.DEVNULL)

@@ -1,4 +1,4 @@
-from moxie._random import RandomState, NativeRandom, entropy_state
+from moxie._random import RandomState, NativeRandom, entropy_state, our_rand_r
 from std.random import Random as Philox
 from std.math import copysign
 from std.testing import assert_equal, assert_true, assert_raises
@@ -6,6 +6,15 @@ import numojo as nm
 from numojo import Shape, Item
 
 def main() raises:
+    var xorshift = UInt32(0)
+    assert_equal(our_rand_r(xorshift), UInt32(270369))
+    assert_equal(xorshift, UInt32(270369))
+    xorshift = 1273642419
+    assert_equal(our_rand_r(xorshift), UInt32(131541053))
+    assert_equal(xorshift, UInt32(2279024701))
+    var saved = xorshift
+    assert_equal(our_rand_r(xorshift), our_rand_r(saved))
+    assert_equal(xorshift, saved)
     var a = RandomState(42)
     var b = RandomState(42)
     for _ in range(2000):

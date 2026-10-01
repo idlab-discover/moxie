@@ -4,6 +4,19 @@ import json, subprocess
 import numpy as np
 from oracle import load, ROOT
 sample,Dummy,check=load()
+from our_rand_r_oracle import sequence as xorshift_sequence
+
+# Compare every output AND full state; using the masked output as the next
+# state would appear correct on short low-bit-only examples.
+xorshift_seeds = sorted({0, 1, 42, 1273642419, 2**31-1, 2**31, 2**32-1,
+                        *(1 << bit for bit in range(32)),
+                        *(2**32-1 ^ (1 << bit) for bit in range(32))})
+for seed in xorshift_seeds:
+    count = 4096
+    out = subprocess.check_output([ROOT/'builds/draws', 'our_rand_r', str(seed), str(count)], text=True)
+    got = np.array(out.splitlines(), dtype=np.uint32).reshape(count, 2)
+    np.testing.assert_array_equal(got, xorshift_sequence(seed, count), err_msg=f'our_rand_r seed={seed}')
+print(f'PASS our_rand_r: {len(xorshift_seeds)} seeds x {count} exact output/state pairs against pinned sklearn')
 CASES=0
 
 def probe(mode, seed, count=100, n=0, k=1, method='auto', p=()):

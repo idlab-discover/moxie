@@ -1,4 +1,4 @@
-from moxie._random import RandomState, NativeRandom
+from moxie._random import RandomState, NativeRandom, our_rand_r
 from std.random import seed, random_float64
 from std.sys import argv
 from moxie._random import _covariance_transform
@@ -11,6 +11,12 @@ def main() raises:
     var mode = args[1]
     var s = Int(args[2])
     var count = Int(args[3])
+    if mode == "our_rand_r":
+        var word = UInt32(s)
+        for _ in range(count):
+            print(our_rand_r(word))
+            print(word)
+        return
     var n = Int(args[4])
     var k = Int(args[5])
     var state = RandomState(s)

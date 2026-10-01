@@ -12,6 +12,18 @@ from numojo import NDArray, Shape, Item
 from mojo_linalg import svd, NumericalError
 
 
+def our_rand_r(mut state: UInt32) -> UInt32:
+    """Advance sklearn's XorShift32 state; return its low 31 bits."""
+    # Adapted from sklearn/utils/_random.pxd (BSD-3-Clause; see LICENSES).
+    # Keep the full UInt32 state: only the returned value is reduced.
+    if state == 0:
+        state = 1
+    state ^= state << 13
+    state ^= state >> 17
+    state ^= state << 5
+    return state & UInt32(0x7fffffff)
+
+
 struct NativeRandom(Copyable, Movable):
     """Isolated stdlib Philox; reproducible but NOT NumPy compatible."""
     var _generator: Philox[10]

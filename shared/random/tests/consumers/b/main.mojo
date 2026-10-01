@@ -1,8 +1,11 @@
-from moxie._random import RandomState
+from moxie._random import RandomState, our_rand_r
 from moxie.consumer_b import evaluate, SeededProbe
 from std.testing import assert_equal, assert_true
 
 def main() raises:
+    var word = UInt32(0)
+    assert_equal(our_rand_r(word), UInt32(270369))
+    assert_equal(word, UInt32(270369))
     var state = RandomState(42)
     print(evaluate(state))
     print(evaluate(state))

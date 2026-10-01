@@ -61,9 +61,11 @@ The manifest stays uncompressed. No speed or universal size benefit is promised.
 `SNAPPY.lock.json` pins mojo-snappy 0.2.0 source and license hashes for Mojo 1.0.0.
 `python tools/prepare_snappy.py` recovers those exact Git objects into
 `builds/snappy`; verified cached bytes work without the source checkout. Include
-`-I builds/snappy/src` when importing the codec or precompiling the whole package.
-The core `serialization` module can be imported without Snappy. No third-party
-codec source is copied into tracked Moxie library files.
+`-I builds/snappy/src` when importing the codec, precompiling the whole package,
+or consuming that precompiled package (Mojo resolves its recorded codec
+dependency eagerly). The core `serialization` module can be imported from source
+without Snappy. No third-party codec source is copied into tracked Moxie library
+files.
 
 ## Wire format, version 1
 

@@ -91,9 +91,10 @@ automatic dtype promotion, and serialization adapters.
 
 This module does not yet provide a heterogeneous table, estimator adapters,
 standalone categorical `MissingIndicator`, or changes to impute/compose.
-Families can exchange columns through this single core owner and adopt it
-explicitly through their dependency manifests. Include the `moxie._categorical`
-module and the existing pinned NuMojo dependency; do not copy its implementation.
+Families exchange columns through this single core owner, following the
+[live-source development policy](family-development.md). Include
+`moxie._categorical` and NuMojo in the dependency manifest, retaining compatible
+toolchain locks; import the implementation from Moxie.
 
 ## Validation
 

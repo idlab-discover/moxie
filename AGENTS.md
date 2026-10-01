@@ -2,8 +2,8 @@
 
 Implement each family independently in its own repository beside
 `../scikit-learn`, the reference for correctness and public API surface.
-Import `../moxie` for genuinely global framework components; keep
-family-specific implementation and builds local.
+Import the current `../moxie` HEAD for genuinely global framework components,
+even while it is unstable; keep family-specific implementation and builds local.
 
 For family work, read [docs/family-development.md](docs/family-development.md).
 The whole family repository is the development boundary. That policy supersedes
@@ -34,18 +34,17 @@ capability or raise a clear error; never return plausible placeholder results.
 Preserve the derivation chain: Moxie mirrors scikit-learn's fundamental API;
 each family copies that scaffold and refines only its family's contracts; each
 algorithm starts from its family's scaffold and develops in a self-contained
-project. These codebases stabilize independently. Retain explicit provenance
-and compatible public interfaces so they can be integrated later; integration
-is separate work. Adopt parent changes deliberately rather than coupling child
-progress to the latest parent revision. Shared engines serve concrete reuse
-needs; algorithm-specific implementation details belong in the algorithm.
+project. Retain explicit provenance and compatible public interfaces so they
+can be integrated later; integration is separate work. Shared engines serve
+concrete reuse needs; algorithm-specific implementation details belong in the
+algorithm.
 
-Moxie is the shared foundation. The `scaffold-v1.1` tag identifies its frozen
-starting point. Family repositories derive from that exact commit; algorithm
-work derives from the appropriate family. Keep shared contracts unchanged in
-family work. A required shared change belongs in moxie as a reviewed, tested,
-versioned change, then is deliberately propagated to derivatives. Never move a
-published baseline tag to disguise a change.
+Moxie is the shared foundation. The `scaffold-v1.1` tag records historical
+scaffold provenance; current child development consumes Moxie HEAD under
+`docs/family-development.md`. Keep shared contracts unchanged in family work.
+A required shared change belongs in Moxie with review and tests, and children
+validate against the current shared implementation. Preserve published baseline
+tags as historical records.
 
 Mirror scikit-learn's package/module layout under `src/moxie`. Group related
 algorithms through their real shared capabilities. Do not impose probability,
@@ -80,8 +79,8 @@ are authorized native runtime dependencies.
 
 Before implementing a numerical operation or reporting a missing capability,
 read `../session-plan/NUMERICS.md` and the shared numerical project's tested
-operation policy, then inspect the pinned libraries for both complete operations
-and composable primitives. Prefer a direct library call, then a bounded-memory
+operation policy, then inspect the libraries consumed by the build for complete
+operations and composable primitives. Prefer a direct library call, then a bounded-memory
 composition, then the smallest custom kernel needed for the remaining semantics.
 Keep custom kernels on shared storage in their assigned owner. Record exact
 APIs considered and concrete correctness, allocation or performance reasons for

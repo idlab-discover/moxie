@@ -12,10 +12,14 @@ as the implementation runtime. Keep the recorded reference revision, API parity,
 pure-Mojo implementation, numerical evidence and existing scope requirements.
 Family independence does not relax correctness or permit placeholder algorithms.
 
-Import Moxie for genuinely global framework contracts and shared infrastructure.
-Preserve copied baseline provenance and common API compatibility. Family-specific
-helpers belong in the family, even when a similar helper might eventually be
-useful elsewhere. Implement or revise them locally and validate their consumers;
+Family repositories and algorithm child folders consume the current Moxie HEAD
+for genuinely global framework contracts and shared infrastructure, even while
+it is unstable. Use the live local checkout on every build, including working
+source edits; no stable release, source pin, or separate adoption approval is
+required. Validate consumers against those inputs and resolve compatibility
+issues through their owning projects. Preserve copied baseline provenance and
+common API compatibility. Family-specific helpers belong in the family, even
+when a similar helper might eventually be useful elsewhere. Implement or revise them locally and validate their consumers;
 a missing family helper is ordinary implementation work, not an owner handoff.
 Request genuinely global additions through Moxie's COMMON-FAMILY-REQUIREMENTS.md.
 Continue independent family work while an external capability is unavailable.

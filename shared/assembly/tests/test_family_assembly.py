@@ -119,6 +119,12 @@ class FamilyAssemblyTests(unittest.TestCase):
         self.assertEqual((output / 'mojo_optimize/probe.mojo').read_bytes(),
                          (self.external / 'module.mojo').read_bytes())
 
+    def test_snappy_asset_namespace(self):
+        self.lock['projects'][1]['assets'] = {'mojo_snappy/__init__.mojo': 'module.mojo'}
+        output = self.run_assembly()
+        self.assertEqual((output / 'mojo_snappy/__init__.mojo').read_bytes(),
+                         (self.external / 'module.mojo').read_bytes())
+
     def test_balsa_asset_namespace(self):
         self.lock['projects'][1]['assets'] = {'balsa/__init__.mojo': 'module.mojo'}
         output = self.run_assembly()

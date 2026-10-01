@@ -171,3 +171,8 @@ The initial short baseline on this Ryzen 9 5950X host measured approximately
 108 ms (consumer A) and 111 ms (consumer B) per full assembly, with about 1.4 MB
 of generated source each. These two-process, three-value samples are smoke
 baselines; pyperf warned that the B sample is too small for a stable estimate.
+
+The family development assembler (`tools/assemble_family.py`) also accepts
+`mojo_snappy/` assets for optional native model compression. These retain the
+same file hashes, source recovery, collision checks and license assets as other
+external runtime packages. Existing consumer locks remain unchanged until adoption.

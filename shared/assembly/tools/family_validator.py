@@ -133,7 +133,7 @@ def plan(consumer, lock_path):
         require(isinstance(project['assets'], dict), 'assets must be an object')
         for target, source in project['assets'].items():
             path = relative(target)
-            require(path.parts[0] in ('numojo', 'mojo_linalg', 'mojo_optimize', 'numax', 'balsa', 'licenses'), f'unsupported asset namespace: {target}')
+            require(path.parts[0] in ('numojo', 'mojo_linalg', 'mojo_optimize', 'numax', 'balsa', 'mojo_snappy', 'licenses'), f'unsupported asset namespace: {target}')
             data = pinned(source)
             require(target not in assets, f'asset collision: {target}')
             assets[target] = data

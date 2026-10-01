@@ -85,43 +85,31 @@ def plan(consumer, lock_path):
     require(isinstance(lock['projects'], list) and lock['projects'], 'projects must be nonempty')
     owners, candidates, assets, manifests = {}, {}, {}, []
     for project in lock['projects']:
-        fields(project, ('id', 'path', 'revision', 'files', 'modules', 'assets', 'exports'))
+        fields(project, ('id', 'path', 'modules', 'assets', 'exports'), ('revision', 'files'))
         owner = project['id']
         require(isinstance(owner, str) and re.fullmatch('[A-Za-z_0-9.-]+', owner), 'invalid project id')
         require(owner not in owners, f'duplicate project: {owner}')
         require(isinstance(project['path'], str) and project['path'], 'invalid project path')
         root = (lock_path.parent / project['path']).resolve()
-        revision = project['revision']
-        require(isinstance(revision, str) and re.fullmatch('[0-9a-f]{40}', revision), 'invalid Git revision')
-        head = git(root, 'rev-parse', 'HEAD').decode().strip()
-        same_repository = git(root, 'rev-parse', '--show-toplevel') == git(consumer, 'rev-parse', '--show-toplevel')
-        if same_repository:
-            # Locks within one repository cannot pin the commit containing
-            # themselves. Require provenance ancestry and exact file hashes.
-            ancestry = subprocess.run(['git', '-C', str(root), 'merge-base',
-                                      '--is-ancestor', revision, head],
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            require(ancestry.returncode == 0, f'revision drift: {owner}')
-        else:
-            require(head == revision, f'revision drift: {owner}')
+        require(root.is_dir(), f'missing dependency directory: {root}')
         owners[owner] = project
-        require(isinstance(project['files'], dict), 'files must be an object')
+        # Old v1 manifests remain readable; hashes/revisions are provenance only.
+        if 'files' in project:
+            require(isinstance(project['files'], dict), 'files must be an object')
+            for name in project['files']:
+                relative(name)
         blobs = {}
-        for name, expected in project['files'].items():
-            sha(expected)
-            data = source_file(root, name).read_bytes()
-            require(digest(data) == expected, f'source drift: {owner}/{name}')
-            blobs[name] = data
-        def pinned(name):
+        def current(name):
             relative(name)
-            require(name in blobs, f'unpinned file: {owner}/{name}')
+            if name not in blobs:
+                blobs[name] = source_file(root, name).read_bytes()
             return blobs[name]
         require(isinstance(project['modules'], dict), 'modules must be an object')
         for name, spec in project['modules'].items():
             module(name)
             require(name != 'moxie', 'root must be an export package')
             fields(spec, ('file',), ('baseline',))
-            data = pinned(spec['file'])
+            data = current(spec['file'])
             baseline = spec.get('baseline')
             if baseline is not None:
                 require(isinstance(baseline, str) and re.fullmatch('[0-9a-f]{40}', baseline), 'invalid baseline')
@@ -134,7 +122,7 @@ def plan(consumer, lock_path):
         for target, source in project['assets'].items():
             path = relative(target)
             require(path.parts[0] in ('numojo', 'mojo_linalg', 'mojo_optimize', 'numax', 'balsa', 'mojo_snappy', 'licenses'), f'unsupported asset namespace: {target}')
-            data = pinned(source)
+            data = current(source)
             require(target not in assets, f'asset collision: {target}')
             assets[target] = data
         if project['exports'] is not None:

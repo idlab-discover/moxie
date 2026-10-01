@@ -2,9 +2,7 @@
 
 `moxie.serialization` owns the shared binary container and schema adapter
 contract. Families own estimator identifiers, state schemas, reconstruction and
-semantic validation. This feature is under development on
-`feature/native-model-serialization`; format version 1 is not a stable release
-promise. It uses neither pickle nor safetensors.
+semantic validation. Format version 1 is experimental and is not a stable release promise. It uses neither pickle nor safetensors.
 
 A family implements `ModelSchema`, with an associated `Model` type and static
 `encode(model) -> ModelArchive` / `decode(archive) -> Model` methods. Decode
@@ -58,14 +56,14 @@ loader also accepts raw payloads. A raw-only loader explicitly rejects compresse
 payloads. Compression is per array, opt-in, and used only when it reduces bytes.
 The manifest stays uncompressed. No speed or universal size benefit is promised.
 
-`SNAPPY.lock.json` pins mojo-snappy 0.2.0 source and license hashes for Mojo 1.0.0.
-`python tools/prepare_snappy.py` recovers those exact Git objects into
-`builds/snappy`; verified cached bytes work without the source checkout. Include
-`-I builds/snappy/src` when importing the codec, precompiling the whole package,
-or consuming that precompiled package (Mojo resolves its recorded codec
-dependency eagerly). The core `serialization` module can be imported from source
-without Snappy. No third-party codec source is copied into tracked Moxie library
-files.
+The optional codec uses the current local `../../mojo-snappy/src` checkout.
+Include `-I ../../mojo-snappy/src` when importing the codec, precompiling the
+whole package, or consuming that precompiled package (Mojo resolves its recorded
+codec dependency eagerly). There is no source hash lock or cached snapshot.
+The core `serialization` module can be imported from source without Snappy.
+mojo-snappy's license and upstream notices remain in its source repository;
+family assembly includes those license assets alongside the codec. The tested
+toolchain remains Mojo 1.0.0.
 
 ## Wire format, version 1
 

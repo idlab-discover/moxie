@@ -7,9 +7,8 @@ version = "0.1.0"
 
 [tasks]
 start = "mojo run -I src examples/estimator.mojo"
-prepare-snappy = "python tools/prepare_snappy.py"
-build = { depends-on = ["prepare-snappy"], cmd = "mkdir -p builds && mojo precompile -I builds/snappy/src src/moxie -o builds/moxie.mojoc && mojo build -I src examples/estimator.mojo -o builds/example" }
-test = { depends-on = ["prepare-snappy"], cmd = "mojo run -I src -I examples tests/test_contracts.mojo && mojo run -I src tests/test_capabilities.mojo && bash tests/check_compile_fail.sh && mojo run -I src tests/test_serialization.mojo && mojo run -I src -I builds/snappy/src tests/test_serialization_snappy.mojo && python tests/serialization_wire.py" }
+build = { cmd = "mkdir -p builds && mojo precompile -I ../../mojo-snappy/src src/moxie -o builds/moxie.mojoc && mojo build -I src examples/estimator.mojo -o builds/example" }
+test = { cmd = "mojo run -I src -I examples tests/test_contracts.mojo && mojo run -I src tests/test_capabilities.mojo && bash tests/check_compile_fail.sh && mojo run -I src tests/test_serialization.mojo && mojo run -I src -I ../../mojo-snappy/src tests/test_serialization_snappy.mojo && python tests/serialization_wire.py" }
 
 [dependencies]
 mojo = "*"

@@ -33,7 +33,7 @@ class FamilyAssemblyTests(unittest.TestCase):
             (root / 'module.mojo').write_text('def value() -> Int:\n    return 1\n')
             commit(root)
         self.lock = {'schema': 1, 'projects': [self.entry(self.family, 'owned'), self.entry(self.external, 'dependency')], 'overrides': []}
-        self.path = self.family / 'DEPENDENCIES.lock.json'
+        self.path = self.family / 'DEPENDENCIES.json'
 
     def tearDown(self):
         self.temp.cleanup()
@@ -56,27 +56,29 @@ class FamilyAssemblyTests(unittest.TestCase):
         output = self.run_assembly()
         self.assertEqual((output / 'moxie/owned.mojo').read_text(), data)
         self.assertEqual(self.path.read_bytes(), original)
-        self.assertIn('development', json.loads((output / 'ASSEMBLY.json').read_text()))
+        self.assertIn('files', json.loads((output / 'ASSEMBLY.json').read_text()))
 
-    def test_external_advance_uses_exact_old_bytes_on_cold_build(self):
-        expected = (self.external / 'module.mojo').read_bytes()
-        (self.external / 'module.mojo').write_text('changed external source')
-        commit(self.external)
+    def test_external_edits_are_used_on_every_build(self):
+        self.run_assembly()
+        expected = b'changed external source'
+        (self.external / 'module.mojo').write_bytes(expected)
         output = self.run_assembly()
         self.assertEqual((output / 'moxie/dependency.mojo').read_bytes(), expected)
-
-    def test_cached_sibling_can_be_absent(self):
-        self.run_assembly()
-        self.external.rename(self.root / 'moved')
+        commit(self.external)
         self.run_assembly()
 
-    def test_unrecoverable_external_hash_rejected_without_losing_output(self):
+    def test_missing_sibling_is_reported_without_cached_fallback(self):
         output = self.run_assembly()
         before = (output / 'ASSEMBLY.json').read_bytes()
-        self.lock['projects'][1]['files']['module.mojo'] = '0' * 64
-        with self.assertRaisesRegex(ValueError, 'source drift'):
+        self.external.rename(self.root / 'moved')
+        with self.assertRaisesRegex(ValueError, 'missing dependency directory'):
             self.run_assembly()
         self.assertEqual((output / 'ASSEMBLY.json').read_bytes(), before)
+
+    def test_old_hashes_and_revisions_are_not_gates(self):
+        self.lock['projects'][1]['files']['module.mojo'] = '0' * 64
+        self.lock['projects'][1]['revision'] = '0' * 40
+        self.run_assembly()
 
     def test_module_conflicts_still_rejected(self):
         self.lock['projects'][0]['modules'] = {'moxie.dependency': {'file': 'module.mojo'}}
@@ -92,7 +94,7 @@ class FamilyAssemblyTests(unittest.TestCase):
     def test_child_consumes_live_family_engine(self):
         child = self.family / 'algorithms' / 'example'
         child.mkdir(parents=True)
-        self.path = child / 'DEPENDENCIES.lock.json'
+        self.path = child / 'DEPENDENCIES.json'
         self.path.write_text(json.dumps(self.lock))
         (self.family / 'module.mojo').write_text('family engine edit')
         output = assemble(child, self.path, child / 'builds/deps')
@@ -110,7 +112,7 @@ class FamilyAssemblyTests(unittest.TestCase):
 
     def test_upstream_metadata_is_not_a_build_gate(self):
         self.lock['projects'][1]['files']['AGENTS.md'] = '0' * 64
-        self.lock['projects'][1]['files']['DEPENDENCIES.lock.json'] = '0' * 64
+        self.lock['projects'][1]['files']['DEPENDENCIES.json'] = '0' * 64
         self.run_assembly()
 
     def test_existing_optimize_asset_namespace(self):
@@ -134,22 +136,16 @@ class FamilyAssemblyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unsupported asset namespace'):
             self.run_assembly()
 
-    def test_two_content_versions_at_one_revision_remain_available(self):
-        first = (self.external / 'module.mojo').read_bytes()
+    def test_manifest_needs_no_revision_or_hashes(self):
+        for project in self.lock['projects']:
+            project.pop('files')
+            project.pop('revision')
         self.run_assembly()
-        first_pin = self.lock['projects'][1]['files']['module.mojo']
-        second = b'different uncommitted external bytes'
-        (self.external / 'module.mojo').write_bytes(second)
-        self.lock['projects'][1]['files']['module.mojo'] = hashlib.sha256(second).hexdigest()
-        self.run_assembly()
-        self.external.rename(self.root / 'moved')
-        self.lock['projects'][1]['files']['module.mojo'] = first_pin
-        output = self.run_assembly()
-        self.assertEqual((output / 'moxie/dependency.mojo').read_bytes(), first)
 
-    def test_legacy_tool_is_unchanged(self):
-        from assemble_family import legacy
-        self.assertTrue(callable(legacy().plan))
+    def test_entrypoints_share_the_same_validator(self):
+        from assemble import plan as first
+        from assemble_family import plan as second
+        self.assertIs(first, second)
 
 
 if __name__ == '__main__':

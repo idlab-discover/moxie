@@ -36,7 +36,7 @@ The fixture paths were executed separately.
 Validation commands:
 
 - `pixi run build`: complete native package/consumer/control compilation.
-- `pixi run test`: source/revision drift, missing/unpinned files, traversal and
+- `pixi run test`: live source changes, stale metadata, missing files, traversal and
   symlink escape, module/export/asset collisions, schema validation, override
   failures, baseline provenance, stale output removal and native contracts.
 - `pixi run parity`: exact assembled-versus-direct native behavior for both

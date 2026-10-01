@@ -17,7 +17,7 @@ class AssemblyTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(dir=ROOT / 'builds')
         self.root = Path(self.temporary.name)
-        source = ROOT / 'tests/fixtures/consumer_b/DEPENDENCIES.lock.json'
+        source = ROOT / 'tests/fixtures/consumer_b/DEPENDENCIES.json'
         self.lock = json.loads(source.read_text())
         for project in self.lock['projects']:
             project['path'] = str((source.parent / project['path']).resolve())
@@ -42,7 +42,7 @@ class AssemblyTests(unittest.TestCase):
 
     def local(self):
         (self.root / 'module.mojo').write_text('def marker() -> Int:\n    return 1\n')
-        p = {'id': 'local', 'path': str(self.root), 'revision': self.project('moxie')['revision'],
+        p = {'id': 'local', 'path': str(self.root), 'revision': '0' * 40,
              'files': {'module.mojo': digest((self.root / 'module.mojo').read_bytes())},
              'modules': {'moxie.local': {'file': 'module.mojo'}}, 'assets': {},
              'exports': {'schema': 1, 'packages': {}}}
@@ -117,23 +117,19 @@ class AssemblyTests(unittest.TestCase):
         (self.root / 'module.mojo').unlink()
         self.fails('missing file')
 
-    def test_source_drift(self):
+    def test_live_source_edit(self):
         self.local()
         (self.root / 'module.mojo').write_text('changed')
-        self.fails('source drift')
+        self.assertEqual(self.execute()['moxie/local.mojo'], b'changed')
 
-    def test_same_repository_ancestor_with_exact_hashes(self):
-        self.project('moxie')['revision'] = subprocess.check_output(
-            ['git', '-C', str(ROOT), 'rev-parse', '786a5ee'], text=True).strip()
+    def test_stale_source_metadata_is_ignored(self):
+        self.project('moxie')['revision'] = '0' * 40
+        self.project('moxie')['files'] = {'src/moxie/base.mojo': '0' * 64}
         self.execute()
-        self.project('moxie')['files']['src/moxie/base.mojo'] = '0' * 64
-        self.fails('source drift')
 
-    def test_external_repository_requires_exact_head(self):
-        project = self.project('dummy-family')
-        project['revision'] = subprocess.check_output(
-            ['git', '-C', project['path'], 'rev-parse', 'HEAD^'], text=True).strip()
-        self.fails('revision drift')
+    def test_external_revision_is_not_a_gate(self):
+        self.project('dummy-family')['revision'] = '0' * 40
+        self.execute()
 
     def test_pinned_linalg_asset_namespace(self):
         project = self.local()
@@ -149,11 +145,12 @@ class AssemblyTests(unittest.TestCase):
         self.assertEqual(self.execute()['numax/core/libm.mojo'],
                          (self.root / 'module.mojo').read_bytes())
         project['files']['module.mojo'] = '0' * 64
-        self.fails('source drift')
+        self.execute()
 
-    def test_git_revision_drift(self):
-        self.project('numerics')['revision'] = '0' * 40
-        self.fails('revision drift')
+    def test_git_revision_is_optional(self):
+        for project in self.lock['projects']:
+            project.pop('revision', None)
+        self.execute()
 
     def test_path_traversal(self):
         p = self.local()
@@ -168,9 +165,9 @@ class AssemblyTests(unittest.TestCase):
         (self.root / 'module.mojo').symlink_to(ROOT / 'tools/assemble.py')
         self.fails('source symlink escape')
 
-    def test_unpinned_module(self):
+    def test_module_needs_no_hash_inventory(self):
         self.project('consumer')['files'] = {}
-        self.fails('unpinned file')
+        self.execute()
 
     def test_override_must_name_exact_losers(self):
         self.lock['overrides'][0]['from'].append('numerics')
@@ -212,8 +209,8 @@ class AssemblyTests(unittest.TestCase):
         assemble(self.root, self.save(), target)
         self.assertFalse((target / 'stale.mojo').exists())
         receipt = (target / 'ASSEMBLY.json').read_bytes()
-        self.project('numerics')['revision'] = '0' * 40
-        with self.assertRaisesRegex(AssemblyError, 'revision drift'):
+        self.project('numerics')['modules']['moxie._dense']['file'] = 'missing.mojo'
+        with self.assertRaisesRegex(AssemblyError, 'missing file'):
             assemble(self.root, self.save(), target)
         self.assertEqual((target / 'ASSEMBLY.json').read_bytes(), receipt)
 
@@ -224,10 +221,9 @@ class AssemblyTests(unittest.TestCase):
         with self.assertRaisesRegex(AssemblyError, 'symlink escape'):
             assemble(self.root, self.save(), self.root / 'builds/deps')
 
-    def test_tool_pin_verified_before_execution(self):
-        self.project('assembly')['files']['tools/assemble.py'] = '0' * 64
-        with self.assertRaisesRegex(ValueError, 'tool drift'):
-            consume(self.root, self.save(), ROOT / 'tools/assemble.py')
+    def test_launcher_rejects_wrong_tool_path(self):
+        with self.assertRaisesRegex(ValueError, 'wrong assembly tool path'):
+            consume(self.root, self.save(), ROOT / 'tools/wrong.py')
 
 
 if __name__ == '__main__':

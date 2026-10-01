@@ -26,6 +26,6 @@ The shared starting point is tagged `scaffold-v1.1`. Derivatives retain its Git
 history and record the baseline commit in `SCAFFOLD_BASE`. Each family uses the
 same `moxie` namespace, so modules can eventually be integrated without renaming.
 
-Native model serialization is being developed on a feature branch. See the
+Experimental native model serialization is available. See the
 [serialization guide](docs/serialization.md) for the shared engine, family-owned
 schema contract, optional Snappy codec, and current limits.

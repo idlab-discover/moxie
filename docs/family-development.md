@@ -26,18 +26,18 @@ development inputs: editing them does not require changing content pins. Keep
 module/export manifests accurate when adding, removing or relocating modules;
 retain namespace collision checks and explicit ownership overrides.
 
-External dependencies are deliberately adopted, reproducible inputs. Verify
-consumed bytes and retain licenses and provenance; a dependency owner's newer
-HEAD or unrelated edits must not invalidate an already adopted version. Cache
-verified snapshots inside the family. If exact pinned bytes cannot be recovered,
-report that specific dependency and deliberately adopt a validated replacement;
-never silently refresh external pins during a build.
+Local source dependencies are live development inputs. Shared assembly reads the
+current files at each declared project path on every build; there are no source
+revision/hash gates or cached historical fallbacks. Keep dependency paths, module
+ownership, exports and license assets in `DEPENDENCIES.json`. Older v1 manifests
+remain readable, but their `revision` and `files` pins are ignored. Missing source
+checkouts or files raise an error. Generated receipts record the bytes consumed.
 
-Existing cross-family reuse can consume a verified snapshot without requiring
-its owner's live checkout or tests on each build. New cross-family integration
-is separate work, not a prerequisite for unrelated family algorithms. Avoid
-turning planned reuse into mandatory scheduling dependencies. Keep genuinely
-global components in Moxie rather than creating competing framework copies.
+Retain compatible Pixi toolchain locks, correctness-reference revisions and
+published baseline tags. Baseline proofs still protect deduplication of inherited
+contracts. New cross-family integration is separate work; keep genuinely global
+components in Moxie. Existing consumers that bootstrap an old assembler must
+switch to the current shared tool to adopt this workflow.
 
 Use atomic commits with explicit paths for completed, validated changes within
 the family repository. Nested project folders use that repository's Git history;

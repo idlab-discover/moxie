@@ -13,4 +13,4 @@ pixi run parity
 The native runtime remains pure Mojo. Python implements only build, validation
 and benchmark tooling. Inputs from Moxie, numerics, NuMojo and the dummy family
 remain read-only; generated namespaces live under each consumer's ignored
-`builds/deps`. The two fixture projects demonstrate pinned tool reuse.
+`builds/deps`. The two fixture projects demonstrate shared local tool reuse.

@@ -1,4 +1,4 @@
-"""Execute one isolated fixture project with the shared, pinned assembler."""
+"""Execute one isolated fixture project with the shared local assembler."""
 import argparse
 from pathlib import Path
 import subprocess
@@ -13,7 +13,7 @@ if __name__ == '__main__':
     p.add_argument('action', choices=['build', 'test'])
     args = p.parse_args()
     consumer = args.consumer.resolve()
-    consume(consumer, consumer / 'DEPENDENCIES.lock.json', ROOT / 'tools/assemble.py')
+    consume(consumer, consumer / 'DEPENDENCIES.json', ROOT / 'tools/assemble.py')
     compile(consumer / 'main.mojo', consumer / 'builds/probe', [consumer / 'builds/deps'])
     if args.action == 'test':
         subprocess.run([str(consumer / 'builds/probe')], check=True)

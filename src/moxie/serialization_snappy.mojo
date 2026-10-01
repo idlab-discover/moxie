@@ -1,4 +1,4 @@
-"""Optional raw Snappy payload codec, backed by the pinned mojo-snappy package."""
+"""Optional raw Snappy payload codec, backed by the local mojo-snappy package."""
 from mojo_snappy import compress, decompress, uncompressed_length
 from .serialization import PayloadCodec
 

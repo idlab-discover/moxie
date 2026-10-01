@@ -27,12 +27,12 @@ def build():
     metadata = list(Path(sys.prefix, 'conda-meta').glob('max-core-*.json'))
     if len(metadata) != 1 or json.loads(metadata[0].read_text())['version'] != '26.5.0':
         raise RuntimeError('MAX mismatch')
-    assemble(ROOT, ROOT / 'DEPENDENCIES.lock.json', ROOT / 'builds/deps')
+    assemble(ROOT, ROOT / 'DEPENDENCIES.json', ROOT / 'builds/deps')
     # Compile every owned runtime module as a package, including the empty owner API.
     run('mojo', 'precompile', ROOT / 'src/moxie', '-o', ROOT / 'builds/owner.mojoc')
     for letter in ('a', 'b'):
         consumer = ROOT / 'tests/fixtures' / f'consumer_{letter}'
-        consume(consumer, consumer / 'DEPENDENCIES.lock.json', ROOT / 'tools/assemble.py')
+        consume(consumer, consumer / 'DEPENDENCIES.json', ROOT / 'tools/assemble.py')
         compile(consumer / 'main.mojo', consumer / 'builds/probe', [consumer / 'builds/deps'])
         run('mojo', 'precompile', consumer / 'builds/deps/moxie', '-I', consumer / 'builds/deps',
             '-o', consumer / 'builds/moxie.mojoc')

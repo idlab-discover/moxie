@@ -92,8 +92,6 @@
         "required": [
           "id",
           "path",
-          "revision",
-          "files",
           "modules",
           "assets",
           "exports"

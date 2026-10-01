@@ -1,6 +1,5 @@
-"""Small launcher: verify the shared tool before executing its explicit path."""
+"""Small launcher: execute the shared tool at its declared local path."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -12,11 +11,11 @@ def consume(consumer, lock, tool):
     data = json.loads(lock.read_text())
     pins = [p for p in data['projects'] if p['id'] == 'assembly']
     if len(pins) != 1:
-        raise ValueError('exactly one assembly tool pin required')
+        raise ValueError('exactly one assembly project required')
     pin = pins[0]
     expected = (lock.parent / pin['path'] / 'tools/assemble_family.py').resolve()
-    if tool != expected or hashlib.sha256(tool.read_bytes()).hexdigest() != pin['files']['tools/assemble_family.py']:
-        raise ValueError('assembly tool drift or wrong path')
+    if tool != expected:
+        raise ValueError('wrong assembly tool path')
     subprocess.run([sys.executable, str(tool), '--consumer', str(consumer),
                     '--lock', str(lock), '--output', str(consumer / 'builds/deps')], check=True)
 

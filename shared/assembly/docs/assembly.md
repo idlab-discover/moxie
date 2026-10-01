@@ -1,178 +1,66 @@
-# Shared dependency assembly, version 1
+# Shared dependency assembly
 
-`tools/assemble.py` is the single dependency assembler for foundation projects,
-family scaffolds and compact families. It is Python build tooling; all executed
-native probes and inherited numerical code are pure Mojo. There is no library
-runtime export from this project. The assembler uses Python's standard library
-and Linux advisory file locking.
+`tools/assemble.py` and `tools/assemble_family.py` use the same namespace
+validator. They assemble current local sources on every build, without source
+revision pins, hash gates, Git recovery or historical caches. Python is build
+tooling only; the assembled library remains pure Mojo.
 
-## Consumer setup
-
-Keep owned modules in `src/moxie/`. Create `DEPENDENCIES.lock.json` with the
-versioned [lock schema](../schemas/assembly-v1.schema.json), and ignore `builds/`.
-The two complete examples are [consumer A](../tests/fixtures/consumer_a/DEPENDENCIES.lock.json)
-and [consumer B](../tests/fixtures/consumer_b/DEPENDENCIES.lock.json). B represents
-a compact family with an inherited module and overlapping baseline files.
-Each has its own Pixi manifest/lock and can run `pixi run build` and `pixi run test`.
-
-Use the exact Mojo 1.0.0 / MAX 26.5.0 / NuMojo combination from the completed
-numerics owner. This project's Pixi environment reproduces that resolved lock;
-no backend selection or numerical buffer implementation occurs here.
-
-Pin the shared tool's project path, Git revision and file SHA-256 in an
-`assembly` project entry, including `tools/assemble.py`, `tools/consume.py` and
-both schemas. Run the shared launcher read-only, using explicit paths:
+Keep owned modules under `src/moxie/`, dependency declarations in
+`DEPENDENCIES.json`, and generated output under ignored `builds/deps`.
+The manifest uses [schema 1](../schemas/assembly-v1.schema.json) with projects
+and explicit overrides. Each project declares `id`, `path`, `modules`, `assets`
+and `exports`. Paths resolve relative to the manifest. A module maps its full
+`moxie.*` name to a source `file`; assets map output paths to source paths.
+All transitive runtime imports and license assets must be declared.
 
 ```sh
-python /path/to/assembly/tools/consume.py \
+python /path/to/moxie/shared/assembly/tools/assemble.py \
   --consumer /path/to/consumer \
-  --lock /path/to/consumer/DEPENDENCIES.lock.json \
-  --tool /path/to/assembly/tools/assemble.py
-mojo build -O3 -I /path/to/consumer/builds/deps \
-  /path/to/consumer/tests/main.mojo -o /path/to/consumer/builds/test
+  --lock /path/to/consumer/DEPENDENCIES.json \
+  --output /path/to/consumer/builds/deps
+mojo build -I /path/to/consumer/builds/deps /path/to/consumer/tests/main.mojo
 ```
 
-The launcher checks the selected assembler's hash **before executing it**.
-The assembler rechecks all pinned files and revisions, including its own tool
-entry, on every invocation. Treat the launcher itself as trusted build tooling:
-pin it in the consumer lock and review/verify that pin when updating the shared
-tool. Do not copy an editable assembler into the consumer. A consumer may invoke
-`assemble.py` directly after its own pre-execution SHA-256 check.
+The `--lock` argument remains for CLI compatibility; it now names a source
+manifest. Old version-1 manifests with `revision` and `files` remain accepted;
+those fields no longer constrain consumed content. The launchers verify the
+specified tool path against the assembly project, without checking its hash.
+Consumers with their own old-tool bootstrap must switch to the live tool.
+Missing dependency directories or source files fail explicitly; there is no
+fallback to a cached revision. Compatible Pixi toolchain locks are unchanged.
 
-Compile with the single generated import root. Adding several partial `moxie`
-include directories is not supported composition. The owner tool itself
-bootstraps read-only from the completed numerics lock; consumers have no bootstrap
-exception. `tools/pin.py` is an explicit maintainer command for this project's
-fixtures, never a build step and never a general automatic update command.
+## Ownership and validation
 
-## Lock and export contract
+Export manifests map each public symbol to its owning module. Every package
+ancestor needs an explicit manifest. Generated initializers contain sorted
+imports; arbitrary package initialization is unsupported. Module, symbol, asset
+and file/directory collisions fail before output is replaced. Supported external
+asset namespaces include `numojo`, `mojo_linalg`, `mojo_optimize`, `numax`,
+`balsa`, `mojo_snappy`, and `licenses`.
 
-Paths in a project's `path` resolve relative to the lock file. They may refer
-to sibling repositories or use absolute paths. File paths within projects and
-asset destinations must be canonical relative paths: no absolute paths, `..`,
-`.` segments, repeated separators or backslashes. Source symlinks may resolve
-only within the specified project root. All pinned files must exist.
+Duplicate modules require an explicit override naming all displaced owners and
+one winner. Identical inherited baseline modules are the exception: both must
+name the same baseline commit and match its actual Git bytes. This baseline
+provenance check protects shared contract deduplication; it is not a pin on a
+dependency checkout's HEAD. Published baseline tags remain unchanged.
 
-A lock is a flattened dependency graph: list the family, foundation baseline,
-every transitive engine/algorithm actually used, the numerical source and the
-tool. Include upstream dependency locks as hashed evidence. The assembler does
-not discover or silently extend transitive dependencies. The compiler catches
-missing imports. Authors must review the full closure before pinning.
+Source paths must be canonical relative paths within their declared project;
+traversal and escaping symlinks fail. Output must be exactly the consumer's
+Git-ignored `builds/deps`, without symlink redirection. Input bytes are read
+before output replacement, cooperating writers are serialized, and a failed
+validation preserves existing output. Successful assembly removes stale files.
+`ASSEMBLY.json` records module ownership and hashes of the actual output bytes
+for inspection; those hashes are receipts, not future build gates.
 
-Each project contains:
+Assembly must finish before compilation. Concurrent source mutation during a
+build is unsupported. This is build tooling for trusted repositories, not a
+sandbox for executing untrusted code.
 
-| Field | Meaning |
-| --- | --- |
-| `id` | Unique stable owner name |
-| `path`, `revision` | Source root and Git revision (40 hexadecimal characters) |
-| `files` | Relative filename to SHA-256 map; every consumed file must be pinned |
-| `modules` | Full `moxie.*` module to `{ "file": "src/...mojo" }` |
-| `assets` | Destination to pinned source filename, for `numojo/`, `mojo_linalg/`, `numax/` and `licenses/` |
-| `exports` | Embedded version-1 manifest, or null for non-Moxie assets |
+## Verification
 
-External repositories must be at the exact pinned HEAD. Projects in the same
-Git repository as the consumer may pin an ancestor of HEAD: a lock cannot
-contain the hash of its own commit. Every listed file still requires an exact
-SHA-256 match, so later commits never authorize source drift implicitly.
-
-The [export schema](../schemas/exports-v1.schema.json) is also usable standalone.
-An embedded manifest is explicit data, for example:
-
-```json
-{"schema": 1, "packages": {
-  "moxie": {"MyEstimator": "moxie.example"},
-  "moxie.utils": {}
-}}
-```
-
-Keys below each package are exported symbols; values name their owning modules.
-The contributor must own each referenced module. Empty maps explicitly request
-empty initializers. Every package ancestor needs a manifest entry. Generated
-initializers contain sorted absolute imports only; they do not concatenate or
-execute inherited initializer bodies. Pin original initializers as provenance
-and explicitly inventory their exports. Package-level executable initialization
-and symbol aliases are outside v1; put required logic in owned modules. Native
-compilation verifies that exported symbols actually exist.
-
-Duplicate JSON keys, unknown fields/schema versions, invalid identifiers,
-module/package collisions and file/directory collisions are errors. The schema
-specifies structural types; the tool additionally enforces ownership, provenance,
-path containment and cross-reference constraints.
-
-## Deduplication and relocation
-
-A duplicate module is an error even if the bytes happen to match. The one
-exception is an identical inherited baseline: both module entries must set
-`baseline` to the same commit, and `git show BASELINE:REPO_FILE` must exactly
-match each pinned source. Matching baseline exports are deduplicated too.
-A baseline label alone cannot authorize deduplication.
-
-For an authorized relocation, specify the exact module, all displaced owners,
-the one replacement owner, and a nonempty reason:
-
-```json
-{"module": "moxie.dummy", "from": ["dummy-family"], "to": "consumer",
- "reason": "Relocate the inherited module to the owned implementation"}
-```
-
-Every named contributor must supply that module; unused, ambiguous or incomplete
-overrides fail. The displaced source is still hash-verified. Exports referring
-to its displaced module are removed, then replacement exports are applied.
-Other export collisions remain errors. The original repository stays unchanged.
-An override records an authorized relocation; it does not authorize a fork of
-shared helpers. Consumer B replaces the real inherited dummy scaffold with a
-small marker and proves the fixture-requested root estimator exports disappear.
-The original dummy-family root initializer exports only base contracts; this
-fixture explicitly requests two additional dummy re-exports to test their removal. The marker is
-strictly a test double, not a Dummy implementation.
-
-## Materialization and failure behavior
-
-Output must be exactly `CONSUMER/builds/deps`, Git-ignored and free from symlink
-redirection. The tool verifies and snapshots all bytes before creating output,
-then writes a staging tree and replaces the generated namespace. Stale files
-cannot survive a successful assembly. `ASSEMBLY.json` records the lock hash,
-selected module owners and every output file hash. Invalid input leaves an
-existing namespace unchanged and returns a nonzero status; consumers must stop
-on failure rather than use an older tree.
-
-Cooperating assembler writers are serialized. Assembly and compilation should
-run sequentially: replacement is not a filesystem-wide atomic transaction, and
-concurrent compilers or untrusted processes mutating inputs/output are outside
-the contract. Process interruption during final replacement may require a rerun.
-The tool is an integrity checker for trusted, reviewed locks, not a sandbox for
-untrusted repositories or a cryptographic signature service.
-
-## Validation and limits
-
-`pixi run build` verifies dependencies and compiles all owned native modules,
-the generated packages, two isolated consumers, the example and direct-import
-controls. `pixi run test` runs host-side failure contracts and native tests.
-The estimator-shaped probes exercise parent fitted-state checks, repeat fit,
-clone independence, parameter changes, shared views versus owned copies, and
-the same pinned dense kernels for Float32 and Float64.
-
-`pixi run parity` compares both native consumers to direct imports from the
-original numerics package and separately executes the original parent validation
-contract. It uses exact equality on small exactly representable values. This is
-assembly behavior parity, not sklearn estimator parity or another numerical
-backend evaluation. The original parent and numerical projects are read-only.
-
-Run `pixi run python tools/benchmark.py` after parity for a short pyperf baseline
-of both fixture assemblies plus GNU time peak RSS. Results include process
-startup, Git verification, hashing and full rematerialization; compilation is
-excluded. Raw measurements and machine/tool metadata stay in ignored
-`benchmarks/`. Space scales with pinned source bytes and generated copies; there
-is no claim of zero-copy assembly or tuned performance.
-
-Dense-only exclusions and executed checks are recorded in [scope.md](scope.md).
-
-The initial short baseline on this Ryzen 9 5950X host measured approximately
-108 ms (consumer A) and 111 ms (consumer B) per full assembly, with about 1.4 MB
-of generated source each. These two-process, three-value samples are smoke
-baselines; pyperf warned that the B sample is too small for a stable estimate.
-
-The family development assembler (`tools/assemble_family.py`) also accepts
-`mojo_snappy/` assets for optional native model compression. These retain the
-same file hashes, source recovery, collision checks and license assets as other
-external runtime packages. Existing consumer locks remain unchanged until adoption.
+Run `pixi run build`, `pixi run test`, and `pixi run parity`. Tests exercise local
+and external edits, stale legacy metadata, missing sources, namespace ownership,
+baseline proofs, path containment and output preservation. Two isolated native
+consumers are compiled and compared exactly against direct imports in both
+Float32 and Float64. This tests assembly and shared numerical contracts, not
+estimator parity. No source pins need updating to run these checks.

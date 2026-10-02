@@ -1,0 +1,5 @@
+{
+  "module": "moxie.preprocessing._dense_transforms",
+  "estimators": [],
+  "symbols": ["DEFAULT_TILE_BYTES", "transform", "transform_into", "transform_inplace", "transform_sink", "normalize", "normalize_into", "normalize_inplace", "normalize_sink", "norms_into", "TileSink", "FeatureNorms"]
+}

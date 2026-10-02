@@ -4,9 +4,11 @@ Sibling `moxie-<module>` repositories consume current Moxie HEAD under the
 [family policy](family-development.md). `scaffold-v1.1` records their origin.
 Public imports stay under `moxie.<module>`, matching the scikit-learn module
 structure. Family APIs live in their own current docs. Dense Dummy
-estimators, Compose, and Pipeline have since been integrated into this
-repository; see the [Dummy API](dummy/api.md), [Compose scope](compose/scope.md), and
-[Pipeline API](pipeline/sequential.md). Other families continue to develop
+estimators, Compose, Pipeline, and dense Preprocessing have since been integrated into this
+repository; see the [Dummy API](dummy/api.md), [Compose scope](compose/scope.md),
+[Pipeline API](pipeline/sequential.md), and
+[Preprocessing API](../families/preprocessing/docs/api.md). Their original sibling
+checkouts are not build dependencies. Other families continue to develop
 independently. Each repository contains its own Pixi environment, Git history, family contracts,
 compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 

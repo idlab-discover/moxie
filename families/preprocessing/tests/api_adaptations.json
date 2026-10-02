@@ -1,0 +1,11 @@
+{
+  "KBinsDiscretizer.dtype": "the output dtype is the struct parameter KBinsDiscretizer[dtype, out_dtype]; its default (the input dtype) is dtype=None",
+  "OneHotEncoder.categories": "categories='auto' is None; explicit categories are typed per-feature lists with None (missing) last",
+  "OneHotEncoder.dtype": "the output dtype is the struct parameter OneHotEncoder[K, dtype]",
+  "OrdinalEncoder.categories": "categories='auto' is None; explicit categories are typed per-feature lists with None (missing) last",
+  "OrdinalEncoder.dtype": "the output dtype is the struct parameter OrdinalEncoder[K, dtype]",
+  "TargetEncoder.categories": "categories='auto' is None; explicit categories are typed per-feature lists with None (missing) last",
+  "TargetEncoder.smooth": "smooth='auto' is None; an m-estimate smoothing value is an Optional[Float64]",
+  "TargetEncoder.shuffle": "the 'deprecated' default is None (shuffle=True); Moxie has no FutureWarning channel",
+  "TargetEncoder.random_state": "the 'deprecated' default is None; an Optional[Int] seed, or fit_transform(X, y, rng) for a caller-owned RandomState"
+}

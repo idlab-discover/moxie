@@ -9,6 +9,8 @@ native model persistence. Dense `ColumnTransformer`, `make_column_transformer`,
 Typed supervised `Pipeline` and dense `FeatureUnion` are integrated; see the
 [Pipeline API](docs/pipeline/sequential.md) and [FeatureUnion API](docs/pipeline/feature-union.md).
 Their `make_pipeline` and `make_union` factories remain explicit scaffolds.
+All 29 preprocessing public names have dense implementations; see the
+[Preprocessing API](families/preprocessing/docs/api.md) for native scope and limitations.
 
 ```sh
 pixi install --locked
@@ -30,6 +32,7 @@ from moxie.dummy_serialization import DummyClassifierSchema, DummyRegressorSchem
 from moxie.serialization import save_model, load_model
 from moxie.compose import ColumnTransformer, TransformedTargetRegressor
 from moxie.pipeline import Pipeline, FeatureUnion
+from moxie.preprocessing import StandardScaler, OneHotEncoder
 ```
 
 The Dummy estimator and schema types are also exported from `moxie`. Implementation
@@ -38,7 +41,8 @@ Builds assemble one namespace with the current local sources declared in
 `DEPENDENCIES.json`, including NuMojo, mojo-linalg (used by NuMojo), and the
 optional Snappy codec. Keep those checkouts at the declared paths. Missing
 sources and module ownership conflicts fail explicitly. The `moxie-dummy`,
-`moxie-compose`, and `moxie-pipeline` checkouts are not required to build or use Moxie.
+`moxie-compose`, `moxie-pipeline`, and `moxie-preprocessing` checkouts are not
+required to build or use Moxie.
 Integrated composition tests consume the LinearRegression subset of
 `../moxie-linear_model`, and its existing NNLS dependency at
 `../.worktrees/mojo-optimize-linear_model`. These remain separately owned live
@@ -71,6 +75,7 @@ Children consume current local sources; see [development policy](docs/family-dev
 
 ## Scope and validation
 
+- [Preprocessing API and validation](families/preprocessing/README.md)
 - [Dummy native API](docs/dummy/api.md) and [dense scope](docs/dummy/scope.md)
 - [Compose API, scope and validation](docs/compose/scope.md)
 - [Categorical feature columns](docs/categorical.md)
@@ -80,8 +85,11 @@ Children consume current local sources; see [development policy](docs/family-dev
 
 `test` builds and runs shared contracts, container/codec checks and the migrated
 Dummy estimator, dtype and persistence tests, plus compose contracts and real
-Pipeline/Dummy and transformed-target consumers. `parity` compares Dummy and
-compose with the local `../scikit-learn` checkout at revision
+Pipeline/Dummy and transformed-target consumers, plus preprocessing contracts,
+API signatures and isolated consumers. All nine preprocessing parity groups
+run as part of `parity`. Family engines, tests and standalone tooling live in
+`families/preprocessing`; public modules live in `src/moxie/preprocessing`.
+Parity checks use the local `../scikit-learn` checkout at revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Sparse data, Python bindings and
 complete scikit-learn compatibility remain outside the implemented scope.
 

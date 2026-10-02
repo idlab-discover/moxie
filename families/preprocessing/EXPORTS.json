@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.preprocessing": {
+      "Preprocessor": "moxie.preprocessing._base",
+      "InvertiblePreprocessor": "moxie.preprocessing._base",
+      "OnlinePreprocessor": "moxie.preprocessing._base",
+      "TargetPreprocessor": "moxie.preprocessing._base",
+      "Binarizer": "moxie.preprocessing._simple",
+      "FunctionTransformer": "moxie.preprocessing._function_transformer",
+      "KBinsDiscretizer": "moxie.preprocessing._discretization",
+      "KernelCenterer": "moxie.preprocessing._simple",
+      "LabelBinarizer": "moxie.preprocessing._label",
+      "LabelEncoder": "moxie.preprocessing._label",
+      "MaxAbsScaler": "moxie.preprocessing._scalers",
+      "MinMaxScaler": "moxie.preprocessing._scalers",
+      "MultiLabelBinarizer": "moxie.preprocessing._label",
+      "Normalizer": "moxie.preprocessing._simple",
+      "OneHotEncoder": "moxie.preprocessing._encoders",
+      "OrdinalEncoder": "moxie.preprocessing._encoders",
+      "PolynomialFeatures": "moxie.preprocessing._polynomial",
+      "PowerTransformer": "moxie.preprocessing._quantiles",
+      "QuantileTransformer": "moxie.preprocessing._quantiles",
+      "RobustScaler": "moxie.preprocessing._scalers",
+      "SplineTransformer": "moxie.preprocessing._polynomial",
+      "StandardScaler": "moxie.preprocessing._scalers",
+      "TargetEncoder": "moxie.preprocessing._target_encoder",
+      "add_dummy_feature": "moxie.preprocessing._simple",
+      "binarize": "moxie.preprocessing._simple",
+      "label_binarize": "moxie.preprocessing._label",
+      "maxabs_scale": "moxie.preprocessing._scalers",
+      "minmax_scale": "moxie.preprocessing._scalers",
+      "normalize": "moxie.preprocessing._simple",
+      "power_transform": "moxie.preprocessing._quantiles",
+      "quantile_transform": "moxie.preprocessing._quantiles",
+      "robust_scale": "moxie.preprocessing._scalers",
+      "scale": "moxie.preprocessing._scalers"
+    }
+  }
+}

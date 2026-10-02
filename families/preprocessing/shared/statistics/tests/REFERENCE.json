@@ -1,0 +1,16 @@
+{
+  "path": "../../../../../scikit-learn",
+  "revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "files": {
+    "sklearn/utils/extmath.py": "c017bee38f6ead6ae29051b0a4a48861bf17d79cb1e3c7050ede026b5c0e4bae",
+    "sklearn/utils/validation.py": "d7c9e061aa6b8888e1d2a5027c21d9b76094008564f03a4f1a700daef224287c",
+    "sklearn/preprocessing/_data.py": "40a37e1e8ae15867c21a836248a1de5dd05dcbddd665b41f55d39a571b6a0fb4",
+    "sklearn/preprocessing/_encoders.py": "96a0194db1d42a5130f6d71461c59f9f9a06fc1b955e222b8f1294856e939946",
+    "sklearn/preprocessing/_label.py": "3c43e0d6d18d4a14c1596bbc5afaabf32b29d58036752001a7133cb4a2bd0883",
+    "sklearn/preprocessing/__init__.py": "8765145009f723a4e00bd6953fcd931d110ec527064929b1121d1f79241376ff",
+    "sklearn/utils/tests/test_extmath.py": "c8fc634b87f0a6e8b824545738095f8b93cc55996c4bad3f7600cec0e4b7ce7a",
+    "sklearn/preprocessing/tests/test_data.py": "e7b33fe1b7e4bef1c4ec0403c08e38cff90f62bc5ebfbf6453d37b02d84078d1",
+    "doc/modules/preprocessing.rst": "5f187d90bf2838f75353ca6ce74d4b0d1dcf97a10c523c56a2fd599be50d2b89",
+    "COPYING": "50d6a9d340f19ab355609917993114daf5f47e3161067bcf34955bbd05cd9cb0"
+  }
+}

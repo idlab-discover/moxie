@@ -360,6 +360,179 @@
         },
         "schema": 1
       }
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {},
+        "schema": 1
+      },
+      "id": "assembly",
+      "modules": {},
+      "path": "shared/assembly"
+    },
+    {
+      "id": "labels",
+      "path": "shared/labels",
+      "modules": {
+        "moxie._labels": {
+          "file": "src/moxie/_labels.mojo"
+        }
+      },
+      "assets": {
+        "licenses/labels-sklearn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {}
+        }
+      }
+    },
+    {
+      "assets": {
+        "licenses/preprocessing-sklearn.txt": "families/preprocessing/LICENSES/sklearn.txt",
+        "licenses/preprocessing-scipy.txt": "families/preprocessing/LICENSES/scipy.txt",
+        "licenses/preprocessing-numpy.txt": "families/preprocessing/LICENSES/numpy.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.preprocessing": {
+            "Binarizer": "moxie.preprocessing._simple",
+            "FunctionTransformer": "moxie.preprocessing._function_transformer",
+            "InvertiblePreprocessor": "moxie.preprocessing._base",
+            "KBinsDiscretizer": "moxie.preprocessing._discretization",
+            "KernelCenterer": "moxie.preprocessing._simple",
+            "LabelBinarizer": "moxie.preprocessing._label",
+            "LabelEncoder": "moxie.preprocessing._label",
+            "MaxAbsScaler": "moxie.preprocessing._scalers",
+            "MinMaxScaler": "moxie.preprocessing._scalers",
+            "MultiLabelBinarizer": "moxie.preprocessing._label",
+            "Normalizer": "moxie.preprocessing._simple",
+            "OneHotEncoder": "moxie.preprocessing._encoders",
+            "OnlinePreprocessor": "moxie.preprocessing._base",
+            "OrdinalEncoder": "moxie.preprocessing._encoders",
+            "PolynomialFeatures": "moxie.preprocessing._polynomial",
+            "PowerTransformer": "moxie.preprocessing._quantiles",
+            "Preprocessor": "moxie.preprocessing._base",
+            "QuantileTransformer": "moxie.preprocessing._quantiles",
+            "RobustScaler": "moxie.preprocessing._scalers",
+            "SplineTransformer": "moxie.preprocessing._polynomial",
+            "StandardScaler": "moxie.preprocessing._scalers",
+            "TargetEncoder": "moxie.preprocessing._target_encoder",
+            "TargetPreprocessor": "moxie.preprocessing._base",
+            "add_dummy_feature": "moxie.preprocessing._simple",
+            "binarize": "moxie.preprocessing._simple",
+            "label_binarize": "moxie.preprocessing._label",
+            "maxabs_scale": "moxie.preprocessing._scalers",
+            "minmax_scale": "moxie.preprocessing._scalers",
+            "normalize": "moxie.preprocessing._simple",
+            "power_transform": "moxie.preprocessing._quantiles",
+            "quantile_transform": "moxie.preprocessing._quantiles",
+            "robust_scale": "moxie.preprocessing._scalers",
+            "scale": "moxie.preprocessing._scalers"
+          }
+        },
+        "schema": 1
+      },
+      "id": "preprocessing",
+      "modules": {
+        "moxie.preprocessing._api_types": {
+          "file": "src/moxie/preprocessing/_api_types.mojo"
+        },
+        "moxie.preprocessing._base": {
+          "file": "src/moxie/preprocessing/_base.mojo"
+        },
+        "moxie.preprocessing._common": {
+          "file": "src/moxie/preprocessing/_common.mojo"
+        },
+        "moxie.preprocessing._contracts": {
+          "file": "src/moxie/preprocessing/_contracts.mojo"
+        },
+        "moxie.preprocessing._discretization": {
+          "file": "src/moxie/preprocessing/_discretization.mojo"
+        },
+        "moxie.preprocessing._encoders": {
+          "file": "src/moxie/preprocessing/_encoders.mojo"
+        },
+        "moxie.preprocessing._function_transformer": {
+          "file": "src/moxie/preprocessing/_function_transformer.mojo"
+        },
+        "moxie.preprocessing._label": {
+          "file": "src/moxie/preprocessing/_label.mojo"
+        },
+        "moxie.preprocessing._metadata": {
+          "file": "src/moxie/preprocessing/_metadata.mojo"
+        },
+        "moxie.preprocessing._optimize": {
+          "file": "src/moxie/preprocessing/_optimize.mojo"
+        },
+        "moxie.preprocessing._percentiles": {
+          "file": "src/moxie/preprocessing/_percentiles.mojo"
+        },
+        "moxie.preprocessing._polynomial": {
+          "file": "src/moxie/preprocessing/_polynomial.mojo"
+        },
+        "moxie.preprocessing._quantiles": {
+          "file": "src/moxie/preprocessing/_quantiles.mojo"
+        },
+        "moxie.preprocessing._scalers": {
+          "file": "src/moxie/preprocessing/_scalers.mojo"
+        },
+        "moxie.preprocessing._simple": {
+          "file": "src/moxie/preprocessing/_simple.mojo"
+        },
+        "moxie.preprocessing._special_math": {
+          "file": "src/moxie/preprocessing/_special_math.mojo"
+        },
+        "moxie.preprocessing._target_encoder": {
+          "file": "src/moxie/preprocessing/_target_encoder.mojo"
+        },
+        "moxie.preprocessing._validation": {
+          "file": "src/moxie/preprocessing/_validation.mojo"
+        },
+        "moxie.preprocessing._vocabulary": {
+          "file": "src/moxie/preprocessing/_vocabulary.mojo"
+        }
+      },
+      "path": "."
+    },
+    {
+      "id": "statistics",
+      "path": "families/preprocessing/shared/statistics",
+      "modules": {
+        "moxie.preprocessing._moments": {
+          "file": "src/moxie/preprocessing/_moments.mojo"
+        }
+      },
+      "assets": {
+        "licenses/statistics-numpy.txt": "LICENSES/numpy.txt",
+        "licenses/statistics-sklearn.txt": "LICENSES/sklearn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.preprocessing": {}
+        }
+      }
+    },
+    {
+      "id": "transforms",
+      "path": "families/preprocessing/shared/transforms",
+      "modules": {
+        "moxie.preprocessing._dense_transforms": {
+          "file": "src/moxie/preprocessing/_dense_transforms.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.preprocessing": {}
+        }
+      }
     }
   ],
   "overrides": []

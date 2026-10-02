@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "modules": {
+    "moxie.preprocessing._moments": [
+      "MOMENTS_API_VERSION",
+      "DEFAULT_TILE_ROWS",
+      "TILE_SCRATCH_BYTES",
+      "MomentsStateV1",
+      "update_moments",
+      "update_moments_weighted",
+      "update_moments_scalar",
+      "ExtremaStateV1",
+      "update_extrema",
+      "RobustQuantilesV1",
+      "robust_quantiles",
+      "INPUT_PRECISION_API_VERSION",
+      "InputPrecisionStatsV1",
+      "nanmean_at",
+      "nanmean_std_at"
+    ]
+  }
+}

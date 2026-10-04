@@ -27,6 +27,10 @@ MAX 26.5.0. Python and scikit-learn are validation/build tools only.
 `FrozenEstimator` preserves fitted state and conditionally forwards supported
 methods; see the [Frozen API and coverage](docs/frozen/api.md).
 
+KernelRidge is integrated with dense named, precomputed and native callable kernels,
+weighted multioutput fits and native persistence. See [KernelRidge](families/kernel_ridge/README.md).
+Its contracts and reference comparisons run in the root test and parity tasks.
+
 ## Imports and dependencies
 
 ```mojo
@@ -37,6 +41,7 @@ from moxie.compose import ColumnTransformer, TransformedTargetRegressor
 from moxie.pipeline import Pipeline, FeatureUnion
 from moxie.preprocessing import StandardScaler, OneHotEncoder
 from moxie.frozen import FrozenEstimator
+from moxie.kernel_ridge import KernelRidge
 ```
 
 The Dummy estimator and schema types are also exported from `moxie`. Implementation
@@ -46,7 +51,7 @@ Builds assemble one namespace with the current local sources declared in
 optional Snappy codec. Keep those checkouts at the declared paths. Missing
 sources and module ownership conflicts fail explicitly. The `moxie-dummy`,
 `moxie-compose`, `moxie-pipeline`, `moxie-frozen`, and `moxie-preprocessing`
-checkouts are not required to build or use Moxie.
+checkouts, as well as `moxie-kernel_ridge`, are not required to build or use Moxie.
 Integrated composition tests consume the LinearRegression subset of
 `../moxie-linear_model`, and its existing NNLS dependency at
 `../.worktrees/mojo-optimize-linear_model`. These remain separately owned live

@@ -76,6 +76,30 @@
         },
         "moxie.frozen._frozen": {
           "file": "src/moxie/frozen/_frozen.mojo"
+        },
+        "moxie.kernel_ridge": {
+          "file": "src/moxie/kernel_ridge.mojo"
+        },
+        "moxie.kernel_ridge_serialization": {
+          "file": "src/moxie/kernel_ridge_serialization.mojo"
+        },
+        "moxie._kernel_ridge._api": {
+          "file": "src/moxie/_kernel_ridge/_api.mojo"
+        },
+        "moxie._kernel_ridge._estimator": {
+          "file": "src/moxie/_kernel_ridge/_estimator.mojo"
+        },
+        "moxie._kernel_ridge._kernels": {
+          "file": "src/moxie/_kernel_ridge/_kernels.mojo"
+        },
+        "moxie._kernel_ridge._promotion": {
+          "file": "src/moxie/_kernel_ridge/_promotion.mojo"
+        },
+        "moxie._kernel_ridge._solve": {
+          "file": "src/moxie/_kernel_ridge/_solve.mojo"
+        },
+        "moxie._kernel_ridge._validation": {
+          "file": "src/moxie/_kernel_ridge/_validation.mojo"
         }
       },
       "assets": {
@@ -142,6 +166,16 @@
             "FrozenEstimator": "moxie.frozen._frozen",
             "FrozenParams": "moxie.frozen._frozen",
             "is_clusterer": "moxie.frozen._frozen"
+          },
+          "moxie._kernel_ridge": {
+            "pairwise": "moxie._kernel_ridge._kernels",
+            "pairwise_callable": "moxie._kernel_ridge._kernels",
+            "RowKernel": "moxie._kernel_ridge._kernels",
+            "solve_kernel": "moxie._kernel_ridge._solve",
+            "cholesky": "moxie._kernel_ridge._solve",
+            "triangular_solve": "moxie._kernel_ridge._solve",
+            "least_squares": "moxie._kernel_ridge._solve",
+            "solve_kernel_scalar": "moxie._kernel_ridge._solve"
           }
         },
         "schema": 1

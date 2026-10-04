@@ -34,6 +34,7 @@ def build():
         '--consumer', ROOT, '--lock', ROOT / 'DEPENDENCIES.json', '--output', DEPS)
     run('mojo', 'precompile', DEPS / 'moxie', '-I', DEPS, '-o', ROOT / 'builds/moxie.mojoc')
     run(sys.executable, ROOT / 'families/preprocessing/tools/check.py', 'build')
+    run(sys.executable, ROOT / 'families/kernel_ridge/tools/check.py', 'build')
     sources = sorted((ROOT / 'tests').glob('*.mojo'))
     sources += sorted((ROOT / 'tests/dummy').glob('*.mojo'))
     sources += compose_sources()
@@ -77,6 +78,7 @@ def compose_test():
 
 
 def parity():
+    run(sys.executable, ROOT / 'families/kernel_ridge/tools/check.py', 'parity-only')
     frozen_checks.parity(run)
     run(sys.executable, ROOT / 'families/preprocessing/tools/check.py', 'parity-only')
     for name in ["parity.py", "union_parity.py", "compose_parity.py"]:
@@ -88,6 +90,7 @@ def parity():
 
 
 def test():
+    run(sys.executable, ROOT / 'families/kernel_ridge/tools/check.py', 'test-only')
     frozen_checks.test(run, executable)
     run(sys.executable, ROOT / 'families/preprocessing/tools/check.py', 'test-only')
     pipeline_checks.test(run, executable)

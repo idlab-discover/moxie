@@ -4,7 +4,7 @@ Sibling `moxie-<module>` repositories consume current Moxie HEAD under the
 [family policy](family-development.md). `scaffold-v1.1` records their origin.
 Public imports stay under `moxie.<module>`, matching the scikit-learn module
 structure. Family APIs live in their own current docs. Dense Dummy
-estimators, Compose, Pipeline, Frozen, KernelRidge, and dense Preprocessing have since been integrated into this
+estimators, Compose, Pipeline, Frozen, KernelRidge, dense Covariance, and dense Preprocessing have since been integrated into this
 repository; see the [Dummy API](dummy/api.md), [Compose scope](compose/scope.md),
 [Pipeline API](pipeline/sequential.md),
 [Preprocessing API](../families/preprocessing/docs/api.md),
@@ -32,7 +32,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-calibration` | `sklearn/calibration.py` |
 | `moxie-cluster` | `sklearn/cluster` |
 | `moxie-mixture` | `sklearn/mixture` |
-| `moxie-covariance` | `sklearn/covariance` |
+| Integrated: `families/covariance` | `sklearn/covariance` |
 | `moxie-decomposition` | `sklearn/decomposition` |
 | `moxie-cross_decomposition` | `sklearn/cross_decomposition` |
 | `moxie-manifold` | `sklearn/manifold` |
@@ -72,3 +72,5 @@ belong under `docs/private/<algorithm>/sources/` with a URL, revision and licens
 record. These are local research inputs, never runtime dependencies or tracked
 vendor copies. Deriving a repository with Git does not copy ignored resources;
 prepare them again at the new algorithm location.
+
+See [Covariance](../families/covariance/README.md) for its API and remaining numerical differences.

@@ -100,6 +100,48 @@
         },
         "moxie._kernel_ridge._validation": {
           "file": "src/moxie/_kernel_ridge/_validation.mojo"
+        },
+        "moxie.covariance._base": {
+          "file": "src/moxie/covariance/_base.mojo"
+        },
+        "moxie.covariance._engines": {
+          "file": "src/moxie/covariance/_engines.mojo"
+        },
+        "moxie.covariance._state": {
+          "file": "src/moxie/covariance/_state.mojo"
+        },
+        "moxie.covariance._param_update": {
+          "file": "src/moxie/covariance/_param_update.mojo"
+        },
+        "moxie.covariance._empirical_covariance": {
+          "file": "src/moxie/covariance/_empirical_covariance.mojo"
+        },
+        "moxie.covariance._shrunk_covariance_fixed": {
+          "file": "src/moxie/covariance/_shrunk_covariance_fixed.mojo"
+        },
+        "moxie.covariance._shrunk_covariance_adaptive": {
+          "file": "src/moxie/covariance/_shrunk_covariance_adaptive.mojo"
+        },
+        "moxie.covariance._elliptic_envelope": {
+          "file": "src/moxie/covariance/_elliptic_envelope.mojo"
+        },
+        "moxie.covariance._robust_covariance": {
+          "file": "src/moxie/covariance/_robust_covariance.mojo"
+        },
+        "moxie.covariance._enet_gram": {
+          "file": "src/moxie/covariance/_enet_gram.mojo"
+        },
+        "moxie.covariance._graph_lasso": {
+          "file": "src/moxie/covariance/_graph_lasso.mojo"
+        },
+        "moxie.covariance._graph_lasso_solver": {
+          "file": "src/moxie/covariance/_graph_lasso_solver.mojo"
+        },
+        "moxie.covariance._graph_lasso_cv": {
+          "file": "src/moxie/covariance/_graph_lasso_cv.mojo"
+        },
+        "moxie.covariance._lars_gram": {
+          "file": "src/moxie/covariance/_lars_gram.mojo"
         }
       },
       "assets": {
@@ -176,6 +218,26 @@
             "triangular_solve": "moxie._kernel_ridge._solve",
             "least_squares": "moxie._kernel_ridge._solve",
             "solve_kernel_scalar": "moxie._kernel_ridge._solve"
+          },
+          "moxie.covariance": {
+            "CovarianceEstimator": "moxie.covariance._base",
+            "RobustCovarianceDetector": "moxie.covariance._base",
+            "EmpiricalCovariance": "moxie.covariance._empirical_covariance",
+            "ShrunkCovariance": "moxie.covariance._shrunk_covariance_fixed",
+            "empirical_covariance": "moxie.covariance._empirical_covariance",
+            "log_likelihood": "moxie.covariance._empirical_covariance",
+            "shrunk_covariance": "moxie.covariance._empirical_covariance",
+            "LedoitWolf": "moxie.covariance._shrunk_covariance_adaptive",
+            "OAS": "moxie.covariance._shrunk_covariance_adaptive",
+            "ledoit_wolf": "moxie.covariance._shrunk_covariance_adaptive",
+            "ledoit_wolf_shrinkage": "moxie.covariance._shrunk_covariance_adaptive",
+            "oas": "moxie.covariance._shrunk_covariance_adaptive",
+            "EllipticEnvelope": "moxie.covariance._elliptic_envelope",
+            "MinCovDet": "moxie.covariance._robust_covariance",
+            "fast_mcd": "moxie.covariance._robust_covariance",
+            "GraphicalLasso": "moxie.covariance._graph_lasso",
+            "graphical_lasso": "moxie.covariance._graph_lasso",
+            "GraphicalLassoCV": "moxie.covariance._graph_lasso"
           }
         },
         "schema": 1
@@ -305,12 +367,14 @@
         "mojo_linalg/qr.mojo": "src/mojo_linalg/qr.mojo",
         "mojo_linalg/svd.mojo": "src/mojo_linalg/svd.mojo",
         "mojo_linalg/symmetric.mojo": "src/mojo_linalg/symmetric.mojo",
-        "mojo_linalg/triangular.mojo": "src/mojo_linalg/triangular.mojo"
+        "mojo_linalg/triangular.mojo": "src/mojo_linalg/triangular.mojo",
+        "mojo_linalg/_math.mojo": "src/mojo_linalg/_math.mojo",
+        "mojo_linalg/incomplete_gamma.mojo": "src/mojo_linalg/incomplete_gamma.mojo"
       },
       "exports": null,
       "id": "mojo-linalg",
       "modules": {},
-      "path": "../mojo-linalg"
+      "path": "../.worktrees/mojo-linalg-covariance"
     },
     {
       "id": "mojo-snappy",
@@ -577,6 +641,63 @@
         "packages": {
           "moxie": {},
           "moxie.preprocessing": {}
+        }
+      }
+    },
+    {
+      "id": "model_selection",
+      "path": "../moxie-model_selection",
+      "modules": {
+        "moxie.model_selection._indices": {
+          "file": "src/moxie/model_selection/_indices.mojo"
+        },
+        "moxie.model_selection._base": {
+          "file": "src/moxie/model_selection/_base.mojo"
+        },
+        "moxie.model_selection._evaluation": {
+          "file": "src/moxie/model_selection/_evaluation.mojo"
+        },
+        "moxie.model_selection._results": {
+          "file": "src/moxie/model_selection/_results.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.model_selection": {}
+        }
+      }
+    },
+    {
+      "id": "splitters",
+      "path": "../moxie-model_selection/algorithms/splitters",
+      "modules": {
+        "moxie.model_selection._split": {
+          "file": "src/moxie/model_selection/_split.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.model_selection": {}
+        }
+      }
+    },
+    {
+      "id": "validation",
+      "path": "../moxie-model_selection/algorithms/validation",
+      "modules": {
+        "moxie.model_selection._validation": {
+          "file": "src/moxie/model_selection/_validation.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.model_selection": {}
         }
       }
     }

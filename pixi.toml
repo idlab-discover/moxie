@@ -12,6 +12,11 @@ parity = { cmd = "python tools/check.py parity", depends-on = ["build"], env = {
 start = { cmd = "builds/examples/dummy", depends-on = ["build"] }
 scaffold-start = { cmd = "builds/examples/estimator", depends-on = ["build"] }
 
+covariance-test = "python families/covariance/tools/check.py test"
+covariance-parity = "python families/covariance/tools/check.py parity"
+covariance-audit = { cmd = "python families/covariance/tests/audit.py", depends-on = ["covariance-test"] }
+covariance-numerical-audit = { cmd = "python families/covariance/tests/numerical_focus.py", depends-on = ["covariance-test"] }
+
 [dependencies]
 mojo = "==1.0.0"
 max-core = "==26.5.0"

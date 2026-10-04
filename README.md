@@ -31,6 +31,9 @@ KernelRidge is integrated with dense named, precomputed and native callable kern
 weighted multioutput fits and native persistence. See [KernelRidge](families/kernel_ridge/README.md).
 Its contracts and reference comparisons run in the root test and parity tasks.
 
+Dense covariance is integrated with all 16 public exports. See [Covariance](families/covariance/README.md)
+for APIs, validation commands and numerical limitations.
+
 ## Imports and dependencies
 
 ```mojo
@@ -42,6 +45,7 @@ from moxie.pipeline import Pipeline, FeatureUnion
 from moxie.preprocessing import StandardScaler, OneHotEncoder
 from moxie.frozen import FrozenEstimator
 from moxie.kernel_ridge import KernelRidge
+from moxie.covariance import EmpiricalCovariance, MinCovDet, GraphicalLassoCV
 ```
 
 The Dummy estimator and schema types are also exported from `moxie`. Implementation
@@ -51,11 +55,14 @@ Builds assemble one namespace with the current local sources declared in
 optional Snappy codec. Keep those checkouts at the declared paths. Missing
 sources and module ownership conflicts fail explicitly. The `moxie-dummy`,
 `moxie-compose`, `moxie-pipeline`, `moxie-frozen`, and `moxie-preprocessing`
-checkouts, as well as `moxie-kernel_ridge`, are not required to build or use Moxie.
+checkouts, as well as `moxie-kernel_ridge` and `moxie-covariance`, are not required to build or use Moxie.
 Integrated composition tests consume the LinearRegression subset of
 `../moxie-linear_model`, and its existing NNLS dependency at
 `../.worktrees/mojo-optimize-linear_model`. These remain separately owned live
 source dependencies; this integration does not import their entire families.
+
+Covariance uses the tested `../.worktrees/mojo-linalg-covariance` numerical checkout
+and the declared `../moxie-model_selection` subset for graphical cross-validation.
 
 After `pixi run build`, compile a consumer from this repository root:
 
@@ -85,6 +92,7 @@ Children consume current local sources; see [development policy](docs/family-dev
 ## Scope and validation
 
 - [Preprocessing API and validation](families/preprocessing/README.md)
+- [Covariance API and numerical limits](families/covariance/README.md)
 - [Dummy native API](docs/dummy/api.md) and [dense scope](docs/dummy/scope.md)
 - [Compose API, scope and validation](docs/compose/scope.md)
 - [Categorical feature columns](docs/categorical.md)

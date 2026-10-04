@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.covariance": {
+      "CovarianceEstimator": "moxie.covariance._base",
+      "RobustCovarianceDetector": "moxie.covariance._base",
+      "EmpiricalCovariance": "moxie.covariance._empirical_covariance",
+      "ShrunkCovariance": "moxie.covariance._shrunk_covariance_fixed",
+      "empirical_covariance": "moxie.covariance._empirical_covariance",
+      "log_likelihood": "moxie.covariance._empirical_covariance",
+      "shrunk_covariance": "moxie.covariance._empirical_covariance",
+      "LedoitWolf": "moxie.covariance._shrunk_covariance_adaptive",
+      "OAS": "moxie.covariance._shrunk_covariance_adaptive",
+      "ledoit_wolf": "moxie.covariance._shrunk_covariance_adaptive",
+      "ledoit_wolf_shrinkage": "moxie.covariance._shrunk_covariance_adaptive",
+      "oas": "moxie.covariance._shrunk_covariance_adaptive",
+      "EllipticEnvelope": "moxie.covariance._elliptic_envelope",
+      "MinCovDet": "moxie.covariance._robust_covariance",
+      "fast_mcd": "moxie.covariance._robust_covariance",
+      "GraphicalLasso": "moxie.covariance._graph_lasso",
+      "graphical_lasso": "moxie.covariance._graph_lasso",
+      "GraphicalLassoCV": "moxie.covariance._graph_lasso"
+    }
+  }
+}

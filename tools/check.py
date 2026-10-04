@@ -23,6 +23,7 @@ def executable(source):
 
 
 def build():
+    run(sys.executable, ROOT / 'families/covariance/tools/check.py', 'build')
     version = run('mojo', '--version', capture_output=True, text=True).stdout
     if not version.startswith('Mojo 1.0.0 '):
         raise RuntimeError(f'Expected Mojo 1.0.0, got {version.strip()}')
@@ -78,6 +79,7 @@ def compose_test():
 
 
 def parity():
+    run(sys.executable, ROOT / 'families/covariance/tools/check.py', 'parity-only')
     run(sys.executable, ROOT / 'families/kernel_ridge/tools/check.py', 'parity-only')
     frozen_checks.parity(run)
     run(sys.executable, ROOT / 'families/preprocessing/tools/check.py', 'parity-only')
@@ -90,6 +92,7 @@ def parity():
 
 
 def test():
+    run(sys.executable, ROOT / 'families/covariance/tools/check.py', 'test-only')
     run(sys.executable, ROOT / 'families/kernel_ridge/tools/check.py', 'test-only')
     frozen_checks.test(run, executable)
     run(sys.executable, ROOT / 'families/preprocessing/tools/check.py', 'test-only')

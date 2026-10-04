@@ -96,8 +96,14 @@ struct NoTransformer[dtype: DType = DType.float64](ColumnComponent, _ModeOnly):
     def get_params(self, deep: Bool = True) raises -> NoTransformerParams:
         return NoTransformerParams()
 
-    def set_params(mut self, params: NoTransformerParams) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: NoTransformerParams,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()
@@ -105,7 +111,14 @@ struct NoTransformer[dtype: DType = DType.float64](ColumnComponent, _ModeOnly):
     def __sklearn_is_fitted__(self) -> Bool:
         return False
 
-    def fit(mut self, X: NDArray[Self.dtype], y: Optional[NDArray[Self.dtype]] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[Self.dtype],
+        y: Optional[NDArray[Self.dtype]] = None,
+    ) raises -> ref[self] Self:
         raise Error("TypeError: NoTransformer marks 'drop'/'passthrough' entries and cannot be fitted")
 
     def transform(self, X: NDArray[Self.dtype]) raises -> NDArray[Self.dtype]:
@@ -481,7 +494,7 @@ def _fit_transform_impl[dtype: DType, E: ColumnComponent](
     var target: Optional[E.Target] = None
     if y:
         target = rebind_var[E.Target](y.value().copy())
-    estimator.fit(arg, target)
+    _ = estimator.fit(arg, target)
     var out = estimator.transform(arg)
     return rebind_var[NDArray[dtype]](out^)
 
@@ -1227,7 +1240,13 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
         return Self.Params(self.transformers.unfitted(), self.remainder.cloned(), self.sparse_threshold, self.n_jobs,
                            self.transformer_weights.copy(), self.verbose, self.verbose_feature_names_out.copy())
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.transformers = params.transformers.unfitted()
         self.remainder = params.remainder.cloned()
         self.sparse_threshold = params.sparse_threshold
@@ -1235,9 +1254,12 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
         self.transformer_weights = params.transformer_weights.copy()
         self.verbose = params.verbose
         self.verbose_feature_names_out = params.verbose_feature_names_out.copy()
+        return self
 
-    def set_params(
-        mut self,
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
         *,
         var remainder: TransformerSpec[Self.R] = TransformerSpec[Self.R].unset(),
         sparse_threshold: Optional[Float64] = None,
@@ -1246,7 +1268,7 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
         verbose: Optional[Bool] = None,
         var verbose_feature_names_out: FeatureNamesOutOption = FeatureNamesOutOption.unset(),
         remainder_params: Optional[Self.R.Params] = None,
-    ) raises:
+    ) raises -> ref[self] Self:
         """Update only the supplied values (use the Params record to reset one to None).
 
         `remainder_params` (sklearn `remainder__<param>`) is applied after a
@@ -1269,7 +1291,8 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
         if verbose_feature_names_out.is_set():
             self.verbose_feature_names_out = verbose_feature_names_out^
         if remainder_params:
-            self.remainder.estimator.value().set_params(remainder_params.value())
+            _ = self.remainder.estimator.value().set_params(remainder_params.value())
+        return self
 
     def set_transformer[T: ColumnComponent](mut self, name: String, var transformer: TransformerSpec[T]) raises:
         """Equivalent of sklearn `set_params(name=transformer)`: replace a named entry's transformer (same type T)."""
@@ -1284,7 +1307,7 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
         var updated = spec.value().copy()
         if not updated.estimator:
             raise self._invalid_parameter(name + "_params")
-        updated.estimator.value().set_params(params)
+        _ = updated.estimator.value().set_params(params)
         _ = self.transformers.replace[T](name, updated)
 
     def _invalid_parameter(self, name: String) -> Error:
@@ -1383,8 +1406,16 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
     def fit_transform(mut self, X: ColumnTable[Self.dtype], y: Optional[Self.Target] = None) raises -> Self.Transformed:
         return self._fit_transform(X.values(), y, X.schema())
 
-    def fit(mut self, X: ColumnTable[Self.dtype], y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         _ = self.fit_transform(X, y)
+        return self
 
     def _fit_transform(mut self, X: Self.Input, y: Optional[Self.Target], schema: Optional[ColumnSchema] = None) raises -> Self.Transformed:
         """Fit all transformers and return the horizontally stacked outputs.
@@ -1485,8 +1516,16 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
                 spans[name] = OutputSpan(0, 0)
         return spans^
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         _ = self.fit_transform(X, y)
+        return self
 
     def transform(self, X: Self.Input) raises -> Self.Transformed:
         """Transform with the fitted transformers and their fitted column indices."""

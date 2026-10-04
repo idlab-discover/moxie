@@ -39,8 +39,15 @@ struct Scale[d: DType](Copyable, FeatureNamesOut, TransformerMixin, Unsupervised
     def get_params(self, deep: Bool = True) raises -> DoubleParams:
         return DoubleParams(self.factor)
 
-    def set_params(mut self, params: DoubleParams) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: DoubleParams,
+    ) raises -> ref[self] Self:
         self.factor = params.factor
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.factor)
@@ -48,8 +55,15 @@ struct Scale[d: DType](Copyable, FeatureNamesOut, TransformerMixin, Unsupervised
     def __sklearn_is_fitted__(self) -> Bool:
         return True
 
-    def fit(mut self, X: NDArray[Self.d], y: Optional[NDArray[Self.d]] = None) raises:
-        pass
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[Self.d],
+        y: Optional[NDArray[Self.d]] = None,
+    ) raises -> ref[self] Self:
+        return self
 
     def transform(self, X: NDArray[Self.d]) raises -> NDArray[Self.d]:
         var out = X.copy()
@@ -76,8 +90,14 @@ struct Center[d: DType](Copyable, FeatureNamesOut, FitTransformer, TransformerMi
     def get_params(self, deep: Bool = True) raises -> DoubleParams:
         return DoubleParams(0.0)
 
-    def set_params(mut self, params: DoubleParams) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: DoubleParams,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()
@@ -85,7 +105,14 @@ struct Center[d: DType](Copyable, FeatureNamesOut, FitTransformer, TransformerMi
     def __sklearn_is_fitted__(self) -> Bool:
         return len(self.means_) > 0
 
-    def fit(mut self, X: NDArray[Self.d], y: Optional[NDArray[Self.d]] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[Self.d],
+        y: Optional[NDArray[Self.d]] = None,
+    ) raises -> ref[self] Self:
         if X.ndim != 2:
             raise Error("ValueError: Expected 2D array, got 1D array instead:")
         self.means_ = List[Float64]()
@@ -94,9 +121,10 @@ struct Center[d: DType](Copyable, FeatureNamesOut, FitTransformer, TransformerMi
             for i in range(X.shape[0]):
                 total += Float64(X.unsafe_get(i * X.shape[1] + j))
             self.means_.append(total / Float64(X.shape[0]))
+        return self
 
     def fit_transform(mut self, X: NDArray[Self.d], y: Optional[NDArray[Self.d]] = None) raises -> NDArray[Self.d]:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def transform(self, X: NDArray[Self.d]) raises -> NDArray[Self.d]:
@@ -126,8 +154,15 @@ struct Expand[d: DType](Copyable, FeatureNamesOut, TransformerMixin, Unsupervise
     def get_params(self, deep: Bool = True) raises -> DoubleParams:
         return DoubleParams(1.0 if self.short else 0.0)
 
-    def set_params(mut self, params: DoubleParams) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: DoubleParams,
+    ) raises -> ref[self] Self:
         self.short = params.factor != 0
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.short)
@@ -135,8 +170,15 @@ struct Expand[d: DType](Copyable, FeatureNamesOut, TransformerMixin, Unsupervise
     def __sklearn_is_fitted__(self) -> Bool:
         return True
 
-    def fit(mut self, X: NDArray[Self.d], y: Optional[NDArray[Self.d]] = None) raises:
-        pass
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[Self.d],
+        y: Optional[NDArray[Self.d]] = None,
+    ) raises -> ref[self] Self:
+        return self
 
     def transform(self, X: NDArray[Self.d]) raises -> NDArray[Self.d]:
         var n = X.shape[0]

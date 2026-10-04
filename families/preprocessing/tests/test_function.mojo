@@ -165,7 +165,7 @@ def test_defaults_and_identity() raises:
     assert_equal(out.shape[0], 3)
     out.unsafe_set(0, 99.0)
     assert_equal(X.item(0, 0), 0.0)
-    model.fit(X)
+    _ = model.fit(X)
     assert_equal(model.n_features_in_.value(), 2)
     assert_false(Bool(model.inverse_check_warning_))
     var back = model.inverse_transform(model.transform(X))
@@ -179,7 +179,7 @@ def test_defaults_and_identity() raises:
     nan.unsafe_set(1, Float64("nan"))
     _ = model.fit_transform(nan)
     var vector = zeros[DType.float64](Shape(4))
-    model.fit(vector)
+    _ = model.fit(vector)
     assert_equal(model.n_features_in_.value(), 2)  # sklearn keeps it: no second axis
     assert_equal(model.transform(vector).ndim, 1)
     # Strided negative-stride view: logical elements only.
@@ -195,22 +195,22 @@ def test_validate() raises:
     var nan = X.copy()
     nan.unsafe_set(1, Float64("nan"))
     with assert_raises(contains="Input X contains NaN"):
-        model.fit(nan)
+        _ = model.fit(nan)
     var inf = X.copy()
     inf.unsafe_set(1, Float64("inf"))
     with assert_raises(contains="infinity"):
         _ = model.transform(inf)
     with assert_raises(contains="Expected 2D array"):
-        model.fit(zeros[DType.float64](Shape(3)))
+        _ = model.fit(zeros[DType.float64](Shape(3)))
     with assert_raises(contains="dim 3"):
-        model.fit(zeros[DType.float64](Shape(2, 2, 2)))
+        _ = model.fit(zeros[DType.float64](Shape(2, 2, 2)))
     with assert_raises(contains="0 sample(s)"):
-        model.fit(zeros[DType.float64](Shape(0, 2)))
+        _ = model.fit(zeros[DType.float64](Shape(0, 2)))
     with assert_raises(contains="0 feature(s)"):
-        model.fit(zeros[DType.float64](Shape(2, 0)))
+        _ = model.fit(zeros[DType.float64](Shape(2, 0)))
     # Unfitted transform skips the count check, as sklearn does.
     _ = model.transform(matrix(2, 4))
-    model.fit(X)
+    _ = model.fit(X)
     with assert_raises(contains="is expecting 2 features"):
         _ = model.transform(matrix(2, 3))
     # inverse_transform uses a bare check_array (no estimator context, no count).
@@ -224,11 +224,11 @@ def test_check_inverse() raises:
     for k in range(4):
         X.unsafe_set(k, Float64((k + 1) * (k + 1)))
     var bad = FunctionTransformer(Elementwise[sqrt64](), Elementwise[round64](), validate=True)
-    bad.fit(X)
+    _ = bad.fit(X)
     assert_true(Bool(bad.inverse_check_warning_))
     assert_true("not strictly inverse" in bad.inverse_check_warning_.value())
-    bad.set_params(check_inverse=False)
-    bad.fit(X)
+    _ = bad.set_params(check_inverse=False)
+    _ = bad.fit(X)
     assert_false(Bool(bad.inverse_check_warning_))   # every fit resets it
     var good = FunctionTransformer(Elementwise[expm164](), Elementwise[log1p64](), validate=True)
     var Xt = good.fit_transform(X)
@@ -239,7 +239,7 @@ def test_check_inverse() raises:
         assert_true(abs(back.unsafe_get(k) - X.unsafe_get(k)) <= 1e-9 * X.unsafe_get(k))
     # Only one callable given: no check.
     var only = FunctionTransformer(Elementwise[sqrt64](), validate=True)
-    only.fit(X)
+    _ = only.fit(X)
     assert_false(Bool(only.inverse_check_warning_))
     # Subsample X[::max(1, n // 100)]: odd rows are negative and corrupted by
     # the inverse; n=250 samples only even rows (no warning), n=150 all rows.
@@ -248,15 +248,15 @@ def test_check_inverse() raises:
         for i in range(n):
             Y.unsafe_set(i, Float64(i + 1) if i % 2 == 0 else -Float64(i))
         var sub = FunctionTransformer(Identity[DType.float64](), Elementwise[corrupt_negative]())
-        sub.fit(Y)
+        _ = sub.fit(Y)
         assert_equal(Bool(sub.inverse_check_warning_), n == 150)
     # Non-numeric (bool) input cannot be checked, as in sklearn.
     var B = zeros[DType.bool](Shape(2, 2))
     var boolean = FunctionTransformer(Elementwise[negate_bool](), Elementwise[negate_bool]())
     with assert_raises(contains="only supported when all the elements"):
-        boolean.fit(B)
-    boolean.set_params(check_inverse=False)
-    boolean.fit(B)
+        _ = boolean.fit(B)
+    _ = boolean.set_params(check_inverse=False)
+    _ = boolean.fit(B)
     # Integer input keeps its dtype; the check compares in Float64.
     var I = zeros[DType.int64](Shape(3, 2))
     for k in range(6):
@@ -281,11 +281,11 @@ def test_kw_args_and_shape_changes() raises:
     var model = FunctionTransformer(KwArrayFn[affine](), kw_args=ScaleKw(2.0, 1.0))
     var out = model.transform(X)
     assert_equal(out.item(2, 1), X.item(2, 1) * 2.0 + 1.0)
-    model.set_params(kw_args=ScaleKw(3.0, 0.0))
+    _ = model.set_params(kw_args=ScaleKw(3.0, 0.0))
     assert_equal(model.transform(X).item(2, 1), X.item(2, 1) * 3.0)
     var params = model.get_params()
     params.kw_args = None
-    model.set_params(params)
+    _ = model.set_params(params)
     assert_equal(model.transform(X).item(2, 1), X.item(2, 1))   # kw_args reset: defaults
     var copied = clone(model)
     assert_false(Bool(copied.kw_args))
@@ -307,7 +307,7 @@ def test_kw_args_and_shape_changes() raises:
     # Setting func back to None goes through the params record.
     var record = cols.get_params()
     record.func = None
-    cols.set_params(record)
+    _ = cols.set_params(record)
     assert_equal(cols.transform(X).shape[1], 2)
 
 
@@ -320,7 +320,7 @@ def test_dtype_change() raises:
     with assert_raises(contains="TypeError"):
         _ = to32.inverse_transform(out)
     var pair = FunctionTransformer(Elementwise[to_f32](), Elementwise[to_f64]())
-    pair.fit(X)
+    _ = pair.fit(X)
     assert_false(Bool(pair.inverse_check_warning_))
     assert_equal(pair.inverse_transform(out).item(1, 0), X.item(1, 0))
 
@@ -328,48 +328,48 @@ def test_dtype_change() raises:
 def test_feature_names() raises:
     var X = matrix(4, 3)
     var plain = FunctionTransformer()
-    plain.fit(X)
+    _ = plain.fit(X)
     with assert_raises(contains="AttributeError"):
         _ = plain.get_feature_names_out()
     var one = FunctionTransformer(feature_names_out="one-to-one")
     with assert_raises(contains="n_features_in_"):
         _ = one.get_feature_names_out()   # unfitted, no names (sklearn: array(None))
     assert_equal(one.get_feature_names_out(names("a", "b"))[1], "b")   # unfitted: no count check
-    one.fit(X)
+    _ = one.fit(X)
     var generated = one.get_feature_names_out()
     assert_equal(len(generated), 3)
     assert_equal(generated[2], "x2")
     assert_equal(one.get_feature_names_out(names("a", "b", "c"))[0], "a")
     with assert_raises(contains="length equal to number of features"):
         _ = one.get_feature_names_out(names("a"))
-    one.fit_named(X, names("p", "q", "r"))
+    _ = one.fit_named(X, names("p", "q", "r"))
     assert_equal(one.get_feature_names_out()[1], "q")
     with assert_raises(contains="not equal to feature_names_in_"):
         _ = one.get_feature_names_out(names("p", "q", "s"))
-    one.fit(X)
+    _ = one.fit(X)
     assert_false(Bool(one.feature_names_in_))
     with assert_raises(contains="does not match"):
-        one.fit_named(X, names("p"))
+        _ = one.fit_named(X, names("p"))
     # Callable names; N inferred from the keyword overload.
     var named = FunctionTransformer(Elementwise[log1p64](), feature_names_out=NamesFn[suffix_log]())
     assert_equal(named.get_feature_names_out()[0], "unfitted")   # receives None
-    named.fit_named(X, names("a", "b", "c"))
+    _ = named.fit_named(X, names("a", "b", "c"))
     assert_equal(named.get_feature_names_out()[2], "c_log")
     var copied = clone(named)
     assert_true(copied.feature_names_out.is_callable())
     var extra = FunctionTransformer(AddColumns(2), feature_names_out=AppendNames(2), validate=True)
-    extra.fit(X)
+    _ = extra.fit(X)
     var out_names = extra.get_feature_names_out()
     assert_equal(len(out_names), 5)
     assert_equal(out_names[4], "rnd1")
     # set_params switches modes; invalid strings fail at fit and in get_feature_names_out.
-    extra.set_params(feature_names_out="one-to-one")
+    _ = extra.set_params(feature_names_out="one-to-one")
     assert_equal(len(extra.get_feature_names_out()), 3)
-    extra.set_params(feature_names_out=None)
+    _ = extra.set_params(feature_names_out=None)
     assert_true(extra.feature_names_out.is_none())
     var invalid = FunctionTransformer(feature_names_out="one-to-many")
     with assert_raises(contains="must be a callable, a str among {'one-to-one'} or None"):
-        invalid.fit(X)
+        _ = invalid.fit(X)
     with assert_raises(contains="is invalid"):
         _ = invalid.get_feature_names_out()
 

@@ -25,7 +25,6 @@
       "id": "moxie",
       "modules": {
         "moxie.base": {
-          "baseline": "ec75e4cf4a4b1d244fffa6f8b3b55016635e5914",
           "file": "src/moxie/base.mojo"
         },
         "moxie.utils.validation": {

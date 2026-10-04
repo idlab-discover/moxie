@@ -37,13 +37,25 @@ struct LabelProbe(LabelTransformer):
         pass
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return False
-    def fit(mut self, y: List[String]) raises:
+    def fit[
+        origin: MutOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[y_origin] y: List[String],
+    ) raises -> ref[self] Self:
         raise Error("Probe only")
     def transform(self, y: List[String]) raises -> List[Int]:
         raise Error("Probe only")
@@ -151,7 +163,7 @@ def main() raises:
     var y: List[String] = ["cat"]
     var codes: List[Int] = [0]
     with assert_raises():
-        labels.fit(y)
+        _ = labels.fit(y)
     with assert_raises():
         _ = labels.transform(y)
     with assert_raises():

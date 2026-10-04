@@ -40,8 +40,8 @@ def main() raises:
     var copied = clone(model)
     assert_false(Bool(copied.feature_names_in_))
     var raw = ColumnTransformer(ColumnEntry("a", "passthrough", [0]))
-    raw.fit(table)
-    raw.fit(X)
+    _ = raw.fit(table)
+    _ = raw.fit(X)
     assert_false(Bool(raw.feature_names_in_))
     var floating: List[String] = ["floating"]
     var float32: List[String] = ["float32"]
@@ -57,7 +57,7 @@ def main() raises:
     assert_equal(selected.fit_transform(table).shape[1], 3)
     var first: List[String] = ["age"]
     var named = ColumnTransformer(ColumnEntry("first", "passthrough", first.copy()), remainder="passthrough")
-    named.fit(table)
+    _ = named.fit(table)
     assert_equal(named.transformers_()[1].columns.names[0], "income")
     with assert_raises():
         _ = named.transform(unseen)

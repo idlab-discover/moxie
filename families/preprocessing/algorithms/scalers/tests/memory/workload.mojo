@@ -42,65 +42,65 @@ def run[d: DType](op: String, n: Int, p: Int) raises:
         out = checksum(X.copy())
     elif op == "std_fit":
         var s = StandardScaler[d]()
-        s.fit(X)
+        _ = s.fit(X)
         out = s.mean_.value().unsafe_get(0)
     elif op == "std_fit_weighted":
         var s = StandardScaler[d]()
-        s.fit(X, sample_weight=w)
+        _ = s.fit(X, sample_weight=w)
         out = s.mean_.value().unsafe_get(0)
     elif op == "std_fit_scalar":
         var s = StandardScaler[d]()
-        s.fit(X, sample_weight=2.5)
+        _ = s.fit(X, sample_weight=2.5)
         out = s.mean_.value().unsafe_get(0)
     elif op == "std_partial_fit":
         var s = StandardScaler[d]()
-        s.partial_fit(X)
-        s.partial_fit(X, sample_weight=w)
+        _ = s.partial_fit(X)
+        _ = s.partial_fit(X, sample_weight=w)
         out = s.var_.value().unsafe_get(0)
     elif op == "std_transform":
         var s = StandardScaler[d]()
-        s.fit(X)
+        _ = s.fit(X)
         out = checksum(s.transform(X))
     elif op == "std_inverse":
         var s = StandardScaler[d]()
-        s.fit(X)
+        _ = s.fit(X)
         out = checksum(s.inverse_transform(X))
     elif op == "std_inplace":
         var s = StandardScaler[d]()
-        s.fit(X)
+        _ = s.fit(X)
         s.transform_inplace(X)
         s.inverse_transform_inplace(X)
         out = checksum(X)
     elif op == "minmax_fit":
         var m = MinMaxScaler[d]()
-        m.fit(X)
-        m.partial_fit(X)
+        _ = m.fit(X)
+        _ = m.partial_fit(X)
         out = Float64(m.scale_.unsafe_get(0))
     elif op == "minmax_transform":
         var m = MinMaxScaler[d]((-1.0, 1.0), clip=True)
-        m.fit(X)
+        _ = m.fit(X)
         out = checksum(m.transform(X))
     elif op == "minmax_inplace":
         var m = MinMaxScaler[d]()
-        m.fit(X)
+        _ = m.fit(X)
         m.transform_inplace(X)
         out = checksum(X)
     elif op == "maxabs_fit":
         var a = MaxAbsScaler[d]()
-        a.fit(X)
-        a.partial_fit(X)
+        _ = a.fit(X)
+        _ = a.partial_fit(X)
         out = Float64(a.scale_.unsafe_get(0))
     elif op == "maxabs_transform":
         var a = MaxAbsScaler[d](clip=True)
-        a.fit(X)
+        _ = a.fit(X)
         out = checksum(a.transform(X))
     elif op == "robust_fit":
         var r = RobustScaler[d](unit_variance=True)
-        r.fit(X)
+        _ = r.fit(X)
         out = r.scale_.value().unsafe_get(0)
     elif op == "robust_transform":
         var r = RobustScaler[d]()
-        r.fit(X)
+        _ = r.fit(X)
         out = checksum(r.transform(X))
     elif op == "scale":
         out = checksum(scale(X))
@@ -118,9 +118,9 @@ def run[d: DType](op: String, n: Int, p: Int) raises:
         out = checksum(robust_scale(X, axis=1))
     elif op == "view_fit_transform":
         var s = StandardScaler[d]()
-        s.fit(tiny)
+        _ = s.fit(tiny)
         var r = RobustScaler[d]()
-        r.fit(tiny)
+        _ = r.fit(tiny)
         out = checksum(s.transform(tiny)) + checksum(r.transform(tiny)) + checksum(scale(tiny))
     else:
         raise Error("unknown op " + op)

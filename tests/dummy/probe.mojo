@@ -96,9 +96,9 @@ def regressor_probe[dtype: DType]() raises:
         quantile = q
     var model = DummyRegressor[dtype](strategy=strategy, constant=constant, quantile=quantile)
     if weighted:
-        model.fit(X, y, sample_weight=weights)
+        _ = model.fit(X, y, sample_weight=weights)
     else:
-        model.fit(X, y)
+        _ = model.fit(X, y)
     emit(model.constant_.value())
     var result = model.predict(test, return_std=True)
     emit(result.prediction)
@@ -145,7 +145,7 @@ def classifier_probe[multioutput: Bool, dtype: DType]() raises:
     var model = DummyClassifier[multioutput=multioutput, dtype=dtype](strategy=strategy, constant=constant.copy(), random_state=seed)
     if (mode == "global" or mode == "global32"):
         seed_global_random_state(seed)
-        model.set_params(random_state=Optional[Optional[Int]](Optional[Int]()))
+        _ = model.set_params(random_state=Optional[Optional[Int]](Optional[Int]()))
     var targets = Model.Target()
     comptime if multioutput:
         targets = rebind[Model.Target](y).copy()
@@ -155,9 +155,9 @@ def classifier_probe[multioutput: Bool, dtype: DType]() raises:
             flat.append(row[0].copy())
         targets = rebind[Model.Target](flat).copy()
     if weighted:
-        model.fit(X, targets, sample_weight=weights)
+        _ = model.fit(X, targets, sample_weight=weights)
     else:
-        model.fit(X, targets)
+        _ = model.fit(X, targets)
     comptime if multioutput:
         for j in range(outputs):
             print(rebind[List[Int]](model.n_classes_)[j])

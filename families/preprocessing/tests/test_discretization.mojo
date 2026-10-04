@@ -28,22 +28,22 @@ def test_params_and_clone() raises:
     assert_equal(params.encode, "ordinal")
     assert_false(Bool(params.subsample))
     assert_equal(params.random_state.value(), 4)
-    model.set_params(n_bins=6, quantile_method=String("linear"), subsample=Optional[Optional[Int]](Optional[Int](50)))
+    _ = model.set_params(n_bins=6, quantile_method=String("linear"), subsample=Optional[Optional[Int]](Optional[Int](50)))
     assert_equal(model.n_bins, 6)
     assert_equal(model.subsample.value(), 50)
-    model.set_params(subsample=Optional[Optional[Int]](Optional[Int](None)))
+    _ = model.set_params(subsample=Optional[Optional[Int]](Optional[Int](None)))
     assert_false(Bool(model.subsample))
     var per_feature: List[Int] = [2, 4]
-    model.set_params(per_feature)
+    _ = model.set_params(per_feature)
     assert_equal(model.get_params().n_bins_per_feature.value()[1], 4)
-    model.fit(data(12, 2))
+    _ = model.fit(data(12, 2))
     assert_true(model.__sklearn_is_fitted__())
     var fresh = clone(model)
     assert_false(fresh.__sklearn_is_fitted__())
     assert_equal(fresh.n_bins_per_feature.value()[0], 2)
     assert_equal(fresh.strategy, "uniform")
     assert_equal(fresh.n_bins_.size, 0)
-    fresh.set_params(KBinsDiscretizerParams(5, None, "onehot-dense", "kmeans", "inverted_cdf", Optional[Int](10), None))
+    _ = fresh.set_params(KBinsDiscretizerParams(5, None, "onehot-dense", "kmeans", "inverted_cdf", Optional[Int](10), None))
     assert_equal(fresh.encode, "onehot-dense")
     assert_false(Bool(fresh.n_bins_per_feature))
     with assert_raises(contains="only 'default'"):
@@ -59,7 +59,7 @@ def test_defaults_and_sparse() raises:
     assert_equal(model.subsample.value(), 200000)
     # sklearn's default encode='onehot' returns a sparse matrix: deferred.
     with assert_raises(contains="sparse"):
-        model.fit(data(10, 2))
+        _ = model.fit(data(10, 2))
     assert_false(model.__sklearn_is_fitted__())
 
 
@@ -71,36 +71,36 @@ def test_unfitted_and_validation() raises:
         _ = model.inverse_transform(data(4, 2))
     with assert_raises(contains="NotFittedError"):
         _ = model.get_feature_names_out()
-    model.set_params(strategy=String("median"))
+    _ = model.set_params(strategy=String("median"))
     with assert_raises(contains="'strategy' parameter"):
-        model.fit(data(6, 2))
-    model.set_params(strategy=String("quantile"), n_bins=1)
+        _ = model.fit(data(6, 2))
+    _ = model.set_params(strategy=String("quantile"), n_bins=1)
     with assert_raises(contains="'n_bins' parameter"):
-        model.fit(data(6, 2))
+        _ = model.fit(data(6, 2))
     var bad: List[Int] = [3, 1]
-    model.set_params(bad)
+    _ = model.set_params(bad)
     with assert_raises(contains="indices 1."):
-        model.fit(data(6, 2))
-    model.set_params(n_bins=3, random_state=Optional[Optional[Int]](Optional[Int](-2)))
+        _ = model.fit(data(6, 2))
+    _ = model.set_params(n_bins=3, random_state=Optional[Optional[Int]](Optional[Int](-2)))
     with assert_raises(contains="'random_state' parameter"):
-        model.fit(data(6, 2))
+        _ = model.fit(data(6, 2))
 
 
 def test_refit_and_failed_fit_keep_state() raises:
     var model = KBinsDiscretizer(3, encode="onehot-dense", strategy="uniform")
     var names: List[String] = ["a", "b", "c"]
-    model.fit_named(data(9, 3), names)
+    _ = model.fit_named(data(9, 3), names)
     assert_equal(model.get_feature_names_out()[0], "a_0.0")
     assert_equal(len(model.get_feature_names_out()), 9)
     # A failing fit (kmeans with too few samples) leaves the fitted state intact.
-    model.set_params(strategy=String("kmeans"), n_bins=5)
+    _ = model.set_params(strategy=String("kmeans"), n_bins=5)
     with assert_raises(contains="n_samples=3 should be >= n_clusters=5"):
-        model.fit(data(3, 2))
+        _ = model.fit(data(3, 2))
     assert_equal(model.n_features_in_, 3)
     assert_equal(model.feature_names_in_.value()[2], "c")
     # A successful refit replaces everything, including the names.
-    model.set_params(strategy=String("uniform"), n_bins=4)
-    model.fit(data(8, 2))
+    _ = model.set_params(strategy=String("uniform"), n_bins=4)
+    _ = model.fit(data(8, 2))
     assert_equal(model.n_features_in_, 2)
     assert_false(Bool(model.feature_names_in_))
     assert_equal(len(model.bin_edges_), 2)
@@ -136,16 +136,16 @@ def test_random_state() raises:
     var X = data(40, 2)
     # Integer seeds reseed every fit; a borrowed RandomState advances.
     var seeded = KBinsDiscretizer(4, encode="ordinal", subsample=15, random_state=3)
-    seeded.fit(X)
+    _ = seeded.fit(X)
     var rng = RandomState(3)
     var borrowed = KBinsDiscretizer(4, encode="ordinal", subsample=15, random_state=99)
-    borrowed.fit(X, rng)
+    _ = borrowed.fit(X, rng)
     for j in range(2):
         for k in range(seeded.bin_edges_[j].size):
             assert_equal(seeded.bin_edges_[j].unsafe_get(k), borrowed.bin_edges_[j].unsafe_get(k))
     # random_state=None draws from the process default stream.
     var unseeded = KBinsDiscretizer(4, encode="ordinal", subsample=15)
-    unseeded.fit(X)
+    _ = unseeded.fit(X)
     assert_equal(unseeded.n_bins_.size, 2)
 
 
@@ -154,17 +154,17 @@ def test_sample_weight() raises:
     var w = zeros[DType.float64](Shape(10))
     var model = KBinsDiscretizer(3, encode="ordinal", strategy="quantile")
     with assert_raises(contains="at least one non-zero"):
-        model.fit(X, sample_weight=w)
+        _ = model.fit(X, sample_weight=w)
     with assert_raises(contains="sample_weight.shape == (4,), expected (10,)!"):
-        model.fit(X, sample_weight=zeros[DType.float64](Shape(4)))
+        _ = model.fit(X, sample_weight=zeros[DType.float64](Shape(4)))
     for i in range(10):
         w.unsafe_set(i, Float64(i % 3))
-    model.fit(X, sample_weight=w)
+    _ = model.fit(X, sample_weight=w)
     assert_equal(model.n_bins_.size, 2)
-    model.fit(X, sample_weight=2.0)
-    model.set_params(quantile_method=String("hazen"))
+    _ = model.fit(X, sample_weight=2.0)
+    _ = model.set_params(quantile_method=String("hazen"))
     with assert_raises(contains="quantile_method should either be set to"):
-        model.fit(X, sample_weight=w)
+        _ = model.fit(X, sample_weight=w)
 
 
 def main() raises:

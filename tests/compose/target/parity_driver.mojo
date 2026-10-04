@@ -84,9 +84,9 @@ def run[dtype: DType](fx: Fixture) raises:
     var X = fx.array[dtype]("X")
     var y = fx.array[dtype]("y")
     if fx.has("sw"):
-        model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
+        _ = model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
     else:
-        model.fit(X, y)
+        _ = model.fit(X, y)
     for message in model.warnings_:
         print(String("warn|", fx.id, "|", message))
     var out = ResultLine(fx.id)

@@ -59,10 +59,12 @@ through their own `__sklearn_clone__` implementation.
 
 ## Explicit Mojo differences
 
-- `fit`, `set_params`, and `partial_fit` mutate in place and return nothing.
-  Use `model.fit(X, y)` followed by `model.predict(X)`. The reference-returning
-  trait conformance attempted on Mojo 1.0.0 was rejected by the compiler;
-  fluent chaining is not promised by this baseline.
+- `fit`, `set_params`, and `partial_fit` mutate in place and return a mutable
+  borrow of the original estimator. Concrete and shared-trait calls support
+  `model.set_params(params).fit(X, y).predict(X)`. Standalone mutation calls
+  remain valid; write `_ = model.fit(X, y)` to explicitly discard the borrow.
+  `fit_transform` and `fit_predict` still return transformed data and predictions.
+  Clone remains a separate operation with each estimator's existing semantics.
 - `get_params(deep=True)` returns an estimator-specific typed `Params` record
   or mapping. `set_params(params)` accepts that same type. Concrete estimators
   should also provide named keyword overloads for familiar partial updates.
@@ -81,6 +83,8 @@ through their own `__sklearn_clone__` implementation.
 - Python reflection, serialization, rich repr, pandas output, metadata routing,
   full sklearn tags, and Python bindings are outside this scaffold. They must
   be designed and tested before claiming compatibility with those facilities.
+
+Implementation signatures follow the [shared fluent convention](../../../docs/interfaces.md#fluent-implementation-convention), including named immutable input origins.
 
 ## Validation and extension
 

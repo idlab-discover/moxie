@@ -431,7 +431,13 @@ struct FunctionTransformer[
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.func, self.inverse_func, validate=self.validate, accept_sparse=self.accept_sparse, check_inverse=self.check_inverse, feature_names_out=self.feature_names_out, kw_args=self.kw_args, inv_kw_args=self.inv_kw_args)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.func = params.func.copy()
         self.inverse_func = params.inverse_func.copy()
         self.validate = params.validate
@@ -440,14 +446,22 @@ struct FunctionTransformer[
         self.feature_names_out = params.feature_names_out.copy()
         self.kw_args = params.kw_args.copy()
         self.inv_kw_args = params.inv_kw_args.copy()
+        return self
 
-    def set_params(
-        mut self, *, func: Optional[Self.F] = None, inverse_func: Optional[Self.G] = None,
-        validate: Optional[Bool] = None, accept_sparse: Optional[Bool] = None,
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        func: Optional[Self.F] = None,
+        inverse_func: Optional[Self.G] = None,
+        validate: Optional[Bool] = None,
+        accept_sparse: Optional[Bool] = None,
         check_inverse: Optional[Bool] = None,
         feature_names_out: FeatureNamesOut[Self.N] = FeatureNamesOut[Self.N]._not_given(),
-        kw_args: Optional[Self.F.KwArgs] = None, inv_kw_args: Optional[Self.G.KwArgs] = None,
-    ) raises:
+        kw_args: Optional[Self.F.KwArgs] = None,
+        inv_kw_args: Optional[Self.G.KwArgs] = None,
+    ) raises -> ref[self] Self:
         """Update the given parameters. An omitted Optional leaves the value unchanged;
         reset func/inverse_func/kw_args to None with `set_params(record)`.
         `feature_names_out=None` does reset it."""
@@ -467,6 +481,7 @@ struct FunctionTransformer[
             self.kw_args = kw_args.copy()
         if inv_kw_args:
             self.inv_kw_args = inv_kw_args.copy()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.func, self.inverse_func, validate=self.validate, accept_sparse=self.accept_sparse, check_inverse=self.check_inverse, feature_names_out=self.feature_names_out, kw_args=self.kw_args, inv_kw_args=self.inv_kw_args)
@@ -480,18 +495,35 @@ struct FunctionTransformer[
 
     # -- fitting -------------------------------------------------------------
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         """Record n_features_in_ (rank >= 2 input), validate X if `validate`,
         and run the check_inverse round trip when both callables are given."""
         self._fit(X, None)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         """`fit` on a named table: records feature_names_in_ (X must be rank 2)."""
         if X.ndim != 2:
             raise Error("ValueError: fit_named requires a rank-2 X, got rank " + String(X.ndim))
         if len(feature_names) != X.shape[1]:
             raise Error("ValueError: feature_names length " + String(len(feature_names)) + " does not match n_features " + String(X.shape[1]))
         self._fit(X, feature_names.copy())
+        return self
 
     def _fit(mut self, X: Self.Input, var names: Optional[List[String]]) raises:
         self.feature_names_out._validate()
@@ -539,7 +571,7 @@ struct FunctionTransformer[
             raise Error("TypeError: func=None is the identity, which cannot produce " + dtype_name[Self.F.OutDType]() + " output from " + dtype_name[Self.F.InDType]() + " input")
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def inverse_transform(self, X: Self.Transformed) raises -> Self.Input:

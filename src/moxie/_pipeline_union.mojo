@@ -58,12 +58,12 @@ def _fit_branch[dtype: DType, E: TransformerMixin](mut estimator: E, X: NDArray[
     comptime assert E.Input == NDArray[dtype], "union input must be NDArray[dtype]"
     comptime if conforms_to(E, UnsupervisedEstimator):
         comptime assert E.Target == NDArray[dtype], "union target must be NDArray[dtype]"
-        estimator.fit(rebind[E.Input](X), rebind[Optional[E.Target]](y))
+        _ = estimator.fit(rebind[E.Input](X), rebind[Optional[E.Target]](y))
     elif conforms_to(E, SupervisedEstimator):
         comptime assert E.Target == NDArray[dtype], "union target must be NDArray[dtype]"
         if not y:
             raise Error("ValueError: supervised union branch requires y")
-        estimator.fit(rebind[E.Input](X), rebind[E.Target](y.value()))
+        _ = estimator.fit(rebind[E.Input](X), rebind[E.Target](y.value()))
     else:
         raise Error("TypeError: branch has no fit; use fit_transform")
 
@@ -115,9 +115,16 @@ struct UnionStep[dtype_: DType, E: TransformerMixin & Deinitable](UnionBranches)
         return [params.name]
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.name, self.estimator.get_params(deep))
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.name = params.name
-        self.estimator.set_params(params.estimator)
+        _ = self.estimator.set_params(params.estimator)
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.name, clone(self.estimator))
     def __sklearn_is_fitted__(self) -> Bool:
@@ -183,13 +190,20 @@ struct UnionSentinel[dtype_: DType = DType.float64](UnionBranches):
         return [params.name]
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.name, self.mode)
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         if params.mode != StepMode.passthrough and params.mode != StepMode.drop:
             raise Error("ValueError: union sentinel must be passthrough or drop")
         if self.mode != params.mode:
             self._n_features = None
         self.name = params.name
         self.mode = params.mode
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.name, self.mode)
     def __sklearn_is_fitted__(self) -> Bool:
@@ -256,9 +270,16 @@ struct UnionPair[A: UnionBranches, B: UnionBranches](UnionBranches):
         var first: Self.A.Params = self.first.get_params(deep)
         var second: Self.B.Params = self.second.get_params(deep)
         return Self.Params(first^, second^)
-    def set_params(mut self, params: Self.Params) raises:
-        self.first.set_params(params.first)
-        self.second.set_params(params.second)
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
+        _ = self.first.set_params(params.first)
+        _ = self.second.set_params(params.second)
+        return self
     def __sklearn_clone__(self) raises -> Self:
         var first: Self.A = clone(self.first)
         var second: Self.B = clone(self.second)
@@ -328,13 +349,20 @@ struct FeatureUnion[B: UnionBranches](TransformerMixin, FitTransformer, Unsuperv
         self.verbose_feature_names_out = verbose_feature_names_out
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.transformer_list.get_params(deep), self.n_jobs, self.transformer_weights.copy(), self.verbose, self.verbose_feature_names_out)
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         _validate_union(Self.B.param_names(params.transformer_list), params.n_jobs, params.transformer_weights)
-        self.transformer_list.set_params(params.transformer_list)
+        _ = self.transformer_list.set_params(params.transformer_list)
         self.n_jobs = params.n_jobs
         self.transformer_weights = params.transformer_weights.copy()
         self.verbose = params.verbose
         self.verbose_feature_names_out = params.verbose_feature_names_out
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self(clone(self.transformer_list), n_jobs=self.n_jobs, transformer_weights=self.transformer_weights,
                     verbose=self.verbose, verbose_feature_names_out=self.verbose_feature_names_out)
@@ -356,10 +384,18 @@ struct FeatureUnion[B: UnionBranches](TransformerMixin, FitTransformer, Unsuperv
         if len(outputs) == 1:
             return outputs[0].copy()
         return _concatenate_list(outputs, axis=1)
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._validate(X)
         var outputs = List[Self.Input]()
         self.transformer_list.fit_branches(X, y, False, self.transformer_weights, self.verbose, outputs)
+        return self
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
         self._validate(X)
         var outputs = List[Self.Input]()

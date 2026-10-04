@@ -97,7 +97,8 @@ remain unchanged across calls to `partial_fit`. Do not retain interior views
 across updates through another shared handle or perform concurrent reads and
 updates; reference counting does not synchronize estimator operations.
 
-These overloads return nothing, following the shared Mojo contract. Arbitrary
+These overloads return a mutable borrow of this wrapper, following the shared
+fluent contract. Arbitrary
 extra arguments and incremental sample weights are not part of the shared
 incremental traits and are not synthesized. Nonincremental estimators reject
 `partial_fit` at compile time.
@@ -123,7 +124,7 @@ predictive clusterer's independent `Predictor` capability can still be forwarded
 - Learned attributes and custom read-only methods use `frozen.estimator()`;
   arbitrary attribute forwarding, indexing, and inference overloads outside
   the shared traits are not synthesized.
-- Fit and parameter changes return nothing, following the shared contract.
+- Fit, partial fit, and parameter changes return a mutable borrow of this wrapper.
   Nested parameter rejection occurs at compile time rather than as a Python
   `ValueError`.
 - Arbitrary fit `*args`/`**kwargs`, dynamic metadata routing, Python tags

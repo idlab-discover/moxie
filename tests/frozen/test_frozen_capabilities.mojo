@@ -38,8 +38,15 @@ struct TransformProbe(
     def get_params(self, deep: Bool = True) raises -> Int:
         return self.offset
 
-    def set_params(mut self, params: Int) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
         self.offset = params
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.offset)
@@ -47,8 +54,16 @@ struct TransformProbe(
     def __sklearn_is_fitted__(self) -> Bool:
         return True
 
-    def fit(mut self, X: Int, y: Optional[Int] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        y: Optional[Int] = None,
+    ) raises -> ref[self] Self:
         self.offset = X
+        return self
 
     def transform(self, X: Int) raises -> Int:
         return X + self.offset
@@ -57,7 +72,7 @@ struct TransformProbe(
         return X - self.offset
 
     def fit_transform(mut self, X: Int, y: Optional[Int] = None) raises -> Int:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
 
@@ -70,8 +85,14 @@ struct BareProbe(BaseEstimator):
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
 
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()
@@ -100,7 +121,13 @@ struct ResponseProbe(
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
 
-    def set_params(mut self, params: Int) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
         raise Error("probe mutation must not be called")
 
     def __sklearn_clone__(self) raises -> Self:
@@ -109,10 +136,29 @@ struct ResponseProbe(
     def __sklearn_is_fitted__(self) -> Bool:
         return True
 
-    def fit(mut self, X: Int, y: Int) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        ref[y_origin] y: Int,
+    ) raises -> ref[self] Self:
         raise Error("inner fit must not be called")
 
-    def fit(mut self, X: Int, y: Int, *, sample_weight: Int) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        ref[y_origin] y: Int,
+        *,
+        ref[sample_weight_origin] sample_weight: Int,
+    ) raises -> ref[self] Self:
         raise Error("inner weighted fit must not be called")
 
     def predict(self, X: Int) raises -> Int:
@@ -145,8 +191,14 @@ struct DensityProbe(DensityMixin):
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
 
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()
@@ -154,7 +206,14 @@ struct DensityProbe(DensityMixin):
     def __sklearn_is_fitted__(self) -> Bool:
         return True
 
-    def fit(mut self, X: Int, y: Optional[String] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        y: Optional[String] = None,
+    ) raises -> ref[self] Self:
         raise Error("inner fit must not be called")
 
     def score_samples(self, X: Int) raises -> List[Float64]:
@@ -178,14 +237,14 @@ def main() raises:
     comptime assert not conforms_to(T, Predictor)
     comptime assert not conforms_to(T, FitTransformer)
     var transform = T(TransformProbe())
-    transform.fit(100)
-    transform.fit(200, Optional[Int](5))
+    _ = transform.fit(100)
+    _ = transform.fit(200, Optional[Int](5))
     assert_equal(transformed(transform, 3), 10)
     assert_equal(transform.inverse_transform(10), 3)
 
     var responses = FrozenEstimator(ResponseProbe())
-    responses.fit(1, 2)
-    responses.fit(1, 2, sample_weight=-100)
+    _ = responses.fit(1, 2)
+    _ = responses.fit(1, 2, sample_weight=-100)
     var cloned_responses = responses.__sklearn_clone__()
     assert_equal(cloned_responses.predict(2), 12)
     assert_equal(
@@ -199,14 +258,14 @@ def main() raises:
     assert_equal(responses.score(3, 4), 7.0)
     assert_equal(responses.score(3, 4, Optional[Int](5)), 12.0)
     var density = FrozenEstimator(DensityProbe())
-    density.fit(100)
+    _ = density.fit(100)
     assert_equal(density.score(5), 3.0)
     assert_equal(density.score(5, Optional[String]("abc")), 6.0)
     assert_equal(density.score_samples(5), density.estimator().score_samples(5))
 
     # BaseEstimator alone imposes no input or inference capability.
     var bare = FrozenEstimator(BareProbe())
-    bare.fit("ignored", 1)
+    _ = bare.fit("ignored", 1)
     comptime assert not conforms_to(FrozenEstimator[BareProbe], Predictor)
 
     # This pre-existing probe raises from every algorithm operation. Every
@@ -241,5 +300,5 @@ def main() raises:
     with assert_raises():
         _ = frozen.score(1)
     with assert_raises():
-        frozen.fit(1, 2, sample_weight=3)
+        _ = frozen.fit(1, 2, sample_weight=3)
     print("Frozen capability contracts passed")

@@ -35,7 +35,7 @@ def check[dtype: DType, multi: Bool]() raises:
             Z.unsafe_set(i * 3 + j, Scalar[dtype](100 + i * 10 + j))
     with assert_raises():
         _ = pipe.predict(Z)
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     assert_equal(pipe.n_features_in_(), X.shape[1])
     assert_true(pipe.__sklearn_is_fitted__())
     assert_true(pipe.transformer.__sklearn_is_fitted__())
@@ -60,28 +60,28 @@ def check[dtype: DType, multi: Bool]() raises:
         _ = fresh.predict(Z)
     var params = fresh.get_params()
     params.estimator.strategy = "median"
-    fresh.set_params(params)
+    _ = fresh.set_params(params)
     assert_equal(pipe.get_params().estimator.strategy, "mean")
     y.unsafe_set(0, 100)
-    fresh.fit(X, y)
+    _ = fresh.fit(X, y)
     output.add("median", fresh.predict(Z))
     output.add("original", pipe.predict(Z))
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     output.add("refit", pipe.predict(Z))
     # Dummy accepts any feature count, so the prefix must enforce its own schema.
     var wrong = zeros[dtype](Shape(2, 2))
     with assert_raises():
         _ = pipe.predict(wrong)
     with assert_raises():
-        pipe.fit(wrong, y)
+        _ = pipe.fit(wrong, y)
     assert_true(pipe.__sklearn_is_fitted__())
     output.add("after_failure", pipe.predict(Z))
     # A parameter update changes the prefix only on refit.
     var updated = pipe.get_params()
     updated.transformer.remainder = "drop"
-    pipe.set_params(updated)
+    _ = pipe.set_params(updated)
     assert_equal(pipe.transformer.transform(Z).shape[1], 4)
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     assert_equal(pipe.estimator.n_features_in_.value(), 3)
     output.add("drop_remainder", pipe.transformer.transform(Z))
     output.add("updated", pipe.predict(Z))

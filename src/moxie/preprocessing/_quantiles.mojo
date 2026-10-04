@@ -243,19 +243,33 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor)
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.n_quantiles, self.output_distribution, self.ignore_implicit_zeros, self.subsample, self.random_state, self.copy)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.n_quantiles = params.n_quantiles
         self.output_distribution = params.output_distribution
         self.ignore_implicit_zeros = params.ignore_implicit_zeros
         self.subsample = params.subsample
         self.random_state = params.random_state
         self.copy = params.copy_input
+        return self
 
-    def set_params(
-        mut self, *, n_quantiles: Optional[Int] = None, output_distribution: Optional[String] = None,
-        ignore_implicit_zeros: Optional[Bool] = None, subsample: Optional[Optional[Int]] = None,
-        random_state: Optional[Optional[Int]] = None, copy: Optional[Bool] = None,
-    ) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        n_quantiles: Optional[Int] = None,
+        output_distribution: Optional[String] = None,
+        ignore_implicit_zeros: Optional[Bool] = None,
+        subsample: Optional[Optional[Int]] = None,
+        random_state: Optional[Optional[Int]] = None,
+        copy: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         """Outer None leaves a parameter unchanged; an inner None sets it to None."""
         if n_quantiles:
             self.n_quantiles = n_quantiles.value()
@@ -269,6 +283,7 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor)
             self.random_state = random_state.value()
         if copy:
             self.copy = copy.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(n_quantiles=self.n_quantiles, output_distribution=self.output_distribution, ignore_implicit_zeros=self.ignore_implicit_zeros, subsample=self.subsample, random_state=self.random_state, copy=self.copy)
@@ -303,7 +318,14 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor)
         self.feature_names_in_ = None
         self._fitted = True
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._validate(X)
         var n = X.shape[0]
         if self._needs_subsample(n):
@@ -318,8 +340,16 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor)
             self._commit(X, rows^)
         else:
             self._commit(X, None)
+        return self
 
-    def fit(mut self, X: Self.Input, mut random_state: RandomState) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        mut random_state: RandomState,
+    ) raises -> ref[self] Self:
         """Fit drawing the subsample from a borrowed RandomState (advanced in place).
 
         The configured `random_state` is ignored, like passing a RandomState
@@ -331,15 +361,25 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor)
             self._commit(X, rows^)
         else:
             self._commit(X, None)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=True)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     # -- transformation -------------------------------------------------------
@@ -393,7 +433,7 @@ def quantile_transform[dtype: DType](
         raise Error("ValueError: The 'axis' parameter of quantile_transform must be a int among {0, 1}. Got " + String(axis) + " instead.")
     var model = QuantileTransformer[dtype](n_quantiles=n_quantiles, output_distribution=output_distribution, ignore_implicit_zeros=ignore_implicit_zeros, subsample=subsample, random_state=random_state, copy=copy)
     var view = _matrix_view(X, axis == 1)
-    model.fit(view)
+    _ = model.fit(view)
     model._check(view)
     var result = matrix[dtype](X.shape[0], X.shape[1])
     var normal = output_distribution == "normal"
@@ -691,18 +731,34 @@ struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.method, self.standardize, self.copy)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.method = params.method
         self.standardize = params.standardize
         self.copy = params.copy_input
+        return self
 
-    def set_params(mut self, *, method: Optional[String] = None, standardize: Optional[Bool] = None, copy: Optional[Bool] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        method: Optional[String] = None,
+        standardize: Optional[Bool] = None,
+        copy: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         if method:
             self.method = method.value()
         if standardize:
             self.standardize = standardize.value()
         if copy:
             self.copy = copy.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.method, standardize=self.standardize, copy=self.copy)
@@ -792,7 +848,7 @@ struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor):
         var scaler = Optional[StandardScaler[Self.dtype]](None)
         if self.standardize:
             var fitted = StandardScaler[Self.dtype](copy=False)
-            fitted.fit(table)
+            _ = fitted.fit(table)
             if force_transform:
                 fitted.transform_inplace(table)
             scaler = fitted^
@@ -805,14 +861,31 @@ struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor):
             return table^
         return None
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         _ = self._fit(X, False)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=True)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
         var result = self._fit(X, True)

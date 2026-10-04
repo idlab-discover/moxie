@@ -19,14 +19,30 @@ struct NameStep(SupervisedEstimator, TransformerMixin, Predictor, UnionFeatureNa
         self.fitted = False
     def get_params(self, deep: Bool = True) raises -> String:
         return self.prefix
-    def set_params(mut self, params: String) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: String,
+    ) raises -> ref[self] Self:
         self.prefix = params
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.prefix)
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fitted
-    def fit(mut self, X: Int, y: Int) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        ref[y_origin] y: Int,
+    ) raises -> ref[self] Self:
         self.fitted = True
+        return self
     def transform(self, X: Int) raises -> Int:
         return X
     def predict(self, X: Int) raises -> Int:
@@ -66,7 +82,7 @@ def main() raises:
     emit("names_explicit", names)
     names[0] = "changed"
     assert_equal(pipe.get_feature_names_out(inputs.copy())[0], "b_a_height")
-    pipe.fit(1, 1)
+    _ = pipe.fit(1, 1)
     emit("names_default", pipe.get_feature_names_out())
     assert_equal(pipe.get_feature_names_out()[1], "b_a_x1")
     emit("names_empty", pipe.get_feature_names_out(List[String]()))
@@ -86,11 +102,11 @@ def main() raises:
         _ = fresh.get_feature_names_out()
     var params = fresh.get_params()
     params.transformer = "new_"
-    fresh.set_params(params)
-    fresh.fit(2, 2)
+    _ = fresh.set_params(params)
+    _ = fresh.fit(2, 2)
     emit("names_clone", fresh.get_feature_names_out())
     assert_equal(pipe.get_feature_names_out()[0], "b_a_x0")
-    pipe.fit(2, 2)
+    _ = pipe.fit(2, 2)
     emit("names_refit", pipe.get_feature_names_out())
     var nested = Pipeline(NameStep("outer_"), pipe^)
     emit("names_nested", nested.get_feature_names_out(inputs.copy()))

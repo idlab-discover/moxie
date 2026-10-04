@@ -18,14 +18,29 @@ struct DecisionProbe(SupervisedEstimator, Predictor, DecisionFunction):
         self.child = Recorder()
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return self.child.fitted
-    def fit(mut self, X: Int, y: Int) raises:
-        self.child.fit(X, y)
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        ref[y_origin] y: Int,
+    ) raises -> ref[self] Self:
+        _ = self.child.fit(X, y)
+        return self
     def predict(self, X: Int) raises -> Int:
         raise Error("decision_function must not call predict")
     def decision_function(self, X: Int) raises -> Int:
@@ -45,14 +60,29 @@ struct DenseDecision[dtype: DType, multiclass: Bool](SupervisedEstimator, Predic
         self.fitted = False
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fitted
-    def fit(mut self, X: Self.Input, y: Self.Target) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
         self.fitted = True
+        return self
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         raise Error("decision_function must not call predict")
     def decision_function(self, X: Self.Input) raises -> Self.Decision:
@@ -79,7 +109,7 @@ def dense[dtype: DType, multiclass: Bool]() raises:
     var pipe = Pipeline(CopyStep[dtype](), DenseDecision[dtype, multiclass]())
     with assert_raises():
         _ = pipe.decision_function(X)
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     var result = through_trait(pipe, X)
     comptime assert type_of(result) == NDArray[dtype]
     assert_equal(result.ndim, 2 if multiclass else 1)
@@ -112,7 +142,7 @@ def main() raises:
     var pipe = Pipeline(Shift(), DecisionProbe())
     with assert_raises():
         _ = pipe.decision_function(1)
-    pipe.fit(5, 7)
+    _ = pipe.fit(5, 7)
     assert_equal(through_trait(pipe, 1), 23)
     print("decision_scalar", pipe.decision_function(1))
     with assert_raises():
@@ -122,26 +152,26 @@ def main() raises:
         _ = fresh.decision_function(1)
     var params = fresh.get_params()
     params.transformer = 4
-    fresh.set_params(params)
-    fresh.fit(5, 7)
-    pipe.fit(8, 7)
+    _ = fresh.set_params(params)
+    _ = fresh.fit(5, 7)
+    _ = pipe.fit(8, 7)
     print("decision_refit", fresh.decision_function(1), pipe.decision_function(1))
     with assert_raises():
-        pipe.fit(-1, 7)
+        _ = pipe.fit(-1, 7)
     assert_true(pipe.__sklearn_is_fitted__())
     with assert_raises():
         _ = pipe.decision_function(1)
     with assert_raises():
-        pipe.fit(5, -1)
+        _ = pipe.fit(5, -1)
     assert_false(pipe.__sklearn_is_fitted__())
     with assert_raises():
         _ = pipe.decision_function(1)
     var fused = Pipeline(Fused(), DecisionProbe())
-    fused.fit(5, 7)
+    _ = fused.fit(5, 7)
     print("decision_fused", fused.decision_function(1))
     assert_equal(fused.transformer.calls, 1)
     var nested = Pipeline(Shift(2), Pipeline(Shift(4), DecisionProbe()))
-    nested.fit(5, 7)
+    _ = nested.fit(5, 7)
     print("decision_nested", nested.decision_function(1))
     dense[DType.float32, False]()
     dense[DType.float32, True]()

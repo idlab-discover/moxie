@@ -22,8 +22,15 @@ struct Shift(SupervisedEstimator, TransformerMixin):
     def get_params(self, deep: Bool = True) raises -> Int:
         return self.offset
 
-    def set_params(mut self, params: Int) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
         self.offset = params
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.offset)
@@ -31,13 +38,22 @@ struct Shift(SupervisedEstimator, TransformerMixin):
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fitted
 
-    def fit(mut self, X: Int, y: Int) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        ref[y_origin] y: Int,
+    ) raises -> ref[self] Self:
         self.fitted = False
         if X < 0:
             raise Error("ValueError: negative training input")
         self.seen = X
         self.seen_y = y
         self.fitted = True
+        return self
 
     def transform(self, X: Int) raises -> Int:
         if not self.fitted:
@@ -55,13 +71,27 @@ struct Fused(SupervisedEstimator, FitTransformer, TransformerMixin):
         self.calls = 0
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return self.calls > 0
-    def fit(mut self, X: Int, y: Int) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        ref[y_origin] y: Int,
+    ) raises -> ref[self] Self:
         raise Error("fit must not run when fit_transform exists")
     def fit_transform(mut self, X: Int, y: Optional[Int] = None) raises -> Int:
         self.calls += 1
@@ -80,14 +110,28 @@ struct Unsupervised(UnsupervisedEstimator, TransformerMixin):
         self.seen_y = 0
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return True
-    def fit(mut self, X: Int, y: Optional[Int] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        y: Optional[Int] = None,
+    ) raises -> ref[self] Self:
         self.seen_y = y.value()
+        return self
     def transform(self, X: Int) raises -> Int:
         return X * 2
 
@@ -106,19 +150,34 @@ struct Recorder(SupervisedEstimator, Predictor):
         self.fitted = False
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fitted
-    def fit(mut self, X: Int, y: Int) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        ref[y_origin] y: Int,
+    ) raises -> ref[self] Self:
         self.fitted = False
         if y < 0:
             raise Error("ValueError: negative target")
         self.seen = X
         self.seen_y = y
         self.fitted = True
+        return self
     def predict(self, X: Int) raises -> Int:
         if not self.fitted:
             raise Error("NotFittedError: Recorder")
@@ -133,7 +192,7 @@ def main() raises:
     var pipe = Pipeline(Shift(), Recorder(), transformer_name="shift", estimator_name="record")
     with assert_raises():
         _ = pipe.predict(1)
-    pipe.fit(5, 7)
+    _ = pipe.fit(5, 7)
     assert_equal(pipe.transformer.seen, 5)
     assert_equal(pipe.transformer.seen_y, 7)
     assert_equal(pipe.estimator.seen, 7)
@@ -147,38 +206,38 @@ def main() raises:
     assert_equal(independent.transformer_name, "shift")
     var params = independent.get_params()
     params.transformer = 4
-    independent.set_params(params)
-    independent.fit(5, 7)
+    _ = independent.set_params(params)
+    _ = independent.fit(5, 7)
     assert_equal(independent.predict(1), 24)
     print("clone", independent.predict(1), pipe.predict(1))
     assert_equal(pipe.predict(1), 16)
-    pipe.fit(8, 3)
+    _ = pipe.fit(8, 3)
     assert_equal(pipe.estimator.seen, 10)
     # The fitted query follows the final estimator, even when a prefix fit fails.
     with assert_raises():
-        pipe.fit(-1, 3)
+        _ = pipe.fit(-1, 3)
     assert_true(pipe.__sklearn_is_fitted__())
     print("prefix_failure", Int(pipe.__sklearn_is_fitted__()))
     with assert_raises():
         _ = pipe.predict(1)
     with assert_raises():
-        pipe.fit(5, -1)
+        _ = pipe.fit(5, -1)
     assert_false(pipe.__sklearn_is_fitted__())
     assert_true(pipe.transformer.fitted)
     print("final_failure", Int(pipe.__sklearn_is_fitted__()), Int(pipe.transformer.fitted))
     var fused = Pipeline(Fused(), Recorder())
-    fused.fit(5, 7)
+    _ = fused.fit(5, 7)
     assert_equal(fused.transformer.calls, 1)
     assert_equal(fused.estimator.seen, 112)
     assert_equal(fused.predict(1), 145)
     print("fused", fused.transformer.calls, fused.estimator.seen, fused.predict(1))
     var unsupervised = Pipeline(Unsupervised(), Recorder())
-    unsupervised.fit(5, 7)
+    _ = unsupervised.fit(5, 7)
     assert_equal(unsupervised.transformer.seen_y, 7)
     assert_equal(unsupervised.estimator.seen, 10)
     print("unsupervised", unsupervised.transformer.seen_y, unsupervised.estimator.seen)
     var nested = Pipeline(Shift(2), Pipeline(Shift(4), Recorder()))
-    nested.fit(5, 7)
+    _ = nested.fit(5, 7)
     assert_equal(nested.estimator.estimator.seen, 11)
     assert_equal(nested.predict(1), 32)
     print("nested", nested.estimator.estimator.seen, nested.predict(1))
@@ -188,6 +247,6 @@ def main() raises:
         _ = Pipeline(Shift(), Recorder(), transformer_name="memory")
     params.transformer_name = params.estimator_name
     with assert_raises():
-        independent.set_params(params)
+        _ = independent.set_params(params)
     assert_equal(independent.transformer_name, "shift")
     print("Sequential execution, clone, refit, dispatch and failure contracts passed")

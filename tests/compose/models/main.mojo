@@ -49,7 +49,7 @@ def run[dtype: DType](jobs: Int) raises:
     var transformed = columns.fit_transform(X, y.copy())
     assert_false(feature.__sklearn_is_fitted__())
     assert_true(columns.named_transformers_[Function]("root").__sklearn_is_fitted__())
-    model.fit(transformed, y, sample_weight=weights)
+    _ = model.fit(transformed, y, sample_weight=weights)
     assert_false(regressor.__sklearn_is_fitted__())
     var fresh_columns = clone(columns)
     var fresh_model = clone(model)
@@ -66,15 +66,15 @@ def run[dtype: DType](jobs: Int) raises:
     # A failed fit must preserve the last successfully fitted model.
     var empty = zeros[dtype](Shape(0))
     with assert_raises():
-        model.fit(transformed, empty)
+        _ = model.fit(transformed, empty)
     result.add("after_failure", model.predict(transformed))
     # Normal fits replace learned state; cloned configuration reproduces a refit.
     for i in range(y.size):
         y.unsafe_set(i, y.unsafe_get(i) * 4)
-    columns.fit(X, y.copy())
-    model.fit(columns.transform(X), y)
-    fresh_columns.fit(X, y.copy())
-    fresh_model.fit(fresh_columns.transform(X), y)
+    _ = columns.fit(X, y.copy())
+    _ = model.fit(columns.transform(X), y)
+    _ = fresh_columns.fit(X, y.copy())
+    _ = fresh_model.fit(fresh_columns.transform(X), y)
     result.add("refit", model.predict(columns.transform(X)))
     result.add("clone_refit", fresh_model.predict(fresh_columns.transform(X)))
     result.emit()

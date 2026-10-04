@@ -125,14 +125,32 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self._estimator.copy())
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self._estimator = params._estimator.copy()
+        return self
 
-    def set_params(mut self, *, var estimator: Self.E) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        var estimator: Self.E,
+    ) raises -> ref[self] Self:
         self._estimator = ArcPointer(estimator^)
+        return self
 
-    def set_params(mut self) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return self.copy()
@@ -143,53 +161,99 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     def __sklearn_is_fitted__(self) -> Bool:
         return self._estimator[].__sklearn_is_fitted__()
 
-    def fit(
-        mut self, X: Self.Input, y: Self.Target
-    ) raises where conforms_to(Self.E, SupervisedEstimator):
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self where conforms_to(Self.E, SupervisedEstimator):
         check_is_fitted(self)
-
-    def fit(
-        mut self, X: Self.Input, y: Optional[Self.Target] = None
-    ) raises where conforms_to(Self.E, UnsupervisedEstimator):
-        check_is_fitted(self)
-
-    def fit(
-        mut self,
-        X: Self.Input,
-        y: Self.Target,
-        *,
-        sample_weight: Self.SampleWeight,
-    ) raises where conforms_to(Self.E, WeightedSupervisedEstimator):
-        check_is_fitted(self)
+        return self
 
     def fit[
-        Features: AnyType, Targets: AnyType
-    ](mut self, X: Features, y: Targets) raises:
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self where conforms_to(Self.E, UnsupervisedEstimator):
+        check_is_fitted(self)
+        return self
+
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
+        check_is_fitted(self)
+        return self
+
+    def fit[
+        Features: AnyType,
+        Targets: AnyType,
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Features,
+        ref[y_origin] y: Targets,
+    ) raises -> ref[self] Self:
         """The reference ignores even inputs outside the estimator's input type.
         """
         check_is_fitted(self)
+        return self
 
-    def partial_fit(
-        mut self, X: Self.Input, y: Self.Target
-    ) raises where conforms_to(Self.E, IncrementalRegressor):
-        self._estimator[].partial_fit(X, rebind[Self.E.Target](y))
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self where conforms_to(Self.E, IncrementalRegressor):
+        _ = self._estimator[].partial_fit(X, rebind[Self.E.Target](y))
+        return self
 
-    def partial_fit(
-        mut self,
-        X: Self.Input,
-        y: Self.Target,
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
-    ) raises where conforms_to(Self.E, IncrementalClassifier):
-        self._estimator[].partial_fit(
+    ) raises -> ref[self] Self where conforms_to(Self.E, IncrementalClassifier):
+        _ = self._estimator[].partial_fit(
             X,
             rebind[Self.E.Target](y),
             rebind[Optional[Self.E.Classes]](classes),
         )
+        return self
 
-    def partial_fit(
-        mut self, X: Self.Input, y: Optional[Self.Target] = None
-    ) raises where conforms_to(Self.E, IncrementalTransformer):
-        self._estimator[].partial_fit(X, rebind[Optional[Self.E.Target]](y))
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self where conforms_to(Self.E, IncrementalTransformer):
+        _ = self._estimator[].partial_fit(X, rebind[Optional[Self.E.Target]](y))
+        return self
 
     def predict(
         self, X: Self.Input

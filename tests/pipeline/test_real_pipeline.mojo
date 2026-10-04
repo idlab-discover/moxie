@@ -18,8 +18,14 @@ struct CopyStep[dtype: DType](TransformerMixin, FitTransformer):
         self.target_rows = 0
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
@@ -45,7 +51,7 @@ def check[dtype: DType]() raises:
                         transformer_name="copy", estimator_name="dummy")
     with assert_raises():
         _ = pipe.predict(X)
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     assert_true(pipe.__sklearn_is_fitted__())
     assert_equal(pipe.transformer.target_rows, 4)
     var prediction = pipe.predict(X)
@@ -60,16 +66,16 @@ def check[dtype: DType]() raises:
     assert_false(other.transformer.fitted)
     var params = other.get_params()
     params.estimator.strategy = "median"
-    other.set_params(params)
+    _ = other.set_params(params)
     y.itemset(0, 100)
-    other.fit(X, y)
+    _ = other.fit(X, y)
     var median = other.predict(X)
     assert_equal(Float64(median.item(0)), 5.0)
     assert_equal(Float64(pipe.predict(X).item(0)), 3.0)
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     assert_equal(Float64(pipe.predict(X).item(0)), 28.0)
     var nested = Pipeline(CopyStep[dtype](), pipe^)
-    nested.fit(X, y)
+    _ = nested.fit(X, y)
     assert_equal(Float64(nested.predict(X).item(0)), 28.0)
     print("real", Int(dtype == DType.float64), Float64(prediction.item(0)), Float64(median.item(0)), Float64(nested.predict(X).item(0)))
 

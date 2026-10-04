@@ -5,4 +5,4 @@ import numojo as nm
 def main() raises:
     var model = DummyClassifier()
     var X = nm.zeros[DType.float64](Shape(2, 1))
-    model.partial_fit(X, X)
+    _ = model.partial_fit(X, X)

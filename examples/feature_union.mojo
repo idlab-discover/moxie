@@ -22,7 +22,7 @@ def main() raises:
         print(names[i], combined.item(0, i))
     # Replace DummyRegressor with any compatible supervised predictor.
     var model = Pipeline(features^, DummyRegressor())
-    model.fit(X, y)
+    _ = model.fit(X, y)
     print("Prediction:", model.predict(X).item(0))
     var fresh = clone(model)
     print("Clone fitted:", fresh.__sklearn_is_fitted__())

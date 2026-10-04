@@ -24,8 +24,8 @@ def test(run, executable):
     for name, diagnostic in [
         ('nested_params', "no matching method in call to 'set_params'"),
         ('inner_params', "no matching method in call to 'set_params'"),
-        ('mutation', 'invalid use of mutating method'),
-        ('param_mutation', 'invalid use of mutating method'),
+        ('mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
+        ('param_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
         ('fit_predict', "has no attribute 'fit_predict'"),
         ('fit_transform', "has no attribute 'fit_transform'"),
         ('proba', "invalid call to 'predict_proba': violated constraint"),

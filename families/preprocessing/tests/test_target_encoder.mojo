@@ -13,7 +13,7 @@ from moxie.preprocessing._target_encoder import kfold_test_folds, stratified_kfo
 
 def generic_fit[P: TargetPreprocessor](mut model: P, X: P.Input, y: P.Target) raises -> P.Transformed:
     # Compile-time trait conformance plus generic dispatch.
-    model.fit(X, y)
+    _ = model.fit(X, y)
     return model.transform(X)
 
 
@@ -99,9 +99,9 @@ def test_lifecycle() raises:
     var names = model.get_feature_names_out()
     assert_equal(names[1], "x1")
     var named: List[String] = ["color", "size"]
-    model.fit_named(X, named, y)
+    _ = model.fit_named(X, named, y)
     assert_equal(model.get_feature_names_out()[0], "color")
-    model.fit(X, y)
+    _ = model.fit(X, y)
     assert_false(Bool(model.feature_names_in_))
     var copy = clone(model)
     assert_false(copy.__sklearn_is_fitted__())
@@ -119,29 +119,29 @@ def test_params() raises:
     assert_equal(params.smooth.value(), 2.0)
     assert_equal(params.cv, 3)
     assert_false(params.shuffle.value())
-    model.set_params(smooth=Optional[Float64](None), cv=4, random_state=Optional[Int](7), shuffle=Optional[Bool](True))
+    _ = model.set_params(smooth=Optional[Float64](None), cv=4, random_state=Optional[Int](7), shuffle=Optional[Bool](True))
     assert_false(Bool(model.smooth))
     assert_equal(model.cv, 4)
     assert_equal(model.random_state.value(), 7)
     var record = model.get_params()
     record.target_type = "binary"
-    model.set_params(record)
+    _ = model.set_params(record)
     assert_equal(model.target_type, "binary")
     # Invalid parameters raise at fit, as sklearn validates there.
     var bad = TargetEncoder(target_type="ordinal")
     with assert_raises(contains="'target_type' parameter"):
-        bad.fit(X, y)
+        _ = bad.fit(X, y)
     var negative = TargetEncoder(smooth=Optional[Float64](-1.0))
     with assert_raises(contains="'smooth' parameter"):
-        negative.fit(X, y)
+        _ = negative.fit(X, y)
     var one = TargetEncoder(cv=1)
     with assert_raises(contains="'cv' parameter"):
         _ = one.fit_transform(X, y)
     var seed = TargetEncoder(random_state=-3)
     with assert_raises(contains="'random_state' parameter"):
-        seed.fit(X, y)
+        _ = seed.fit(X, y)
     var fixed = TargetEncoder(shuffle=False, random_state=0)
-    fixed.fit(X, y)  # only the cross-fitting splitter rejects this pair
+    _ = fixed.fit(X, y)  # only the cross-fitting splitter rejects this pair
     with assert_raises(contains="no effect since shuffle is False"):
         _ = fixed.fit_transform(X, y)
     var many = TargetEncoder(cv=11, random_state=0)
@@ -150,11 +150,11 @@ def test_params() raises:
     var short = floats([1.0, 2.0])
     var default = TargetEncoder()
     with assert_raises(contains="inconsistent numbers of samples: [10, 2]"):
-        default.fit(X, short)
+        _ = default.fit(X, short)
     var with_nan = target()
     with_nan.unsafe_set(4, Float64("nan"))
     with assert_raises(contains="Input y contains NaN"):
-        default.fit(X, with_nan)
+        _ = default.fit(X, with_nan)
 
 
 def test_targets() raises:
@@ -179,11 +179,11 @@ def test_targets() raises:
     assert_equal(names[5], "x1_2")
     var two = TargetEncoder[StringKind, NumericLabels[DType.int64]](target_type="multiclass")
     with assert_raises(contains="exactly 2 classes"):
-        two.fit(X, ints([0, 1, 0, 1, 0, 1, 0, 1, 0, 1]))
+        _ = two.fit(X, ints([0, 1, 0, 1, 0, 1, 0, 1, 0, 1]))
     # Float class labels format as Python floats.
     var float_classes = floats([2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 2.0, 0.0, 1.0, 1.0])
     var named = TargetEncoder[StringKind, NumericLabels[DType.float64]](target_type="multiclass")
-    named.fit(X, float_classes)
+    _ = named.fit(X, float_classes)
     assert_equal(named.get_feature_names_out()[1], "x0_1.0")
     # Float32 continuous targets average in Float32, like NumPy.
     var y32 = zeros[DType.float32](Shape(10))
@@ -197,7 +197,7 @@ def test_targets() raises:
     # String targets cannot be continuous.
     var strings = TargetEncoder[StringKind, StringLabels](target_type="continuous")
     with assert_raises(contains="TypeError"):
-        strings.fit(X, labels)
+        _ = strings.fit(X, labels)
     # Numeric features and explicit categories (an unseen value is unknown).
     var values = zeros[DType.int64](Shape(10))
     for i in range(10):

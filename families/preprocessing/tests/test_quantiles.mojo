@@ -43,7 +43,7 @@ def test_quantile_lifecycle() raises:
     with assert_raises(contains="NotFittedError"):
         _ = model.get_feature_names_out()
     var X = data(30, 2)
-    model.fit(X)
+    _ = model.fit(X)
     assert_equal(model.n_quantiles_, 10)
     assert_equal(model.quantiles_.shape[0], 10)
     assert_equal(model.references_.item(9), 1.0)
@@ -59,8 +59,8 @@ def test_quantile_lifecycle() raises:
     with assert_raises(contains="X has 3 features, but QuantileTransformer is expecting 2"):
         _ = model.transform(data(4, 3))
     # Repeat fit replaces learned state (feature count and quantile count).
-    model.set_params(n_quantiles=1000)
-    model.fit(data(7, 3))
+    _ = model.set_params(n_quantiles=1000)
+    _ = model.fit(data(7, 3))
     assert_equal(model.n_features_in_, 3)
     assert_equal(model.n_quantiles_, 7)
     var fresh = clone(model)
@@ -68,14 +68,14 @@ def test_quantile_lifecycle() raises:
     assert_equal(fresh.n_quantiles, 1000)
     assert_equal(fresh.random_state.value(), 3)
     # Inner None clears an optional parameter; outer None leaves it.
-    model.set_params(subsample=Optional[Optional[Int]](Optional[Int](None)))
+    _ = model.set_params(subsample=Optional[Optional[Int]](Optional[Int](None)))
     assert_false(Bool(model.subsample))
-    model.set_params(n_quantiles=5)
+    _ = model.set_params(n_quantiles=5)
     assert_false(Bool(model.subsample))
     var names: List[String] = ["a", "b", "c"]
-    model.fit_named(data(7, 3), names)
+    _ = model.fit_named(data(7, 3), names)
     assert_equal(model.get_feature_names_out()[2], "c")
-    model.fit(data(7, 3))
+    _ = model.fit(data(7, 3))
     assert_equal(model.get_feature_names_out()[0], "x0")
     with assert_raises(contains="only 'default'"):
         model.set_output(transform=String("pandas"))
@@ -85,16 +85,16 @@ def test_quantile_params_and_errors() raises:
     var X = data(12, 2)
     var bad = QuantileTransformer(n_quantiles=0)
     with assert_raises(contains="'n_quantiles' parameter"):
-        bad.fit(X)
+        _ = bad.fit(X)
     bad = QuantileTransformer(output_distribution="gamma")
     with assert_raises(contains="'output_distribution' parameter"):
-        bad.fit(X)
+        _ = bad.fit(X)
     bad = QuantileTransformer(subsample=10)
     with assert_raises(contains="cannot be greater than the number of samples used"):
-        bad.fit(X)
+        _ = bad.fit(X)
     bad = QuantileTransformer(random_state=-1)
     with assert_raises(contains="'random_state' parameter"):
-        bad.fit(X)
+        _ = bad.fit(X)
     # ignore_implicit_zeros has no effect on dense input (sklearn only warns).
     var a = QuantileTransformer(n_quantiles=5, ignore_implicit_zeros=True)
     var b = QuantileTransformer(n_quantiles=5)
@@ -103,10 +103,10 @@ def test_quantile_params_and_errors() raises:
         _ = quantile_transform(X, axis=2)
     # A failed fit leaves the previous state intact.
     var kept = QuantileTransformer(n_quantiles=4)
-    kept.fit(X)
-    kept.set_params(n_quantiles=0)
+    _ = kept.fit(X)
+    _ = kept.set_params(n_quantiles=0)
     with assert_raises(contains="n_quantiles"):
-        kept.fit(data(5, 3))
+        _ = kept.fit(data(5, 3))
     assert_equal(kept.n_features_in_, 2)
 
 
@@ -114,16 +114,16 @@ def test_quantile_random_state() raises:
     var X = data(200, 2)
     # Integer seeds reseed on every fit.
     var seeded = QuantileTransformer(n_quantiles=20, subsample=50, random_state=11)
-    seeded.fit(X)
+    _ = seeded.fit(X)
     var first = seeded.quantiles_.copy()
-    seeded.fit(X)
+    _ = seeded.fit(X)
     assert_same(first, seeded.quantiles_)
     # A borrowed RandomState draws the same rows as the equal integer seed, then advances.
     var rng = RandomState(11)
     var borrowed = QuantileTransformer(n_quantiles=20, subsample=50)
-    borrowed.fit(X, rng)
+    _ = borrowed.fit(X, rng)
     assert_same(first, borrowed.quantiles_)
-    borrowed.fit(X, rng)
+    _ = borrowed.fit(X, rng)
     var differs = False
     for k in range(first.size):
         if first.unsafe_get(k) != borrowed.quantiles_.unsafe_get(k):
@@ -132,7 +132,7 @@ def test_quantile_random_state() raises:
     # None draws from the process default stream.
     seed_global_random_state(11)
     var default = QuantileTransformer(n_quantiles=20, subsample=50)
-    default.fit(X)
+    _ = default.fit(X)
     assert_same(first, default.quantiles_)
 
 
@@ -147,7 +147,7 @@ def test_quantile_dtypes_and_edges() raises:
     assert_equal(out.item(0, 0), 0)
     assert_equal(out.item(5, 0), 1)
     var single = QuantileTransformer(n_quantiles=3)
-    single.fit(data(1, 2))
+    _ = single.fit(data(1, 2))
     assert_equal(single.n_quantiles_, 1)
     var t = quantile_transform(data(5, 4), axis=1, n_quantiles=4)
     assert_equal(t.shape[0], 5)
@@ -164,7 +164,7 @@ def test_power_lifecycle() raises:
     var direct = model.fit_transform(X)
     assert_equal(model.lambdas_.shape[0], 2)
     var fitted = PowerTransformer()
-    fitted.fit(X)
+    _ = fitted.fit(X)
     for j in range(2):
         assert_equal(fitted.lambdas_.item(j), model.lambdas_.item(j))
     var t = fitted.transform(X)
@@ -180,17 +180,17 @@ def test_power_lifecycle() raises:
     assert_same(inplace, fitted.inverse_transform(fitted.transform(X)))
     with assert_raises(contains="X has 3 features, but PowerTransformer is expecting 2"):
         _ = fitted.transform(data(4, 3))
-    fitted.set_params(method="box-cox", standardize=False)
-    fitted.fit(data(9, 3))
+    _ = fitted.set_params(method="box-cox", standardize=False)
+    _ = fitted.fit(data(9, 3))
     assert_equal(fitted.n_features_in_, 3)
     with assert_raises(contains="strictly positive"):
         _ = fitted.transform(data(4, 3, -10.0))
     var copy = clone(fitted)
     assert_equal(copy.method, "box-cox")
     assert_false(copy.__sklearn_is_fitted__())
-    fitted.set_params(method="log")
+    _ = fitted.set_params(method="log")
     with assert_raises(contains="'method' parameter"):
-        fitted.fit(data(4, 3))
+        _ = fitted.fit(data(4, 3))
 
 
 def test_power_edges() raises:
@@ -207,17 +207,17 @@ def test_power_edges() raises:
     for i in range(4):
         nan_col.unsafe_set(i * 2, Float64("nan"))
     with assert_raises(contains="not enough values to unpack"):
-        model.fit(nan_col)
+        _ = model.fit(nan_col)
     var box = PowerTransformer("box-cox")
     with assert_raises(contains="Column must not be all nan."):
-        box.fit(nan_col)
+        _ = box.fit(nan_col)
     var X32 = zeros[DType.float32](Shape(5, 1))
     for i in range(5):
         X32.unsafe_set(i, Float32(i + 1) * Float32(i + 1))
     var f = power_transform(X32, "box-cox")
     assert_equal(f.shape[0], 5)
     var p32 = PowerTransformer[DType.float32]("box-cox")
-    p32.fit(X32)
+    _ = p32.fit(X32)
     var back = p32.inverse_transform(p32.transform(X32))
     for i in range(5):
         assert_true(abs(Float64(back.item(i, 0)) - Float64(X32.item(i, 0))) < 1e-3)

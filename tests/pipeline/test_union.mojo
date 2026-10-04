@@ -23,7 +23,7 @@ def check[dtype: DType]() raises:
     assert_false(union.__sklearn_is_fitted__())
     with assert_raises():
         _ = union.transform(X)
-    union.fit(X, y.copy())
+    _ = union.fit(X, y.copy())
     assert_equal(union.transformer_list.first.estimator.fit_calls, 1)
     assert_equal(union.transformer_list.second.estimator.fit_calls, 1)
     assert_equal(union.transformer_list.second.estimator.fused_calls, 0)
@@ -45,14 +45,14 @@ def check[dtype: DType]() raises:
     var params = copied.get_params()
     params.transformer_weights.value()["double"] = 4
     params.transformer_list.first.estimator.factor = 5
-    copied.set_params(params)
+    _ = copied.set_params(params)
     params.transformer_weights.value()["double"] = 9
     assert_equal(copied.transformer_weights.value()["double"], 4.0)
     assert_equal(union.transformer_weights.value()["double"], 0.5)
     assert_equal(union.transformer_list.first.estimator.factor, 2.0)
     params.transformer_list.second.name = "double"
     with assert_raises():
-        copied.set_params(params)
+        _ = copied.set_params(params)
     assert_equal(copied.transformer_list.second.name, "fused")
     var names = union.get_feature_names_out()
     assert_equal(names[0], "double__x0")
@@ -69,7 +69,7 @@ def check[dtype: DType]() raises:
     assert_equal(len(dropped.get_feature_names_out()), 0)
     var sentinel_params = dropped.get_params()
     sentinel_params.transformer_list.first.mode = StepMode.passthrough
-    dropped.set_params(sentinel_params)
+    _ = dropped.set_params(sentinel_params)
     var passed = dropped.fit_transform(X)
     assert_equal(Float64(passed.item(1, 1)), 4.0)
     passed.itemset(0, 99)
@@ -83,7 +83,7 @@ def check[dtype: DType]() raises:
     assert_equal(union.n_features_in_(), 2)
     # Feature count delegates to the first branch, including external child refits.
     var three_cols = zeros[dtype](Shape(2, 3))
-    union.transformer_list.first.estimator.fit(three_cols)
+    _ = union.transformer_list.first.estimator.fit(three_cols)
     assert_equal(union.n_features_in_(), 3)
     with assert_raises():
         _ = FeatureUnion(UnionPair(UnionSentinel[dtype]("x"), UnionSentinel[dtype]("x")))
@@ -108,14 +108,14 @@ def check[dtype: DType]() raises:
         _ = bad.fit_transform(X)
     bad.transformer_list.first.estimator.kind = 4
     with assert_raises():
-        bad.fit(X)
+        _ = bad.fit(X)
     assert_false(bad.__sklearn_is_fitted__())
     bad.transformer_list.first.estimator.kind = 0
-    bad.fit(X)
+    _ = bad.fit(X)
     assert_true(bad.__sklearn_is_fitted__())
     bad.transformer_list.second.estimator.kind = 4
     with assert_raises():
-        bad.fit(X)
+        _ = bad.fit(X)
     assert_true(bad.transformer_list.first.estimator.fitted)
     assert_false(bad.transformer_list.second.estimator.fitted)
     # A recursive branch tree is a flat ordered list, including drop positions.
@@ -155,19 +155,19 @@ def check[dtype: DType]() raises:
     # A union is a real prefix for the implemented Pipeline and DummyRegressor.
     X.itemset(0, 1)
     var model = Pipeline(views^, DummyRegressor[dtype]())
-    model.fit(X, y)
+    _ = model.fit(X, y)
     var prediction = model.predict(X)
     assert_equal(prediction.shape[0], 2)
     assert_equal(Float64(prediction.item(0)), 3.0)
     assert_false(clone(model).__sklearn_is_fitted__())
     var supervised = FeatureUnion(union_step[dtype]("supervised", SupervisedOnly[dtype]()))
     with assert_raises():
-        supervised.fit(X)
-    supervised.fit(X, y.copy())
+        _ = supervised.fit(X)
+    _ = supervised.fit(X, y.copy())
     assert_equal(Float64(supervised.transform(X).item(0)), 1.0)
     var fused_only = FeatureUnion(union_step[dtype]("fused", FusedOnly[dtype]()))
     with assert_raises():
-        fused_only.fit(X)
+        _ = fused_only.fit(X)
     assert_equal(Float64(fused_only.fit_transform(X).item(0)), 1.0)
     var no_names = FeatureUnion(union_step[dtype]("no_names", CopyStep[dtype]()))
     with assert_raises():
@@ -179,7 +179,7 @@ def check[dtype: DType]() raises:
     assert_equal(Float64(nested.fit_transform(X).item(0)), 1.0)
     assert_equal(nested.get_feature_names_out()[0], "nested__raw__x0")
     var silent = FeatureUnion(UnionSentinel[dtype]("raw"), n_jobs=1, verbose_feature_names_out=False)
-    silent.fit(X)
+    _ = silent.fit(X)
     assert_equal(silent.get_feature_names_out()[0], "x0")
     var all_dropped = FeatureUnion(UnionSentinel[dtype]("drop", StepMode.drop), verbose_feature_names_out=False)
     with assert_raises():

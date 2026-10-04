@@ -43,8 +43,15 @@ struct Scale[d: DType = F64](Copyable, FeatureNamesOut, TransformerMixin, Unsupe
     def get_params(self, deep: Bool = True) raises -> FactorParams:
         return FactorParams(self.factor)
 
-    def set_params(mut self, params: FactorParams) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: FactorParams,
+    ) raises -> ref[self] Self:
         self.factor = params.factor
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.factor)
@@ -52,8 +59,16 @@ struct Scale[d: DType = F64](Copyable, FeatureNamesOut, TransformerMixin, Unsupe
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fits_ > 0
 
-    def fit(mut self, X: NDArray[Self.d], y: Optional[NDArray[Self.d]] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[Self.d],
+        y: Optional[NDArray[Self.d]] = None,
+    ) raises -> ref[self] Self:
         self.fits_ += 1
+        return self
 
     def transform(self, X: NDArray[Self.d]) raises -> NDArray[Self.d]:
         var out = X.copy()
@@ -89,8 +104,14 @@ struct Center(Copyable, FitTransformer, TransformerMixin, UnsupervisedEstimator)
     def get_params(self, deep: Bool = True) raises -> CenterParams:
         return CenterParams()
 
-    def set_params(mut self, params: CenterParams) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: CenterParams,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()
@@ -98,7 +119,14 @@ struct Center(Copyable, FitTransformer, TransformerMixin, UnsupervisedEstimator)
     def __sklearn_is_fitted__(self) -> Bool:
         return len(self.means_) > 0
 
-    def fit(mut self, X: NDArray[F64], y: Optional[NDArray[F64]] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[F64],
+        y: Optional[NDArray[F64]] = None,
+    ) raises -> ref[self] Self:
         if X.ndim != 2:
             raise Error("ValueError: Expected 2D array, got 1D array instead: array=[...]")
         self.means_ = List[Float64]()
@@ -108,9 +136,10 @@ struct Center(Copyable, FitTransformer, TransformerMixin, UnsupervisedEstimator)
                 total += X.unsafe_get(i * X.shape[1] + j)
             self.means_.append(total / Float64(X.shape[0]))
         self.saw_y_ = Bool(y)
+        return self
 
     def fit_transform(mut self, X: NDArray[F64], y: Optional[NDArray[F64]] = None) raises -> NDArray[F64]:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.fit_transform_calls_ += 1
         return self.transform(X)
 
@@ -141,8 +170,15 @@ struct Expand(Copyable, FeatureNamesOut, TransformerMixin, UnsupervisedEstimator
     def get_params(self, deep: Bool = True) raises -> FactorParams:
         return FactorParams(self.factor)
 
-    def set_params(mut self, params: FactorParams) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: FactorParams,
+    ) raises -> ref[self] Self:
         self.factor = params.factor
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.factor)
@@ -150,8 +186,16 @@ struct Expand(Copyable, FeatureNamesOut, TransformerMixin, UnsupervisedEstimator
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fitted_
 
-    def fit(mut self, X: NDArray[F64], y: Optional[NDArray[F64]] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[F64],
+        y: Optional[NDArray[F64]] = None,
+    ) raises -> ref[self] Self:
         self.fitted_ = True
+        return self
 
     def transform(self, X: NDArray[F64]) raises -> NDArray[F64]:
         var n = X.shape[0]
@@ -191,8 +235,14 @@ struct Anonymous(Copyable, TransformerMixin, UnsupervisedEstimator):
     def get_params(self, deep: Bool = True) raises -> CenterParams:
         return CenterParams()
 
-    def set_params(mut self, params: CenterParams) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: CenterParams,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()
@@ -200,8 +250,16 @@ struct Anonymous(Copyable, TransformerMixin, UnsupervisedEstimator):
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fitted_
 
-    def fit(mut self, X: NDArray[F64], y: Optional[NDArray[F64]] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[F64],
+        y: Optional[NDArray[F64]] = None,
+    ) raises -> ref[self] Self:
         self.fitted_ = True
+        return self
 
     def transform(self, X: NDArray[F64]) raises -> NDArray[F64]:
         return X.copy()
@@ -359,7 +417,7 @@ def test_y_and_fit_transform_dispatch() raises:
     var fitted = ct.named_transformers_[Center]("c")
     assert_equal(fitted.fit_transform_calls_, 1)
     assert_true(fitted.saw_y_)
-    ct.fit(X)
+    _ = ct.fit(X)
     assert_false(ct.named_transformers_[Center]("c").saw_y_)
 
 
@@ -429,15 +487,15 @@ def test_feature_names() raises:
     assert_equal(ct.get_feature_names_out(given)[4], "remainder__r")
     with assert_raises(contains="ValueError: input_features should have length equal to number of features (5), got 2"):
         _ = ct.get_feature_names_out(["p", "q"])
-    ct.set_params(verbose_feature_names_out=False)
+    _ = ct.set_params(verbose_feature_names_out=False)
     assert_equal(ct.get_feature_names_out()[2], "x3")
-    ct.set_params(verbose_feature_names_out="{feature_name}@{transformer_name}")
+    _ = ct.set_params(verbose_feature_names_out="{feature_name}@{transformer_name}")
     assert_equal(ct.get_feature_names_out()[0], "x0@a")
 
     def upper(transformer: String, feature: String) raises -> String:
         return transformer.upper() + ":" + feature
 
-    ct.set_params(verbose_feature_names_out=upper)
+    _ = ct.set_params(verbose_feature_names_out=upper)
     assert_equal(ct.get_feature_names_out()[3], "SQ:x3^2")
     var clash = ColumnTransformer(ColumnEntry("a", Scale(), [0, 1]), ColumnEntry("b", "passthrough", [1, 0]),
                                   verbose_feature_names_out=False)
@@ -480,7 +538,7 @@ def test_params_clone_and_refit() raises:
     assert_false(copy.__sklearn_is_fitted__())
     copy.set_transformer("b", Scale(4.0))
     copy.set_transformer_params[Scale[]]("a", FactorParams(-1.0))
-    copy.set_params(remainder_params=FactorParams(0.5))
+    _ = copy.set_params(remainder_params=FactorParams(0.5))
     var out = copy.fit_transform(X)
     assert_columns(out, [0.0, -1.0, 1.0, 4.0, 2.0, 0.5, 3.0, 0.5, 4.0, 0.5])
     # The original is unaffected and still fitted.
@@ -497,13 +555,13 @@ def test_params_clone_and_refit() raises:
     # A failed refit keeps the previous learned state.
     var broken = ct.get_params()
     broken.remainder = "keep"
-    ct.set_params(broken)
+    _ = ct.set_params(broken)
     with assert_raises(contains="'remainder' parameter"):
         _ = ct.fit_transform(X)
     assert_true(ct.__sklearn_is_fitted__())
     assert_equal(ct.transform(X).shape[1], 4)
-    ct.set_params(remainder=Scale(1.0))
-    ct.set_params(n_jobs=4, verbose=False)
+    _ = ct.set_params(remainder=Scale(1.0))
+    _ = ct.set_params(n_jobs=4, verbose=False)
     assert_columns(ct.fit_transform(X), [0.0, 2.0, 2.0, 1.0, 3.0, 1.0, 4.0, 1.0])
     with assert_raises(contains="pandas"):
         ct.set_output(transform="pandas")
@@ -535,19 +593,19 @@ def test_parallel_components() raises:
     for i in range(actual.size):
         assert_equal(Float64(transformed.unsafe_get(i)), Float64(expected.unsafe_get(i)))
     assert_equal(concurrent.output_indices_.value()["b"].start, serial.output_indices_.value()["b"].start)
-    concurrent.set_params(n_jobs=-1)
+    _ = concurrent.set_params(n_jobs=-1)
     _ = concurrent.fit_transform(X)
-    concurrent.set_params(n_jobs=0)
+    _ = concurrent.set_params(n_jobs=0)
     with assert_raises():
         _ = concurrent.transform(X)
-    concurrent.set_params(n_jobs=2)
+    _ = concurrent.set_params(n_jobs=2)
     _ = concurrent.transform(X)
     # A worker exception must leave the previous fitted estimators usable.
     var failing = ColumnTransformer(ColumnEntry("a", Scale(2), [0]), ColumnEntry("b", Center(), [1]), n_jobs=2)
     var before = failing.fit_transform(X)
     failing.transformers.tail.head.columns = Columns[F64](1)
     with assert_raises():
-        failing.fit(X)
+        _ = failing.fit(X)
     var after = failing.transform(X)
     for i in range(before.size):
         assert_equal(Float64(before.unsafe_get(i)), Float64(after.unsafe_get(i)))

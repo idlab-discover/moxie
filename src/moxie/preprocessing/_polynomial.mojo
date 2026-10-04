@@ -349,17 +349,30 @@ struct PolynomialFeatures[dtype: DType = DType.float64](Preprocessor):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.degree, self.degree_range, self.interaction_only, self.include_bias, self.order)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.degree = params.degree
         self.degree_range = params.degree_range
         self.interaction_only = params.interaction_only
         self.include_bias = params.include_bias
         self.order = params.order
+        return self
 
-    def set_params(
-        mut self, *, degree: Optional[Int] = None, interaction_only: Optional[Bool] = None,
-        include_bias: Optional[Bool] = None, order: Optional[String] = None,
-    ) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        degree: Optional[Int] = None,
+        interaction_only: Optional[Bool] = None,
+        include_bias: Optional[Bool] = None,
+        order: Optional[String] = None,
+    ) raises -> ref[self] Self:
         """Keyword updates; an integer `degree` replaces a tuple degree."""
         if degree:
             self.degree = degree.value()
@@ -370,15 +383,23 @@ struct PolynomialFeatures[dtype: DType = DType.float64](Preprocessor):
             self.include_bias = include_bias.value()
         if order:
             self.order = order.value()
+        return self
 
-    def set_params(mut self, *, degree: Tuple[Int, Int]) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        degree: Tuple[Int, Int],
+    ) raises -> ref[self] Self:
         """sklearn `set_params(degree=(min_degree, max_degree))`."""
         self.degree = degree[1]
         self.degree_range = degree
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         var result = Self()
-        result.set_params(self.get_params())
+        _ = result.set_params(self.get_params())
         return result^
 
     def __sklearn_is_fitted__(self) -> Bool:
@@ -429,14 +450,31 @@ struct PolynomialFeatures[dtype: DType = DType.float64](Preprocessor):
         self.feature_names_in_ = None
         self._fitted = True
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._fit(X)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         _check_shape(X, 1, "PolynomialFeatures")
         check_names_length(feature_names, X.shape[1])
         self._fit(X)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
         self._fit(X)
@@ -925,7 +963,13 @@ struct SplineTransformer[dtype: DType = DType.float64](Preprocessor):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.n_knots, self.degree, self.knots, self.knot_positions.copy(), self.extrapolation, self.include_bias, self.order, self.handle_missing, self.sparse_output)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.n_knots = params.n_knots
         self.degree = params.degree
         self.knots = params.knots
@@ -935,13 +979,22 @@ struct SplineTransformer[dtype: DType = DType.float64](Preprocessor):
         self.order = params.order
         self.handle_missing = params.handle_missing
         self.sparse_output = params.sparse_output
+        return self
 
-    def set_params(
-        mut self, *, n_knots: Optional[Int] = None, degree: Optional[Int] = None,
-        knots: Optional[String] = None, extrapolation: Optional[String] = None,
-        include_bias: Optional[Bool] = None, order: Optional[String] = None,
-        handle_missing: Optional[String] = None, sparse_output: Optional[Bool] = None,
-    ) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        n_knots: Optional[Int] = None,
+        degree: Optional[Int] = None,
+        knots: Optional[String] = None,
+        extrapolation: Optional[String] = None,
+        include_bias: Optional[Bool] = None,
+        order: Optional[String] = None,
+        handle_missing: Optional[String] = None,
+        sparse_output: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         """Keyword updates; a string `knots` replaces explicit knot positions."""
         if n_knots:
             self.n_knots = n_knots.value()
@@ -960,14 +1013,22 @@ struct SplineTransformer[dtype: DType = DType.float64](Preprocessor):
             self.handle_missing = handle_missing.value()
         if sparse_output:
             self.sparse_output = sparse_output.value()
+        return self
 
-    def set_params(mut self, *, knots: NDArray[DType.float64]) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        knots: NDArray[DType.float64],
+    ) raises -> ref[self] Self:
         """sklearn `set_params(knots=array)`."""
         self.knot_positions = knots.copy()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         var result = Self()
-        result.set_params(self.get_params())
+        _ = result.set_params(self.get_params())
         return result^
 
     def __sklearn_is_fitted__(self) -> Bool:
@@ -1154,37 +1215,84 @@ struct SplineTransformer[dtype: DType = DType.float64](Preprocessor):
         self._validate_params()
         self._check_X(X, 2, self.handle_missing, True)
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._start(X)
         self._fit(X, None)
+        return self
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target], sample_weight: NDArray[Self.dtype]) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target],
+        ref[sample_weight_origin] sample_weight: NDArray[Self.dtype],
+    ) raises -> ref[self] Self:
         self._start(X)
         var weights = self._weights(X, sample_weight)
         self._fit(X, weights^)
+        return self
 
-    def fit(mut self, X: Self.Input, *, sample_weight: NDArray[Self.dtype]) raises:
-        self.fit(X, None, sample_weight)
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        *,
+        ref[sample_weight_origin] sample_weight: NDArray[Self.dtype],
+    ) raises -> ref[self] Self:
+        _ = self.fit(X, None, sample_weight)
+        return self
 
-    def fit(mut self, X: Self.Input, *, sample_weight: Float64) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        *,
+        ref[sample_weight_origin] sample_weight: Float64,
+    ) raises -> ref[self] Self:
         """Scalar weight, broadcast as sklearn `_check_sample_weight` does."""
         self._start(X)
         var weights = List[Scalar[Self.dtype]](length=X.shape[0], fill=Scalar[Self.dtype](sample_weight))
         _check_weights_nonzero(weights)
         self._fit(X, weights^)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         _check_shape(X, 2, "SplineTransformer")
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def fit_transform(mut self, X: Self.Input, *, sample_weight: NDArray[Self.dtype]) raises -> Self.Transformed:
-        self.fit(X, None, sample_weight)
+        _ = self.fit(X, None, sample_weight)
         return self.transform(X)
 
     # -- transformation -------------------------------------------------------

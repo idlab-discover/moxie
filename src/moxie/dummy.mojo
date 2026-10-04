@@ -101,26 +101,51 @@ struct DummyRegressor[dtype: DType = DType.float64](BaselineRegressor, WeightedS
         values[Item(0)] = constant
         self = Self(strategy=strategy, constant=Optional[Self.Array](values^), quantile=quantile)
 
-    def set_params(mut self, *, constant: Self.Number, strategy: Optional[String] = None, quantile: Optional[Optional[Float64]] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        constant: Self.Number,
+        strategy: Optional[String] = None,
+        quantile: Optional[Optional[Float64]] = None,
+    ) raises -> ref[self] Self:
         var values = nm.zeros[Self.dtype](Shape(1))
         values[Item(0)] = constant
-        self.set_params(strategy=strategy, constant=Optional[Optional[Self.Array]](Optional[Self.Array](values^)), quantile=quantile)
+        _ = self.set_params(strategy=strategy, constant=Optional[Optional[Self.Array]](Optional[Self.Array](values^)), quantile=quantile)
+        return self
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.strategy, self.constant.copy(), self.quantile)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.strategy = params.strategy
         self.constant = params.constant.copy()
         self.quantile = params.quantile
+        return self
 
-    def set_params(mut self, *, strategy: Optional[String] = None, constant: Optional[Optional[Self.Array]] = None, quantile: Optional[Optional[Float64]] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        strategy: Optional[String] = None,
+        constant: Optional[Optional[Self.Array]] = None,
+        quantile: Optional[Optional[Float64]] = None,
+    ) raises -> ref[self] Self:
         if strategy:
             self.strategy = strategy.value()
         if constant:
             self.constant = constant.value().copy()
         if quantile:
             self.quantile = quantile.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(strategy=self.strategy, constant=self.constant.copy(), quantile=self.quantile)
@@ -128,19 +153,48 @@ struct DummyRegressor[dtype: DType = DType.float64](BaselineRegressor, WeightedS
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self.constant_)
 
-    def fit(mut self, X: Self.Array, y: Self.Array) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Array,
+        ref[y_origin] y: Self.Array,
+    ) raises -> ref[self] Self:
         _ = _target(y)
         _length(X, y.shape[0])
         self._fit(y, None)
         self.n_features_in_ = X.shape[1] if X.ndim > 1 else Optional[Int]()
+        return self
 
-    def fit(mut self, X: Self.Array, y: Self.Array, *, sample_weight: Self.Array) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Array,
+        ref[y_origin] y: Self.Array,
+        *,
+        ref[sample_weight_origin] sample_weight: Self.Array,
+    ) raises -> ref[self] Self:
         _ = _target(y)
         _length(X, y.shape[0])
         self._fit(y, sample_weight.copy())
         self.n_features_in_ = X.shape[1] if X.ndim > 1 else Optional[Int]()
+        return self
 
-    def fit(mut self, X: Optional[Self.Array], y: Self.Array, sample_weight: Optional[Self.Array] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        X: Optional[Self.Array],
+        ref[y_origin] y: Self.Array,
+        sample_weight: Optional[Self.Array] = None,
+    ) raises -> ref[self] Self:
         _ = _target(y)
         if X:
             _length(X.value(), y.shape[0])
@@ -148,6 +202,7 @@ struct DummyRegressor[dtype: DType = DType.float64](BaselineRegressor, WeightedS
         self.n_features_in_ = None
         if X and X.value().ndim > 1:
             self.n_features_in_ = X.value().shape[1]
+        return self
 
     def _fit(mut self, y: Self.Array, weights: Optional[Self.Array]) raises:
         var outputs = _target(y)
@@ -395,25 +450,50 @@ struct DummyClassifier[multioutput: Bool = False, dtype: DType = DType.float64](
         var constants: List[Label] = [constant.copy()]
         self = Self(strategy=strategy, random_state=random_state, constant=Optional[List[Label]](constants^))
 
-    def set_params(mut self, *, constant: Label, strategy: Optional[String] = None, random_state: Optional[Optional[Int]] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        constant: Label,
+        strategy: Optional[String] = None,
+        random_state: Optional[Optional[Int]] = None,
+    ) raises -> ref[self] Self:
         var constants: List[Label] = [constant.copy()]
-        self.set_params(strategy=strategy, random_state=random_state, constant=Optional[Optional[List[Label]]](Optional[List[Label]](constants^)))
+        _ = self.set_params(strategy=strategy, random_state=random_state, constant=Optional[Optional[List[Label]]](Optional[List[Label]](constants^)))
+        return self
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.strategy, self.random_state, self.constant.copy())
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.strategy = params.strategy
         self.random_state = params.random_state
         self.constant = params.constant.copy()
+        return self
 
-    def set_params(mut self, *, strategy: Optional[String] = None, random_state: Optional[Optional[Int]] = None, constant: Optional[Optional[List[Label]]] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        strategy: Optional[String] = None,
+        random_state: Optional[Optional[Int]] = None,
+        constant: Optional[Optional[List[Label]]] = None,
+    ) raises -> ref[self] Self:
         if strategy:
             self.strategy = strategy.value()
         if random_state:
             self.random_state = random_state.value()
         if constant:
             self.constant = constant.value().copy()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(strategy=self.strategy, random_state=self.random_state, constant=self.constant.copy())
@@ -421,23 +501,85 @@ struct DummyClassifier[multioutput: Bool = False, dtype: DType = DType.float64](
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self.n_outputs_)
 
-    def fit(mut self, X: Self.Input, y: Self.Target) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
         self._fit(X, self._target_rows(y), None)
+        return self
 
-    def fit(mut self, X: Self.Input, y: Self.Target, *, sample_weight: Self.SampleWeight) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
         self._fit(X, self._target_rows(y), sample_weight.copy())
+        return self
 
-    def fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight],
+    ) raises -> ref[self] Self:
         self._fit(X, self._target_rows(y), sample_weight)
+        return self
 
-    def fit(mut self, X: Self.Input, y: Self.OtherTarget) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.OtherTarget,
+    ) raises -> ref[self] Self:
         self._fit(X, self._other_rows(y), None)
+        return self
 
-    def fit(mut self, X: Self.Input, y: Self.OtherTarget, *, sample_weight: Self.SampleWeight) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.OtherTarget,
+        *,
+        ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
         self._fit(X, self._other_rows(y), sample_weight.copy())
+        return self
 
-    def fit(mut self, X: Self.Input, y: Self.OtherTarget, sample_weight: Optional[Self.SampleWeight]) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.OtherTarget,
+        sample_weight: Optional[Self.SampleWeight],
+    ) raises -> ref[self] Self:
         self._fit(X, self._other_rows(y), sample_weight)
+        return self
 
     def _target_rows(self, y: Self.Target) -> Self.Rows:
         comptime if Self.multioutput:

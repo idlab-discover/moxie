@@ -33,7 +33,7 @@ def test_polynomial_values() raises:
     assert_equal(powers.unsafe_get(3 * 2), 2)       # x0^2 row
     assert_equal(powers.unsafe_get(4 * 2 + 1), 1)   # x0 x1 row
     var interaction = PolynomialFeatures(interaction_only=True)
-    interaction.fit(X)
+    _ = interaction.fit(X)
     var inter = generic_transform(interaction, X)
     var want_inter: List[Float64] = [1, 0, 1, 0, 1, 2, 3, 6, 1, 4, 5, 20]
     for k in range(12):
@@ -81,51 +81,51 @@ def test_polynomial_lifecycle() raises:
         _ = model.get_feature_names_out()
     with assert_raises(contains="NotFittedError"):
         _ = model.powers_()
-    model.fit(arange[DType.float64](3, 3))
+    _ = model.fit(arange[DType.float64](3, 3))
     assert_equal(model.n_features_in_, 3)
     assert_equal(model.n_output_features_, 7)
     with assert_raises(contains="X has 2 features, but PolynomialFeatures is expecting 3"):
         _ = model.transform(arange[DType.float64](2, 2))
     # Repeat fit replaces the learned state; set_params(degree=int) clears the tuple.
-    model.set_params(degree=2, include_bias=True)
+    _ = model.set_params(degree=2, include_bias=True)
     assert_false(Bool(model.degree_range))
-    model.fit(arange[DType.float64](3, 2))
+    _ = model.fit(arange[DType.float64](3, 2))
     assert_equal(model.n_features_in_, 2)
     assert_equal(model.n_output_features_, 4)
-    model.set_params(degree=(0, 1))
+    _ = model.set_params(degree=(0, 1))
     assert_equal(model.degree_range.value()[1], 1)
     # Invalid parameters raise at fit and leave the fitted state intact.
-    model.set_params(degree=-1)
+    _ = model.set_params(degree=-1)
     with assert_raises(contains="'degree' parameter of PolynomialFeatures"):
-        model.fit(arange[DType.float64](3, 2))
+        _ = model.fit(arange[DType.float64](3, 2))
     assert_equal(model.n_output_features_, 4)
-    model.set_params(degree=(3, 2))
+    _ = model.set_params(degree=(3, 2))
     with assert_raises(contains="min_degree <= max_degree, got (3, 2)"):
-        model.fit(arange[DType.float64](3, 2))
-    model.set_params(degree=0, include_bias=False)
+        _ = model.fit(arange[DType.float64](3, 2))
+    _ = model.set_params(degree=0, include_bias=False)
     with assert_raises(contains="empty output array"):
-        model.fit(arange[DType.float64](3, 2))
-    model.set_params(degree=2, include_bias=True, order="K")
+        _ = model.fit(arange[DType.float64](3, 2))
+    _ = model.set_params(degree=2, include_bias=True, order="K")
     with assert_raises(contains="'order' parameter"):
-        model.fit(arange[DType.float64](3, 2))
-    model.set_params(order="C")
+        _ = model.fit(arange[DType.float64](3, 2))
+    _ = model.set_params(order="C")
     var nan = arange[DType.float64](2, 2)
     nan.unsafe_set(1, Float64("nan"))
     with assert_raises(contains="Input X contains NaN"):
-        model.fit(nan)
+        _ = model.fit(nan)
     # The overflow check reports the exact Python-integer count.
     var wide = PolynomialFeatures((0, 100))
     with assert_raises(contains="would have 90548514656103281165404177077484163874504589675413336841320 features"):
-        wide.fit(arange[DType.float64](1, 100))
+        _ = wide.fit(arange[DType.float64](1, 100))
     # Feature names: fit_named, explicit names, cleared by an unnamed fit.
     var named = PolynomialFeatures(2)
     var names: List[String] = ["a", "b"]
-    named.fit_named(arange[DType.float64](2, 2), names)
+    _ = named.fit_named(arange[DType.float64](2, 2), names)
     assert_equal(named.get_feature_names_out()[4], "a b")
     with assert_raises(contains="not equal"):
         var other: List[String] = ["a", "c"]
         _ = named.get_feature_names_out(other^)
-    named.fit(arange[DType.float64](2, 2))
+    _ = named.fit(arange[DType.float64](2, 2))
     assert_false(Bool(named.feature_names_in_))
     with assert_raises(contains="only 'default'"):
         named.set_output(transform=String("pandas"))
@@ -154,7 +154,7 @@ def test_spline_values() raises:
     assert_equal(nobias.get_feature_names_out()[3], "x1_sp_0")
     # Periodic splines wrap: x and x + period encode identically.
     var periodic = SplineTransformer(n_knots=4, degree=3, extrapolation="periodic")
-    periodic.fit(arange[DType.float64](6, 1))
+    _ = periodic.fit(arange[DType.float64](6, 1))
     var c = periodic.bsplines_[0].coefficients()
     assert_equal(c.shape[0], 6)
     assert_equal(c.shape[1], 3)
@@ -166,11 +166,11 @@ def test_spline_values() raises:
     # Extrapolation modes outside the fitted range.
     var outside = arange[DType.float64](1, 1, 9.0)
     var error = SplineTransformer(extrapolation="error")
-    error.fit(X)
+    _ = error.fit(X)
     with assert_raises(contains="beyond the limits of the knots"):
         _ = error.transform(outside)
     var linear = SplineTransformer(extrapolation="linear")
-    linear.fit(X)
+    _ = linear.fit(X)
     var lin = linear.transform(outside)
     var edge = linear.transform(arange[DType.float64](1, 1, 5.0))
     assert_true(lin.unsafe_get(6) > edge.unsafe_get(6))  # continued linearly past the last knot
@@ -188,7 +188,7 @@ def test_spline_lifecycle() raises:
     with assert_raises(contains="NotFittedError"):
         _ = model.transform(arange[DType.float64](2, 1))
     var X = arange[DType.float64](8, 2)
-    model.fit(X)
+    _ = model.fit(X)
     assert_equal(model.n_features_in_, 2)
     assert_equal(model.n_features_out_, 8)
     with assert_raises(contains="X has 3 features, but SplineTransformer is expecting 2"):
@@ -199,35 +199,35 @@ def test_spline_lifecycle() raises:
     for k in range(6):
         K.unsafe_set(k, kv[k])
     var explicit = SplineTransformer(degree=1, knots=K)
-    explicit.fit(X)
+    _ = explicit.fit(X)
     assert_equal(explicit.bsplines_[1].t.unsafe_get(1), 1)
     assert_equal(explicit.n_features_out_, 6)
     var explicit_copy = clone(explicit)
     assert_true(Bool(explicit_copy.knot_positions))
-    explicit.set_params(knots=String("uniform"))
+    _ = explicit.set_params(knots=String("uniform"))
     assert_false(Bool(explicit.knot_positions))
-    explicit.set_params(knots=K)
+    _ = explicit.set_params(knots=K)
     assert_true(Bool(explicit.knot_positions))
     var bad = zeros[DType.float64](Shape(2, 2))
     bad.unsafe_set(0, 2.0)
-    explicit.set_params(knots=bad)
+    _ = explicit.set_params(knots=bad)
     with assert_raises(contains="sorted without duplicates"):
-        explicit.fit(X)
+        _ = explicit.fit(X)
     assert_equal(explicit.n_features_out_, 6)  # failed fit keeps state
     # Parameter and input errors.
     var sparse = SplineTransformer(sparse_output=True)
     with assert_raises(contains="sparse output is deferred"):
-        sparse.fit(X)
+        _ = sparse.fit(X)
     var periodic = SplineTransformer(n_knots=3, degree=3, extrapolation="periodic")
     with assert_raises(contains="Periodic splines require degree < n_knots"):
-        periodic.fit(X)
+        _ = periodic.fit(X)
     var one = SplineTransformer()
     with assert_raises(contains="minimum of 2 is required by SplineTransformer"):
-        one.fit(arange[DType.float64](1, 2))
+        _ = one.fit(arange[DType.float64](1, 2))
     var nan = X.copy()
     nan.unsafe_set(3, Float64("nan"))
     with assert_raises(contains="handle_missing='error'"):
-        one.fit(nan)
+        _ = one.fit(nan)
     # handle_missing="zeros": missing cells encode as all-zero splines.
     var zeros_model = SplineTransformer(n_knots=3, degree=2, handle_missing="zeros")
     var encoded = zeros_model.fit_transform(nan)
@@ -239,21 +239,21 @@ def test_spline_lifecycle() raises:
         w.unsafe_set(i, 1.0)
     w.unsafe_set(7, 0.0)
     var weighted = SplineTransformer(n_knots=3, degree=1)
-    weighted.fit(X, sample_weight=w)
+    _ = weighted.fit(X, sample_weight=w)
     assert_equal(weighted.bsplines_[0].t.unsafe_get(3), 12)  # max over weighted rows
     var zero_w = zeros[DType.float64](Shape(8))
     with assert_raises(contains="at least one non-zero"):
-        weighted.fit(X, sample_weight=zero_w)
+        _ = weighted.fit(X, sample_weight=zero_w)
     with assert_raises(contains="expected (8,)"):
-        weighted.fit(X, sample_weight=zeros[DType.float64](Shape(3)))
-    weighted.fit(X, sample_weight=2.0)
+        _ = weighted.fit(X, sample_weight=zeros[DType.float64](Shape(3)))
+    _ = weighted.fit(X, sample_weight=2.0)
     assert_equal(weighted.bsplines_[0].t.unsafe_get(3), 14)
     _ = weighted.fit_transform(X, sample_weight=w)
     # Names.
     var names: List[String] = ["a", "b"]
-    weighted.fit_named(X, names)
+    _ = weighted.fit_named(X, names)
     assert_equal(weighted.get_feature_names_out()[3], "b_sp_0")
-    weighted.fit(X)
+    _ = weighted.fit(X)
     assert_false(Bool(weighted.feature_names_in_))
 
 

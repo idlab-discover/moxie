@@ -7,9 +7,15 @@ struct Probe(Copyable, Movable):
     var learned: Optional[NDArray[DType.float64]]
     def __init__(out self):
         self.learned = None
-    def fit(mut self, x: NDArray[DType.float64]) raises:
+    def fit[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        x: NDArray[DType.float64],
+    ) raises -> ref[self] Self:
         validate_dense(x)
         self.learned = sum_axis2d(x, 0)
+        return self
     def total(self) raises -> Float64:
         if not self.learned:
             raise Error("NotFittedError: call fit")

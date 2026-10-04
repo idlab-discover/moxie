@@ -223,18 +223,34 @@ struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Onli
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.copy, self.with_mean, self.with_std)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.copy = params.copy_input
         self.with_mean = params.with_mean
         self.with_std = params.with_std
+        return self
 
-    def set_params(mut self, *, copy: Optional[Bool] = None, with_mean: Optional[Bool] = None, with_std: Optional[Bool] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        copy: Optional[Bool] = None,
+        with_mean: Optional[Bool] = None,
+        with_std: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         if copy:
             self.copy = copy.value()
         if with_mean:
             self.with_mean = with_mean.value()
         if with_std:
             self.with_std = with_std.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(copy=self.copy, with_mean=self.with_mean, with_std=self.with_std)
@@ -330,43 +346,128 @@ struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Onli
             update_moments_scalar(X, sample_weight, state)
         self._commit(state^, X.shape[1], True, reset)
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._partial(X, True)
+        return self
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target], sample_weight: NDArray[Self.dtype]) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target],
+        ref[sample_weight_origin] sample_weight: NDArray[Self.dtype],
+    ) raises -> ref[self] Self:
         self._partial_weighted(X, sample_weight, True)
+        return self
 
-    def fit(mut self, X: Self.Input, *, sample_weight: NDArray[Self.dtype]) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        *,
+        ref[sample_weight_origin] sample_weight: NDArray[Self.dtype],
+    ) raises -> ref[self] Self:
         self._partial_weighted(X, sample_weight, True)
+        return self
 
-    def fit(mut self, X: Self.Input, *, sample_weight: Float64) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        *,
+        ref[sample_weight_origin] sample_weight: Float64,
+    ) raises -> ref[self] Self:
         """Scalar weights are broadcast logically, never expanded."""
         self._partial_scalar(X, sample_weight, True)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=True)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
-    def partial_fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._partial(X, not self._state)
+        return self
 
-    def partial_fit(mut self, X: Self.Input, y: Optional[Self.Target], sample_weight: NDArray[Self.dtype]) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target],
+        ref[sample_weight_origin] sample_weight: NDArray[Self.dtype],
+    ) raises -> ref[self] Self:
         self._partial_weighted(X, sample_weight, not self._state)
+        return self
 
-    def partial_fit(mut self, X: Self.Input, *, sample_weight: NDArray[Self.dtype]) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        *,
+        ref[sample_weight_origin] sample_weight: NDArray[Self.dtype],
+    ) raises -> ref[self] Self:
         self._partial_weighted(X, sample_weight, not self._state)
+        return self
 
-    def partial_fit(mut self, X: Self.Input, *, sample_weight: Float64) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        *,
+        ref[sample_weight_origin] sample_weight: Float64,
+    ) raises -> ref[self] Self:
         self._partial_scalar(X, sample_weight, not self._state)
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def fit_transform(mut self, X: Self.Input, *, sample_weight: NDArray[Self.dtype]) raises -> Self.Transformed:
-        self.fit(X, sample_weight=sample_weight)
+        _ = self.fit(X, sample_weight=sample_weight)
         return self.transform(X)
 
     # -- transformation -------------------------------------------------------
@@ -454,18 +555,34 @@ struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.feature_range, self.copy, self.clip)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.feature_range = params.feature_range
         self.copy = params.copy_input
         self.clip = params.clip
+        return self
 
-    def set_params(mut self, *, feature_range: Optional[Tuple[Float64, Float64]] = None, copy: Optional[Bool] = None, clip: Optional[Bool] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        feature_range: Optional[Tuple[Float64, Float64]] = None,
+        copy: Optional[Bool] = None,
+        clip: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         if feature_range:
             self.feature_range = feature_range.value()
         if copy:
             self.copy = copy.value()
         if clip:
             self.clip = clip.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.feature_range, copy=self.copy, clip=self.clip)
@@ -510,20 +627,45 @@ struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
             self.feature_names_in_ = None
         self.n_features_in_ = p
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._partial(X, True)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=True)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
-    def partial_fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._partial(X, False)
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def _check(self, X: Self.Input, features: Bool) raises:
@@ -598,15 +740,30 @@ struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.copy, self.clip)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.copy = params.copy_input
         self.clip = params.clip
+        return self
 
-    def set_params(mut self, *, copy: Optional[Bool] = None, clip: Optional[Bool] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        copy: Optional[Bool] = None,
+        clip: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         if copy:
             self.copy = copy.value()
         if clip:
             self.clip = clip.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(copy=self.copy, clip=self.clip)
@@ -637,20 +794,45 @@ struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
             self.feature_names_in_ = None
         self.n_features_in_ = p
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._partial(X, True)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=True)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
-    def partial_fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._partial(X, False)
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def _check(self, X: Self.Input) raises:
@@ -740,14 +922,31 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.with_centering, self.with_scaling, self.quantile_range, self.copy, self.unit_variance)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.with_centering = params.with_centering
         self.with_scaling = params.with_scaling
         self.quantile_range = params.quantile_range
         self.copy = params.copy_input
         self.unit_variance = params.unit_variance
+        return self
 
-    def set_params(mut self, *, with_centering: Optional[Bool] = None, with_scaling: Optional[Bool] = None, quantile_range: Optional[Tuple[Float64, Float64]] = None, copy: Optional[Bool] = None, unit_variance: Optional[Bool] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        with_centering: Optional[Bool] = None,
+        with_scaling: Optional[Bool] = None,
+        quantile_range: Optional[Tuple[Float64, Float64]] = None,
+        copy: Optional[Bool] = None,
+        unit_variance: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         if with_centering:
             self.with_centering = with_centering.value()
         if with_scaling:
@@ -758,6 +957,7 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor):
             self.copy = copy.value()
         if unit_variance:
             self.unit_variance = unit_variance.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(with_centering=self.with_centering, with_scaling=self.with_scaling, quantile_range=self.quantile_range, copy=self.copy, unit_variance=self.unit_variance)
@@ -768,7 +968,14 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor):
     def set_output(mut self, *, transform: Optional[String] = None) raises:
         check_set_output(transform)
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=True)
         _check_quantile_range(self.quantile_range[0], self.quantile_range[1])
         var p = X.shape[1]
@@ -792,15 +999,25 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor):
         self.n_features_in_ = p
         self.feature_names_in_ = None
         self._fitted = True
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=True)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def _check(self, X: Self.Input) raises:

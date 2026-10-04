@@ -64,10 +64,12 @@ through their own `__sklearn_clone__` implementation.
 
 ## Explicit Mojo differences
 
-- `fit`, `set_params`, and `partial_fit` mutate in place and return nothing.
-  Use `model.fit(X, y)` followed by `model.predict(X)`. The reference-returning
-  trait conformance attempted on Mojo 1.0.0 was rejected by the compiler;
-  fluent chaining is not promised by this baseline.
+- `fit`, `set_params`, and `partial_fit` mutate in place and return a mutable
+  borrow of the original estimator. Concrete and shared-trait calls support
+  `model.set_params(params).fit(X, y).predict(X)`. Standalone mutation calls
+  remain valid; write `_ = model.fit(X, y)` to explicitly discard the borrow.
+  `fit_transform` and `fit_predict` still return transformed data and predictions.
+  Clone remains a separate operation with each estimator's existing semantics.
 - `get_params(deep=True)` returns an estimator-specific typed `Params` record
   or mapping. `set_params(params)` accepts that same type. Concrete estimators
   should also provide named keyword overloads for familiar partial updates.
@@ -87,11 +89,57 @@ through their own `__sklearn_clone__` implementation.
   full sklearn tags, and Python bindings are outside this scaffold. They must
   be designed and tested before claiming compatibility with those facilities.
 
+## Fluent implementation convention
+
+On Mojo 1.0.0, use an explicit mutable origin for the receiver and immutable
+references for the mutation inputs in both the trait and its implementations:
+
+```mojo
+def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+    ref[origin] self,
+    ref[x_origin] X: Self.Input,
+    ref[y_origin] y: Self.Target,
+) raises -> ref[self] Self:
+    self._fit(X, y)
+    return self
+```
+
+Use the same convention for `set_params(params)`, unsupervised `fit`, weighted
+`fit`, and all supported `partial_fit` overloads. Give required inputs separate
+immutable origins; keep optional inputs as ordinary `Optional` arguments so
+callers can omit them. Keep keyword weights, defaults, and validation unchanged.
+The result borrows `self`; do not return a copy or transfer it with `^`. Callers need a mutable estimator. The
+borrow adds no model copy or allocation; runtime cost has not been benchmarked.
+A raising mutation yields no result and preserves the estimator's existing
+failure-state rules; a chain is not a transaction and does not undo earlier calls.
+
+Explicit immutable input references avoid a Mojo 1.0.0 conversion-thunk failure
+when an associated type is register-passable (such as `Int`). The simpler
+`X: Self.Input` spelling works for some array estimators but is insufficient for
+all existing generic composition consumers. Preserve these input conventions
+when implementing shared traits. Named immutable origins allow generic
+composition to forward borrowed inputs. A fixed `ImmutAnyOrigin` is insufficient
+for some constrained associated types, and inferred references on omitted
+optional arguments can crash this compiler.
+
+This is a source migration: a `None`-returning implementation no longer satisfies
+these traits. Families must migrate every matching overload together with their
+shared Moxie source, including test estimators and generic consumers. Keep
+family-owned methods in their owner; no alternative family contract is needed.
+For KernelRidge, migrate its typed and mapping `set_params`, all `fit` overloads
+(including weighted and feature-name variants), and use the same borrowed
+receiver/result on its request setters. Update standalone calls to discard
+results, then run its Float32/Float64 direct and generic chaining tests and
+existing parity checks against the assembled current Moxie sources.
+
 ## Validation and extension
 
 Run `pixi run build`, `pixi run test`, and `pixi run start`. Tests cover generic
 trait dispatch, parameter ownership, unfitted clone behavior, fitted-state
 checks, repeated fitting, mismatched targets, and changed feature counts.
+`tests/test_fluent.mojo` covers scalar and array inputs, concrete and generic
+chaining, weighted/incremental updates, and composition. Compile-failure probes
+reject mutation through immutable receivers and escaping local borrows.
 Family tests compile concrete probes for their additional required methods;
 probes raise instead of fabricating algorithm results.
 

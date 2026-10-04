@@ -29,7 +29,7 @@ def test_normalizer() raises:
     # Stateless: transform works before fit and is "fitted" for check_is_fitted.
     assert_true(model.__sklearn_is_fitted__())
     var unfitted = model.transform(X)
-    model.fit(X)
+    _ = model.fit(X)
     var out = generic_transform(model, X)
     assert_equal(out.item(0, 0), unfitted.item(0, 0))
     assert_equal(model.n_features_in_, 2)
@@ -38,21 +38,21 @@ def test_normalizer() raises:
     var copy = clone(model)
     assert_equal(copy.norm, "l1")
     assert_equal(copy.n_features_in_, 0)
-    model.set_params(norm="l3")
+    _ = model.set_params(norm="l3")
     with assert_raises(contains="'norm' parameter"):
-        model.fit(X)
-    model.set_params(NormalizerParamsLike())
+        _ = model.fit(X)
+    _ = model.set_params(NormalizerParamsLike())
     assert_equal(model.norm, "max")
     with assert_raises(contains="only 'default'"):
         model.set_output(transform=String("pandas"))
     model.set_output(transform=String("default"))
     var names: List[String] = ["a", "b"]
-    model.fit_named(X, names)
+    _ = model.fit_named(X, names)
     assert_equal(model.get_feature_names_out()[1], "b")
     with assert_raises(contains="not equal"):
         var other: List[String] = ["a", "c"]
         _ = model.get_feature_names_out(other^)
-    model.fit(X)
+    _ = model.fit(X)
     assert_false(Bool(model.feature_names_in_))
     assert_equal(model.get_feature_names_out()[0], "x0")
     var inplace = X.copy()
@@ -84,7 +84,7 @@ def test_binarizer() raises:
     assert_equal(X.item(0, 0), 0)
     var cloned = clone(model)
     assert_equal(cloned.threshold, 0.5)
-    model.set_params(copy=False)
+    _ = model.set_params(copy=False)
     assert_false(model.get_params().copy_input)
 
 
@@ -96,7 +96,7 @@ def test_kernel_centerer() raises:
         _ = model.transform(K)
     with assert_raises(contains="NotFittedError"):
         _ = model.get_feature_names_out()
-    model.fit(K)
+    _ = model.fit(K)
     var centered = generic_transform(model, K)
     assert_equal(model.n_features_in_, 3)
     var total = Float64(0)
@@ -107,7 +107,7 @@ def test_kernel_centerer() raises:
     with assert_raises(contains="features"):
         _ = model.transform(matrix(3, 2))
     with assert_raises(contains="square"):
-        model.fit(matrix(2, 3))
+        _ = model.fit(matrix(2, 3))
     # A failed fit leaves earlier learned state intact.
     assert_equal(model.n_features_in_, 3)
     var refit = clone(model)

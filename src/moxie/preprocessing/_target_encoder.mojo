@@ -359,19 +359,32 @@ struct TargetEncoder[
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.categories.copy(), self.target_type, self.smooth, self.cv, self.shuffle, self.random_state)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.categories = params.categories.copy()
         self.target_type = params.target_type
         self.smooth = params.smooth
         self.cv = params.cv
         self.shuffle = params.shuffle
         self.random_state = params.random_state
+        return self
 
-    def set_params(
-        mut self, *, target_type: Optional[String] = None, smooth: Optional[Optional[Float64]] = None,
-        cv: Optional[Int] = None, shuffle: Optional[Optional[Bool]] = None,
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        target_type: Optional[String] = None,
+        smooth: Optional[Optional[Float64]] = None,
+        cv: Optional[Int] = None,
+        shuffle: Optional[Optional[Bool]] = None,
         random_state: Optional[Optional[Int]] = None,
-    ) raises:
+    ) raises -> ref[self] Self:
         """Outer None leaves a parameter unchanged; an inner None sets it to None."""
         if target_type:
             self.target_type = target_type.value()
@@ -383,10 +396,11 @@ struct TargetEncoder[
             self.shuffle = shuffle.value()
         if random_state:
             self.random_state = random_state.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         var result = Self()
-        result.set_params(self.get_params())
+        _ = result.set_params(self.get_params())
         return result^
 
     def __sklearn_is_fitted__(self) -> Bool:
@@ -432,7 +446,7 @@ struct TargetEncoder[
         if kind == "multiclass":
             # LabelBinarizer's target checks; its columns are one-vs-all codes.
             var binarizer = LabelBinarizer[Self.Y]()
-            binarizer.fit(y)
+            _ = binarizer.fit(y)
             if binarizer.y_type_ == "multilabel-indicator":
                 _ = Self.Y.column_length(y)  # raises: TargetEncoder targets are 1d
             if Self.Y.rows(binarizer.classes_) == 2:
@@ -465,7 +479,7 @@ struct TargetEncoder[
         if len(X) and X[0].rows() != n_y:
             raise Error("ValueError: Found input variables with inconsistent numbers of samples: [" + String(X[0].rows()) + ", " + String(n_y) + "]")
         var core = _EncoderCore[Self.K]()
-        core.fit(X, self.categories, "ignore", None, None, False)
+        _ = core.fit(X, self.categories, "ignore", None, None, False)
         var n = X[0].rows()
         var target = self._target(y, n)
         var width = target.n_columns
@@ -562,14 +576,33 @@ struct TargetEncoder[
             return stratified_kfold_test_folds(labels.value(), self.cv, self._shuffle(), random_state)
         return kfold_test_folds(n, self.cv, self._shuffle(), random_state)
 
-    def fit(mut self, X: Self.Input, y: Self.L) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.L,
+    ) raises -> ref[self] Self:
         """Learn encodings on all of X (fit then transform is not cross-fitted)."""
         _ = self._fit(X, rebind[Self.Y.Labels](y))
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Self.L) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        ref[y_origin] y: Self.L,
+    ) raises -> ref[self] Self:
         check_names_length(feature_names, len(X))
         _ = self._fit(X, rebind[Self.Y.Labels](y))
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Self.L) raises -> NDArray[DType.float64]:
         """Fit on all rows, then return the cross-fitted encoding of X.

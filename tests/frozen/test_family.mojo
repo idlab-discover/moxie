@@ -71,7 +71,13 @@ struct ContractProbe(
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return 0
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         raise Error("Contract probe: no algorithm implemented")
 
     def __sklearn_clone__(self) raises -> Self:
@@ -80,10 +86,25 @@ struct ContractProbe(
     def __sklearn_is_fitted__(self) -> Bool:
         return False
 
-    def fit(mut self, X: Self.Input, y: Self.Target) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
         raise Error("Contract probe: no algorithm implemented")
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         raise Error("Contract probe: no algorithm implemented")
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
@@ -130,29 +151,51 @@ struct ContractProbe(
     ) raises -> Self.Labels:
         raise Error("Contract probe: no algorithm implemented")
 
-    def fit(
-        mut self,
-        X: Self.Input,
-        y: Self.Target,
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
         *,
-        sample_weight: Self.SampleWeight,
-    ) raises:
+        ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
         raise Error("Contract probe: no algorithm implemented")
 
-    def partial_fit(mut self, X: Self.Input, y: Self.Target) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
         raise Error("Contract probe: no algorithm implemented")
 
-    def partial_fit(
-        mut self,
-        X: Self.Input,
-        y: Self.Target,
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
-    ) raises:
+    ) raises -> ref[self] Self:
         raise Error("Contract probe: no algorithm implemented")
 
-    def partial_fit(
-        mut self, X: Self.Input, y: Optional[Self.Target] = None
-    ) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         raise Error("Contract probe: no algorithm implemented")
 
 
@@ -160,7 +203,7 @@ def main() raises:
     var probe = ContractProbe()
     assert_false(probe.__sklearn_is_fitted__())
     with assert_raises():
-        probe.fit(1, 2)
+        _ = probe.fit(1, 2)
     with assert_raises():
         _ = probe.predict(1)
     print("Capability conformance checks passed")

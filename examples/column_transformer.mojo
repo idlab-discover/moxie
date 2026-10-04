@@ -30,8 +30,14 @@ struct RangeScaler(Copyable, FeatureNamesOut, TransformerMixin, UnsupervisedEsti
     def get_params(self, deep: Bool = True) raises -> RangeScalerParams:
         return RangeScalerParams()
 
-    def set_params(mut self, params: RangeScalerParams) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: RangeScalerParams,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()
@@ -39,7 +45,14 @@ struct RangeScaler(Copyable, FeatureNamesOut, TransformerMixin, UnsupervisedEsti
     def __sklearn_is_fitted__(self) -> Bool:
         return len(self.low_) > 0
 
-    def fit(mut self, X: NDArray[DType.float64], y: Optional[NDArray[DType.float64]] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[DType.float64],
+        y: Optional[NDArray[DType.float64]] = None,
+    ) raises -> ref[self] Self:
         self.low_ = List[Float64]()
         self.span_ = List[Float64]()
         for j in range(X.shape[1]):
@@ -50,6 +63,7 @@ struct RangeScaler(Copyable, FeatureNamesOut, TransformerMixin, UnsupervisedEsti
                 high = max(high, X.unsafe_get(i * X.shape[1] + j))
             self.low_.append(low)
             self.span_.append(high - low if high > low else 1.0)
+        return self
 
     def transform(self, X: NDArray[DType.float64]) raises -> NDArray[DType.float64]:
         var out = X.copy()

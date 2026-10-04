@@ -115,8 +115,15 @@ struct Scale(Copyable, InverseTransformer, UnsupervisedEstimator):
     def get_params(self, deep: Bool = True) raises -> ScaleParams:
         return ScaleParams(self.factor)
 
-    def set_params(mut self, params: ScaleParams) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: ScaleParams,
+    ) raises -> ref[self] Self:
         self.factor = params.factor
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.factor)
@@ -124,10 +131,18 @@ struct Scale(Copyable, InverseTransformer, UnsupervisedEstimator):
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fits_ > 0
 
-    def fit(mut self, X: NDArray[F64], y: Optional[NDArray[F64]] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: NDArray[F64],
+        y: Optional[NDArray[F64]] = None,
+    ) raises -> ref[self] Self:
         if X.ndim != 2:
             raise Error("ValueError: Scale expects a matrix")
         self.fits_ += 1
+        return self
 
     def transform(self, X: NDArray[F64]) raises -> NDArray[F64]:
         var out = X.copy()
@@ -174,9 +189,9 @@ def test_identity_matches_linear_regression() raises:
     var X = features()
     var y = positive_target()
     var model = TransformedTargetRegressor()
-    model.fit(X, y)
+    _ = model.fit(X, y)
     var reference = LinearRegression()
-    reference.fit(X, y)
+    _ = reference.fit(X, y)
     var pred = model.predict(X)
     assert_equal(pred.ndim, 1)
     assert_close(pred, reference.predict(X))
@@ -192,9 +207,9 @@ def test_function_pair() raises:
     var X = features()
     var y = positive_target()
     var model = TransformedTargetRegressor(func=log_f, inverse_func=exp_f)
-    model.fit(X, y)
+    _ = model.fit(X, y)
     var reference = LinearRegression()
-    reference.fit(X, log_f(y))
+    _ = reference.fit(X, log_f(y))
     assert_close(model.regressor_.value().coef_, reference.coef_)
     assert_close(model.predict(X), exp_f(reference.predict(X)))
     assert_equal(len(model.warnings_), 0)
@@ -206,29 +221,29 @@ def test_target_shapes() raises:
     var X = features()
     var column = matrix(6, 1, [1.0, 2.0, 4.5, 6.0, 11.0, 14.0])
     var model = TransformedTargetRegressor(func=log_f, inverse_func=exp_f)
-    model.fit(X, column)
+    _ = model.fit(X, column)
     var pred = model.predict(X)
     assert_equal(pred.ndim, 2)
     assert_equal(pred.shape[1], 1)
     var two = matrix(6, 2, [1.0, 3.0, 2.0, 1.0, 4.5, 2.0, 6.0, 5.0, 11.0, 4.0, 14.0, 8.0])
-    model.fit(X, two)
+    _ = model.fit(X, two)
     pred = model.predict(X)
     assert_equal(pred.shape[0], 6)
     assert_equal(pred.shape[1], 2)
     var reference = LinearRegression()
-    reference.fit(X, log_f(two))
+    _ = reference.fit(X, log_f(two))
     assert_close(pred, exp_f(reference.predict(X)))
 
 
 def test_vector_function_output() raises:
     # func may return a vector; regression proceeds on it (sklearn FIXME path).
     var model = TransformedTargetRegressor(func=squeeze_f, inverse_func=same, check_inverse=False)
-    model.fit(features(), positive_target())
+    _ = model.fit(features(), positive_target())
     assert_equal(model.predict(features()).ndim, 1)
     # With check_inverse, the 1-D forward output reaches inverse_transform's 2-D check.
     var checked = TransformedTargetRegressor(func=squeeze_f, inverse_func=same)
     try:
-        checked.fit(features(), positive_target())
+        _ = checked.fit(features(), positive_target())
         raise Error("expected failure")
     except err:
         expect_error("ValueError: Expected 2D array, got 1D array instead", err)
@@ -238,17 +253,17 @@ def test_inverse_warnings() raises:
     var X = features()
     var y = positive_target()
     var model = TransformedTargetRegressor(func=plus_one, inverse_func=same)
-    model.fit(X, y)
+    _ = model.fit(X, y)
     assert_equal(len(model.warnings_), 2)
     assert_true(model.warnings_[0].startswith("UserWarning: The provided functions are not strictly inverse"))
     assert_true(model.warnings_[1].startswith("UserWarning: The provided functions or transformer are not strictly"))
     assert_true(model.transformer_.value().warnings_[0].startswith("UserWarning: The provided functions are"))
     var quiet = TransformedTargetRegressor(func=plus_one, inverse_func=same, check_inverse=False)
-    quiet.fit(X, y)
+    _ = quiet.fit(X, y)
     assert_equal(len(quiet.warnings_), 0)
     # A non-inverse custom transformer warns only through the meta-estimator check.
     var scaled = TransformedTargetRegressor[F64, LinearRegression[F64], Scale](transformer=Scale(2.0))
-    scaled.fit(X, y)
+    _ = scaled.fit(X, y)
     assert_equal(len(scaled.warnings_), 0)
 
 
@@ -257,26 +272,26 @@ def test_configuration_errors() raises:
     var y = positive_target()
     var both = TransformedTargetRegressor[F64, LinearRegression[F64], Scale](transformer=Scale(), func=log_f, inverse_func=exp_f)
     try:
-        both.fit(X, y)
+        _ = both.fit(X, y)
         raise Error("expected failure")
     except err:
         expect_error("ValueError: 'transformer' and functions 'func'/'inverse_func' cannot both be set.", err)
     var forward_only = TransformedTargetRegressor(func=log_f)
     try:
-        forward_only.fit(X, y)
+        _ = forward_only.fit(X, y)
         raise Error("expected failure")
     except err:
         expect_error("ValueError: When 'func' is provided, 'inverse_func' must also be provided.", err)
     var inverse_only = TransformedTargetRegressor(inverse_func=exp_f)
     try:
-        inverse_only.fit(X, y)
+        _ = inverse_only.fit(X, y)
         raise Error("expected failure")
     except err:
         expect_error("ValueError: When 'inverse_func' is provided, 'func' must also be provided.", err)
     # Static component types cannot hold the implicit defaults.
     var custom_t = TransformedTargetRegressor[F64, LinearRegression[F64], Scale]()
     with assert_raises(contains="transformer=None selects a TargetFunctionTransformer"):
-        custom_t.fit(X, y)
+        _ = custom_t.fit(X, y)
     assert_false(custom_t.__sklearn_is_fitted__())
 
 
@@ -286,30 +301,30 @@ def test_target_validation() raises:
     var y = positive_target()
     y.unsafe_set(2, nan[F64]())
     with assert_raises(contains="ValueError: Input y contains NaN."):
-        model.fit(X, y)
+        _ = model.fit(X, y)
     y.unsafe_set(2, inf[F64]())
     with assert_raises(contains="ValueError: Input y contains infinity or a value too large for dtype('float64')."):
-        model.fit(X, y)
+        _ = model.fit(X, y)
     with assert_raises(contains="ValueError: Found array with 0 sample(s) (shape=(0,)) while a minimum of 1 is required."):
-        model.fit(X, zeros[F64](Shape(0)))
+        _ = model.fit(X, zeros[F64](Shape(0)))
     with assert_raises(contains="ValueError: Found array with 0 feature(s) (shape=(6, 0))"):
-        model.fit(X, zeros[F64](Shape(6, 0)))
+        _ = model.fit(X, zeros[F64](Shape(6, 0)))
     # Function transformers reject targets of rank three.
     with assert_raises(contains="ValueError: Found array with dim 3. FunctionTransformer expected <= 2."):
-        model.fit(X, zeros[F64](Shape(6, 1, 1)))
+        _ = model.fit(X, zeros[F64](Shape(6, 1, 1)))
     # Regressor errors propagate (sample-count mismatch).
     with assert_raises():
-        model.fit(X, vector([1.0, 2.0, 3.0]))
+        _ = model.fit(X, vector([1.0, 2.0, 3.0]))
     assert_false(model.__sklearn_is_fitted__())
 
 
 def test_repeat_and_failed_fit() raises:
     var X = features()
     var model = TransformedTargetRegressor(func=log_f, inverse_func=exp_f)
-    model.fit(X, positive_target())
+    _ = model.fit(X, positive_target())
     var first = model.predict(X)
     var other = vector([2.0, 2.5, 3.0, 3.5, 4.0, 4.5])
-    model.fit(X, other)
+    _ = model.fit(X, other)
     var second = model.predict(X)
     assert_true(abs(Float64(second.unsafe_get(0)) - Float64(first.unsafe_get(0))) > 1e-3)
     # A failing fit keeps the previous learned state.
@@ -317,16 +332,16 @@ def test_repeat_and_failed_fit() raises:
     bad.unsafe_set(0, -1.0)  # log(-1) = NaN reaches the regressor
     var failed = False
     try:
-        model.fit(X, bad)
+        _ = model.fit(X, bad)
     except:
         failed = True
     assert_true(failed, "NaN transformed targets must fail the regressor fit")
     assert_close(model.predict(X), second)
-    model.set_params(func=plus_one, inverse_func=same)
-    model.fit(X, other)
+    _ = model.set_params(func=plus_one, inverse_func=same)
+    _ = model.fit(X, other)
     assert_equal(len(model.warnings_), 2)
-    model.set_params(check_inverse=False)
-    model.fit(X, other)
+    _ = model.set_params(check_inverse=False)
+    _ = model.fit(X, other)
     assert_equal(len(model.warnings_), 0)
 
 
@@ -334,30 +349,30 @@ def test_clone_and_params() raises:
     var X = features()
     var y = positive_target()
     var model = TransformedTargetRegressor(LinearRegression(fit_intercept=False), func=log_f, inverse_func=exp_f)
-    model.fit(X, y)
+    _ = model.fit(X, y)
     # The constructor regressor is configuration: fitting used a clone.
     assert_false(model.regressor.value().__sklearn_is_fitted__())
     var copy = clone(model)
     assert_false(copy.__sklearn_is_fitted__())
     assert_false(copy.get_params().regressor.value().fit_intercept)
-    copy.set_params(regressor_params=LinearRegressionParams(True, True, 1e-6, None, False))
+    _ = copy.set_params(regressor_params=LinearRegressionParams(True, True, 1e-6, None, False))
     assert_true(copy.regressor.value().fit_intercept)
     assert_false(model.regressor.value().fit_intercept)
     assert_true(model.__sklearn_is_fitted__())
     # Whole-component replacement precedes nested parameter updates.
-    copy.set_params(regressor=LinearRegression(tol=1e-3), regressor_params=LinearRegressionParams(False, True, 1e-4, None, False))
+    _ = copy.set_params(regressor=LinearRegression(tol=1e-3), regressor_params=LinearRegressionParams(False, True, 1e-4, None, False))
     assert_equal(copy.regressor.value().tol, 1e-4)
     # Records restore None components and round-trip all fields.
     var record = model.get_params()
     record.regressor = None
-    copy.set_params(record)
+    _ = copy.set_params(record)
     assert_false(Bool(copy.regressor))
     assert_true(Bool(copy.func))
     var empty = TransformedTargetRegressor()
     with assert_raises(contains="Invalid parameter 'regressor_params'"):
-        empty.set_params(regressor_params=LinearRegressionParams(True, True, 1e-6, None, False))
+        _ = empty.set_params(regressor_params=LinearRegressionParams(True, True, 1e-6, None, False))
     var rebuilt = TransformedTargetRegressor(model.get_params())
-    rebuilt.fit(X, y)
+    _ = rebuilt.fit(X, y)
     assert_close(rebuilt.predict(X), model.predict(X))
 
 
@@ -365,13 +380,13 @@ def test_custom_transformer() raises:
     var X = features()
     var y = positive_target()
     var model = TransformedTargetRegressor[F64, LinearRegression[F64], Scale](transformer=Scale(4.0))
-    model.fit(X, y)
+    _ = model.fit(X, y)
     assert_equal(model.transformer_.value().fits_, 1)
     assert_equal(model.transformer.value().fits_, 0)
     var reference = LinearRegression()
-    reference.fit(X, Scale(4.0).transform(matrix(6, 1, [1.0, 2.0, 4.5, 6.0, 11.0, 14.0])))
+    _ = reference.fit(X, Scale(4.0).transform(matrix(6, 1, [1.0, 2.0, 4.5, 6.0, 11.0, 14.0])))
     assert_close(model.predict(X), squeeze_f(Scale(4.0).inverse_transform(reference.predict(X))))
-    model.set_params(transformer_params=ScaleParams(8.0))
+    _ = model.set_params(transformer_params=ScaleParams(8.0))
     assert_equal(model.transformer.value().factor, 8.0)
 
 
@@ -380,9 +395,9 @@ def test_sample_weight_and_score() raises:
     var y = positive_target()
     var w = vector([1.0, 0.0, 2.0, 1.0, 3.0, 0.5])
     var model = TransformedTargetRegressor(func=log_f, inverse_func=exp_f)
-    model.fit(X, y, sample_weight=w)
+    _ = model.fit(X, y, sample_weight=w)
     var reference = LinearRegression()
-    reference.fit(X, log_f(y), sample_weight=w)
+    _ = reference.fit(X, log_f(y), sample_weight=w)
     var pred = exp_f(reference.predict(X))
     assert_close(model.predict(X), pred)
     # R^2 (weighted and unweighted) in the original target space.
@@ -409,30 +424,30 @@ def test_float32() raises:
     var X = matrix[F32](6, 2, [0.0, 1.0, 1.0, 0.5, 2.0, 2.0, 3.0, 1.5, 4.0, 3.0, 5.0, 2.5])
     var y = vector[F32]([1.0, 2.0, 4.5, 6.0, 11.0, 14.0])
     var model = TransformedTargetRegressor[F32](func=log_f32, inverse_func=exp_f32)
-    model.fit(X, y)
+    _ = model.fit(X, y)
     var reference = LinearRegression[F32]()
-    reference.fit(X, log_f32(y))
+    _ = reference.fit(X, log_f32(y))
     assert_close(model.predict(X), exp_f32(reference.predict(X)), atol=1e-4)
     y.unsafe_set(0, inf[F32]())
     with assert_raises(contains="dtype('float32')"):
-        model.fit(X, y)
+        _ = model.fit(X, y)
 
 
 def test_function_transformer_alone() raises:
     var ft = TargetFunctionTransformer(log_f, exp_f)
     with assert_raises(contains="NotFittedError"):
         _ = ft.transform(matrix(2, 1, [1.0, 2.0]))
-    ft.fit(matrix(3, 1, [1.0, 2.0, 3.0]))
+    _ = ft.fit(matrix(3, 1, [1.0, 2.0, 3.0]))
     assert_equal(ft.n_features_in_.value(), 1)
     with assert_raises(contains="X has 2 features, but FunctionTransformer is expecting 1 features as input."):
         _ = ft.transform(matrix(1, 2, [1.0, 2.0]))
     with assert_raises(contains="Expected 2D array, got 1D array instead"):
-        ft.fit(vector([1.0, 2.0]))
+        _ = ft.fit(vector([1.0, 2.0]))
     var params = ft.get_params()
     assert_true(params.check_inverse)
     var identity = clone(ft)
-    identity.set_params(TargetFunctionTransformerParams[F64](None, None, False))
-    identity.fit(matrix(2, 1, [5.0, 7.0]))
+    _ = identity.set_params(TargetFunctionTransformerParams[F64](None, None, False))
+    _ = identity.fit(matrix(2, 1, [5.0, 7.0]))
     assert_close(identity.transform(matrix(2, 1, [5.0, 7.0])), matrix(2, 1, [5.0, 7.0]))
     assert_close(identity.inverse_transform(matrix(2, 1, [5.0, 7.0])), matrix(2, 1, [5.0, 7.0]))
     with assert_raises(contains="Input contains NaN."):

@@ -11,9 +11,14 @@ struct SeededProbe(Copyable, Movable):
     def __init__(out self, seed: Int):
         self.seed = seed
         self.learned_ = -1
-    def fit(mut self) raises:
+    def fit[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+    ) raises -> ref[self] Self:
         var state = RandomState(self.seed)
         self.learned_ = state.random_sample()
+        return self
     def clone(self) -> Self:
         return Self(self.seed)
 

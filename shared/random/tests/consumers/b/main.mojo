@@ -10,16 +10,16 @@ def main() raises:
     print(evaluate(state))
     print(evaluate(state))
     var estimator = SeededProbe(42)
-    estimator.fit()
+    _ = estimator.fit()
     var previous = estimator.learned_
-    estimator.fit()
+    _ = estimator.fit()
     assert_equal(estimator.learned_, previous)
     var cloned = estimator.clone()
     assert_equal(cloned.learned_, -1)
-    cloned.fit()
+    _ = cloned.fit()
     assert_equal(cloned.learned_, estimator.learned_)
     cloned.seed = 43
-    cloned.fit()
+    _ = cloned.fit()
     assert_true(cloned.learned_ != estimator.learned_)
 
     seed_global_random_state(42)

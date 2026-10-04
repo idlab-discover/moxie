@@ -6,6 +6,8 @@ trait BaseEstimator(Movable):
 
     Params is an estimator-specific record or mapping, never learned state.
     Concrete constructors retain sklearn keyword names and defaults.
+    Mutations return a borrow of self. Explicit immutable input origins avoid
+    Mojo 1.0 conversion thunks for register-passable associated types.
     """
 
     comptime Params: Copyable
@@ -13,7 +15,13 @@ trait BaseEstimator(Movable):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         ...
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         ...
 
     def __sklearn_clone__(self) raises -> Self:
@@ -35,7 +43,15 @@ trait InputEstimator(BaseEstimator):
 trait SupervisedEstimator(InputEstimator):
     comptime Target: Movable
 
-    def fit(mut self, X: Self.Input, y: Self.Target) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
         ...
 
 
@@ -44,7 +60,14 @@ trait UnsupervisedEstimator(InputEstimator):
 
     comptime Target: Movable
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         ...
 
 
@@ -162,35 +185,57 @@ trait WeightedSupervisedEstimator(SupervisedEstimator):
 
     comptime SampleWeight: Movable
 
-    def fit(
-        mut self,
-        X: Self.Input,
-        y: Self.Target,
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
         *,
-        sample_weight: Self.SampleWeight,
-    ) raises:
+        ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
         ...
 
 
 trait IncrementalRegressor(RegressorMixin):
-    def partial_fit(mut self, X: Self.Input, y: Self.Target) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
         ...
 
 
 trait IncrementalClassifier(ClassifierMixin):
     comptime Classes: Movable
 
-    def partial_fit(
-        mut self,
-        X: Self.Input,
-        y: Self.Target,
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
-    ) raises:
+    ) raises -> ref[self] Self:
         ...
 
 
 trait IncrementalTransformer(TransformerMixin, UnsupervisedEstimator):
-    def partial_fit(
-        mut self, X: Self.Input, y: Optional[Self.Target] = None
-    ) raises:
+    def partial_fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         ...

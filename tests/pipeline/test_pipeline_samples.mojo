@@ -19,14 +19,29 @@ struct SampleProbe(SupervisedEstimator, Predictor, SampleScorer):
         self.child = Recorder()
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return self.child.fitted
-    def fit(mut self, X: Int, y: Int) raises:
-        self.child.fit(X, y)
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        ref[y_origin] y: Int,
+    ) raises -> ref[self] Self:
+        _ = self.child.fit(X, y)
+        return self
     def predict(self, X: Int) raises -> Int:
         raise Error("score_samples must not call predict")
     def score_samples(self, X: Int) raises -> Int:
@@ -46,14 +61,29 @@ struct DenseSampleProbe[dtype: DType](SupervisedEstimator, Predictor, SampleScor
         self.fixture = DenseDecision[Self.dtype, False]()
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fixture.fitted
-    def fit(mut self, X: Self.Input, y: Self.Target) raises:
-        self.fixture.fit(X, y)
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        _ = self.fixture.fit(X, y)
+        return self
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         raise Error("score_samples must not call predict")
     def score_samples(self, X: Self.Input) raises -> Self.SampleScores:
@@ -73,7 +103,7 @@ def dense[dtype: DType]() raises:
     var pipe = Pipeline(CopyStep[dtype](), DenseSampleProbe[dtype]())
     with assert_raises():
         _ = pipe.score_samples(X)
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     var scores = through_trait(pipe, X)
     comptime assert type_of(scores) == NDArray[dtype]
     assert_equal(scores.ndim, 1)
@@ -102,7 +132,7 @@ def main() raises:
     var pipe = Pipeline(Shift(), SampleProbe())
     with assert_raises():
         _ = pipe.score_samples(1)
-    pipe.fit(5, 7)
+    _ = pipe.fit(5, 7)
     assert_equal(through_trait(pipe, 1), -23)
     print("samples_scalar", pipe.score_samples(1))
     with assert_raises():
@@ -112,26 +142,26 @@ def main() raises:
         _ = fresh.score_samples(1)
     var params = fresh.get_params()
     params.transformer = 4
-    fresh.set_params(params)
-    fresh.fit(5, 7)
-    pipe.fit(8, 7)
+    _ = fresh.set_params(params)
+    _ = fresh.fit(5, 7)
+    _ = pipe.fit(8, 7)
     print("samples_refit", fresh.score_samples(1), pipe.score_samples(1))
     with assert_raises():
-        pipe.fit(-1, 7)
+        _ = pipe.fit(-1, 7)
     assert_true(pipe.__sklearn_is_fitted__())
     with assert_raises():
         _ = pipe.score_samples(1)
     with assert_raises():
-        pipe.fit(5, -1)
+        _ = pipe.fit(5, -1)
     assert_false(pipe.__sklearn_is_fitted__())
     with assert_raises():
         _ = pipe.score_samples(1)
     var fused = Pipeline(Fused(), SampleProbe())
-    fused.fit(5, 7)
+    _ = fused.fit(5, 7)
     print("samples_fused", fused.score_samples(1))
     assert_equal(fused.transformer.calls, 1)
     var nested = Pipeline(Shift(2), Pipeline(Shift(4), SampleProbe()))
-    nested.fit(5, 7)
+    _ = nested.fit(5, 7)
     print("samples_nested", nested.score_samples(1))
     dense[DType.float32]()
     dense[DType.float64]()

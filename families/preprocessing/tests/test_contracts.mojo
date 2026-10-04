@@ -7,7 +7,7 @@ from estimator import DemoRegressor, DemoParams
 def exercise_generic[
     E: RegressorMixin
 ](mut estimator: E, X: E.Input, y: E.Target) raises -> E.Prediction:
-    estimator.fit(X, y)
+    _ = estimator.fit(X, y)
     return estimator.predict(X)
 
 
@@ -51,11 +51,11 @@ def main() raises:
     var fresh = clone(model)
     assert_false(fresh.__sklearn_is_fitted__())
     assert_equal(fresh.offset, 2.0)
-    fresh.set_params(params)
+    _ = fresh.set_params(params)
     assert_equal(fresh.offset, 7.0)
     assert_equal(model.offset, 2.0)
-    fresh.fit(X, y)
-    fresh.fit(X, y)
+    _ = fresh.fit(X, y)
+    _ = fresh.fit(X, y)
     assert_equal(fresh.predict(X)[0], 8.0)
     with assert_raises():
         _ = fresh.score(X, y)

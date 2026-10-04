@@ -130,15 +130,30 @@ struct Normalizer[dtype: DType = DType.float64](Preprocessor):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.norm, self.copy)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.norm = params.norm
         self.copy = params.copy_input
+        return self
 
-    def set_params(mut self, *, norm: Optional[String] = None, copy: Optional[Bool] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        norm: Optional[String] = None,
+        copy: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         if norm:
             self.norm = norm.value()
         if copy:
             self.copy = copy.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.norm, copy=self.copy)
@@ -150,17 +165,34 @@ struct Normalizer[dtype: DType = DType.float64](Preprocessor):
     def set_output(mut self, *, transform: Optional[String] = None) raises:
         check_set_output(transform)
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         _ = _norm_code(self.norm, "Normalizer")
         check_matrix(X, allow_nan=False)
         self.n_features_in_ = X.shape[1]
         self.feature_names_in_ = None
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=False)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def _check(self, X: Self.Input) raises -> Int:
         var code = _norm_code(self.norm, "Normalizer")
@@ -182,7 +214,7 @@ struct Normalizer[dtype: DType = DType.float64](Preprocessor):
         engine.normalize_inplace(X, axis=1, norm=code)
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
@@ -221,15 +253,30 @@ struct Binarizer[dtype: DType = DType.float64](Preprocessor):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.threshold, self.copy)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.threshold = params.threshold
         self.copy = params.copy_input
+        return self
 
-    def set_params(mut self, *, threshold: Optional[Float64] = None, copy: Optional[Bool] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        threshold: Optional[Float64] = None,
+        copy: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         if threshold:
             self.threshold = threshold.value()
         if copy:
             self.copy = copy.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(threshold=self.threshold, copy=self.copy)
@@ -240,16 +287,33 @@ struct Binarizer[dtype: DType = DType.float64](Preprocessor):
     def set_output(mut self, *, transform: Optional[String] = None) raises:
         check_set_output(transform)
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=False)
         self.n_features_in_ = X.shape[1]
         self.feature_names_in_ = None
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=False)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def _check(self, X: Self.Input) raises:
         check_matrix(X, allow_nan=False)
@@ -269,7 +333,7 @@ struct Binarizer[dtype: DType = DType.float64](Preprocessor):
         binarize_inplace(X, threshold=self.threshold)
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
@@ -307,8 +371,14 @@ struct KernelCenterer[dtype: DType = DType.float64](Preprocessor):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params()
 
-    def set_params(mut self, params: Self.Params) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()
@@ -319,7 +389,14 @@ struct KernelCenterer[dtype: DType = DType.float64](Preprocessor):
     def set_output(mut self, *, transform: Optional[String] = None) raises:
         check_set_output(transform)
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         """X is the training kernel K of shape (n_samples, n_samples)."""
         check_matrix(X, allow_nan=False)
         var n = X.shape[0]
@@ -339,12 +416,22 @@ struct KernelCenterer[dtype: DType = DType.float64](Preprocessor):
         self.K_fit_all_ = total / Scalar[Self.dtype](n)
         self.n_features_in_ = n
         self.feature_names_in_ = None
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=False)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def _center(self, X: Self.Input, mut out: NDArray[Self.dtype]) raises:
         check_fitted(self.__sklearn_is_fitted__(), "KernelCenterer")
@@ -389,7 +476,7 @@ struct KernelCenterer[dtype: DType = DType.float64](Preprocessor):
                 put(X, i, j, v + self.K_fit_all_)
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:

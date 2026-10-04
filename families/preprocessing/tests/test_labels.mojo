@@ -67,10 +67,10 @@ def test_label_encoder_strings() raises:
     var fresh = clone(model)
     assert_false(fresh.__sklearn_is_fitted__())
     var other: List[String] = ["b", "a"]
-    model.fit(other)
+    _ = model.fit(other)
     assert_equal(len(model.classes_), 2)
     # Fitting on no labels is a valid fit with no classes.
-    model.fit(none)
+    _ = model.fit(none)
     assert_true(model.__sklearn_is_fitted__())
     assert_equal(len(model.classes_), 0)
 
@@ -92,7 +92,7 @@ def test_label_encoder_numeric() raises:
     assert_true(isnan(back.item(5)))
     # NaN is unseen when no NaN was fitted.
     var finite = LabelEncoder[NumericLabels[DType.float64]]()
-    finite.fit(floats([1.0, 2.0]))
+    _ = finite.fit(floats([1.0, 2.0]))
     with assert_raises(contains="unseen labels: [nan]"):
         _ = finite.transform(floats([nan]))
     # Integer labels and a one-column matrix (sklearn column_or_1d).
@@ -101,7 +101,7 @@ def test_label_encoder_numeric() raises:
     var int_codes = int_model.fit_transform(column)
     assert_equal(Int(int_codes.item(1)), 0)
     with assert_raises(contains="y should be a 1d array, got an array of shape (2, 2) instead."):
-        int_model.fit(int_matrix(2, 2, [1, 2, 3, 4]))
+        _ = int_model.fit(int_matrix(2, 2, [1, 2, 3, 4]))
     # Strided (negative-stride) views are read in place.
     var base = ints([5, 1, 9])
     var reversed = base.view_with_layout(Shape(3), nm.NDArrayStrides(-1), 2)
@@ -159,25 +159,25 @@ def test_label_binarizer() raises:
     with assert_raises(contains="was not fitted with multilabel input"):
         _ = model.transform(indicator)
     # Parameter errors are raised at fit; sparse output is deferred.
-    model.set_params(neg_label=3)
+    _ = model.set_params(neg_label=3)
     with assert_raises(contains="neg_label=3 must be strictly less than pos_label=2."):
-        model.fit(y)
-    model.set_params(LabelBinarizer[NumericLabels[DType.int64]].Params(0, 1, True))
+        _ = model.fit(y)
+    _ = model.set_params(LabelBinarizer[NumericLabels[DType.int64]].Params(0, 1, True))
     with assert_raises(contains="sparse output is deferred"):
-        model.fit(y)
+        _ = model.fit(y)
     var copy = clone(model)
     assert_true(copy.sparse_output)
     assert_false(copy.__sklearn_is_fitted__())
     with assert_raises(contains="Multioutput target data is not supported"):
-        multi.fit(int_matrix(2, 2, [1, 2, 3, 4]))
+        _ = multi.fit(int_matrix(2, 2, [1, 2, 3, 4]))
     var scores_model = LabelBinarizer[NumericLabels[DType.float64]]()
     with assert_raises(contains="Unknown label type: continuous"):
-        scores_model.fit(floats([0.5, 1.0]))
+        _ = scores_model.fit(floats([0.5, 1.0]))
     with assert_raises(contains="Input y contains NaN."):
-        scores_model.fit(floats([Float64("nan"), 1.0]))
+        _ = scores_model.fit(floats([Float64("nan"), 1.0]))
     var empty_model = LabelBinarizer[NumericLabels[DType.int64]]()
     with assert_raises(contains="y has 0 samples"):
-        empty_model.fit(ints(List[Int]()))
+        _ = empty_model.fit(ints(List[Int]()))
 
 
 def test_label_binarize() raises:
@@ -241,7 +241,7 @@ def test_multilabel_binarizer() raises:
     var twice: List[String] = ["a", "a"]
     var duplicate = MultiLabelBinarizer(classes=twice^)
     with assert_raises(contains="duplicate classes"):
-        duplicate.fit(y)
+        _ = duplicate.fit(y)
     var copy = clone(given)
     assert_false(copy.__sklearn_is_fitted__())
     assert_equal(len(copy.get_params().classes.value()), 2)
@@ -254,8 +254,8 @@ def test_multilabel_binarizer() raises:
     var nan_rows: List[List[Float64]] = [[Float64("nan")]]
     var floats_model = MultiLabelBinarizer[NumericLabels[DType.float64]]()
     with assert_raises(contains="does not support NaN labels"):
-        floats_model.fit(nan_rows)
-    numeric.set_params(sparse_output=True)
+        _ = floats_model.fit(nan_rows)
+    _ = numeric.set_params(sparse_output=True)
     with assert_raises(contains="sparse output is deferred"):
         _ = numeric.transform(numbers)
 

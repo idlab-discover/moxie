@@ -38,38 +38,38 @@ def test_standard_scaler() raises:
     with assert_raises(contains="NotFittedError"):
         _ = model.transform(matrix(2, 2))
     var X = matrix(4, 2)
-    model.fit(X)
+    _ = model.fit(X)
     assert_false(Bool(model.mean_.value().size == 0))
     var back = generic_inverse(model, model.transform(X))
     for k in range(8):
         assert_close(back.unsafe_get(k), X.unsafe_get(k))
     # A normal fit replaces learned state; partial_fit accumulates.
-    model.set_params(with_mean=True)
-    model.fit(matrix(3, 2))
+    _ = model.set_params(with_mean=True)
+    _ = model.fit(matrix(3, 2))
     assert_equal(model.n_samples_seen_.value(), 3)
-    model.partial_fit(X)
+    _ = model.partial_fit(X)
     assert_equal(model.n_samples_seen_.value(), 7)
     assert_true(model.n_samples_seen_.is_scalar)
     assert_false(model.n_samples_seen_.is_integer)
     # A NaN makes counts differ by feature: sklearn's vector n_samples_seen_.
     var holes = matrix(3, 2)
     holes.unsafe_set(0, Float64("nan"))
-    model.fit(holes)
+    _ = model.fit(holes)
     assert_false(model.n_samples_seen_.is_scalar)
     assert_equal(model.n_samples_seen_.values.unsafe_get(0), 2)
     with assert_raises(contains="per-feature"):
         _ = model.n_samples_seen_.value()
     # Neither statistic: sklearn's integer count and no moments.
     var counter = StandardScaler(with_mean=False, with_std=False)
-    counter.fit(X)
+    _ = counter.fit(X)
     assert_true(counter.n_samples_seen_.is_integer)
     assert_false(Bool(counter.mean_))
     with assert_raises(contains="partial_fit"):
-        counter.set_params(with_std=True)
-        counter.partial_fit(X)
+        _ = counter.set_params(with_std=True)
+        _ = counter.partial_fit(X)
     # Scalar weights scale counts without expanding a vector.
     var weighted = StandardScaler()
-    weighted.fit(X, sample_weight=2.5)
+    _ = weighted.fit(X, sample_weight=2.5)
     assert_equal(weighted.n_samples_seen_.value(), 10)
     with assert_raises(contains="features"):
         _ = weighted.transform(matrix(2, 3))
@@ -87,9 +87,9 @@ def test_standard_scaler() raises:
     # The borrowed input is unchanged by copying transforms.
     assert_equal(X.item(0, 0), -2.5)
     var names: List[String] = ["a", "b"]
-    weighted.fit_named(X, names)
+    _ = weighted.fit_named(X, names)
     assert_equal(weighted.get_feature_names_out()[1], "b")
-    weighted.fit(X)
+    _ = weighted.fit(X)
     assert_equal(weighted.get_feature_names_out()[0], "x0")
 
 
@@ -100,14 +100,14 @@ def test_minmax_and_maxabs() raises:
     assert_equal(out.item(0, 0), -1)
     assert_equal(out.item(3, 0), 1)
     assert_equal(mm.n_samples_seen_, 4)
-    mm.partial_fit(matrix(2, 3, 100))
+    _ = mm.partial_fit(matrix(2, 3, 100))
     assert_equal(mm.n_samples_seen_, 6)
     # clip bounds transforms of out-of-range data.
     var far = mm.transform(matrix(1, 3, 1e6))
     assert_equal(far.item(0, 0), 1)
-    mm.set_params(feature_range=(2.0, 1.0))
+    _ = mm.set_params(feature_range=(2.0, 1.0))
     with assert_raises(contains="feature range"):
-        mm.fit(X)
+        _ = mm.fit(X)
     var cloned = clone(mm)
     assert_equal(cloned.feature_range[0], 2)
     assert_false(cloned.__sklearn_is_fitted__())
@@ -115,13 +115,13 @@ def test_minmax_and_maxabs() raises:
     var X32 = zeros[DType.float32](Shape(2, 2))
     X32.unsafe_set(0, -4)
     X32.unsafe_set(3, 2)
-    ma.fit(X32)
+    _ = ma.fit(X32)
     assert_equal(ma.max_abs_.unsafe_get(0), 4)
     assert_equal(ma.scale_.unsafe_get(1), 2)
     var t = ma.transform(X32)
     assert_equal(t.item(0, 0), -1)
     var row = zeros[DType.float32](Shape(1, 2))
-    ma.fit(row)
+    _ = ma.fit(row)
     assert_equal(ma.n_samples_seen_, 1)
     # All-zero features are scaled by 1, never divided by zero.
     assert_equal(ma.scale_.unsafe_get(0), 1)
@@ -130,14 +130,14 @@ def test_minmax_and_maxabs() raises:
 def test_robust_scaler() raises:
     var X = matrix(5, 2)
     var model = RobustScaler(with_scaling=False)
-    model.fit(X)
+    _ = model.fit(X)
     assert_false(Bool(model.scale_))
     assert_equal(model.center_.value().unsafe_get(0), X.item(2, 0))
     var back = generic_inverse(model, model.transform(X))
     assert_close(back.item(4, 1), X.item(4, 1))
-    model.set_params(quantile_range=(80.0, 20.0))
+    _ = model.set_params(quantile_range=(80.0, 20.0))
     with assert_raises(contains="quantile range"):
-        model.fit(X)
+        _ = model.fit(X)
     # The failed fit kept earlier learned state.
     assert_true(model.__sklearn_is_fitted__())
     assert_equal(clone(model).quantile_range[0], 80)

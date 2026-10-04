@@ -25,7 +25,7 @@ def fitted_clone() raises -> FrozenEstimator[DummyRegressor]:
     var model = DummyRegressor()
     var X: List[Float64] = [0.0, 1.0, 2.0, 3.0]
     var y: List[Float64] = [2.0, 3.0, 5.0, 10.0]
-    model.fit(X, y)
+    _ = model.fit(X, y)
     var frozen = FrozenEstimator(model^)
     return clone(frozen)
 
@@ -46,7 +46,7 @@ def main() raises:
     assert_false(unfitted.__sklearn_is_fitted__())
     assert_false(clone(unfitted).__sklearn_is_fitted__())
     with assert_raises():
-        unfitted.fit(X, y)
+        _ = unfitted.fit(X, y)
     with assert_raises():
         check_is_fitted(unfitted)
     with assert_raises():
@@ -64,22 +64,22 @@ def main() raises:
 
     var changed: List[Float64] = [100.0, 200.0, 300.0, 400.0]
     var source = DummyRegressor()
-    source.fit(X, y)
+    _ = source.fit(X, y)
     var from_copy = F(source.copy())
-    source.fit(X, changed)
+    _ = source.fit(X, changed)
     assert_equal(from_copy.predict(X), expected)
     with assert_raises():
-        source.fit(X, List[Float64]())
+        _ = source.fit(X, List[Float64]())
     assert_equal(source.constant_.value(), 250.0)
     var unsupported = DummyRegressor(strategy="median")
     with assert_raises():
-        unsupported.fit(X, y)
+        _ = unsupported.fit(X, y)
     assert_false(unsupported.__sklearn_is_fitted__())
     for _ in range(3):
-        frozen.fit(X, changed)
+        _ = frozen.fit(X, changed)
     var empty = List[Float64]()
-    frozen.fit(empty, changed)  # no shape validation in the reference
-    frozen.fit("ignored", 42)  # no input type validation either
+    _ = frozen.fit(empty, changed)  # no shape validation in the reference
+    _ = frozen.fit("ignored", 42)  # no input type validation either
     assert_equal(frozen.predict(X), expected)
     assert_equal(len(frozen.predict(empty)), 0)
 
@@ -91,20 +91,20 @@ def main() raises:
         Pointer(to=frozen.estimator()) == Pointer(to=cloned.estimator())
     )
     assert_true(Pointer(to=deep.estimator()) == Pointer(to=shallow.estimator()))
-    frozen.set_params()
+    _ = frozen.set_params()
     assert_equal(frozen.predict(X), expected)
-    frozen.set_params(estimator=DummyRegressor())
+    _ = frozen.set_params(estimator=DummyRegressor())
     assert_false(frozen.__sklearn_is_fitted__())
     assert_equal(cloned.predict(X), expected)
     assert_equal(copied.predict(X), expected)
-    frozen.set_params(deep)
+    _ = frozen.set_params(deep)
     assert_true(
         Pointer(to=frozen.estimator()) == Pointer(to=cloned.estimator())
     )
 
     var replacement = DummyRegressor()
-    replacement.fit(X, changed)
-    frozen.set_params(estimator=replacement^)
+    _ = replacement.fit(X, changed)
+    _ = frozen.set_params(estimator=replacement^)
     assert_equal(frozen.estimator().constant_.value(), 250.0)
     assert_equal(cloned.predict(X), expected)
     var reconstructed = F(shallow)
@@ -116,6 +116,6 @@ def main() raises:
 
     # A nested frozen estimator retains the same semantics.
     var nested = FrozenEstimator(cloned^)
-    nested.fit(X, changed)
+    _ = nested.fit(X, changed)
     assert_equal(clone(nested).predict(X), expected)
     print("Frozen estimator contracts passed")

@@ -295,7 +295,13 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.n_bins, self.n_bins_per_feature.copy(), self.encode, self.strategy, self.quantile_method, self.subsample, self.random_state)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.n_bins = params.n_bins
         self.n_bins_per_feature = params.n_bins_per_feature.copy()
         self.encode = params.encode
@@ -303,12 +309,20 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
         self.quantile_method = params.quantile_method
         self.subsample = params.subsample
         self.random_state = params.random_state
+        return self
 
-    def set_params(
-        mut self, *, n_bins: Optional[Int] = None, encode: Optional[String] = None,
-        strategy: Optional[String] = None, quantile_method: Optional[String] = None,
-        subsample: Optional[Optional[Int]] = None, random_state: Optional[Optional[Int]] = None,
-    ) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        n_bins: Optional[Int] = None,
+        encode: Optional[String] = None,
+        strategy: Optional[String] = None,
+        quantile_method: Optional[String] = None,
+        subsample: Optional[Optional[Int]] = None,
+        random_state: Optional[Optional[Int]] = None,
+    ) raises -> ref[self] Self:
         """Keyword updates; a scalar `n_bins` replaces a per-feature list.
         `subsample=Optional[Int](None)` selects sklearn's `subsample=None`."""
         if n_bins:
@@ -324,14 +338,21 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
             self.subsample = subsample.value()
         if random_state:
             self.random_state = random_state.value()
+        return self
 
-    def set_params(mut self, n_bins: List[Int]) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        n_bins: List[Int],
+    ) raises -> ref[self] Self:
         """Set a per-feature (array-like) `n_bins`."""
         self.n_bins_per_feature = n_bins.copy()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         var result = Self()
-        result.set_params(self.get_params())
+        _ = result.set_params(self.get_params())
         return result^
 
     def __sklearn_is_fitted__(self) -> Bool:
@@ -561,19 +582,56 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
         self.n_features_in_ = p
         self.feature_names_in_ = None
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         var unused = RandomState(0)
         self._fit(X, vector[Self.dtype](0), False, unused, False)
+        return self
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target], sample_weight: NDArray[Self.dtype]) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target],
+        ref[sample_weight_origin] sample_weight: NDArray[Self.dtype],
+    ) raises -> ref[self] Self:
         var unused = RandomState(0)
         self._fit(X, sample_weight, True, unused, False)
+        return self
 
-    def fit(mut self, X: Self.Input, *, sample_weight: NDArray[Self.dtype]) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        *,
+        ref[sample_weight_origin] sample_weight: NDArray[Self.dtype],
+    ) raises -> ref[self] Self:
         var unused = RandomState(0)
         self._fit(X, sample_weight, True, unused, False)
+        return self
 
-    def fit(mut self, X: Self.Input, *, sample_weight: Float64) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        *,
+        ref[sample_weight_origin] sample_weight: Float64,
+    ) raises -> ref[self] Self:
         """Scalar `sample_weight`: every sample gets that weight, cast to X's dtype."""
         var n = X.shape[0] if X.ndim == 2 else 0
         var weights = vector[Self.dtype](n)
@@ -581,28 +639,57 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
             weights.unsafe_set(i, Scalar[Self.dtype](sample_weight))
         var unused = RandomState(0)
         self._fit(X, weights, True, unused, False)
+        return self
 
-    def fit(mut self, X: Self.Input, mut random_state: RandomState) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        mut random_state: RandomState,
+    ) raises -> ref[self] Self:
         """Fit drawing any subsample from a borrowed RandomState (advanced in
         place); the configured `random_state` is ignored, like passing a
         RandomState instance to sklearn's constructor."""
         self._fit(X, vector[Self.dtype](0), False, random_state, True)
+        return self
 
-    def fit(mut self, X: Self.Input, mut random_state: RandomState, *, sample_weight: NDArray[Self.dtype]) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        mut random_state: RandomState,
+        *,
+        ref[sample_weight_origin] sample_weight: NDArray[Self.dtype],
+    ) raises -> ref[self] Self:
         self._fit(X, sample_weight, True, random_state, True)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_matrix(X, allow_nan=False)
         check_names_length(feature_names, X.shape[1])
-        self.fit(X, y)
+        _ = self.fit(X, y)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        self.fit(X, y)
+        _ = self.fit(X, y)
         return self.transform(X)
 
     def fit_transform(mut self, X: Self.Input, *, sample_weight: NDArray[Self.dtype]) raises -> Self.Transformed:
-        self.fit(X, sample_weight=sample_weight)
+        _ = self.fit(X, sample_weight=sample_weight)
         return self.transform(X)
 
     # -- transforms ---------------------------------------------------------

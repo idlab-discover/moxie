@@ -31,12 +31,12 @@ def check[dtype: DType]() raises:
         var label = String(shape)
         emit("fused-" + label, union.fit_transform(X, y.copy()))
         emit("transform-" + label, union.transform(X))
-        union.fit(X, y.copy())
+        _ = union.fit(X, y.copy())
         emit("fit-" + label, union.transform(X))
         var cloned = clone(union)
         var params = cloned.get_params()
         params.transformer_list.first.estimator.factor = -4
-        cloned.set_params(params)
+        _ = cloned.set_params(params)
         emit("clone-" + label, cloned.fit_transform(X, y.copy()))
         print("state", 32 if dtype == DType.float32 else 64, shape,
               union.transformer_list.first.estimator.fit_calls,
@@ -62,7 +62,7 @@ def check[dtype: DType]() raises:
     weights["again"] = nan[DType.float64]()
     passes.transformer_weights = weights.copy()
     emit("nonfinite-weights", passes.transform(view))
-    passes.fit(view)
+    _ = passes.fit(view)
     var names = passes.get_feature_names_out()
     for name in names:
         print("name", 32 if dtype == DType.float32 else 64, name)

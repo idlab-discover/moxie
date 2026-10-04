@@ -19,7 +19,7 @@ def check[dtype: DType]() raises:
     var pipe = Pipeline(TestTransformer[dtype](kind=1), DummyRegressor[dtype]())
     with assert_raises():
         _ = pipe.n_features_in_()
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     assert_equal(pipe.n_features_in_(), 3)
     assert_equal(pipe.transformer.transform(X).shape[1], 1)
     assert_equal(through_trait(pipe), 3)
@@ -28,10 +28,10 @@ def check[dtype: DType]() raises:
     with assert_raises():
         _ = fresh.n_features_in_()
     var wider = zeros[dtype](Shape(4, 5))
-    fresh.fit(wider, y)
+    _ = fresh.fit(wider, y)
     assert_equal(fresh.n_features_in_(), 5)
     assert_equal(pipe.n_features_in_(), 3)
-    pipe.fit(wider, y)
+    _ = pipe.fit(wider, y)
     assert_equal(pipe.n_features_in_(), 5)
     # No pipeline-wide fitted check: only the first step owns this attribute.
     pipe.estimator = DummyRegressor[dtype]()
@@ -41,17 +41,17 @@ def check[dtype: DType]() raises:
     pipe.transformer = TestTransformer[dtype](kind=1)
     with assert_raises():
         _ = pipe.n_features_in_()
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     var params = pipe.get_params()
     params.transformer.kind = 4
-    pipe.set_params(params)
+    _ = pipe.set_params(params)
     assert_equal(pipe.n_features_in_(), 3)
     with assert_raises():
-        pipe.fit(X, y)
+        _ = pipe.fit(X, y)
     with assert_raises():
         _ = pipe.n_features_in_()
     var missing = Pipeline(CopyStep[dtype](), DummyRegressor[dtype](), transformer_name="copy")
-    missing.fit(X, y)
+    _ = missing.fit(X, y)
     try:
         _ = missing.n_features_in_()
         raise Error("expected missing capability")
@@ -61,7 +61,7 @@ def check[dtype: DType]() raises:
                              UnionSentinel[dtype]("b", StepMode.passthrough))
     var nested = Pipeline(FeatureUnion(branches^),
                           Pipeline(TestTransformer[dtype](kind=1), DummyRegressor[dtype]()))
-    nested.fit(X, y)
+    _ = nested.fit(X, y)
     assert_equal(nested.n_features_in_(), 3)
     assert_equal(nested.estimator.n_features_in_(), 6)
     print("features_union", Int(dtype == DType.float64), nested.n_features_in_(), nested.estimator.n_features_in_())

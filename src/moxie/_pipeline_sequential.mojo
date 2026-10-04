@@ -30,12 +30,12 @@ def _fit_transform[P: TransformerMixin, T: Copyable & Deinitable](
         return step.fit_transform(X, rebind[Optional[P.Target]](target))
     elif conforms_to(P, SupervisedEstimator):
         comptime assert P.Target == T, "pipeline target types must match"
-        step.fit(X, rebind[P.Target](y))
+        _ = step.fit(X, rebind[P.Target](y))
         return step.transform(X)
     elif conforms_to(P, UnsupervisedEstimator):
         comptime assert P.Target == T, "pipeline target types must match"
         var target = Optional[T](y.copy())
-        step.fit(X, rebind[Optional[P.Target]](target))
+        _ = step.fit(X, rebind[Optional[P.Target]](target))
         return step.transform(X)
     else:
         comptime assert False, "pipeline transformer must support fit or fit_transform"
@@ -92,13 +92,20 @@ struct Pipeline[
         return Self.Params(self.transformer_name, self.estimator_name,
                            self.transformer.get_params(deep), self.estimator.get_params(deep))
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         validate_names([params.transformer_name, params.estimator_name],
                        ["steps", "memory", "verbose", "transform_input"])
         self.transformer_name = params.transformer_name
         self.estimator_name = params.estimator_name
-        self.transformer.set_params(params.transformer)
-        self.estimator.set_params(params.estimator)
+        _ = self.transformer.set_params(params.transformer)
+        _ = self.estimator.set_params(params.estimator)
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(clone(self.transformer), clone(self.estimator),
@@ -132,13 +139,22 @@ struct Pipeline[
             raise Error("AttributeError: Estimator " + self.transformer_name +
                         " does not provide get_feature_names_out")
 
-    def fit(mut self, X: Self.Input, y: Self.Target) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
         self._validate_names()
         comptime if conforms_to(Self.Target, Copyable) and conforms_to(Self.Target, Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
             var transformed = _fit_transform(self.transformer, X, y)
-            self.estimator.fit(rebind[Self.E.Input](transformed), y)
+            _ = self.estimator.fit(rebind[Self.E.Input](transformed), y)
         else:
             comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
+        return self
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         check_is_fitted(self)

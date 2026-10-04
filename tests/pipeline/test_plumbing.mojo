@@ -16,8 +16,15 @@ struct Probe(CompositionStep):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return self.config.copy()
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.config = params.copy()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.config[0])
@@ -46,7 +53,7 @@ def contracts() raises:
     var params = independent.get_params()
     params.first.first[0] = 19
     assert_equal(independent.first.first.estimator.config[0], 3)
-    independent.set_params(params)
+    _ = independent.set_params(params)
     params.first.first[0] = 99
     assert_equal(independent.first.first.estimator.config[0], 19)
     assert_equal(tree.first.first.estimator.config[0], 3)

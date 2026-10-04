@@ -25,9 +25,9 @@ def regressors[dtype: DType]() raises:
             _ = before_fit.predict(x)
         var weights = nm.ones[dtype](Shape(4))
         weights[Item(0)] = 2
-        model.fit(x, y, sample_weight=weights)
+        _ = model.fit(x, y, sample_weight=weights)
         # Constructor parameters may change while learned state remains fitted.
-        model.set_params(strategy="median")
+        _ = model.set_params(strategy="median")
         save_model[Schema](model, "builds/regressor.moxie")
         var restored = load_model[Schema]("builds/regressor.moxie")
         save_model[Schema, SnappyCodec](model, "builds/regressor-snappy.moxie")
@@ -48,7 +48,7 @@ def regressors[dtype: DType]() raises:
         assert_true(not copy.__sklearn_is_fitted__())
         restored.constant_.value()[Item(0, 0)] = 99
         assert_true(model.constant_.value().item(0, 0) != 99)
-        restored.fit(x, y)
+        _ = restored.fit(x, y)
         var archive = Schema.encode(model)
         archive.schema_version = 2
         with assert_raises():
@@ -77,8 +77,8 @@ def classifiers[multi: Bool, dtype: DType]() raises:
         var fresh = Schema.encode(model)
         var before_fit = Schema.decode(fresh)
         assert_true(not before_fit.__sklearn_is_fitted__())
-        model.fit(x, y)
-        model.set_params(strategy="uniform")
+        _ = model.fit(x, y)
+        _ = model.set_params(strategy="uniform")
         save_model[Schema](model, "builds/classifier.moxie")
         var restored = load_model[Schema]("builds/classifier.moxie")
         save_model[Schema, SnappyCodec](model, "builds/classifier-snappy.moxie")
@@ -122,7 +122,7 @@ def classifiers[multi: Bool, dtype: DType]() raises:
         var read = loads(bytes)
         var again = Schema.decode(read)
         assert_equal(again.n_outputs_.value(), 2 if multi else 1)
-        restored.fit(x, y)
+        _ = restored.fit(x, y)
 
 
 def edge_states() raises:
@@ -131,7 +131,7 @@ def edge_states() raises:
     var model = DummyClassifier(strategy="prior")
     var weights = nm.ones[DType.float64](Shape(3))
     weights[Item(0)] = 3
-    model.fit(x, labels, sample_weight=weights)
+    _ = model.fit(x, labels, sample_weight=weights)
     var archive = DummyClassifierSchema.encode(model)
     var restored = DummyClassifierSchema.decode(archive)
     assert_true(not restored.random_state)
@@ -146,7 +146,7 @@ def edge_states() raises:
         _ = DummyClassifierSchema.decode(archive)
     var y = nm.ones[DType.float64](Shape(3))
     var regressor = DummyRegressor()
-    regressor.fit(Optional[NDArray[DType.float64]](), y)
+    _ = regressor.fit(Optional[NDArray[DType.float64]](), y)
     var state = DummyRegressorSchema.encode(regressor)
     var again = DummyRegressorSchema.decode(state)
     assert_true(not again.n_features_in_)

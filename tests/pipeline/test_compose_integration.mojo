@@ -29,7 +29,7 @@ def check[dtype: DType]() raises:
         _ = pipe.n_features_in_()
     with assert_raises():
         _ = pipe.transformer.get_feature_names_out()
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     assert_equal(pipe.n_features_in_(), 3)
     var names = pipe.transformer.get_feature_names_out()
     assert_equal(names[0], "left__selected__x2")
@@ -48,7 +48,7 @@ def check[dtype: DType]() raises:
     var inner = clone(pipe.transformer.transformer_list.first.estimator)
     comptime Inner = ColumnTransformer[ColumnCons[NoTransformer[dtype], EndColumns[dtype]]]
     var outer = ColumnTransformer(ColumnEntry[Inner, dtype]("nested", inner^, [0, 1, 2]))
-    outer.fit(X)
+    _ = outer.fit(X)
     assert_equal(outer.get_feature_names_out()[0], "nested__selected__x2")
     var output = ResultLine(String(Int(dtype == DType.float32)))
     output.add("transformed", pipe.transformer.transform(X))
@@ -61,10 +61,10 @@ def check[dtype: DType]() raises:
         _ = fresh.n_features_in_()
     for i in range(y.size):
         y.unsafe_set(i, y.unsafe_get(i) + 7)
-    fresh.fit(X, y)
+    _ = fresh.fit(X, y)
     output.add("clone_refit", fresh.predict(X))
     output.add("original", pipe.predict(X))
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     output.add("refit", pipe.predict(X))
     output.emit()
 

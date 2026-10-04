@@ -57,13 +57,20 @@ struct NamedStep[E: CompositionStep](CompositionStep):
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return self.estimator.get_params(deep)
 
-    def set_params(mut self, params: Self.Params) raises:
-        self.estimator.set_params(params)
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
+        _ = self.estimator.set_params(params)
+        return self
 
     def set_named_params(mut self, name: String, params: Self.Params) raises:
         if name != self.name:
             raise Error("ValueError: unknown step name")
-        self.set_params(params)
+        _ = self.set_params(params)
 
     def replace(mut self, var estimator: Self.E):
         self.estimator = estimator^
@@ -96,9 +103,16 @@ struct StepPair[A: CompositionStep, B: CompositionStep](CompositionStep):
         var second: Self.B.Params = self.second.get_params(deep)
         return Self.Params(first^, second^)
 
-    def set_params(mut self, params: Self.Params) raises:
-        self.first.set_params(params.first)
-        self.second.set_params(params.second)
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
+        _ = self.first.set_params(params.first)
+        _ = self.second.set_params(params.second)
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         var first: Self.A = clone(self.first)

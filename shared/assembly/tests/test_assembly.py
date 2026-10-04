@@ -52,7 +52,8 @@ class AssemblyTests(unittest.TestCase):
     def test_real_baseline_deduplication_and_override(self):
         result = self.execute()
         receipt = json.loads(result['ASSEMBLY.json'])
-        self.assertEqual(receipt['modules']['moxie.base'], ['dummy-family', 'moxie'])
+        self.assertEqual(receipt['modules']['moxie.base'], ['moxie'])
+        self.assertEqual(receipt['modules']['moxie.utils.validation'], ['dummy-family', 'moxie'])
         self.assertEqual(receipt['modules']['moxie.dummy'], ['consumer'])
         self.assertNotIn(b'DummyClassifier', result['moxie/__init__.mojo'])
         self.assertIn(b'replacement_marker', result['moxie/__init__.mojo'])
@@ -68,7 +69,7 @@ class AssemblyTests(unittest.TestCase):
                          {k: v for k, v in second.items() if k != 'ASSEMBLY.json'})
 
     def test_collision_requires_override(self):
-        self.lock['overrides'] = []
+        self.lock['overrides'] = [o for o in self.lock['overrides'] if o['module'] == 'moxie.base']
         self.fails('module collision: moxie.dummy')
 
     def test_identical_nonbaseline_collision(self):

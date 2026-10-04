@@ -19,14 +19,30 @@ struct ScoreRecorder(SupervisedScorer, Predictor):
         self.child = Recorder()
     def get_params(self, deep: Bool = True) raises -> Int:
         return self.child.get_params(deep)
-    def set_params(mut self, params: Int) raises:
-        self.child.set_params(params)
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        _ = self.child.set_params(params)
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return self.child.__sklearn_is_fitted__()
-    def fit(mut self, X: Int, y: Int) raises:
-        self.child.fit(X, y)
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        ref[y_origin] y: Int,
+    ) raises -> ref[self] Self:
+        _ = self.child.fit(X, y)
+        return self
     def predict(self, X: Int) raises -> Int:
         raise Error("score must delegate directly, not call predict")
     def score(self, X: Int, y: Int, sample_weight: Optional[Int] = None) raises -> Float64:
@@ -54,7 +70,7 @@ def dense[dtype: DType]() raises:
     var pipe = Pipeline(CopyStep[dtype](), DummyRegressor[dtype]())
     with assert_raises():
         _ = pipe.score(X, y)
-    pipe.fit(X, y)
+    _ = pipe.fit(X, y)
     assert_equal(through_trait(pipe, X, y), 0.0)
     assert_equal(pipe.score(X, target), -4.0)
     assert_equal(pipe.score(X, target, sample_weight=weights.copy()), -3.0)
@@ -80,7 +96,7 @@ def main() raises:
     var pipe = Pipeline(Shift(), ScoreRecorder())
     with assert_raises():
         _ = pipe.score(1, 7)
-    pipe.fit(5, 7)
+    _ = pipe.fit(5, 7)
     assert_equal(through_trait(pipe, 1, 7), 376.0)
     assert_equal(pipe.score(1, 7, sample_weight=3), 380.0)
     assert_equal(pipe.score(1, 7, sample_weight=None), 376.0)
@@ -94,29 +110,29 @@ def main() raises:
         _ = fresh.score(1, 7)
     var params = fresh.get_params()
     params.transformer = 4
-    fresh.set_params(params)
-    fresh.fit(5, 7)
+    _ = fresh.set_params(params)
+    _ = fresh.fit(5, 7)
     assert_equal(fresh.score(1, 7), 578.0)
-    pipe.fit(8, 7)
+    _ = pipe.fit(8, 7)
     assert_equal(pipe.score(1, 7), 379.0)
     print("score_refit", fresh.score(1, 7), pipe.score(1, 7))
     with assert_raises():
-        pipe.fit(-1, 7)
+        _ = pipe.fit(-1, 7)
     assert_true(pipe.__sklearn_is_fitted__())
     with assert_raises():
         _ = pipe.score(1, 7)
     with assert_raises():
-        pipe.fit(5, -1)
+        _ = pipe.fit(5, -1)
     assert_false(pipe.__sklearn_is_fitted__())
     with assert_raises():
         _ = pipe.score(1, 7)
     var fused = Pipeline(Fused(), ScoreRecorder())
-    fused.fit(5, 7)
+    _ = fused.fit(5, 7)
     assert_equal(fused.score(1, 7), 1281.0)
     assert_equal(fused.transformer.calls, 1)
     print("score_fused", fused.score(1, 7))
     var nested = Pipeline(Shift(2), Pipeline(Shift(4), ScoreRecorder()))
-    nested.fit(5, 7)
+    _ = nested.fit(5, 7)
     assert_equal(nested.score(1, 7), 780.0)
     assert_equal(nested.score(1, 7, sample_weight=5), 786.0)
     print("score_nested", nested.score(1, 7), nested.score(1, 7, sample_weight=5))

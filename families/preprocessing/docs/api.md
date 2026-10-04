@@ -26,7 +26,7 @@ def main() raises:
     for k in range(8):
         X.unsafe_set(k, Float64(k * k))
     var scaler = StandardScaler()           # StandardScaler[DType.float64]
-    scaler.fit(X)                           # mutates in place, returns nothing
+    _ = scaler.fit(X)                       # discard the borrow of scaler
     var Z = scaler.transform(X)             # new owned array
     scaler.transform_inplace(X)             # bounded-memory copy=False
     var fresh = clone(scaler)               # unfitted, same configuration
@@ -52,7 +52,7 @@ clear `ValueError` at fit).
 * Constructor keyword names, order, keyword-only boundaries and defaults match
   sklearn; `tests/api_surface.py` checks this against the pinned source, and
   `tests/api_adaptations.json` lists every documented exception.
-* `fit`, `partial_fit` and `set_params` mutate in place and return nothing.
+* `fit`, `fit_named`, `partial_fit` and `set_params` return a mutable borrow of the original estimator and support chaining; see the [shared convention](../../../docs/interfaces.md#fluent-implementation-convention).
   `fit_transform` returns the transformed array.
 * `get_params()` returns a typed `<Estimator>Params` record; `set_params(record)`
   replaces the configuration, and keyword overloads such as

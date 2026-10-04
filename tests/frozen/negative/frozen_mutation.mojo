@@ -6,4 +6,4 @@ def main() raises:
     var frozen = FrozenEstimator(DummyRegressor())
     var X: List[Float64] = [1.0, 2.0]
     var params = frozen.get_params()
-    frozen.estimator().fit(X, X)
+    _ = frozen.estimator().fit(X, X)

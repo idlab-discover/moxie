@@ -13,8 +13,15 @@ struct ProbeB(CompositionStep):
         self.fitted = False
     def get_params(self, deep: Bool = True) raises -> Int:
         return self.config
-    def set_params(mut self, params: Int) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
         self.config = params
+        return self
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.config)
     def __sklearn_is_fitted__(self) -> Bool:

@@ -14,8 +14,14 @@ struct IncompletePredictor(Predictor):
     def get_params(self, deep: Bool = True) raises -> Int:
         return 0
 
-    def set_params(mut self, params: Int) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Int,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()

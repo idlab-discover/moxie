@@ -322,10 +322,17 @@ struct TargetFunctionTransformer[dtype: DType = DType.float64](
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.func, self.inverse_func, self.check_inverse)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.func = params.func
         self.inverse_func = params.inverse_func
         self.check_inverse = params.check_inverse
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.func, self.inverse_func, check_inverse=self.check_inverse)
@@ -333,7 +340,14 @@ struct TargetFunctionTransformer[dtype: DType = DType.float64](
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self.n_features_in_)
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         _check_matrix(X, "FunctionTransformer", "X", " by FunctionTransformer")
         var log = List[String]()
         if self.check_inverse and self.func and self.inverse_func:
@@ -344,6 +358,7 @@ struct TargetFunctionTransformer[dtype: DType = DType.float64](
                            "If you are sure you want to proceed regardless, set 'check_inverse=False'.")
         self.n_features_in_ = X.shape[1]
         self.warnings_ = log^
+        return self
 
     def transform(self, X: Self.Input) raises -> Self.Transformed:
         _check_matrix(X, "FunctionTransformer", "X", " by FunctionTransformer")
@@ -372,7 +387,7 @@ def _fit_target[dtype: DType, T: TargetTransformer](mut transformer: T, y_2d: ND
     T.Input, Deinitable
 ) and conforms_to(T.Target, Deinitable):
     var arg = rebind_var[T.Input](y_2d.copy())
-    transformer.fit(arg)
+    _ = transformer.fit(arg)
 
 
 def _apply_target[dtype: DType, T: TargetTransformer](transformer: T, a: NDArray[dtype]) raises -> NDArray[dtype] where conforms_to(
@@ -395,7 +410,7 @@ def _fit_regressor[dtype: DType, R: TargetRegressor](mut regressor: R, X: R.Inpu
     R.Target, Deinitable
 ):
     var target = rebind_var[R.Target](y.copy())
-    regressor.fit(X, target)
+    _ = regressor.fit(X, target)
 
 
 def _fit_regressor_weighted[dtype: DType, R: WeightedSupervisedEstimator](
@@ -406,7 +421,7 @@ def _fit_regressor_weighted[dtype: DType, R: WeightedSupervisedEstimator](
     var target = rebind_var[R.Target](y.copy())
     var weight = rebind_var[R.SampleWeight](sample_weight.copy())
     try:
-        regressor.fit(X, target, sample_weight=weight)
+        _ = regressor.fit(X, target, sample_weight=weight)
     except error:
         _ = rebind_var[NDArray[dtype]](target^)
         _ = rebind_var[NDArray[dtype]](weight^)
@@ -525,15 +540,24 @@ struct TransformedTargetRegressor[
         return Self.Params(self.regressor.copy(), self.transformer.copy(), self.func, self.inverse_func,
                            self.check_inverse)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.regressor = params.regressor.copy()
         self.transformer = params.transformer.copy()
         self.func = params.func
         self.inverse_func = params.inverse_func
         self.check_inverse = params.check_inverse
+        return self
 
-    def set_params(
-        mut self,
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
         *,
         var regressor: Optional[Self.R] = None,
         var transformer: Optional[Self.T] = None,
@@ -542,7 +566,7 @@ struct TransformedTargetRegressor[
         check_inverse: Optional[Bool] = None,
         regressor_params: Optional[Self.R.Params] = None,
         transformer_params: Optional[Self.T.Params] = None,
-    ) raises:
+    ) raises -> ref[self] Self:
         """Update only the supplied values (use the Params record to reset one to None).
 
         As in sklearn, components are replaced before nested
@@ -565,9 +589,10 @@ struct TransformedTargetRegressor[
         if check_inverse:
             self.check_inverse = check_inverse.value()
         if regressor_params:
-            self.regressor.value().set_params(regressor_params.value())
+            _ = self.regressor.value().set_params(regressor_params.value())
         if transformer_params:
-            self.transformer.value().set_params(transformer_params.value())
+            _ = self.transformer.value().set_params(transformer_params.value())
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         var regressor: Optional[Self.R] = None
@@ -651,7 +676,15 @@ struct TransformedTargetRegressor[
         self.warnings_ = log^
         self._training_dim = y.ndim
 
-    def fit(mut self, X: Self.Input, y: Self.Target) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
         """Fit the transformer on y, then a fresh regressor clone on the transformed y.
 
         Learned state is replaced only after both fits succeed.
@@ -664,10 +697,20 @@ struct TransformedTargetRegressor[
             self._commit(prepared[0].copy(), regressor^, X, y, log^)
         else:
             comptime assert False, "regressor Target must be NDArray[dtype]"
+        return self
 
-    def fit(
-        mut self, X: Self.Input, y: Self.Target, *, sample_weight: Self.SampleWeight
-    ) raises where conforms_to(Self.R, WeightedSupervisedEstimator):
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self where conforms_to(Self.R, WeightedSupervisedEstimator):
         """Fit with `sample_weight` routed to the regressor (not the transformer, as in sklearn)."""
         comptime if conforms_to(Self.R.Target, Deinitable):
             var log = List[String]()
@@ -677,17 +720,39 @@ struct TransformedTargetRegressor[
             self._commit(prepared[0].copy(), regressor^, X, y, log^)
         else:
             comptime assert False, "regressor Target/SampleWeight must be NDArray[dtype]"
+        return self
 
-    def fit(mut self, X: ColumnTable[Self.dtype], y: Self.Target) raises where Self.Input == NDArray[Self.dtype]:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self where Self.Input == NDArray[Self.dtype]:
         """Fit a named numeric table, retaining names as an owned snapshot."""
         var names = X.schema().names.copy()
-        self.fit(rebind[Self.Input](X.values()), y)
+        _ = self.fit(rebind[Self.Input](X.values()), y)
         self.feature_names_in_ = names^
+        return self
 
-    def fit(mut self, X: ColumnTable[Self.dtype], y: Self.Target, *, sample_weight: Self.SampleWeight) raises where Self.Input == NDArray[Self.dtype] and conforms_to(Self.R, WeightedSupervisedEstimator):
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self where Self.Input == NDArray[Self.dtype] and conforms_to(Self.R, WeightedSupervisedEstimator):
         var names = X.schema().names.copy()
-        self.fit(rebind[Self.Input](X.values()), y, sample_weight=sample_weight)
+        _ = self.fit(rebind[Self.Input](X.values()), y, sample_weight=sample_weight)
         self.feature_names_in_ = names^
+        return self
 
     def predict(self, X: ColumnTable[Self.dtype]) raises -> Self.Prediction where Self.Input == NDArray[Self.dtype]:
         check_is_fitted(self)

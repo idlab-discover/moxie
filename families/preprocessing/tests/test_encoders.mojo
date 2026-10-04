@@ -47,30 +47,30 @@ def test_one_hot() raises:
     var unseen: List[CategoricalColumn[StringCategories]] = [strings(other), strings(sizes)]
     with assert_raises(contains="unknown categories ['violet']"):
         _ = model.transform(unseen)
-    model.set_params(handle_unknown="ignore")
-    model.fit(X)
+    _ = model.set_params(handle_unknown="ignore")
+    _ = model.fit(X)
     var ignored = model.transform(unseen)
     var row_total = Float64(0)
     for j in range(3):
         row_total += ignored.item(0, j)
     assert_equal(row_total, 0)
     # Refit replaces learned state; clone copies configuration only.
-    model.set_params(drop="first")
-    model.fit(X)
+    _ = model.set_params(drop="first")
+    _ = model.fit(X)
     assert_equal(model.transform(X).shape[1], 4)
     assert_equal(model.drop_idx_.value()[1].value(), 0)
     var copy = clone(model)
     assert_false(copy.__sklearn_is_fitted__())
     assert_equal(copy.drop.value(), "first")
     var named: List[String] = ["color", "size"]
-    model.fit_named(X, named)
+    _ = model.fit_named(X, named)
     assert_equal(model.get_feature_names_out()[0], "color_red")
-    model.fit(X)
+    _ = model.fit(X)
     assert_false(Bool(model.feature_names_in_))
     # Sparse output stays deferred, including sklearn's default.
     var default = OneHotEncoder()
     with assert_raises(contains="sparse output"):
-        default.fit(X)
+        _ = default.fit(X)
     with assert_raises(contains="features"):
         var narrow: List[CategoricalColumn[StringCategories]] = [X[0].copy()]
         _ = model.transform(narrow)
@@ -94,7 +94,7 @@ def test_infrequent_and_explicit() raises:
     var bad: List[List[Optional[String]]] = [[None, Optional[String]("a")]]
     var invalid = OrdinalEncoder(categories=bad^)
     with assert_raises(contains="Nan should be the last"):
-        invalid.fit(X)
+        _ = invalid.fit(X)
 
 
 def test_ordinal_missing() raises:
@@ -112,9 +112,9 @@ def test_ordinal_missing() raises:
     assert_false(Bool(generic_inverse(coded, Z)[0].get(1)))
     var integer = OrdinalEncoder[StringNaNKind, DType.int64]()
     with assert_raises(contains="There are missing values"):
-        integer.fit(X)
+        _ = integer.fit(X)
     var unknown = OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-5.0)
-    unknown.fit(X)
+    _ = unknown.fit(X)
     var other: List[Optional[String]] = [Optional[String]("z")]
     var unseen: List[CategoricalColumn[StringCategories]] = [strings(other)]
     var encoded = unknown.transform(unseen)

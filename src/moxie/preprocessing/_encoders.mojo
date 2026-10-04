@@ -93,11 +93,17 @@ struct _EncoderCore[K: CategoryKind](Copyable):
             raise Error("ValueError: Found array with 0 sample(s) (shape=(0, " + String(len(columns)) + ")) while a minimum of 1 is required.")
         return rows
 
-    def fit(
-        mut self, columns: List[CategoricalColumn[Self.K.Domain]],
-        categories: Optional[List[List[Optional[Self.K.Domain.Value]]]], handle_unknown: String,
-        min_frequency: Optional[Float64], max_categories: Optional[Int], ignore_missing: Bool,
-    ) raises:
+    def fit[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        columns: List[CategoricalColumn[Self.K.Domain]],
+        categories: Optional[List[List[Optional[Self.K.Domain.Value]]]],
+        handle_unknown: String,
+        min_frequency: Optional[Float64],
+        max_categories: Optional[Int],
+        ignore_missing: Bool,
+    ) raises -> ref[self] Self:
         var n_samples = Self.check_columns(columns)
         var p = len(columns)
         if categories and len(categories.value()) != p:
@@ -139,6 +145,7 @@ struct _EncoderCore[K: CategoryKind](Copyable):
         self.infrequent_enabled = enabled
         self.ignore_missing = ignore_missing
         self.fitted = True
+        return self
 
     def has_infrequent(self, i: Int) -> Bool:
         return self.infrequent_enabled and len(self.infrequent[i]) > 0
@@ -321,7 +328,13 @@ struct OneHotEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64]
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.categories.copy(), self.drop, self.drop_values.copy(), self.sparse_output, self.handle_unknown, self.min_frequency, self.max_categories, self.feature_name_combiner)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.categories = params.categories.copy()
         self.drop = params.drop
         self.drop_values = params.drop_values.copy()
@@ -330,12 +343,19 @@ struct OneHotEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64]
         self.min_frequency = params.min_frequency
         self.max_categories = params.max_categories
         self.feature_name_combiner = params.feature_name_combiner
+        return self
 
-    def set_params(
-        mut self, *, drop: Optional[String] = None, sparse_output: Optional[Bool] = None,
-        handle_unknown: Optional[String] = None, min_frequency: Optional[Float64] = None,
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        drop: Optional[String] = None,
+        sparse_output: Optional[Bool] = None,
+        handle_unknown: Optional[String] = None,
+        min_frequency: Optional[Float64] = None,
         max_categories: Optional[Int] = None,
-    ) raises:
+    ) raises -> ref[self] Self:
         """Keyword updates; a given `drop` strategy replaces explicit drop values."""
         if drop:
             self.drop = drop
@@ -348,10 +368,11 @@ struct OneHotEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64]
             self.min_frequency = min_frequency
         if max_categories:
             self.max_categories = max_categories
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         var result = Self()
-        result.set_params(self.get_params())
+        _ = result.set_params(self.get_params())
         return result^
 
     def __sklearn_is_fitted__(self) -> Bool:
@@ -419,7 +440,7 @@ struct OneHotEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64]
     def _fit(mut self, X: Self.Input) raises:
         self._validate_params()
         var core = _EncoderCore[Self.K]()
-        core.fit(X, self.categories, self.handle_unknown, self.min_frequency, self.max_categories, False)
+        _ = core.fit(X, self.categories, self.handle_unknown, self.min_frequency, self.max_categories, False)
         var after = self._drop_indices(core)
         var outs = List[Int]()
         for i in range(core.n_features()):
@@ -454,13 +475,30 @@ struct OneHotEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64]
         self.drop_idx_ = original^
         self._n_features_outs = outs^
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._fit(X)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_names_length(feature_names, len(X))
         self._fit(X)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
         self._fit(X)
@@ -635,19 +673,32 @@ struct OrdinalEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.categories.copy(), self.handle_unknown, self.unknown_value, self.encoded_missing_value, self.min_frequency, self.max_categories)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.categories = params.categories.copy()
         self.handle_unknown = params.handle_unknown
         self.unknown_value = params.unknown_value
         self.encoded_missing_value = params.encoded_missing_value
         self.min_frequency = params.min_frequency
         self.max_categories = params.max_categories
+        return self
 
-    def set_params(
-        mut self, *, handle_unknown: Optional[String] = None, unknown_value: Optional[Float64] = None,
-        encoded_missing_value: Optional[Float64] = None, min_frequency: Optional[Float64] = None,
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        handle_unknown: Optional[String] = None,
+        unknown_value: Optional[Float64] = None,
+        encoded_missing_value: Optional[Float64] = None,
+        min_frequency: Optional[Float64] = None,
         max_categories: Optional[Int] = None,
-    ) raises:
+    ) raises -> ref[self] Self:
         if handle_unknown:
             self.handle_unknown = handle_unknown.value()
         if unknown_value:
@@ -658,10 +709,11 @@ struct OrdinalEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64
             self.min_frequency = min_frequency
         if max_categories:
             self.max_categories = max_categories
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         var result = Self()
-        result.set_params(self.get_params())
+        _ = result.set_params(self.get_params())
         return result^
 
     def __sklearn_is_fitted__(self) -> Bool:
@@ -688,7 +740,7 @@ struct OrdinalEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64
         elif self.unknown_value:
             raise Error("TypeError: unknown_value should only be set when handle_unknown is 'use_encoded_value', got " + _number(self.unknown_value.value()) + ".")
         var core = _EncoderCore[Self.K]()
-        core.fit(X, self.categories, h, self.min_frequency, self.max_categories, Self.K.missing_is_nan())
+        _ = core.fit(X, self.categories, h, self.min_frequency, self.max_categories, Self.K.missing_is_nan())
         var cardinalities = List[Int]()
         var missing_features = List[Int]()
         for i in range(core.n_features()):
@@ -721,13 +773,30 @@ struct OrdinalEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64
         self.feature_names_in_ = None
         self._core = core^
 
-    def fit(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises:
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         self._fit(X)
+        return self
 
-    def fit_named(mut self, X: Self.Input, feature_names: List[String], y: Optional[Self.Target] = None) raises:
+    def fit_named[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
         check_names_length(feature_names, len(X))
         self._fit(X)
         self.feature_names_in_ = feature_names.copy()
+        return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
         self._fit(X)

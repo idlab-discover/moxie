@@ -676,8 +676,14 @@ struct LabelEncoder[K: LabelKind = StringLabels, L: Copyable & Deinitable = K.La
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params()
 
-    def set_params(mut self, params: Self.Params) raises:
-        pass
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self()
@@ -685,14 +691,21 @@ struct LabelEncoder[K: LabelKind = StringLabels, L: Copyable & Deinitable = K.La
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted
 
-    def fit(mut self, y: Self.L) raises:
+    def fit[
+        origin: MutOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[y_origin] y: Self.L,
+    ) raises -> ref[self] Self:
         """Learn the sorted distinct labels (NaN last for floating labels)."""
         ref labels = rebind[Self.K.Labels](y)
         self.classes_ = rebind_var[Self.L](Self.K.unique(labels))
         self._fitted = True
+        return self
 
     def fit_transform(mut self, y: Self.L) raises -> NDArray[DType.int64]:
-        self.fit(y)
+        _ = self.fit(y)
         return self.transform(y)
 
     def transform(self, y: Self.L) raises -> NDArray[DType.int64]:
@@ -783,18 +796,34 @@ struct LabelBinarizer[K: LabelKind = StringLabels, L: Copyable & Deinitable = K.
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.neg_label, self.pos_label, self.sparse_output)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.neg_label = params.neg_label
         self.pos_label = params.pos_label
         self.sparse_output = params.sparse_output
+        return self
 
-    def set_params(mut self, *, neg_label: Optional[Int] = None, pos_label: Optional[Int] = None, sparse_output: Optional[Bool] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        neg_label: Optional[Int] = None,
+        pos_label: Optional[Int] = None,
+        sparse_output: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         if neg_label:
             self.neg_label = neg_label.value()
         if pos_label:
             self.pos_label = pos_label.value()
         if sparse_output:
             self.sparse_output = sparse_output.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(neg_label=self.neg_label, pos_label=self.pos_label, sparse_output=self.sparse_output)
@@ -802,7 +831,13 @@ struct LabelBinarizer[K: LabelKind = StringLabels, L: Copyable & Deinitable = K.
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted
 
-    def fit(mut self, y: Self.L) raises:
+    def fit[
+        origin: MutOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[y_origin] y: Self.L,
+    ) raises -> ref[self] Self:
         if self.neg_label >= self.pos_label:
             raise Error("ValueError: neg_label=" + String(self.neg_label) + " must be strictly less than pos_label=" + String(self.pos_label) + ".")
         if self.sparse_output and (self.pos_label == 0 or self.neg_label != 0):
@@ -823,9 +858,10 @@ struct LabelBinarizer[K: LabelKind = StringLabels, L: Copyable & Deinitable = K.
         self.y_type_ = y_type
         self.sparse_input_ = False
         self._fitted = True
+        return self
 
     def fit_transform(mut self, y: Self.L) raises -> NDArray[DType.int64]:
-        self.fit(y)
+        _ = self.fit(y)
         return self.transform(y)
 
     def transform(self, y: Self.L) raises -> NDArray[DType.int64]:
@@ -950,16 +986,31 @@ struct MultiLabelBinarizer[K: LabelKind = StringLabels, L: Copyable & Deinitable
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.classes.copy(), self.sparse_output)
 
-    def set_params(mut self, params: Self.Params) raises:
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
         self.classes = params.classes.copy()
         self.sparse_output = params.sparse_output
+        return self
 
-    def set_params(mut self, *, classes: Optional[List[Self.K.Value]] = None, sparse_output: Optional[Bool] = None) raises:
+    def set_params[
+        origin: MutOrigin,
+    ](
+        ref[origin] self,
+        *,
+        classes: Optional[List[Self.K.Value]] = None,
+        sparse_output: Optional[Bool] = None,
+    ) raises -> ref[self] Self:
         """Keyword updates; resetting `classes` to None needs the record overload."""
         if classes:
             self.classes = classes.copy()
         if sparse_output:
             self.sparse_output = sparse_output.value()
+        return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(classes=self.classes.copy(), sparse_output=self.sparse_output)
@@ -967,7 +1018,13 @@ struct MultiLabelBinarizer[K: LabelKind = StringLabels, L: Copyable & Deinitable
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted
 
-    def fit(mut self, y: List[List[Self.K.Value]]) raises:
+    def fit[
+        origin: MutOrigin,
+        y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[y_origin] y: List[List[Self.K.Value]],
+    ) raises -> ref[self] Self:
         """Classes are the sorted distinct labels, or `classes` in its given order."""
         require_dense_output(self.sparse_output)
         var learned: Self.K.Labels
@@ -990,9 +1047,10 @@ struct MultiLabelBinarizer[K: LabelKind = StringLabels, L: Copyable & Deinitable
         self.classes_ = rebind_var[Self.L](learned^)
         self._order = order^
         self._fitted = True
+        return self
 
     def fit_transform(mut self, y: List[List[Self.K.Value]]) raises -> NDArray[DType.int64]:
-        self.fit(y)
+        _ = self.fit(y)
         return self.transform(y)
 
     def transform(self, y: List[List[Self.K.Value]]) raises -> NDArray[DType.int64]:

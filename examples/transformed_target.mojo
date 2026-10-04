@@ -28,7 +28,7 @@ def main() raises:
 
     # regressor=None uses LinearRegression; func/inverse_func transform y.
     var model = TransformedTargetRegressor(func=elementwise_log, inverse_func=elementwise_exp)
-    model.fit(X, y)
+    _ = model.fit(X, y)
     print("coef_ on log(y):", model.regressor_.value().coef_.unsafe_get(0))
     print("R^2 in target space:", model.score(X, y))
     var query = zeros[DType.float64](Shape(1, 1))

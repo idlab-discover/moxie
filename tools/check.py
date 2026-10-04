@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 import pipeline_checks
+import frozen_checks
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPS = ROOT / 'builds/deps'
@@ -37,11 +38,13 @@ def build():
     sources += sorted((ROOT / 'tests/dummy').glob('*.mojo'))
     sources += compose_sources()
     sources += pipeline_checks.sources()
+    sources += frozen_checks.sources()
     sources += sorted((ROOT / 'examples').glob('*.mojo'))
     for source in sources:
         binary = executable(source)
         binary.parent.mkdir(parents=True, exist_ok=True)
         run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,
+            '-I', ROOT / 'tests/frozen', '-I', ROOT / 'examples/frozen',
             '-I', ROOT / 'tests/pipeline', '-I', ROOT / 'examples', '-I', ROOT / 'tests/compose/support', source, '-o', binary)
 
 
@@ -74,6 +77,7 @@ def compose_test():
 
 
 def parity():
+    frozen_checks.parity(run)
     run(sys.executable, ROOT / 'families/preprocessing/tools/check.py', 'parity-only')
     for name in ["parity.py", "union_parity.py", "compose_parity.py"]:
         run(sys.executable, ROOT / "tests/pipeline" / name)
@@ -84,6 +88,7 @@ def parity():
 
 
 def test():
+    frozen_checks.test(run, executable)
     run(sys.executable, ROOT / 'families/preprocessing/tools/check.py', 'test-only')
     pipeline_checks.test(run, executable)
     compose_test()

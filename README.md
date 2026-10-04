@@ -24,6 +24,9 @@ pixi run start
 original contract demonstration. The locked environment uses Mojo 1.0.0 and
 MAX 26.5.0. Python and scikit-learn are validation/build tools only.
 
+`FrozenEstimator` preserves fitted state and conditionally forwards supported
+methods; see the [Frozen API and coverage](docs/frozen/api.md).
+
 ## Imports and dependencies
 
 ```mojo
@@ -33,6 +36,7 @@ from moxie.serialization import save_model, load_model
 from moxie.compose import ColumnTransformer, TransformedTargetRegressor
 from moxie.pipeline import Pipeline, FeatureUnion
 from moxie.preprocessing import StandardScaler, OneHotEncoder
+from moxie.frozen import FrozenEstimator
 ```
 
 The Dummy estimator and schema types are also exported from `moxie`. Implementation
@@ -41,8 +45,8 @@ Builds assemble one namespace with the current local sources declared in
 `DEPENDENCIES.json`, including NuMojo, mojo-linalg (used by NuMojo), and the
 optional Snappy codec. Keep those checkouts at the declared paths. Missing
 sources and module ownership conflicts fail explicitly. The `moxie-dummy`,
-`moxie-compose`, `moxie-pipeline`, and `moxie-preprocessing` checkouts are not
-required to build or use Moxie.
+`moxie-compose`, `moxie-pipeline`, `moxie-frozen`, and `moxie-preprocessing`
+checkouts are not required to build or use Moxie.
 Integrated composition tests consume the LinearRegression subset of
 `../moxie-linear_model`, and its existing NNLS dependency at
 `../.worktrees/mojo-optimize-linear_model`. These remain separately owned live
@@ -86,7 +90,9 @@ Children consume current local sources; see [development policy](docs/family-dev
 `test` builds and runs shared contracts, container/codec checks and the migrated
 Dummy estimator, dtype and persistence tests, plus compose contracts and real
 Pipeline/Dummy and transformed-target consumers, plus preprocessing contracts,
-API signatures and isolated consumers. All nine preprocessing parity groups
+API signatures and isolated consumers. Frozen ownership, forwarding, and nine
+negative compilation checks run in `test`; 61 Frozen reference comparisons run
+in `parity`. All nine preprocessing parity groups
 run as part of `parity`. Family engines, tests and standalone tooling live in
 `families/preprocessing`; public modules live in `src/moxie/preprocessing`.
 Parity checks use the local `../scikit-learn` checkout at revision

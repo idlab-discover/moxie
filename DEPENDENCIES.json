@@ -70,6 +70,12 @@
         },
         "moxie._feature_metadata": {
           "file": "src/moxie/_feature_metadata.mojo"
+        },
+        "moxie.frozen._base": {
+          "file": "src/moxie/frozen/_base.mojo"
+        },
+        "moxie.frozen._frozen": {
+          "file": "src/moxie/frozen/_frozen.mojo"
         }
       },
       "assets": {
@@ -130,6 +136,12 @@
             "TargetFunctionTransformerParams": "moxie.compose._target",
             "TransformedTargetRegressor": "moxie.compose._target",
             "TransformedTargetRegressorParams": "moxie.compose._target"
+          },
+          "moxie.frozen": {
+            "FrozenEstimatorAPI": "moxie.frozen._base",
+            "FrozenEstimator": "moxie.frozen._frozen",
+            "FrozenParams": "moxie.frozen._frozen",
+            "is_clusterer": "moxie.frozen._frozen"
           }
         },
         "schema": 1

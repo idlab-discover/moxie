@@ -6,10 +6,11 @@ The reference is the local scikit-learn 1.10.dev0 checkout at
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Current Mojo
 contracts follow that reference; they do not establish complete scikit-learn
 compatibility or a universal array ABI.
-Dense Dummy, Compose, Pipeline, and Preprocessing estimators are implemented; see the
+Dense Dummy, Compose, Pipeline, Preprocessing, and Frozen estimators are implemented; see the
 [Dummy API](dummy/api.md), [Compose scope](compose/scope.md),
-[Pipeline API](pipeline/sequential.md), and
-[Preprocessing API](../families/preprocessing/docs/api.md).
+[Pipeline API](pipeline/sequential.md),
+[Preprocessing API](../families/preprocessing/docs/api.md), and
+[Frozen API](frozen/api.md).
 
 The primary source contracts are `sklearn/base.py`,
 `doc/developers/develop.rst`, `doc/glossary.rst`,

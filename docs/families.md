@@ -42,7 +42,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-feature_extraction` | `sklearn/feature_extraction` |
 | Integrated: `src/moxie/kernel_approximation.mojo` | `sklearn/kernel_approximation.py` |
 | `moxie-random_projection` | `sklearn/random_projection.py` |
-| `moxie-isotonic` | `sklearn/isotonic.py` |
+| Integrated: `src/moxie/isotonic.mojo` | `sklearn/isotonic.py` |
 | `moxie-pipeline` | `sklearn/pipeline.py` |
 | `moxie-compose` | `sklearn/compose` |
 | `moxie-model_selection` | `sklearn/model_selection` |
@@ -79,3 +79,6 @@ See [Covariance](../families/covariance/README.md) for its API and remaining num
 
 [Discriminant analysis](discriminant_analysis/README.md) is owned by Moxie.
 Its retired sibling is not a build dependency.
+
+[Isotonic regression](isotonic/README.md) is owned by Moxie, with Float32/Float64 List inputs.
+The retired isotonic sibling is not a build dependency.

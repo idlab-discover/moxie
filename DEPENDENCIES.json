@@ -190,6 +190,9 @@
         },
         "moxie._discriminant_analysis._work": {
           "file": "src/moxie/_discriminant_analysis/_work.mojo"
+        },
+        "moxie.isotonic": {
+          "file": "src/moxie/isotonic.mojo"
         }
       },
       "assets": {

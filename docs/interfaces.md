@@ -160,3 +160,6 @@ its documented native adaptations and exclusions.
 Dense [discriminant analysis](discriminant_analysis/README.md) provides LDA and
 QDA with current fluent fit/set-params contracts, native covariance-estimator
 adapters, and the documented Python-specific exclusions.
+
+[Isotonic regression](isotonic/README.md) is owned by Moxie, with Float32/Float64 List inputs.
+The retired isotonic sibling is not a build dependency.

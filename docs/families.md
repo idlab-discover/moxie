@@ -40,7 +40,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-impute` | `sklearn/impute` |
 | `moxie-feature_selection` | `sklearn/feature_selection` |
 | `moxie-feature_extraction` | `sklearn/feature_extraction` |
-| `moxie-kernel_approximation` | `sklearn/kernel_approximation.py` |
+| Integrated: `src/moxie/kernel_approximation.mojo` | `sklearn/kernel_approximation.py` |
 | `moxie-random_projection` | `sklearn/random_projection.py` |
 | `moxie-isotonic` | `sklearn/isotonic.py` |
 | `moxie-pipeline` | `sklearn/pipeline.py` |
@@ -74,3 +74,5 @@ vendor copies. Deriving a repository with Git does not copy ignored resources;
 prepare them again at the new algorithm location.
 
 See [Covariance](../families/covariance/README.md) for its API and remaining numerical differences.
+
+[Kernel approximation](kernel_approximation/README.md) is owned by Moxie.

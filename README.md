@@ -115,3 +115,7 @@ complete scikit-learn compatibility remain outside the implemented scope.
 Children consume current Moxie HEAD; see [development policy](docs/family-development.md).
 `scaffold-v1.1` remains a historical provenance tag. Build outputs, research notes and raw validation evidence
 stay in ignored local directories.
+
+Dense [kernel approximation](docs/kernel_approximation/README.md) is integrated,
+including RBFSampler, SkewedChi2Sampler, AdditiveChi2Sampler, PolynomialCountSketch
+and Nystroem. The retired `moxie-kernel_approximation` checkout is not required.

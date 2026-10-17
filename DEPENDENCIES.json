@@ -142,6 +142,27 @@
         },
         "moxie.covariance._lars_gram": {
           "file": "src/moxie/covariance/_lars_gram.mojo"
+        },
+        "moxie._kernel_additive": {
+          "file": "src/moxie/_kernel_additive.mojo"
+        },
+        "moxie._kernel_fourier": {
+          "file": "src/moxie/_kernel_fourier.mojo"
+        },
+        "moxie._kernel_nystroem": {
+          "file": "src/moxie/_kernel_nystroem.mojo"
+        },
+        "moxie._kernel_polynomial": {
+          "file": "src/moxie/_kernel_polynomial.mojo"
+        },
+        "moxie._kernel_features": {
+          "file": "src/moxie/_kernel_features.mojo"
+        },
+        "moxie._kernel_approximation_contracts": {
+          "file": "src/moxie/_kernel_approximation_contracts.mojo"
+        },
+        "moxie.kernel_approximation": {
+          "file": "src/moxie/kernel_approximation.mojo"
         }
       },
       "assets": {
@@ -699,6 +720,15 @@
         "packages": {
           "moxie.model_selection": {}
         }
+      }
+    },
+    {
+      "id": "kernel-fft",
+      "path": "../mojo-linalg",
+      "modules": {},
+      "exports": null,
+      "assets": {
+        "mojo_linalg/fft.mojo": "src/mojo_linalg/fft.mojo"
       }
     }
   ],

@@ -7,6 +7,7 @@ import sys
 
 import pipeline_checks
 import frozen_checks
+import kernel_approximation_checks
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPS = ROOT / 'builds/deps'
@@ -41,12 +42,13 @@ def build():
     sources += compose_sources()
     sources += pipeline_checks.sources()
     sources += frozen_checks.sources()
+    sources += kernel_approximation_checks.sources()
     sources += sorted((ROOT / 'examples').glob('*.mojo'))
     for source in sources:
         binary = executable(source)
         binary.parent.mkdir(parents=True, exist_ok=True)
         run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,
-            '-I', ROOT / 'tests/frozen', '-I', ROOT / 'examples/frozen',
+            '-I', ROOT / 'tests/kernel_approximation', '-I', ROOT / 'tests/kernel_approximation/consumers', '-I', ROOT / 'tests/frozen', '-I', ROOT / 'examples/frozen',
             '-I', ROOT / 'tests/pipeline', '-I', ROOT / 'examples', '-I', ROOT / 'tests/compose/support', source, '-o', binary)
 
 
@@ -79,6 +81,7 @@ def compose_test():
 
 
 def parity():
+    kernel_approximation_checks.parity(run)
     run(sys.executable, ROOT / 'families/covariance/tools/check.py', 'parity-only')
     run(sys.executable, ROOT / 'families/kernel_ridge/tools/check.py', 'parity-only')
     frozen_checks.parity(run)
@@ -92,6 +95,7 @@ def parity():
 
 
 def test():
+    kernel_approximation_checks.test(run, executable)
     run(sys.executable, ROOT / 'families/covariance/tools/check.py', 'test-only')
     run(sys.executable, ROOT / 'families/kernel_ridge/tools/check.py', 'test-only')
     frozen_checks.test(run, executable)

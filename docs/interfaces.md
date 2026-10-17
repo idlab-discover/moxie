@@ -153,3 +153,6 @@ and [reference lifetimes](https://mojolang.org/docs/manual/values/lifetimes/).
 Experimental native persistence is an opt-in `ModelSchema` adapter, separate
 from estimator traits; see [serialization](serialization.md). It does not imply
 Python pickle compatibility or automatic persistence for existing families.
+
+Dense [kernel approximation](kernel_approximation/README.md) is implemented with
+its documented native adaptations and exclusions.

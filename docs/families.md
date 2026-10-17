@@ -21,7 +21,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-tree` | `sklearn/tree` |
 | `moxie-ensemble` | `sklearn/ensemble` |
 | `moxie-naive_bayes` | `sklearn/naive_bayes.py` |
-| `moxie-discriminant_analysis` | `sklearn/discriminant_analysis.py` |
+| Integrated: `src/moxie/discriminant_analysis.mojo` | `sklearn/discriminant_analysis.py` |
 | `moxie-gaussian_process` | `sklearn/gaussian_process` |
 | `moxie-neural_network` | `sklearn/neural_network` |
 | Integrated: `families/kernel_ridge` | `sklearn/kernel_ridge.py` |
@@ -76,3 +76,6 @@ prepare them again at the new algorithm location.
 See [Covariance](../families/covariance/README.md) for its API and remaining numerical differences.
 
 [Kernel approximation](kernel_approximation/README.md) is owned by Moxie.
+
+[Discriminant analysis](discriminant_analysis/README.md) is owned by Moxie.
+Its retired sibling is not a build dependency.

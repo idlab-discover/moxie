@@ -119,3 +119,7 @@ stay in ignored local directories.
 Dense [kernel approximation](docs/kernel_approximation/README.md) is integrated,
 including RBFSampler, SkewedChi2Sampler, AdditiveChi2Sampler, PolynomialCountSketch
 and Nystroem. The retired `moxie-kernel_approximation` checkout is not required.
+
+Dense [discriminant analysis](docs/discriminant_analysis/README.md) is integrated.
+Import `LinearDiscriminantAnalysis` and `QuadraticDiscriminantAnalysis` from
+`moxie.discriminant_analysis`; the retired sibling checkout is not required.

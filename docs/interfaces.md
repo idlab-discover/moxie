@@ -156,3 +156,7 @@ Python pickle compatibility or automatic persistence for existing families.
 
 Dense [kernel approximation](kernel_approximation/README.md) is implemented with
 its documented native adaptations and exclusions.
+
+Dense [discriminant analysis](discriminant_analysis/README.md) provides LDA and
+QDA with current fluent fit/set-params contracts, native covariance-estimator
+adapters, and the documented Python-specific exclusions.

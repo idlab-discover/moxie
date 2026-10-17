@@ -163,6 +163,33 @@
         },
         "moxie.kernel_approximation": {
           "file": "src/moxie/kernel_approximation.mojo"
+        },
+        "moxie.discriminant_analysis": {
+          "file": "src/moxie/discriminant_analysis.mojo"
+        },
+        "moxie._discriminant_analysis_contracts": {
+          "file": "src/moxie/_discriminant_analysis_contracts.mojo"
+        },
+        "moxie._discriminant_analysis._covariance": {
+          "file": "src/moxie/_discriminant_analysis/_covariance.mojo"
+        },
+        "moxie._discriminant_analysis._generalized_eigh": {
+          "file": "src/moxie/_discriminant_analysis/_generalized_eigh.mojo"
+        },
+        "moxie._discriminant_analysis._labels": {
+          "file": "src/moxie/_discriminant_analysis/_labels.mojo"
+        },
+        "moxie._discriminant_analysis._lda": {
+          "file": "src/moxie/_discriminant_analysis/_lda.mojo"
+        },
+        "moxie._discriminant_analysis._prediction": {
+          "file": "src/moxie/_discriminant_analysis/_prediction.mojo"
+        },
+        "moxie._discriminant_analysis._qda": {
+          "file": "src/moxie/_discriminant_analysis/_qda.mojo"
+        },
+        "moxie._discriminant_analysis._work": {
+          "file": "src/moxie/_discriminant_analysis/_work.mojo"
         }
       },
       "assets": {
@@ -182,7 +209,9 @@
             "DummyClassifier": "moxie.dummy",
             "DummyRegressor": "moxie.dummy",
             "DummyClassifierSchema": "moxie.dummy_serialization",
-            "DummyRegressorSchema": "moxie.dummy_serialization"
+            "DummyRegressorSchema": "moxie.dummy_serialization",
+            "LinearDiscriminantAnalysis": "moxie.discriminant_analysis",
+            "QuadraticDiscriminantAnalysis": "moxie.discriminant_analysis"
           },
           "moxie.utils": {
             "FittedState": "moxie.utils.validation",
@@ -259,7 +288,8 @@
             "GraphicalLasso": "moxie.covariance._graph_lasso",
             "graphical_lasso": "moxie.covariance._graph_lasso",
             "GraphicalLassoCV": "moxie.covariance._graph_lasso"
-          }
+          },
+          "moxie._discriminant_analysis": {}
         },
         "schema": 1
       }

@@ -193,10 +193,23 @@
         },
         "moxie.isotonic": {
           "file": "src/moxie/isotonic.mojo"
+        },
+        "moxie.random_projection": {
+          "file": "src/moxie/random_projection.mojo"
+        },
+        "moxie._projection.matrix": {
+          "file": "src/moxie/_projection/matrix.mojo"
+        },
+        "moxie._projection.linalg": {
+          "file": "src/moxie/_projection/linalg.mojo"
+        },
+        "moxie._projection.math": {
+          "file": "src/moxie/_projection/math.mojo"
         }
       },
       "assets": {
-        "licenses/scikit-learn.txt": "LICENSES/scikit-learn.txt"
+        "licenses/scikit-learn.txt": "LICENSES/scikit-learn.txt",
+        "licenses/random_projection.txt": "docs/random_projection/THIRD_PARTY_NOTICES"
       },
       "exports": {
         "packages": {
@@ -292,7 +305,8 @@
             "graphical_lasso": "moxie.covariance._graph_lasso",
             "GraphicalLassoCV": "moxie.covariance._graph_lasso"
           },
-          "moxie._discriminant_analysis": {}
+          "moxie._discriminant_analysis": {},
+          "moxie._projection": {}
         },
         "schema": 1
       }

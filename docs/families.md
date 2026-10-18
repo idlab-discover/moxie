@@ -41,7 +41,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-feature_selection` | `sklearn/feature_selection` |
 | `moxie-feature_extraction` | `sklearn/feature_extraction` |
 | Integrated: `src/moxie/kernel_approximation.mojo` | `sklearn/kernel_approximation.py` |
-| `moxie-random_projection` | `sklearn/random_projection.py` |
+| Integrated: `src/moxie/random_projection.mojo` | `sklearn/random_projection.py` |
 | Integrated: `src/moxie/isotonic.mojo` | `sklearn/isotonic.py` |
 | `moxie-pipeline` | `sklearn/pipeline.py` |
 | `moxie-compose` | `sklearn/compose` |
@@ -82,3 +82,7 @@ Its retired sibling is not a build dependency.
 
 [Isotonic regression](isotonic/README.md) is owned by Moxie, with Float32/Float64 List inputs.
 The retired isotonic sibling is not a build dependency.
+
+[Random projection](random_projection/README.md) is owned by Moxie, including Gaussian and sparse
+projections with Float32/Float64 dense and CSR storage. The retired sibling
+is not a build dependency.

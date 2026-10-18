@@ -163,3 +163,7 @@ adapters, and the documented Python-specific exclusions.
 
 [Isotonic regression](isotonic/README.md) is owned by Moxie, with Float32/Float64 List inputs.
 The retired isotonic sibling is not a build dependency.
+
+[Random projection](random_projection/README.md) is owned by Moxie, including Gaussian and sparse
+projections with Float32/Float64 dense and CSR storage. The retired sibling
+is not a build dependency.

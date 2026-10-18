@@ -8,6 +8,7 @@ import sys
 import pipeline_checks
 import frozen_checks
 import isotonic_checks
+import random_projection_checks
 import discriminant_analysis_checks
 import kernel_approximation_checks
 
@@ -47,6 +48,7 @@ def build():
     sources += kernel_approximation_checks.sources()
     sources += discriminant_analysis_checks.sources()
     sources += isotonic_checks.sources()
+    sources += random_projection_checks.sources()
     sources += sorted((ROOT / 'examples').glob('*.mojo'))
     for source in sources:
         binary = executable(source)
@@ -85,6 +87,7 @@ def compose_test():
 
 
 def parity():
+    random_projection_checks.parity(run)
     isotonic_checks.parity(run)
     discriminant_analysis_checks.parity(run)
     kernel_approximation_checks.parity(run)
@@ -101,6 +104,7 @@ def parity():
 
 
 def test():
+    random_projection_checks.test(run, executable)
     isotonic_checks.test(run, executable)
     discriminant_analysis_checks.test(run, executable)
     kernel_approximation_checks.test(run, executable)

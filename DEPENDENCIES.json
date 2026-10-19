@@ -376,6 +376,18 @@
         },
         "moxie.feature_selection._variance_threshold": {
           "file": "src/moxie/feature_selection/_variance_threshold.mojo"
+        },
+        "moxie.cross_decomposition._base": {
+          "file": "src/moxie/cross_decomposition/_base.mojo"
+        },
+        "moxie.cross_decomposition._contracts": {
+          "file": "src/moxie/cross_decomposition/_contracts.mojo"
+        },
+        "moxie.cross_decomposition._pls": {
+          "file": "src/moxie/cross_decomposition/_pls.mojo"
+        },
+        "moxie.cross_decomposition._plssvd": {
+          "file": "src/moxie/cross_decomposition/_plssvd.mojo"
         }
       },
       "assets": {
@@ -579,6 +591,17 @@
             "mutual_info_classif": "moxie.feature_selection._mutual_info",
             "mutual_info_regression": "moxie.feature_selection._mutual_info",
             "r_regression": "moxie.feature_selection._univariate_selection"
+          },
+          "moxie.cross_decomposition": {
+            "CrossDecompositionTransformer": "moxie.cross_decomposition._base",
+            "PLSPredictor": "moxie.cross_decomposition._base",
+            "PLSRegression": "moxie.cross_decomposition._pls",
+            "PLSCanonical": "moxie.cross_decomposition._pls",
+            "CCA": "moxie.cross_decomposition._pls",
+            "PLSEngine": "moxie.cross_decomposition._pls",
+            "PLSParams": "moxie.cross_decomposition._pls",
+            "PLSSVD": "moxie.cross_decomposition._plssvd",
+            "PLSSVDParams": "moxie.cross_decomposition._plssvd"
           }
         },
         "schema": 1

@@ -155,3 +155,8 @@ See [tree documentation](docs/tree/README.md).
 Dense feature selection is integrated under `moxie.feature_selection`. See the
 [feature-selection guide](docs/feature_selection/README.md) for all 19 exports,
 live dependencies and complete family validation commands.
+
+[Cross decomposition](docs/cross_decomposition/README.md) is owned by Moxie core,
+including PLSRegression, PLSCanonical, CCA and PLSSVD with dense Float32/Float64
+inputs and current fluent mutation contracts. Its retired sibling is not a
+build dependency.

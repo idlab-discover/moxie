@@ -184,3 +184,8 @@ dependency.
 including dense regression and kernels. Classification remains unimplemented.
 The retired sibling is not a build dependency; the dedicated GP linalg worktree
 and external optimizer remain explicit numerical dependencies.
+
+[Cross decomposition](cross_decomposition/README.md) is owned by Moxie core,
+including PLSRegression, PLSCanonical, CCA and PLSSVD with dense Float32/Float64
+inputs and current fluent mutation contracts. Its retired sibling is not a
+build dependency.

@@ -9,6 +9,7 @@ import feature_selection_checks
 from compiler_limits import compiler_command
 
 import tree_checks
+import cross_decomposition_checks
 import gaussian_process_checks
 import multioutput_checks
 import multiclass_checks
@@ -53,6 +54,7 @@ def build():
     sources = sorted((ROOT / 'tests').glob('*.mojo'))
     sources += sorted((ROOT / 'tests/dummy').glob('*.mojo'))
     sources += compose_sources()
+    sources += cross_decomposition_checks.sources()
     sources += gaussian_process_checks.sources()
     sources += multioutput_checks.sources()
     sources += multiclass_checks.sources()
@@ -104,6 +106,7 @@ def compose_test():
 def parity():
     feature_selection_checks.main("parity-only")
     tree_checks.parity(run)
+    cross_decomposition_checks.parity(run)
     gaussian_process_checks.parity(run)
     multioutput_checks.parity(run)
     multiclass_checks.parity(run)
@@ -127,6 +130,7 @@ def parity():
 def test():
     feature_selection_checks.main("test-only")
     tree_checks.test(run)
+    cross_decomposition_checks.test(run, executable)
     gaussian_process_checks.test(run, executable)
     multioutput_checks.test(run, executable)
     multiclass_checks.test(run, executable)

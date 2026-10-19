@@ -34,7 +34,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-mixture` | `sklearn/mixture` |
 | Integrated: `families/covariance` | `sklearn/covariance` |
 | `moxie-decomposition` | `sklearn/decomposition` |
-| `moxie-cross_decomposition` | `sklearn/cross_decomposition` |
+| Integrated: `src/moxie/cross_decomposition/` | `sklearn/cross_decomposition`; [guide](cross_decomposition/README.md) |
 | `moxie-manifold` | `sklearn/manifold` |
 | `moxie-preprocessing` | `sklearn/preprocessing` |
 | `moxie-impute` | `sklearn/impute` |

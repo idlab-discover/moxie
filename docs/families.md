@@ -27,7 +27,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | Integrated: `families/kernel_ridge` | `sklearn/kernel_ridge.py` |
 | `moxie-dummy` | `sklearn/dummy.py` |
 | `moxie-semi_supervised` | `sklearn/semi_supervised` |
-| `moxie-multiclass` | `sklearn/multiclass.py` |
+| Integrated: `src/moxie/multiclass.mojo` | `sklearn/multiclass.py` |
 | `moxie-multioutput` | `sklearn/multioutput.py` |
 | `moxie-calibration` | `sklearn/calibration.py` |
 | `moxie-cluster` | `sklearn/cluster` |

@@ -20,7 +20,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-kernel_ridge` | `sklearn/kernel_ridge.py` | `KernelRidgeRegressor` |
 | `moxie-dummy` | `sklearn/dummy.py` | `BaselineClassifier`, `BaselineRegressor` |
 | `moxie-semi_supervised` | `sklearn/semi_supervised` | `SemiSupervisedClassifier` |
-| `moxie-multiclass` | `sklearn/multiclass.py` | `MulticlassClassifier`, `MulticlassDecision`, `MulticlassProbability` |
+| Integrated: `src/moxie/multiclass.mojo` | `sklearn/multiclass.py` | `MulticlassClassifier`, `MulticlassDecision`, `MulticlassProbability` |
 | `moxie-multioutput` | `sklearn/multioutput.py` | `MultiOutputClassifierAPI`, `MultiOutputRegressorAPI`, `MultiOutputProbability` |
 | `moxie-calibration` | `sklearn/calibration.py` | `CalibratedClassifier` |
 | `moxie-cluster` | `sklearn/cluster` | `Clusterer`, `PredictiveClusterer`, `ClusterDistanceTransformer`, `IncrementalClusterer`, `Biclusterer` |

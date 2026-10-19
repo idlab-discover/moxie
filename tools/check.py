@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+import multiclass_checks
 import pipeline_checks
 import frozen_checks
 import isotonic_checks
@@ -43,6 +44,7 @@ def build():
     sources = sorted((ROOT / 'tests').glob('*.mojo'))
     sources += sorted((ROOT / 'tests/dummy').glob('*.mojo'))
     sources += compose_sources()
+    sources += multiclass_checks.sources()
     sources += pipeline_checks.sources()
     sources += frozen_checks.sources()
     sources += kernel_approximation_checks.sources()
@@ -54,7 +56,7 @@ def build():
         binary = executable(source)
         binary.parent.mkdir(parents=True, exist_ok=True)
         run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,
-            '-I', ROOT / 'tests/discriminant_analysis', '-I', ROOT / 'tests/kernel_approximation', '-I', ROOT / 'tests/kernel_approximation/consumers', '-I', ROOT / 'tests/frozen', '-I', ROOT / 'examples/frozen',
+            '-I', ROOT / 'tests/multiclass', '-I', ROOT / 'tests/discriminant_analysis', '-I', ROOT / 'tests/kernel_approximation', '-I', ROOT / 'tests/kernel_approximation/consumers', '-I', ROOT / 'tests/frozen', '-I', ROOT / 'examples/frozen',
             '-I', ROOT / 'tests/pipeline', '-I', ROOT / 'examples', '-I', ROOT / 'tests/compose/support', source, '-o', binary)
 
 
@@ -87,6 +89,7 @@ def compose_test():
 
 
 def parity():
+    multiclass_checks.parity(run)
     random_projection_checks.parity(run)
     isotonic_checks.parity(run)
     discriminant_analysis_checks.parity(run)
@@ -104,6 +107,7 @@ def parity():
 
 
 def test():
+    multiclass_checks.test(run, executable)
     random_projection_checks.test(run, executable)
     isotonic_checks.test(run, executable)
     discriminant_analysis_checks.test(run, executable)

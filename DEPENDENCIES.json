@@ -205,11 +205,33 @@
         },
         "moxie._projection.math": {
           "file": "src/moxie/_projection/math.mojo"
+        },
+        "moxie._multiclass_binary": {
+          "file": "src/moxie/_multiclass_binary.mojo"
+        },
+        "moxie._multiclass_contracts": {
+          "file": "src/moxie/_multiclass_contracts.mojo"
+        },
+        "moxie._multiclass_labels": {
+          "file": "src/moxie/_multiclass_labels.mojo"
+        },
+        "moxie._multiclass_output_code": {
+          "file": "src/moxie/_multiclass_output_code.mojo"
+        },
+        "moxie._multiclass_ovo": {
+          "file": "src/moxie/_multiclass_ovo.mojo"
+        },
+        "moxie._multiclass_ovr": {
+          "file": "src/moxie/_multiclass_ovr.mojo"
+        },
+        "moxie.multiclass": {
+          "file": "src/moxie/multiclass.mojo"
         }
       },
       "assets": {
         "licenses/scikit-learn.txt": "LICENSES/scikit-learn.txt",
-        "licenses/random_projection.txt": "docs/random_projection/THIRD_PARTY_NOTICES"
+        "licenses/random_projection.txt": "docs/random_projection/THIRD_PARTY_NOTICES",
+        "licenses/multiclass-sklearn.txt": "LICENSES/multiclass-scikit-learn.txt"
       },
       "exports": {
         "packages": {

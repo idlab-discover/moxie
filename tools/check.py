@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+import gaussian_process_checks
 import multioutput_checks
 import multiclass_checks
 import pipeline_checks
@@ -46,6 +47,7 @@ def build():
     sources = sorted((ROOT / 'tests').glob('*.mojo'))
     sources += sorted((ROOT / 'tests/dummy').glob('*.mojo'))
     sources += compose_sources()
+    sources += gaussian_process_checks.sources()
     sources += multioutput_checks.sources()
     sources += multiclass_checks.sources()
     sources += pipeline_checks.sources()
@@ -94,6 +96,7 @@ def compose_test():
 
 
 def parity():
+    gaussian_process_checks.parity(run)
     multioutput_checks.parity(run)
     multiclass_checks.parity(run)
     random_projection_checks.parity(run)
@@ -114,6 +117,7 @@ def parity():
 
 
 def test():
+    gaussian_process_checks.test(run, executable)
     multioutput_checks.test(run, executable)
     multiclass_checks.test(run, executable)
     random_projection_checks.test(run, executable)

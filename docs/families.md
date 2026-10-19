@@ -22,7 +22,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-ensemble` | `sklearn/ensemble` |
 | `moxie-naive_bayes` | `sklearn/naive_bayes.py` |
 | Integrated: `src/moxie/discriminant_analysis.mojo` | `sklearn/discriminant_analysis.py` |
-| `moxie-gaussian_process` | `sklearn/gaussian_process` |
+| Integrated: `src/moxie/gaussian_process/` | `sklearn/gaussian_process` |
 | `moxie-neural_network` | `sklearn/neural_network` |
 | Integrated: `families/kernel_ridge` | `sklearn/kernel_ridge.py` |
 | `moxie-dummy` | `sklearn/dummy.py` |
@@ -94,3 +94,8 @@ dependency.
 [Calibration](calibration/README.md) is owned by Moxie core, including all three calibration
 methods, curves and native SVG displays. Its retired sibling is not a build
 dependency.
+
+[Gaussian processes](gaussian_process/README.md) now live in `src/moxie/gaussian_process/`,
+including dense regression and kernels. Classification remains unimplemented.
+The retired sibling is not a build dependency; the dedicated GP linalg worktree
+and external optimizer remain explicit numerical dependencies.

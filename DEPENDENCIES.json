@@ -256,6 +256,27 @@
         },
         "moxie._calibration_frozen": {
           "file": "src/moxie/_calibration_frozen.mojo"
+        },
+        "moxie.gaussian_process._base": {
+          "file": "src/moxie/gaussian_process/_base.mojo"
+        },
+        "moxie.gaussian_process._plumbing": {
+          "file": "src/moxie/gaussian_process/_plumbing.mojo"
+        },
+        "moxie.gaussian_process._algebra": {
+          "file": "src/moxie/gaussian_process/_algebra.mojo"
+        },
+        "moxie.gaussian_process._kernel_math": {
+          "file": "src/moxie/gaussian_process/_kernel_math.mojo"
+        },
+        "moxie.gaussian_process._optimization": {
+          "file": "src/moxie/gaussian_process/_optimization.mojo"
+        },
+        "moxie.gaussian_process.kernels": {
+          "file": "src/moxie/gaussian_process/kernels.mojo"
+        },
+        "moxie.gaussian_process._gpr": {
+          "file": "src/moxie/gaussian_process/_gpr.mojo"
         }
       },
       "assets": {
@@ -263,7 +284,8 @@
         "licenses/random_projection.txt": "docs/random_projection/THIRD_PARTY_NOTICES",
         "licenses/multiclass-sklearn.txt": "LICENSES/multiclass-scikit-learn.txt",
         "licenses/multioutput-scikit-learn.txt": "LICENSES/multioutput-scikit-learn.txt",
-        "licenses/calibration-scikit-learn.txt": "LICENSES/calibration-scikit-learn.txt"
+        "licenses/calibration-scikit-learn.txt": "LICENSES/calibration-scikit-learn.txt",
+        "licenses/gaussian-process-NOTICES": "LICENSES/gaussian-process-NOTICES"
       },
       "exports": {
         "packages": {
@@ -360,7 +382,22 @@
             "GraphicalLassoCV": "moxie.covariance._graph_lasso"
           },
           "moxie._discriminant_analysis": {},
-          "moxie._projection": {}
+          "moxie._projection": {},
+          "moxie.gaussian_process": {
+            "GaussianProcessClassifierAPI": "moxie.gaussian_process._base",
+            "GaussianProcessPosterior": "moxie.gaussian_process._base",
+            "GaussianProcessRegressorAPI": "moxie.gaussian_process._base",
+            "GaussianUncertainty": "moxie.gaussian_process._base",
+            "FminLBFGSB": "moxie.gaussian_process._gpr",
+            "GPROptimizer": "moxie.gaussian_process._gpr",
+            "GaussianProcessRegressor": "moxie.gaussian_process._gpr",
+            "GenericGaussianProcessRegressor": "moxie.gaussian_process._gpr",
+            "GaussianProcessRegressorParams": "moxie.gaussian_process._gpr",
+            "LikelihoodResult": "moxie.gaussian_process._gpr",
+            "LogMarginalLikelihood": "moxie.gaussian_process._gpr",
+            "PredictionResult": "moxie.gaussian_process._plumbing",
+            "OptimizationResult": "moxie.gaussian_process._plumbing"
+          }
         },
         "schema": 1
       }
@@ -831,6 +868,112 @@
       "assets": {
         "mojo_linalg/fft.mojo": "src/mojo_linalg/fft.mojo"
       }
+    },
+    {
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie._gp_linalg": {
+            "NumericalError": "moxie._gp_linalg._storage",
+            "compact_copy": "moxie._gp_linalg._storage",
+            "triangular_solve": "moxie._gp_linalg.triangular",
+            "triangular_solve_inplace": "moxie._gp_linalg.triangular",
+            "CholeskyFactor": "moxie._gp_linalg.cholesky",
+            "cholesky": "moxie._gp_linalg.cholesky",
+            "QRFactor": "moxie._gp_linalg.qr",
+            "qr": "moxie._gp_linalg.qr",
+            "SVDFactor": "moxie._gp_linalg.svd",
+            "svd": "moxie._gp_linalg.svd",
+            "LeastSquaresResult": "moxie._gp_linalg.svd",
+            "least_squares": "moxie._gp_linalg.svd",
+            "SymmetricEigenFactor": "moxie._gp_linalg.symmetric",
+            "PseudoinverseResult": "moxie._gp_linalg.symmetric",
+            "symmetric_eigh": "moxie._gp_linalg.symmetric",
+            "symmetric_pinv": "moxie._gp_linalg.symmetric",
+            "IndefiniteFactor": "moxie._gp_linalg.indefinite",
+            "symmetric_indefinite": "moxie._gp_linalg.indefinite",
+            "symmetric_slogdet": "moxie._gp_linalg.indefinite",
+            "SignedLogDet": "moxie._gp_linalg._determinant",
+            "bessel_kv": "moxie._gp_linalg.special",
+            "bessel_kv_scaled": "moxie._gp_linalg.special"
+          }
+        }
+      },
+      "id": "gaussian-process-linalg",
+      "modules": {
+        "moxie._gp_linalg._determinant": {
+          "file": "src/mojo_linalg/_determinant.mojo"
+        },
+        "moxie._gp_linalg._spectral": {
+          "file": "src/mojo_linalg/_spectral.mojo"
+        },
+        "moxie._gp_linalg._storage": {
+          "file": "src/mojo_linalg/_storage.mojo"
+        },
+        "moxie._gp_linalg.cholesky": {
+          "file": "src/mojo_linalg/cholesky.mojo"
+        },
+        "moxie._gp_linalg.indefinite": {
+          "file": "src/mojo_linalg/indefinite.mojo"
+        },
+        "moxie._gp_linalg.qr": {
+          "file": "src/mojo_linalg/qr.mojo"
+        },
+        "moxie._gp_linalg.special": {
+          "file": "src/mojo_linalg/special.mojo"
+        },
+        "moxie._gp_linalg.svd": {
+          "file": "src/mojo_linalg/svd.mojo"
+        },
+        "moxie._gp_linalg.symmetric": {
+          "file": "src/mojo_linalg/symmetric.mojo"
+        },
+        "moxie._gp_linalg.triangular": {
+          "file": "src/mojo_linalg/triangular.mojo"
+        }
+      },
+      "path": "../.worktrees/mojo-linalg-gaussian_process"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie._optimize": {
+            "LBFGSB": "moxie._optimize.lbfgsb",
+            "LBFGSBConfig": "moxie._optimize.lbfgsb",
+            "Objective": "moxie._optimize.contracts",
+            "Status": "moxie._optimize.contracts"
+          }
+        },
+        "schema": 1
+      },
+      "id": "gaussian-process-optimize",
+      "modules": {
+        "moxie._optimize._lbfgsb_core": {
+          "file": "src/mojo_optimize/_lbfgsb_core.mojo"
+        },
+        "moxie._optimize._vectors": {
+          "file": "src/mojo_optimize/_vectors.mojo"
+        },
+        "moxie._optimize.contracts": {
+          "file": "src/mojo_optimize/contracts.mojo"
+        },
+        "moxie._optimize.history": {
+          "file": "src/mojo_optimize/history.mojo"
+        },
+        "moxie._optimize.lbfgs": {
+          "file": "src/mojo_optimize/lbfgs.mojo"
+        },
+        "moxie._optimize.lbfgsb": {
+          "file": "src/mojo_optimize/lbfgsb.mojo"
+        },
+        "moxie._optimize.line_search": {
+          "file": "src/mojo_optimize/line_search.mojo"
+        }
+      },
+      "path": "../mojo-optimize"
     }
   ],
   "overrides": []

@@ -171,3 +171,7 @@ is not a build dependency.
 [Multiclass classifiers](multiclass/README.md) are owned by Moxie core, including OvR, OvO,
 and OutputCode with dense numeric/string labels and their documented optional
 capabilities. The retired multiclass sibling is not a build dependency.
+
+[Multioutput estimators](multioutput/README.md) are owned by Moxie core, including independent
+classification/regression and both chain types. The retired sibling is not a build
+dependency.

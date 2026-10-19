@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+import multioutput_checks
 import multiclass_checks
 import pipeline_checks
 import frozen_checks
@@ -44,6 +45,7 @@ def build():
     sources = sorted((ROOT / 'tests').glob('*.mojo'))
     sources += sorted((ROOT / 'tests/dummy').glob('*.mojo'))
     sources += compose_sources()
+    sources += multioutput_checks.sources()
     sources += multiclass_checks.sources()
     sources += pipeline_checks.sources()
     sources += frozen_checks.sources()
@@ -55,7 +57,8 @@ def build():
     for source in sources:
         binary = executable(source)
         binary.parent.mkdir(parents=True, exist_ok=True)
-        run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,
+        extra = ('-I', ROOT / 'tests/multioutput') if source.is_relative_to(ROOT / 'tests/multioutput') else ()
+        run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS, *extra,
             '-I', ROOT / 'tests/multiclass', '-I', ROOT / 'tests/discriminant_analysis', '-I', ROOT / 'tests/kernel_approximation', '-I', ROOT / 'tests/kernel_approximation/consumers', '-I', ROOT / 'tests/frozen', '-I', ROOT / 'examples/frozen',
             '-I', ROOT / 'tests/pipeline', '-I', ROOT / 'examples', '-I', ROOT / 'tests/compose/support', source, '-o', binary)
 
@@ -89,6 +92,7 @@ def compose_test():
 
 
 def parity():
+    multioutput_checks.parity(run)
     multiclass_checks.parity(run)
     random_projection_checks.parity(run)
     isotonic_checks.parity(run)
@@ -107,6 +111,7 @@ def parity():
 
 
 def test():
+    multioutput_checks.test(run, executable)
     multiclass_checks.test(run, executable)
     random_projection_checks.test(run, executable)
     isotonic_checks.test(run, executable)

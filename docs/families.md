@@ -28,7 +28,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-dummy` | `sklearn/dummy.py` |
 | `moxie-semi_supervised` | `sklearn/semi_supervised` |
 | Integrated: `src/moxie/multiclass.mojo` | `sklearn/multiclass.py` |
-| `moxie-multioutput` | `sklearn/multioutput.py` |
+| Integrated: `src/moxie/multioutput.mojo` | `sklearn/multioutput.py` |
 | `moxie-calibration` | `sklearn/calibration.py` |
 | `moxie-cluster` | `sklearn/cluster` |
 | `moxie-mixture` | `sklearn/mixture` |
@@ -86,3 +86,7 @@ The retired isotonic sibling is not a build dependency.
 [Random projection](random_projection/README.md) is owned by Moxie, including Gaussian and sparse
 projections with Float32/Float64 dense and CSR storage. The retired sibling
 is not a build dependency.
+
+[Multioutput estimators](multioutput/README.md) are owned by Moxie core, including independent
+classification/regression and both chain types. The retired sibling is not a build
+dependency.

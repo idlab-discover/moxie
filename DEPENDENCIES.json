@@ -226,12 +226,22 @@
         },
         "moxie.multiclass": {
           "file": "src/moxie/multiclass.mojo"
+        },
+        "moxie.multioutput": {
+          "file": "src/moxie/multioutput.mojo"
+        },
+        "moxie._multioutput": {
+          "file": "src/moxie/_multioutput.mojo"
+        },
+        "moxie._multioutput_contracts": {
+          "file": "src/moxie/_multioutput_contracts.mojo"
         }
       },
       "assets": {
         "licenses/scikit-learn.txt": "LICENSES/scikit-learn.txt",
         "licenses/random_projection.txt": "docs/random_projection/THIRD_PARTY_NOTICES",
-        "licenses/multiclass-sklearn.txt": "LICENSES/multiclass-scikit-learn.txt"
+        "licenses/multiclass-sklearn.txt": "LICENSES/multiclass-scikit-learn.txt",
+        "licenses/multioutput-scikit-learn.txt": "LICENSES/multioutput-scikit-learn.txt"
       },
       "exports": {
         "packages": {

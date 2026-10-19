@@ -38,7 +38,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-manifold` | `sklearn/manifold` |
 | `moxie-preprocessing` | `sklearn/preprocessing` |
 | `moxie-impute` | `sklearn/impute` |
-| `moxie-feature_selection` | `sklearn/feature_selection` |
+| Integrated: `src/moxie/feature_selection/` | `sklearn/feature_selection`; [guide](feature_selection/README.md) |
 | `moxie-feature_extraction` | `sklearn/feature_extraction` |
 | Integrated: `src/moxie/kernel_approximation.mojo` | `sklearn/kernel_approximation.py` |
 | Integrated: `src/moxie/random_projection.mojo` | `sklearn/random_projection.py` |

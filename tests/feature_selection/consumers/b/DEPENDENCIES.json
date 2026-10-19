@@ -1,0 +1,680 @@
+{
+  "overrides": [],
+  "projects": [
+    {
+      "assets": {
+        "licenses/feature-selection-scikit-learn.txt": "LICENSES/feature-selection-scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {
+            "BaseEstimator": "moxie.base",
+            "ClassifierMixin": "moxie.base",
+            "Predictor": "moxie.base",
+            "RegressorMixin": "moxie.base",
+            "SupervisedEstimator": "moxie.base",
+            "TransformerMixin": "moxie.base",
+            "UnsupervisedEstimator": "moxie.base",
+            "clone": "moxie.base"
+          },
+          "moxie.utils": {
+            "FittedState": "moxie.utils.validation",
+            "check_is_fitted": "moxie.utils.validation"
+          },
+          "moxie.tree": {
+            "DecisionTreeClassifier": "moxie.tree._classes"
+          },
+          "moxie.feature_selection": {
+            "BuiltinScorer": "moxie.feature_selection._univariate_selection",
+            "ConfiguredScorer": "moxie.feature_selection._univariate_selection",
+            "DecisionTreeClassifierImportance": "moxie.feature_selection._tree_importance",
+            "DenseSupervisedCV": "moxie.feature_selection._sequential_adapter",
+            "DiscreteFeatures": "moxie.feature_selection._mutual_info",
+            "ElasticNetImportance": "moxie.feature_selection._linear_model_importance",
+            "EstimatorCVScore": "moxie.feature_selection._sequential_adapter",
+            "FeatureCount": "moxie.feature_selection._rfe",
+            "FeatureLimitPolicy": "moxie.feature_selection._from_model",
+            "FeatureSelector": "moxie.feature_selection._base",
+            "GenericUnivariateSelect": "moxie.feature_selection._univariate_selection",
+            "ImportanceProvider": "moxie.feature_selection._contracts",
+            "IncrementalPCAImportance": "moxie.feature_selection._incremental_pca_importance",
+            "IncrementalPCAUpdateParams": "moxie.feature_selection._incremental_pca_importance",
+            "IncrementalSelectionEstimator": "moxie.feature_selection._model_importance",
+            "LassoImportance": "moxie.feature_selection._linear_model_importance",
+            "MaxFeatures": "moxie.feature_selection._from_model",
+            "ModelThreshold": "moxie.feature_selection._from_model",
+            "MutualInfoScorer": "moxie.feature_selection._mutual_info_scorer",
+            "RFE": "moxie.feature_selection._rfe",
+            "RFECV": "moxie.feature_selection._rfe",
+            "RFECVParams": "moxie.feature_selection._rfe",
+            "RFECVResultColumn": "moxie.feature_selection._rfe",
+            "RFECVResults": "moxie.feature_selection._rfe",
+            "RFEParams": "moxie.feature_selection._rfe",
+            "ScoreResult": "moxie.feature_selection._contracts",
+            "SelectFdr": "moxie.feature_selection._univariate_selection",
+            "SelectFpr": "moxie.feature_selection._univariate_selection",
+            "SelectFromModel": "moxie.feature_selection._from_model",
+            "SelectFromModelParams": "moxie.feature_selection._from_model",
+            "SelectFwe": "moxie.feature_selection._univariate_selection",
+            "SelectKBest": "moxie.feature_selection._univariate_selection",
+            "SelectPercentile": "moxie.feature_selection._univariate_selection",
+            "SelectionClassLabels": "moxie.feature_selection._model_importance",
+            "SelectionEstimator": "moxie.feature_selection._model_importance",
+            "SelectionParameter": "moxie.feature_selection._univariate_selection",
+            "SelectionPolicy": "moxie.feature_selection._contracts",
+            "SelectionState": "moxie.feature_selection._selection",
+            "SelectorMixin": "moxie.feature_selection._selector_mixin",
+            "SelectorParams": "moxie.feature_selection._univariate_selection",
+            "SequentialAdapter": "moxie.feature_selection._sequential",
+            "SequentialCV": "moxie.feature_selection._sequential",
+            "SequentialCount": "moxie.feature_selection._sequential",
+            "SequentialFeatureSelector": "moxie.feature_selection._sequential",
+            "SequentialParams": "moxie.feature_selection._sequential",
+            "SupervisedSelector": "moxie.feature_selection._base",
+            "SupportResult": "moxie.feature_selection._selection",
+            "UnivariateScorer": "moxie.feature_selection._contracts",
+            "UnsupervisedSelector": "moxie.feature_selection._base",
+            "VarianceThreshold": "moxie.feature_selection._variance_threshold",
+            "chi2": "moxie.feature_selection._univariate_selection",
+            "f_classif": "moxie.feature_selection._univariate_selection",
+            "f_oneway": "moxie.feature_selection._univariate_selection",
+            "f_regression": "moxie.feature_selection._univariate_selection",
+            "mutual_info_classif": "moxie.feature_selection._mutual_info",
+            "mutual_info_regression": "moxie.feature_selection._mutual_info",
+            "r_regression": "moxie.feature_selection._univariate_selection"
+          }
+        },
+        "schema": 1
+      },
+      "id": "moxie",
+      "modules": {
+        "moxie.base": {
+          "file": "src/moxie/base.mojo"
+        },
+        "moxie.utils.validation": {
+          "file": "src/moxie/utils/validation.mojo"
+        },
+        "moxie.tree._builders": {
+          "file": "src/moxie/tree/_builders.mojo"
+        },
+        "moxie.tree._classes": {
+          "file": "src/moxie/tree/_classes.mojo"
+        },
+        "moxie.tree._criterion": {
+          "file": "src/moxie/tree/_criterion.mojo"
+        },
+        "moxie.tree._dense_api": {
+          "file": "src/moxie/tree/_dense_api.mojo"
+        },
+        "moxie.tree._engine_api": {
+          "file": "src/moxie/tree/_engine_api.mojo"
+        },
+        "moxie.tree._partitioner": {
+          "file": "src/moxie/tree/_partitioner.mojo"
+        },
+        "moxie.tree._records": {
+          "file": "src/moxie/tree/_records.mojo"
+        },
+        "moxie.tree._splitter": {
+          "file": "src/moxie/tree/_splitter.mojo"
+        },
+        "moxie.tree._tree": {
+          "file": "src/moxie/tree/_tree.mojo"
+        },
+        "moxie.tree._utils": {
+          "file": "src/moxie/tree/_utils.mojo"
+        },
+        "moxie.feature_selection._api": {
+          "file": "src/moxie/feature_selection/_api.mojo"
+        },
+        "moxie.feature_selection._base": {
+          "file": "src/moxie/feature_selection/_base.mojo"
+        },
+        "moxie.feature_selection._contracts": {
+          "file": "src/moxie/feature_selection/_contracts.mojo"
+        },
+        "moxie.feature_selection._from_model": {
+          "file": "src/moxie/feature_selection/_from_model.mojo"
+        },
+        "moxie.feature_selection._incremental_pca_importance": {
+          "file": "src/moxie/feature_selection/_incremental_pca_importance.mojo"
+        },
+        "moxie.feature_selection._linear_model_importance": {
+          "file": "src/moxie/feature_selection/_linear_model_importance.mojo"
+        },
+        "moxie.feature_selection._model_importance": {
+          "file": "src/moxie/feature_selection/_model_importance.mojo"
+        },
+        "moxie.feature_selection._mutual_info": {
+          "file": "src/moxie/feature_selection/_mutual_info.mojo"
+        },
+        "moxie.feature_selection._mutual_info_scorer": {
+          "file": "src/moxie/feature_selection/_mutual_info_scorer.mojo"
+        },
+        "moxie.feature_selection._rfe": {
+          "file": "src/moxie/feature_selection/_rfe.mojo"
+        },
+        "moxie.feature_selection._selection": {
+          "file": "src/moxie/feature_selection/_selection.mojo"
+        },
+        "moxie.feature_selection._selector_mixin": {
+          "file": "src/moxie/feature_selection/_selector_mixin.mojo"
+        },
+        "moxie.feature_selection._sequential": {
+          "file": "src/moxie/feature_selection/_sequential.mojo"
+        },
+        "moxie.feature_selection._sequential_adapter": {
+          "file": "src/moxie/feature_selection/_sequential_adapter.mojo"
+        },
+        "moxie.feature_selection._tree_importance": {
+          "file": "src/moxie/feature_selection/_tree_importance.mojo"
+        },
+        "moxie.feature_selection._univariate_policy": {
+          "file": "src/moxie/feature_selection/_univariate_policy.mojo"
+        },
+        "moxie.feature_selection._univariate_probability": {
+          "file": "src/moxie/feature_selection/_univariate_probability.mojo"
+        },
+        "moxie.feature_selection._univariate_scores": {
+          "file": "src/moxie/feature_selection/_univariate_scores.mojo"
+        },
+        "moxie.feature_selection._univariate_selection": {
+          "file": "src/moxie/feature_selection/_univariate_selection.mojo"
+        },
+        "moxie.feature_selection._variance_threshold": {
+          "file": "src/moxie/feature_selection/_variance_threshold.mojo"
+        }
+      },
+      "path": "../../../.."
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {},
+        "schema": 1
+      },
+      "id": "numerics",
+      "modules": {
+        "moxie._dense": {
+          "file": "src/moxie/_dense.mojo"
+        }
+      },
+      "path": "../../../../shared/numerics"
+    },
+    {
+      "assets": {
+        "licenses/NuMojo-LICENSE": "LICENSE",
+        "numojo/__init__.mojo": "numojo/__init__.mojo",
+        "numojo/core/__init__.mojo": "numojo/core/__init__.mojo",
+        "numojo/core/accelerator/__init__.mojo": "numojo/core/accelerator/__init__.mojo",
+        "numojo/core/accelerator/device.mojo": "numojo/core/accelerator/device.mojo",
+        "numojo/core/accelerator/kernels/__init__.mojo": "numojo/core/accelerator/kernels/__init__.mojo",
+        "numojo/core/accelerator/kernels/binary_ops.mojo": "numojo/core/accelerator/kernels/binary_ops.mojo",
+        "numojo/core/accelerator/kernels/reduction_ops.mojo": "numojo/core/accelerator/kernels/reduction_ops.mojo",
+        "numojo/core/accelerator/kernels/unary_ops.mojo": "numojo/core/accelerator/kernels/unary_ops.mojo",
+        "numojo/core/accelerator_ndarray.mojo": "numojo/core/accelerator_ndarray.mojo",
+        "numojo/core/complex/__init__.mojo": "numojo/core/complex/__init__.mojo",
+        "numojo/core/complex/complex_ndarray.mojo": "numojo/core/complex/complex_ndarray.mojo",
+        "numojo/core/complex/complex_simd.mojo": "numojo/core/complex/complex_simd.mojo",
+        "numojo/core/dtype/__init__.mojo": "numojo/core/dtype/__init__.mojo",
+        "numojo/core/dtype/complex_dtype.mojo": "numojo/core/dtype/complex_dtype.mojo",
+        "numojo/core/dtype/default_dtype.mojo": "numojo/core/dtype/default_dtype.mojo",
+        "numojo/core/dtype/utility.mojo": "numojo/core/dtype/utility.mojo",
+        "numojo/core/error.mojo": "numojo/core/error.mojo",
+        "numojo/core/indexing/__init__.mojo": "numojo/core/indexing/__init__.mojo",
+        "numojo/core/indexing/index_buffer.mojo": "numojo/core/indexing/index_buffer.mojo",
+        "numojo/core/indexing/item.mojo": "numojo/core/indexing/item.mojo",
+        "numojo/core/indexing/offset.mojo": "numojo/core/indexing/offset.mojo",
+        "numojo/core/indexing/slicing.mojo": "numojo/core/indexing/slicing.mojo",
+        "numojo/core/indexing/traversal.mojo": "numojo/core/indexing/traversal.mojo",
+        "numojo/core/indexing/utility.mojo": "numojo/core/indexing/utility.mojo",
+        "numojo/core/indexing/validation.mojo": "numojo/core/indexing/validation.mojo",
+        "numojo/core/layout/__init__.mojo": "numojo/core/layout/__init__.mojo",
+        "numojo/core/layout/array_methods.mojo": "numojo/core/layout/array_methods.mojo",
+        "numojo/core/layout/flags.mojo": "numojo/core/layout/flags.mojo",
+        "numojo/core/layout/ndshape.mojo": "numojo/core/layout/ndshape.mojo",
+        "numojo/core/layout/ndstrides.mojo": "numojo/core/layout/ndstrides.mojo",
+        "numojo/core/memory/__init__.mojo": "numojo/core/memory/__init__.mojo",
+        "numojo/core/memory/data_container.mojo": "numojo/core/memory/data_container.mojo",
+        "numojo/core/memory/dlpack.mojo": "numojo/core/memory/dlpack.mojo",
+        "numojo/core/memory/storage.mojo": "numojo/core/memory/storage.mojo",
+        "numojo/core/ndarray.mojo": "numojo/core/ndarray.mojo",
+        "numojo/core/traits/__init__.mojo": "numojo/core/traits/__init__.mojo",
+        "numojo/core/traits/array_like.mojo": "numojo/core/traits/array_like.mojo",
+        "numojo/core/traits/backend.mojo": "numojo/core/traits/backend.mojo",
+        "numojo/core/traits/buffered.mojo": "numojo/core/traits/buffered.mojo",
+        "numojo/core/traits/indexer_collection_element.mojo": "numojo/core/traits/indexer_collection_element.mojo",
+        "numojo/core/type_aliases.mojo": "numojo/core/type_aliases.mojo",
+        "numojo/prelude.mojo": "numojo/prelude.mojo",
+        "numojo/routines/__init__.mojo": "numojo/routines/__init__.mojo",
+        "numojo/routines/bitwise.mojo": "numojo/routines/bitwise.mojo",
+        "numojo/routines/constants.mojo": "numojo/routines/constants.mojo",
+        "numojo/routines/creation.mojo": "numojo/routines/creation.mojo",
+        "numojo/routines/functional.mojo": "numojo/routines/functional.mojo",
+        "numojo/routines/indexing.mojo": "numojo/routines/indexing.mojo",
+        "numojo/routines/io/__init__.mojo": "numojo/routines/io/__init__.mojo",
+        "numojo/routines/io/files.mojo": "numojo/routines/io/files.mojo",
+        "numojo/routines/io/formatting.mojo": "numojo/routines/io/formatting.mojo",
+        "numojo/routines/linalg/__init__.mojo": "numojo/routines/linalg/__init__.mojo",
+        "numojo/routines/linalg/decompositions.mojo": "numojo/routines/linalg/decompositions.mojo",
+        "numojo/routines/linalg/misc.mojo": "numojo/routines/linalg/misc.mojo",
+        "numojo/routines/linalg/norms.mojo": "numojo/routines/linalg/norms.mojo",
+        "numojo/routines/linalg/products.mojo": "numojo/routines/linalg/products.mojo",
+        "numojo/routines/linalg/solving.mojo": "numojo/routines/linalg/solving.mojo",
+        "numojo/routines/logic/__init__.mojo": "numojo/routines/logic/__init__.mojo",
+        "numojo/routines/logic/comparison.mojo": "numojo/routines/logic/comparison.mojo",
+        "numojo/routines/logic/contents.mojo": "numojo/routines/logic/contents.mojo",
+        "numojo/routines/logic/logical_ops.mojo": "numojo/routines/logic/logical_ops.mojo",
+        "numojo/routines/logic/truth.mojo": "numojo/routines/logic/truth.mojo",
+        "numojo/routines/manipulation.mojo": "numojo/routines/manipulation.mojo",
+        "numojo/routines/math/__init__.mojo": "numojo/routines/math/__init__.mojo",
+        "numojo/routines/math/arithmetic.mojo": "numojo/routines/math/arithmetic.mojo",
+        "numojo/routines/math/differences.mojo": "numojo/routines/math/differences.mojo",
+        "numojo/routines/math/exponents.mojo": "numojo/routines/math/exponents.mojo",
+        "numojo/routines/math/extrema.mojo": "numojo/routines/math/extrema.mojo",
+        "numojo/routines/math/floating.mojo": "numojo/routines/math/floating.mojo",
+        "numojo/routines/math/hyper.mojo": "numojo/routines/math/hyper.mojo",
+        "numojo/routines/math/misc.mojo": "numojo/routines/math/misc.mojo",
+        "numojo/routines/math/products.mojo": "numojo/routines/math/products.mojo",
+        "numojo/routines/math/rounding.mojo": "numojo/routines/math/rounding.mojo",
+        "numojo/routines/math/sums.mojo": "numojo/routines/math/sums.mojo",
+        "numojo/routines/math/trig.mojo": "numojo/routines/math/trig.mojo",
+        "numojo/routines/operations/__init__.mojo": "numojo/routines/operations/__init__.mojo",
+        "numojo/routines/operations/backend.mojo": "numojo/routines/operations/backend.mojo",
+        "numojo/routines/random.mojo": "numojo/routines/random.mojo",
+        "numojo/routines/searching.mojo": "numojo/routines/searching.mojo",
+        "numojo/routines/sorting.mojo": "numojo/routines/sorting.mojo",
+        "numojo/routines/statistics/__init__.mojo": "numojo/routines/statistics/__init__.mojo",
+        "numojo/routines/statistics/averages.mojo": "numojo/routines/statistics/averages.mojo"
+      },
+      "exports": null,
+      "id": "numojo",
+      "modules": {},
+      "path": "../../../../../../NuMojo"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {},
+        "schema": 1
+      },
+      "id": "assembly",
+      "modules": {},
+      "path": "../../../../shared/assembly"
+    },
+    {
+      "assets": {
+        "licenses/random-MT19937.txt": "LICENSES/MT19937.txt",
+        "licenses/random-NumPy-distributions.md": "LICENSES/NumPy-distributions.md",
+        "licenses/random-NumPy-random.md": "LICENSES/NumPy-random.md",
+        "licenses/random-NumPy.txt": "LICENSES/NumPy.txt",
+        "licenses/random-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "random",
+      "modules": {
+        "moxie._random": {
+          "file": "src/moxie/_random.mojo"
+        }
+      },
+      "path": "../../../../shared/random"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.linear_model": {
+            "ElasticNet": "moxie.linear_model._coordinate_descent",
+            "ElasticNetParams": "moxie.linear_model._coordinate_descent",
+            "Lasso": "moxie.linear_model._coordinate_descent",
+            "LassoParams": "moxie.linear_model._coordinate_descent"
+          }
+        },
+        "schema": 1
+      },
+      "id": "linear_model.selection",
+      "modules": {
+        "moxie.linear_model._base": {
+          "file": "src/moxie/linear_model/_base.mojo"
+        },
+        "moxie.linear_model._cd_fast": {
+          "file": "shared/coordinate_engine/src/moxie/linear_model/_cd_fast.mojo"
+        },
+        "moxie.linear_model._contracts": {
+          "file": "src/moxie/linear_model/_contracts.mojo"
+        },
+        "moxie.linear_model._coordinate_descent": {
+          "file": "algorithms/elastic_net/src/moxie/linear_model/_coordinate_descent.mojo"
+        },
+        "moxie.linear_model._linear_base": {
+          "file": "src/moxie/linear_model/_linear_base.mojo"
+        }
+      },
+      "path": "../../../../../moxie-linear_model"
+    },
+    {
+      "assets": {
+        "mojo_linalg/__init__.mojo": "src/mojo_linalg/__init__.mojo",
+        "mojo_linalg/_determinant.mojo": "src/mojo_linalg/_determinant.mojo",
+        "mojo_linalg/_spectral.mojo": "src/mojo_linalg/_spectral.mojo",
+        "mojo_linalg/_storage.mojo": "src/mojo_linalg/_storage.mojo",
+        "mojo_linalg/cholesky.mojo": "src/mojo_linalg/cholesky.mojo",
+        "mojo_linalg/indefinite.mojo": "src/mojo_linalg/indefinite.mojo",
+        "mojo_linalg/qr.mojo": "src/mojo_linalg/qr.mojo",
+        "mojo_linalg/svd.mojo": "src/mojo_linalg/svd.mojo",
+        "mojo_linalg/symmetric.mojo": "src/mojo_linalg/symmetric.mojo",
+        "mojo_linalg/triangular.mojo": "src/mojo_linalg/triangular.mojo"
+      },
+      "exports": null,
+      "id": "mojo-linalg",
+      "modules": {},
+      "path": "../../../../../mojo-linalg"
+    },
+    {
+      "assets": {
+        "licenses/linalg-sklearn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "linalg",
+      "modules": {
+        "moxie._linalg": {
+          "file": "src/moxie/_linalg.mojo"
+        }
+      },
+      "path": "../../../../shared/linalg"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie.neighbors": {
+            "BuiltinWeights": "moxie.neighbors._query_engine",
+            "NeighborWeights": "moxie.neighbors._query_engine"
+          }
+        },
+        "schema": 1
+      },
+      "id": "query_engine",
+      "modules": {
+        "moxie.neighbors._distance": {
+          "file": "src/moxie/neighbors/_distance.mojo"
+        },
+        "moxie.neighbors._query_engine": {
+          "file": "src/moxie/neighbors/_query_engine.mojo"
+        }
+      },
+      "path": "../../../../../moxie-neighbors/shared/query_engine"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie.neighbors": {}
+        },
+        "schema": 1
+      },
+      "id": "nearest",
+      "modules": {
+        "moxie.neighbors._unsupervised": {
+          "file": "src/moxie/neighbors/_unsupervised.mojo"
+        }
+      },
+      "path": "../../../../../moxie-neighbors/algorithms/nearest"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie.neighbors": {}
+        },
+        "schema": 1
+      },
+      "id": "neighbors.contracts",
+      "modules": {
+        "moxie.neighbors._base": {
+          "file": "src/moxie/neighbors/_base.mojo"
+        },
+        "moxie.neighbors._contracts": {
+          "file": "src/moxie/neighbors/_contracts.mojo"
+        }
+      },
+      "path": "../../../../../moxie-neighbors"
+    },
+    {
+      "assets": {
+        "licenses/labels-sklearn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "labels",
+      "modules": {
+        "moxie._labels": {
+          "file": "src/moxie/_labels.mojo"
+        }
+      },
+      "path": "../../../../shared/labels"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie.model_selection": {
+            "IndexArray": "moxie.model_selection._indices",
+            "IndexSplit": "moxie.model_selection._indices",
+            "TypedScorer": "moxie.model_selection._evaluation"
+          }
+        },
+        "schema": 1
+      },
+      "id": "model_selection.contracts",
+      "modules": {
+        "moxie.model_selection._base": {
+          "file": "src/moxie/model_selection/_base.mojo"
+        },
+        "moxie.model_selection._evaluation": {
+          "file": "src/moxie/model_selection/_evaluation.mojo"
+        },
+        "moxie.model_selection._indices": {
+          "file": "src/moxie/model_selection/_indices.mojo"
+        },
+        "moxie.model_selection._results": {
+          "file": "src/moxie/model_selection/_results.mojo"
+        }
+      },
+      "path": "../../../../../moxie-model_selection"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "BaseCrossValidator": "moxie.model_selection._split",
+            "BaseShuffleSplit": "moxie.model_selection._split",
+            "CheckedCV": "moxie.model_selection._split",
+            "GroupKFold": "moxie.model_selection._split",
+            "GroupShuffleSplit": "moxie.model_selection._split",
+            "IterableCV": "moxie.model_selection._split",
+            "KFold": "moxie.model_selection._split",
+            "LeaveOneGroupOut": "moxie.model_selection._split",
+            "LeaveOneOut": "moxie.model_selection._split",
+            "LeavePGroupsOut": "moxie.model_selection._split",
+            "LeavePOut": "moxie.model_selection._split",
+            "PredefinedSplit": "moxie.model_selection._split",
+            "RepeatedKFold": "moxie.model_selection._split",
+            "RepeatedStratifiedKFold": "moxie.model_selection._split",
+            "ShuffleSplit": "moxie.model_selection._split",
+            "SplitLabels": "moxie.model_selection._split",
+            "SplitSize": "moxie.model_selection._split",
+            "StratifiedGroupKFold": "moxie.model_selection._split",
+            "StratifiedKFold": "moxie.model_selection._split",
+            "StratifiedShuffleSplit": "moxie.model_selection._split",
+            "TimeSeriesSplit": "moxie.model_selection._split",
+            "check_cv": "moxie.model_selection._split",
+            "train_test_split": "moxie.model_selection._split"
+          }
+        },
+        "schema": 1
+      },
+      "id": "splitters",
+      "modules": {
+        "moxie.model_selection._split": {
+          "file": "src/moxie/model_selection/_split.mojo"
+        }
+      },
+      "path": "../../../../../moxie-model_selection/algorithms/splitters"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "CVAdapter": "moxie.model_selection._validation",
+            "CVResult": "moxie.model_selection._validation",
+            "PredictionAdapter": "moxie.model_selection._validation",
+            "cross_val_predict": "moxie.model_selection._validation",
+            "cross_val_score": "moxie.model_selection._validation",
+            "cross_validate": "moxie.model_selection._validation",
+            "validation_curve": "moxie.model_selection._validation"
+          }
+        },
+        "schema": 1
+      },
+      "id": "validation",
+      "modules": {
+        "moxie.model_selection._validation": {
+          "file": "src/moxie/model_selection/_validation.mojo"
+        }
+      },
+      "path": "../../../../../moxie-model_selection/algorithms/validation"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.decomposition": {
+            "IncrementalPCA": "moxie.decomposition._incremental_pca",
+            "IncrementalPCAParams": "moxie.decomposition._incremental_pca"
+          }
+        },
+        "schema": 1
+      },
+      "id": "decomposition.incremental_selection",
+      "modules": {
+        "moxie.decomposition._base": {
+          "file": "src/moxie/decomposition/_base.mojo"
+        },
+        "moxie.decomposition._contracts": {
+          "file": "src/moxie/decomposition/_contracts.mojo"
+        },
+        "moxie.decomposition._incremental_pca": {
+          "file": "src/moxie/decomposition/_incremental_pca.mojo"
+        },
+        "moxie.decomposition._pca": {
+          "file": "src/moxie/decomposition/_pca.mojo"
+        },
+        "moxie.decomposition._pca_backend": {
+          "file": "src/moxie/decomposition/_pca_backend.mojo"
+        },
+        "moxie.decomposition._svd_engine": {
+          "file": "shared/svd_engine/src/moxie/decomposition/_svd_engine.mojo"
+        }
+      },
+      "path": "../../../../../moxie-decomposition"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "categorical",
+      "modules": {
+        "moxie._categorical": {
+          "file": "src/moxie/_categorical.mojo"
+        }
+      },
+      "path": "../../../.."
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "consumer_a",
+      "modules": {
+        "moxie.consumer_a": {
+          "file": "src/moxie/consumer_a.mojo"
+        }
+      },
+      "path": "../a"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "consumer_b",
+      "modules": {
+        "moxie.consumer_b": {
+          "file": "src/moxie/consumer_b.mojo"
+        }
+      },
+      "path": "."
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie.neighbors": {}
+        },
+        "schema": 1
+      },
+      "id": "neighbors.spatial_trees",
+      "modules": {
+        "moxie.neighbors._ball_tree": {
+          "file": "src/moxie/neighbors/_ball_tree.mojo"
+        },
+        "moxie.neighbors._binary_tree": {
+          "file": "src/moxie/neighbors/_binary_tree.mojo"
+        },
+        "moxie.neighbors._kd_tree": {
+          "file": "src/moxie/neighbors/_kd_tree.mojo"
+        },
+        "moxie.neighbors._metrics": {
+          "file": "src/moxie/neighbors/_metrics.mojo"
+        },
+        "moxie.neighbors._tree_engine": {
+          "file": "src/moxie/neighbors/_tree_engine.mojo"
+        }
+      },
+      "path": "../../../../../moxie-neighbors/shared/spatial_trees"
+    }
+  ],
+  "schema": 1
+}

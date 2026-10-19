@@ -5,6 +5,9 @@ import os
 import subprocess
 import sys
 
+import feature_selection_checks
+from compiler_limits import compiler_command
+
 import tree_checks
 import gaussian_process_checks
 import multioutput_checks
@@ -24,7 +27,7 @@ DEPS = ROOT / 'builds/deps'
 def run(*args, **kwargs):
     env = os.environ.copy()
     env.update(PYTHONDONTWRITEBYTECODE='1', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1')
-    return subprocess.run([str(arg) for arg in args], cwd=ROOT, env=env, check=True, **kwargs)
+    return subprocess.run(compiler_command(args), cwd=ROOT, env=env, check=True, **kwargs)
 
 
 def executable(source):
@@ -32,6 +35,7 @@ def executable(source):
 
 
 def build():
+    feature_selection_checks.main("build")
     run(sys.executable, ROOT / 'families/covariance/tools/check.py', 'build')
     version = run('mojo', '--version', capture_output=True, text=True).stdout
     if not version.startswith('Mojo 1.0.0 '):
@@ -98,6 +102,7 @@ def compose_test():
 
 
 def parity():
+    feature_selection_checks.main("parity-only")
     tree_checks.parity(run)
     gaussian_process_checks.parity(run)
     multioutput_checks.parity(run)
@@ -120,6 +125,7 @@ def parity():
 
 
 def test():
+    feature_selection_checks.main("test-only")
     tree_checks.test(run)
     gaussian_process_checks.test(run, executable)
     multioutput_checks.test(run, executable)

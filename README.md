@@ -151,3 +151,7 @@ and external optimizer remain explicit numerical dependencies.
 Dense decision trees and extra trees are integrated in `src/moxie/tree`, with
 shared engines, prepared forest inputs and native text/DOT/SVG/Treelite exports.
 See [tree documentation](docs/tree/README.md).
+
+Dense feature selection is integrated under `moxie.feature_selection`. See the
+[feature-selection guide](docs/feature_selection/README.md) for all 19 exports,
+live dependencies and complete family validation commands.

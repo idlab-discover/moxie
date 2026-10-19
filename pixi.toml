@@ -22,6 +22,10 @@ tree-test = "python tools/tree_checks.py test"
 tree-parity = "python tools/tree_checks.py parity"
 tree-prepare-oracle = "python tools/prepare_tree_oracle.py"
 
+feature-selection-build = "python tools/feature_selection_checks.py build"
+feature-selection-test = "python tools/feature_selection_checks.py test"
+feature-selection-parity = "python tools/feature_selection_checks.py parity"
+
 [dependencies]
 mojo = "==1.0.0"
 max-core = "==26.5.0"

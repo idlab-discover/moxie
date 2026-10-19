@@ -316,6 +316,66 @@
         },
         "moxie.tree._export": {
           "file": "src/moxie/tree/_export.mojo"
+        },
+        "moxie.feature_selection._api": {
+          "file": "src/moxie/feature_selection/_api.mojo"
+        },
+        "moxie.feature_selection._base": {
+          "file": "src/moxie/feature_selection/_base.mojo"
+        },
+        "moxie.feature_selection._contracts": {
+          "file": "src/moxie/feature_selection/_contracts.mojo"
+        },
+        "moxie.feature_selection._from_model": {
+          "file": "src/moxie/feature_selection/_from_model.mojo"
+        },
+        "moxie.feature_selection._incremental_pca_importance": {
+          "file": "src/moxie/feature_selection/_incremental_pca_importance.mojo"
+        },
+        "moxie.feature_selection._linear_model_importance": {
+          "file": "src/moxie/feature_selection/_linear_model_importance.mojo"
+        },
+        "moxie.feature_selection._model_importance": {
+          "file": "src/moxie/feature_selection/_model_importance.mojo"
+        },
+        "moxie.feature_selection._mutual_info": {
+          "file": "src/moxie/feature_selection/_mutual_info.mojo"
+        },
+        "moxie.feature_selection._mutual_info_scorer": {
+          "file": "src/moxie/feature_selection/_mutual_info_scorer.mojo"
+        },
+        "moxie.feature_selection._rfe": {
+          "file": "src/moxie/feature_selection/_rfe.mojo"
+        },
+        "moxie.feature_selection._selection": {
+          "file": "src/moxie/feature_selection/_selection.mojo"
+        },
+        "moxie.feature_selection._selector_mixin": {
+          "file": "src/moxie/feature_selection/_selector_mixin.mojo"
+        },
+        "moxie.feature_selection._sequential": {
+          "file": "src/moxie/feature_selection/_sequential.mojo"
+        },
+        "moxie.feature_selection._sequential_adapter": {
+          "file": "src/moxie/feature_selection/_sequential_adapter.mojo"
+        },
+        "moxie.feature_selection._tree_importance": {
+          "file": "src/moxie/feature_selection/_tree_importance.mojo"
+        },
+        "moxie.feature_selection._univariate_policy": {
+          "file": "src/moxie/feature_selection/_univariate_policy.mojo"
+        },
+        "moxie.feature_selection._univariate_probability": {
+          "file": "src/moxie/feature_selection/_univariate_probability.mojo"
+        },
+        "moxie.feature_selection._univariate_scores": {
+          "file": "src/moxie/feature_selection/_univariate_scores.mojo"
+        },
+        "moxie.feature_selection._univariate_selection": {
+          "file": "src/moxie/feature_selection/_univariate_selection.mojo"
+        },
+        "moxie.feature_selection._variance_threshold": {
+          "file": "src/moxie/feature_selection/_variance_threshold.mojo"
         }
       },
       "assets": {
@@ -324,7 +384,8 @@
         "licenses/multiclass-sklearn.txt": "LICENSES/multiclass-scikit-learn.txt",
         "licenses/multioutput-scikit-learn.txt": "LICENSES/multioutput-scikit-learn.txt",
         "licenses/calibration-scikit-learn.txt": "LICENSES/calibration-scikit-learn.txt",
-        "licenses/gaussian-process-NOTICES": "LICENSES/gaussian-process-NOTICES"
+        "licenses/gaussian-process-NOTICES": "LICENSES/gaussian-process-NOTICES",
+        "licenses/feature-selection-scikit-learn.txt": "LICENSES/feature-selection-scikit-learn.txt"
       },
       "exports": {
         "packages": {
@@ -459,6 +520,65 @@
             "TreeParams": "moxie.tree._classes",
             "TreeInputEncoder": "moxie.tree._classes",
             "PreparedTreeInput": "moxie.tree._classes"
+          },
+          "moxie.feature_selection": {
+            "BuiltinScorer": "moxie.feature_selection._univariate_selection",
+            "ConfiguredScorer": "moxie.feature_selection._univariate_selection",
+            "DecisionTreeClassifierImportance": "moxie.feature_selection._tree_importance",
+            "DenseSupervisedCV": "moxie.feature_selection._sequential_adapter",
+            "DiscreteFeatures": "moxie.feature_selection._mutual_info",
+            "ElasticNetImportance": "moxie.feature_selection._linear_model_importance",
+            "EstimatorCVScore": "moxie.feature_selection._sequential_adapter",
+            "FeatureCount": "moxie.feature_selection._rfe",
+            "FeatureLimitPolicy": "moxie.feature_selection._from_model",
+            "FeatureSelector": "moxie.feature_selection._base",
+            "GenericUnivariateSelect": "moxie.feature_selection._univariate_selection",
+            "ImportanceProvider": "moxie.feature_selection._contracts",
+            "IncrementalPCAImportance": "moxie.feature_selection._incremental_pca_importance",
+            "IncrementalPCAUpdateParams": "moxie.feature_selection._incremental_pca_importance",
+            "IncrementalSelectionEstimator": "moxie.feature_selection._model_importance",
+            "LassoImportance": "moxie.feature_selection._linear_model_importance",
+            "MaxFeatures": "moxie.feature_selection._from_model",
+            "ModelThreshold": "moxie.feature_selection._from_model",
+            "MutualInfoScorer": "moxie.feature_selection._mutual_info_scorer",
+            "RFE": "moxie.feature_selection._rfe",
+            "RFECV": "moxie.feature_selection._rfe",
+            "RFECVParams": "moxie.feature_selection._rfe",
+            "RFECVResultColumn": "moxie.feature_selection._rfe",
+            "RFECVResults": "moxie.feature_selection._rfe",
+            "RFEParams": "moxie.feature_selection._rfe",
+            "ScoreResult": "moxie.feature_selection._contracts",
+            "SelectFdr": "moxie.feature_selection._univariate_selection",
+            "SelectFpr": "moxie.feature_selection._univariate_selection",
+            "SelectFromModel": "moxie.feature_selection._from_model",
+            "SelectFromModelParams": "moxie.feature_selection._from_model",
+            "SelectFwe": "moxie.feature_selection._univariate_selection",
+            "SelectKBest": "moxie.feature_selection._univariate_selection",
+            "SelectPercentile": "moxie.feature_selection._univariate_selection",
+            "SelectionClassLabels": "moxie.feature_selection._model_importance",
+            "SelectionEstimator": "moxie.feature_selection._model_importance",
+            "SelectionParameter": "moxie.feature_selection._univariate_selection",
+            "SelectionPolicy": "moxie.feature_selection._contracts",
+            "SelectionState": "moxie.feature_selection._selection",
+            "SelectorMixin": "moxie.feature_selection._selector_mixin",
+            "SelectorParams": "moxie.feature_selection._univariate_selection",
+            "SequentialAdapter": "moxie.feature_selection._sequential",
+            "SequentialCV": "moxie.feature_selection._sequential",
+            "SequentialCount": "moxie.feature_selection._sequential",
+            "SequentialFeatureSelector": "moxie.feature_selection._sequential",
+            "SequentialParams": "moxie.feature_selection._sequential",
+            "SupervisedSelector": "moxie.feature_selection._base",
+            "SupportResult": "moxie.feature_selection._selection",
+            "UnivariateScorer": "moxie.feature_selection._contracts",
+            "UnsupervisedSelector": "moxie.feature_selection._base",
+            "VarianceThreshold": "moxie.feature_selection._variance_threshold",
+            "chi2": "moxie.feature_selection._univariate_selection",
+            "f_classif": "moxie.feature_selection._univariate_selection",
+            "f_oneway": "moxie.feature_selection._univariate_selection",
+            "f_regression": "moxie.feature_selection._univariate_selection",
+            "mutual_info_classif": "moxie.feature_selection._mutual_info",
+            "mutual_info_regression": "moxie.feature_selection._mutual_info",
+            "r_regression": "moxie.feature_selection._univariate_selection"
           }
         },
         "schema": 1
@@ -655,6 +775,12 @@
         },
         "moxie.linear_model._linear_base": {
           "file": "src/moxie/linear_model/_linear_base.mojo"
+        },
+        "moxie.linear_model._cd_fast": {
+          "file": "shared/coordinate_engine/src/moxie/linear_model/_cd_fast.mojo"
+        },
+        "moxie.linear_model._coordinate_descent": {
+          "file": "algorithms/elastic_net/src/moxie/linear_model/_coordinate_descent.mojo"
         }
       },
       "assets": {},
@@ -666,7 +792,11 @@
             "LinearRegressor": "moxie.linear_model._base",
             "OnlineLinearClassifier": "moxie.linear_model._base",
             "OnlineLinearRegressor": "moxie.linear_model._base",
-            "ProbabilisticLinearClassifier": "moxie.linear_model._base"
+            "ProbabilisticLinearClassifier": "moxie.linear_model._base",
+            "ElasticNet": "moxie.linear_model._coordinate_descent",
+            "ElasticNetParams": "moxie.linear_model._coordinate_descent",
+            "Lasso": "moxie.linear_model._coordinate_descent",
+            "LassoParams": "moxie.linear_model._coordinate_descent"
           }
         },
         "schema": 1
@@ -886,7 +1016,11 @@
       "exports": {
         "schema": 1,
         "packages": {
-          "moxie.model_selection": {}
+          "moxie.model_selection": {
+            "IndexArray": "moxie.model_selection._indices",
+            "IndexSplit": "moxie.model_selection._indices",
+            "TypedScorer": "moxie.model_selection._evaluation"
+          }
         }
       }
     },
@@ -902,7 +1036,32 @@
       "exports": {
         "schema": 1,
         "packages": {
-          "moxie.model_selection": {}
+          "moxie.model_selection": {
+            "BaseCrossValidator": "moxie.model_selection._split",
+            "BaseShuffleSplit": "moxie.model_selection._split",
+            "CheckedCV": "moxie.model_selection._split",
+            "GroupKFold": "moxie.model_selection._split",
+            "GroupShuffleSplit": "moxie.model_selection._split",
+            "IterableCV": "moxie.model_selection._split",
+            "KFold": "moxie.model_selection._split",
+            "LeaveOneGroupOut": "moxie.model_selection._split",
+            "LeaveOneOut": "moxie.model_selection._split",
+            "LeavePGroupsOut": "moxie.model_selection._split",
+            "LeavePOut": "moxie.model_selection._split",
+            "PredefinedSplit": "moxie.model_selection._split",
+            "RepeatedKFold": "moxie.model_selection._split",
+            "RepeatedStratifiedKFold": "moxie.model_selection._split",
+            "ShuffleSplit": "moxie.model_selection._split",
+            "SplitLabels": "moxie.model_selection._split",
+            "SplitSize": "moxie.model_selection._split",
+            "StratifiedGroupKFold": "moxie.model_selection._split",
+            "StratifiedKFold": "moxie.model_selection._split",
+            "StratifiedShuffleSplit": "moxie.model_selection._split",
+            "TimeSeriesSplit": "moxie.model_selection._split",
+            "check_cv": "moxie.model_selection._split",
+            "train_test_split": "moxie.model_selection._split"
+          },
+          "moxie": {}
         }
       }
     },
@@ -918,7 +1077,16 @@
       "exports": {
         "schema": 1,
         "packages": {
-          "moxie.model_selection": {}
+          "moxie.model_selection": {
+            "CVAdapter": "moxie.model_selection._validation",
+            "CVResult": "moxie.model_selection._validation",
+            "PredictionAdapter": "moxie.model_selection._validation",
+            "cross_val_predict": "moxie.model_selection._validation",
+            "cross_val_score": "moxie.model_selection._validation",
+            "cross_validate": "moxie.model_selection._validation",
+            "validation_curve": "moxie.model_selection._validation"
+          },
+          "moxie": {}
         }
       }
     },
@@ -1056,6 +1224,144 @@
         "licenses/Balsa-Treelite.txt": "LICENSES/Treelite.txt"
       },
       "exports": null
+    },
+    {
+      "assets": {
+        "licenses/linalg-sklearn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "linalg",
+      "modules": {
+        "moxie._linalg": {
+          "file": "src/moxie/_linalg.mojo"
+        }
+      },
+      "path": "shared/linalg"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie.neighbors": {
+            "BuiltinWeights": "moxie.neighbors._query_engine",
+            "NeighborWeights": "moxie.neighbors._query_engine"
+          }
+        },
+        "schema": 1
+      },
+      "id": "query_engine",
+      "modules": {
+        "moxie.neighbors._distance": {
+          "file": "src/moxie/neighbors/_distance.mojo"
+        },
+        "moxie.neighbors._query_engine": {
+          "file": "src/moxie/neighbors/_query_engine.mojo"
+        }
+      },
+      "path": "../moxie-neighbors/shared/query_engine"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie.neighbors": {}
+        },
+        "schema": 1
+      },
+      "id": "nearest",
+      "modules": {
+        "moxie.neighbors._unsupervised": {
+          "file": "src/moxie/neighbors/_unsupervised.mojo"
+        }
+      },
+      "path": "../moxie-neighbors/algorithms/nearest"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie.neighbors": {}
+        },
+        "schema": 1
+      },
+      "id": "neighbors.contracts",
+      "modules": {
+        "moxie.neighbors._base": {
+          "file": "src/moxie/neighbors/_base.mojo"
+        },
+        "moxie.neighbors._contracts": {
+          "file": "src/moxie/neighbors/_contracts.mojo"
+        }
+      },
+      "path": "../moxie-neighbors"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.decomposition": {
+            "IncrementalPCA": "moxie.decomposition._incremental_pca",
+            "IncrementalPCAParams": "moxie.decomposition._incremental_pca"
+          }
+        },
+        "schema": 1
+      },
+      "id": "decomposition.incremental_selection",
+      "modules": {
+        "moxie.decomposition._base": {
+          "file": "src/moxie/decomposition/_base.mojo"
+        },
+        "moxie.decomposition._contracts": {
+          "file": "src/moxie/decomposition/_contracts.mojo"
+        },
+        "moxie.decomposition._incremental_pca": {
+          "file": "src/moxie/decomposition/_incremental_pca.mojo"
+        },
+        "moxie.decomposition._pca": {
+          "file": "src/moxie/decomposition/_pca.mojo"
+        },
+        "moxie.decomposition._pca_backend": {
+          "file": "src/moxie/decomposition/_pca_backend.mojo"
+        },
+        "moxie.decomposition._svd_engine": {
+          "file": "shared/svd_engine/src/moxie/decomposition/_svd_engine.mojo"
+        }
+      },
+      "path": "../moxie-decomposition"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie.neighbors": {}
+        },
+        "schema": 1
+      },
+      "id": "neighbors.spatial_trees",
+      "modules": {
+        "moxie.neighbors._ball_tree": {
+          "file": "src/moxie/neighbors/_ball_tree.mojo"
+        },
+        "moxie.neighbors._binary_tree": {
+          "file": "src/moxie/neighbors/_binary_tree.mojo"
+        },
+        "moxie.neighbors._kd_tree": {
+          "file": "src/moxie/neighbors/_kd_tree.mojo"
+        },
+        "moxie.neighbors._metrics": {
+          "file": "src/moxie/neighbors/_metrics.mojo"
+        },
+        "moxie.neighbors._tree_engine": {
+          "file": "src/moxie/neighbors/_tree_engine.mojo"
+        }
+      },
+      "path": "../moxie-neighbors/shared/spatial_trees"
     }
   ],
   "overrides": []

@@ -26,6 +26,10 @@ feature-selection-build = "python tools/feature_selection_checks.py build"
 feature-selection-test = "python tools/feature_selection_checks.py test"
 feature-selection-parity = "python tools/feature_selection_checks.py parity"
 
+mixture-build = "python tools/mixture_checks.py build"
+mixture-test = "python tools/mixture_checks.py test"
+mixture-parity = "python tools/mixture_checks.py parity"
+
 [dependencies]
 mojo = "==1.0.0"
 max-core = "==26.5.0"

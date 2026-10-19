@@ -24,7 +24,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-multioutput` | `sklearn/multioutput.py` | `MultiOutputClassifierAPI`, `MultiOutputRegressorAPI`, `MultiOutputProbability` |
 | `moxie-calibration` | `sklearn/calibration.py` | `CalibratedClassifier` |
 | `moxie-cluster` | `sklearn/cluster` | `Clusterer`, `PredictiveClusterer`, `ClusterDistanceTransformer`, `IncrementalClusterer`, `Biclusterer` |
-| `moxie-mixture` | `sklearn/mixture` | `MixtureDensity`, `InformationCriteria` |
+| Integrated: `src/moxie/mixture/` | `sklearn/mixture` | `MixtureDensity`, `InformationCriteria` |
 | `moxie-covariance` | `sklearn/covariance` | `CovarianceEstimator`, `RobustCovarianceDetector` |
 | `moxie-decomposition` | `sklearn/decomposition` | `DecompositionTransformer`, `InvertibleDecomposition`, `IncrementalDecomposition` |
 | `moxie-cross_decomposition` | `sklearn/cross_decomposition` | `CrossDecompositionTransformer`, `PLSPredictor` |

@@ -1,0 +1,25 @@
+{
+  "gaussian": {
+    "numerical_cases": 224,
+    "error_cases": 16,
+    "exception_counter": "float32_seeded_diverged",
+    "cases": [
+      "c148_blobs_diag_k-means++_float32",
+      "c150_blobs_diag_random_float32",
+      "c223_tiny_full_random_float32"
+    ]
+  },
+  "bayesian": {
+    "numerical_cases": 240,
+    "error_cases": 20,
+    "exception_counter": "float32_drift",
+    "cases": [
+      "c172_prior0_tied_float32",
+      "c186_prior5_diag_float32",
+      "c190_prior1_spherical_float32",
+      "c209_tall_dirichlet_process_spherical_kmeans_float32",
+      "c217_tall_dirichlet_distribution_tied_kmeans_float32",
+      "c226_tall_dirichlet_distribution_spherical_k-means++_float32"
+    ]
+  }
+}

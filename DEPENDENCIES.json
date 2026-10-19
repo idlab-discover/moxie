@@ -388,6 +388,39 @@
         },
         "moxie.cross_decomposition._plssvd": {
           "file": "src/moxie/cross_decomposition/_plssvd.mojo"
+        },
+        "moxie.mixture._base": {
+          "file": "src/moxie/mixture/_base.mojo"
+        },
+        "moxie.mixture._bayesian_mixture": {
+          "file": "src/moxie/mixture/_bayesian_mixture.mojo"
+        },
+        "moxie.mixture._contracts": {
+          "file": "src/moxie/mixture/_contracts.mojo"
+        },
+        "moxie.mixture._em": {
+          "file": "src/moxie/mixture/_em.mojo"
+        },
+        "moxie.mixture._gaussian_kernels": {
+          "file": "src/moxie/mixture/_gaussian_kernels.mojo"
+        },
+        "moxie.mixture._gaussian_mixture": {
+          "file": "src/moxie/mixture/_gaussian_mixture.mojo"
+        },
+        "moxie.mixture._initialization": {
+          "file": "src/moxie/mixture/_initialization.mojo"
+        },
+        "moxie.mixture._kmeans_init": {
+          "file": "src/moxie/mixture/_kmeans_init.mojo"
+        },
+        "moxie.mixture._precision": {
+          "file": "src/moxie/mixture/_precision.mojo"
+        },
+        "moxie.mixture._responsibilities": {
+          "file": "src/moxie/mixture/_responsibilities.mojo"
+        },
+        "moxie.mixture._scalar_math": {
+          "file": "src/moxie/mixture/_scalar_math.mojo"
         }
       },
       "assets": {
@@ -397,7 +430,8 @@
         "licenses/multioutput-scikit-learn.txt": "LICENSES/multioutput-scikit-learn.txt",
         "licenses/calibration-scikit-learn.txt": "LICENSES/calibration-scikit-learn.txt",
         "licenses/gaussian-process-NOTICES": "LICENSES/gaussian-process-NOTICES",
-        "licenses/feature-selection-scikit-learn.txt": "LICENSES/feature-selection-scikit-learn.txt"
+        "licenses/feature-selection-scikit-learn.txt": "LICENSES/feature-selection-scikit-learn.txt",
+        "licenses/mixture-scikit-learn.txt": "LICENSES/mixture-scikit-learn.txt"
       },
       "exports": {
         "packages": {
@@ -602,6 +636,14 @@
             "PLSParams": "moxie.cross_decomposition._pls",
             "PLSSVD": "moxie.cross_decomposition._plssvd",
             "PLSSVDParams": "moxie.cross_decomposition._plssvd"
+          },
+          "moxie.mixture": {
+            "GaussianMixture": "moxie.mixture._gaussian_mixture",
+            "GaussianMixtureParams": "moxie.mixture._gaussian_mixture",
+            "BayesianGaussianMixture": "moxie.mixture._bayesian_mixture",
+            "BayesianGaussianMixtureParams": "moxie.mixture._bayesian_mixture",
+            "MixtureDensity": "moxie.mixture._base",
+            "InformationCriteria": "moxie.mixture._base"
           }
         },
         "schema": 1
@@ -1385,6 +1427,45 @@
         }
       },
       "path": "../moxie-neighbors/shared/spatial_trees"
+    },
+    {
+      "id": "mixture-linalg",
+      "path": "../.worktrees/mojo-linalg-mixture",
+      "modules": {
+        "moxie._mixture_linalg._determinant": {
+          "file": "src/mojo_linalg/_determinant.mojo"
+        },
+        "moxie._mixture_linalg._spectral": {
+          "file": "src/mojo_linalg/_spectral.mojo"
+        },
+        "moxie._mixture_linalg._storage": {
+          "file": "src/mojo_linalg/_storage.mojo"
+        },
+        "moxie._mixture_linalg.cholesky": {
+          "file": "src/mojo_linalg/cholesky.mojo"
+        },
+        "moxie._mixture_linalg.triangular": {
+          "file": "src/mojo_linalg/triangular.mojo"
+        },
+        "moxie._mixture_linalg.symmetric": {
+          "file": "src/mojo_linalg/symmetric.mojo"
+        },
+        "moxie._mixture_linalg.special_gamma": {
+          "file": "src/mojo_linalg/special_gamma.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie._mixture_linalg": {
+            "cholesky": "moxie._mixture_linalg.cholesky",
+            "triangular_solve": "moxie._mixture_linalg.triangular",
+            "symmetric_eigh": "moxie._mixture_linalg.symmetric",
+            "NumericalError": "moxie._mixture_linalg._storage"
+          }
+        }
+      }
     }
   ],
   "overrides": []

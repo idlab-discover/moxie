@@ -160,3 +160,7 @@ live dependencies and complete family validation commands.
 including PLSRegression, PLSCanonical, CCA and PLSSVD with dense Float32/Float64
 inputs and current fluent mutation contracts. Its retired sibling is not a
 build dependency.
+
+[Mixture models](docs/mixture/README.md) are owned by Moxie core. GaussianMixture and
+BayesianGaussianMixture share their EM lifecycle and Gaussian kernels.
+The dedicated mixture linalg worktree remains an explicit numerical dependency.

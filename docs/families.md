@@ -31,7 +31,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | Integrated: `src/moxie/multioutput.mojo` | `sklearn/multioutput.py` |
 | Integrated: `src/moxie/calibration.mojo` | `sklearn/calibration.py` |
 | `moxie-cluster` | `sklearn/cluster` |
-| `moxie-mixture` | `sklearn/mixture` |
+| Integrated: `src/moxie/mixture/` | `sklearn/mixture`; [guide](mixture/README.md) |
 | Integrated: `families/covariance` | `sklearn/covariance` |
 | `moxie-decomposition` | `sklearn/decomposition` |
 | Integrated: `src/moxie/cross_decomposition/` | `sklearn/cross_decomposition`; [guide](cross_decomposition/README.md) |

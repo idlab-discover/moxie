@@ -1,0 +1,28 @@
+{
+  "reference_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "oracle_infrastructure": "scikit-learn 1.9.1; algorithm bodies loaded from the recorded local checkout",
+  "working_sources": "Current Moxie sources including pre-existing staged Naive Bayes; see PROVENANCE.json",
+  "commands_from_moxie": [
+    {
+      "command": "pixi run python tools/model_selection_checks.py all",
+      "result": "PASS: all three child builds, native contracts, examples and numerical parity. Splitters: 409 cases and 1431 exact folds. Candidates: 59 cases, 998 exact candidates and 54 exact RNG words. Search: 22 cases and 1173 checked records. CV: 184 validation-curve cells, 346 learning-curve cells, 58 permutation scores, 472 prediction cells, 36 incremental GaussianNB score cells, and 12 display moments. Float64 tolerances range from 1e-13 to 1e-12; index/order/RNG checks are exact."
+    },
+    {
+      "command": "pixi run python families/model_selection/tools/check.py test",
+      "result": "PASS: package precompilation, family contracts, both isolated consumers, missing-source/module/export collision rejection and negative capability compilation."
+    },
+    {
+      "command": "pixi run python tools/model_selection_checks.py independence",
+      "result": "PASS with standalone checkout temporarily moved out of reach: fresh root assembly, source/owner/license checks, isolated display and splitter consumers, and rejected unsupported probability capability. Checkout restored before retirement bookkeeping."
+    },
+    {
+      "command": "for c in tests/feature_selection/consumers/{a,b} families/covariance/tests/consumers/{a,b}; do python shared/assembly/tools/assemble_family.py --consumer \"$PWD/$c\" --lock \"$PWD/$c/DEPENDENCIES.json\" --output \"$PWD/$c/builds/deps\"; done",
+      "result": "PASS: all four redirected manifests assemble. No other family's numerical parity suite was run."
+    },
+    {
+      "command": "python families/model_selection/tools/completeness.py",
+      "result": "Expected exit 1: FixedThresholdClassifier, TunedThresholdClassifierCV, HalvingGridSearchCV and HalvingRandomSearchCV remain raising declarations. Unvalidated ignored drafts are recorded in scope.md."
+    }
+  ],
+  "limits": "Dense serial native contract only; no claim of full sklearn parity, sparse support, Python metadata routing or matplotlib compatibility. All four tracked Pixi locks retained byte-for-byte."
+}

@@ -1,0 +1,438 @@
+{
+  "schema": 1,
+  "overrides": [],
+  "projects": [
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {
+            "BaseEstimator": "moxie.base",
+            "ClassifierMixin": "moxie.base",
+            "Predictor": "moxie.base",
+            "RegressorMixin": "moxie.base",
+            "SupervisedEstimator": "moxie.base",
+            "TransformerMixin": "moxie.base",
+            "UnsupervisedEstimator": "moxie.base",
+            "clone": "moxie.base"
+          },
+          "moxie.utils": {
+            "FittedState": "moxie.utils.validation",
+            "check_is_fitted": "moxie.utils.validation"
+          }
+        },
+        "schema": 1
+      },
+      "id": "moxie",
+      "modules": {
+        "moxie.base": {
+          "file": "src/moxie/base.mojo"
+        },
+        "moxie.utils.validation": {
+          "file": "src/moxie/utils/validation.mojo"
+        }
+      },
+      "path": "../../../../.."
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {},
+        "schema": 1
+      },
+      "id": "numerics",
+      "modules": {
+        "moxie._dense": {
+          "file": "src/moxie/_dense.mojo"
+        }
+      },
+      "path": "../../../../../shared/numerics"
+    },
+    {
+      "assets": {
+        "licenses/NuMojo-LICENSE": "LICENSE",
+        "numojo/__init__.mojo": "numojo/__init__.mojo",
+        "numojo/core/__init__.mojo": "numojo/core/__init__.mojo",
+        "numojo/core/accelerator/__init__.mojo": "numojo/core/accelerator/__init__.mojo",
+        "numojo/core/accelerator/device.mojo": "numojo/core/accelerator/device.mojo",
+        "numojo/core/accelerator/kernels/__init__.mojo": "numojo/core/accelerator/kernels/__init__.mojo",
+        "numojo/core/accelerator/kernels/binary_ops.mojo": "numojo/core/accelerator/kernels/binary_ops.mojo",
+        "numojo/core/accelerator/kernels/reduction_ops.mojo": "numojo/core/accelerator/kernels/reduction_ops.mojo",
+        "numojo/core/accelerator/kernels/unary_ops.mojo": "numojo/core/accelerator/kernels/unary_ops.mojo",
+        "numojo/core/accelerator_ndarray.mojo": "numojo/core/accelerator_ndarray.mojo",
+        "numojo/core/complex/__init__.mojo": "numojo/core/complex/__init__.mojo",
+        "numojo/core/complex/complex_ndarray.mojo": "numojo/core/complex/complex_ndarray.mojo",
+        "numojo/core/complex/complex_simd.mojo": "numojo/core/complex/complex_simd.mojo",
+        "numojo/core/dtype/__init__.mojo": "numojo/core/dtype/__init__.mojo",
+        "numojo/core/dtype/complex_dtype.mojo": "numojo/core/dtype/complex_dtype.mojo",
+        "numojo/core/dtype/default_dtype.mojo": "numojo/core/dtype/default_dtype.mojo",
+        "numojo/core/dtype/utility.mojo": "numojo/core/dtype/utility.mojo",
+        "numojo/core/error.mojo": "numojo/core/error.mojo",
+        "numojo/core/indexing/__init__.mojo": "numojo/core/indexing/__init__.mojo",
+        "numojo/core/indexing/index_buffer.mojo": "numojo/core/indexing/index_buffer.mojo",
+        "numojo/core/indexing/item.mojo": "numojo/core/indexing/item.mojo",
+        "numojo/core/indexing/offset.mojo": "numojo/core/indexing/offset.mojo",
+        "numojo/core/indexing/slicing.mojo": "numojo/core/indexing/slicing.mojo",
+        "numojo/core/indexing/traversal.mojo": "numojo/core/indexing/traversal.mojo",
+        "numojo/core/indexing/utility.mojo": "numojo/core/indexing/utility.mojo",
+        "numojo/core/indexing/validation.mojo": "numojo/core/indexing/validation.mojo",
+        "numojo/core/layout/__init__.mojo": "numojo/core/layout/__init__.mojo",
+        "numojo/core/layout/array_methods.mojo": "numojo/core/layout/array_methods.mojo",
+        "numojo/core/layout/flags.mojo": "numojo/core/layout/flags.mojo",
+        "numojo/core/layout/ndshape.mojo": "numojo/core/layout/ndshape.mojo",
+        "numojo/core/layout/ndstrides.mojo": "numojo/core/layout/ndstrides.mojo",
+        "numojo/core/memory/__init__.mojo": "numojo/core/memory/__init__.mojo",
+        "numojo/core/memory/data_container.mojo": "numojo/core/memory/data_container.mojo",
+        "numojo/core/memory/dlpack.mojo": "numojo/core/memory/dlpack.mojo",
+        "numojo/core/memory/storage.mojo": "numojo/core/memory/storage.mojo",
+        "numojo/core/ndarray.mojo": "numojo/core/ndarray.mojo",
+        "numojo/core/traits/__init__.mojo": "numojo/core/traits/__init__.mojo",
+        "numojo/core/traits/array_like.mojo": "numojo/core/traits/array_like.mojo",
+        "numojo/core/traits/backend.mojo": "numojo/core/traits/backend.mojo",
+        "numojo/core/traits/buffered.mojo": "numojo/core/traits/buffered.mojo",
+        "numojo/core/traits/indexer_collection_element.mojo": "numojo/core/traits/indexer_collection_element.mojo",
+        "numojo/core/type_aliases.mojo": "numojo/core/type_aliases.mojo",
+        "numojo/prelude.mojo": "numojo/prelude.mojo",
+        "numojo/routines/__init__.mojo": "numojo/routines/__init__.mojo",
+        "numojo/routines/bitwise.mojo": "numojo/routines/bitwise.mojo",
+        "numojo/routines/constants.mojo": "numojo/routines/constants.mojo",
+        "numojo/routines/creation.mojo": "numojo/routines/creation.mojo",
+        "numojo/routines/functional.mojo": "numojo/routines/functional.mojo",
+        "numojo/routines/indexing.mojo": "numojo/routines/indexing.mojo",
+        "numojo/routines/io/__init__.mojo": "numojo/routines/io/__init__.mojo",
+        "numojo/routines/io/files.mojo": "numojo/routines/io/files.mojo",
+        "numojo/routines/io/formatting.mojo": "numojo/routines/io/formatting.mojo",
+        "numojo/routines/linalg/__init__.mojo": "numojo/routines/linalg/__init__.mojo",
+        "numojo/routines/linalg/decompositions.mojo": "numojo/routines/linalg/decompositions.mojo",
+        "numojo/routines/linalg/misc.mojo": "numojo/routines/linalg/misc.mojo",
+        "numojo/routines/linalg/norms.mojo": "numojo/routines/linalg/norms.mojo",
+        "numojo/routines/linalg/products.mojo": "numojo/routines/linalg/products.mojo",
+        "numojo/routines/linalg/solving.mojo": "numojo/routines/linalg/solving.mojo",
+        "numojo/routines/logic/__init__.mojo": "numojo/routines/logic/__init__.mojo",
+        "numojo/routines/logic/comparison.mojo": "numojo/routines/logic/comparison.mojo",
+        "numojo/routines/logic/contents.mojo": "numojo/routines/logic/contents.mojo",
+        "numojo/routines/logic/logical_ops.mojo": "numojo/routines/logic/logical_ops.mojo",
+        "numojo/routines/logic/truth.mojo": "numojo/routines/logic/truth.mojo",
+        "numojo/routines/manipulation.mojo": "numojo/routines/manipulation.mojo",
+        "numojo/routines/math/__init__.mojo": "numojo/routines/math/__init__.mojo",
+        "numojo/routines/math/arithmetic.mojo": "numojo/routines/math/arithmetic.mojo",
+        "numojo/routines/math/differences.mojo": "numojo/routines/math/differences.mojo",
+        "numojo/routines/math/exponents.mojo": "numojo/routines/math/exponents.mojo",
+        "numojo/routines/math/extrema.mojo": "numojo/routines/math/extrema.mojo",
+        "numojo/routines/math/floating.mojo": "numojo/routines/math/floating.mojo",
+        "numojo/routines/math/hyper.mojo": "numojo/routines/math/hyper.mojo",
+        "numojo/routines/math/misc.mojo": "numojo/routines/math/misc.mojo",
+        "numojo/routines/math/products.mojo": "numojo/routines/math/products.mojo",
+        "numojo/routines/math/rounding.mojo": "numojo/routines/math/rounding.mojo",
+        "numojo/routines/math/sums.mojo": "numojo/routines/math/sums.mojo",
+        "numojo/routines/math/trig.mojo": "numojo/routines/math/trig.mojo",
+        "numojo/routines/operations/__init__.mojo": "numojo/routines/operations/__init__.mojo",
+        "numojo/routines/operations/backend.mojo": "numojo/routines/operations/backend.mojo",
+        "numojo/routines/random.mojo": "numojo/routines/random.mojo",
+        "numojo/routines/searching.mojo": "numojo/routines/searching.mojo",
+        "numojo/routines/sorting.mojo": "numojo/routines/sorting.mojo",
+        "numojo/routines/statistics/__init__.mojo": "numojo/routines/statistics/__init__.mojo",
+        "numojo/routines/statistics/averages.mojo": "numojo/routines/statistics/averages.mojo"
+      },
+      "exports": null,
+      "id": "numojo",
+      "modules": {},
+      "path": "../../../../../../../NuMojo"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {},
+        "schema": 1
+      },
+      "id": "assembly",
+      "modules": {},
+      "path": "../../../../../shared/assembly"
+    },
+    {
+      "assets": {
+        "licenses/random-MT19937.txt": "LICENSES/MT19937.txt",
+        "licenses/random-NumPy-distributions.md": "LICENSES/NumPy-distributions.md",
+        "licenses/random-NumPy-random.md": "LICENSES/NumPy-random.md",
+        "licenses/random-NumPy.txt": "LICENSES/NumPy.txt",
+        "licenses/random-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "random",
+      "modules": {
+        "moxie._random": {
+          "file": "src/moxie/_random.mojo"
+        }
+      },
+      "path": "../../../../../shared/random"
+    },
+    {
+      "id": "mojo-linalg",
+      "path": "../../../../../../mojo-linalg",
+      "modules": {},
+      "assets": {
+        "mojo_linalg/__init__.mojo": "src/mojo_linalg/__init__.mojo",
+        "mojo_linalg/_determinant.mojo": "src/mojo_linalg/_determinant.mojo",
+        "mojo_linalg/_spectral.mojo": "src/mojo_linalg/_spectral.mojo",
+        "mojo_linalg/_storage.mojo": "src/mojo_linalg/_storage.mojo",
+        "mojo_linalg/cholesky.mojo": "src/mojo_linalg/cholesky.mojo",
+        "mojo_linalg/indefinite.mojo": "src/mojo_linalg/indefinite.mojo",
+        "mojo_linalg/qr.mojo": "src/mojo_linalg/qr.mojo",
+        "mojo_linalg/svd.mojo": "src/mojo_linalg/svd.mojo",
+        "mojo_linalg/symmetric.mojo": "src/mojo_linalg/symmetric.mojo",
+        "mojo_linalg/triangular.mojo": "src/mojo_linalg/triangular.mojo"
+      },
+      "exports": null
+    },
+    {
+      "id": "labels",
+      "modules": {
+        "moxie._labels": {
+          "file": "src/moxie/_labels.mojo"
+        }
+      },
+      "assets": {
+        "licenses/labels-sklearn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {}
+        }
+      },
+      "path": "../../../../../shared/labels"
+    },
+    {
+      "id": "model_selection",
+      "path": "../../..",
+      "modules": {
+        "moxie.model_selection._results": {
+          "file": "src/moxie/model_selection/_results.mojo"
+        },
+        "moxie.model_selection._candidates": {
+          "file": "src/moxie/model_selection/_candidates.mojo"
+        },
+        "moxie.model_selection._base": {
+          "file": "src/moxie/model_selection/_base.mojo"
+        },
+        "moxie.model_selection._indices": {
+          "file": "src/moxie/model_selection/_indices.mojo"
+        },
+        "moxie.model_selection._evaluation": {
+          "file": "src/moxie/model_selection/_evaluation.mojo"
+        },
+        "moxie.model_selection._api": {
+          "file": "src/moxie/model_selection/_api.mojo"
+        },
+        "moxie.model_selection._api_types": {
+          "file": "src/moxie/model_selection/_api_types.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "CrossValidator": "moxie.model_selection._base",
+            "SearchEstimator": "moxie.model_selection._base",
+            "PredictiveSearch": "moxie.model_selection._base",
+            "IndexArray": "moxie.model_selection._indices",
+            "IndexSplit": "moxie.model_selection._indices",
+            "SplitCursor": "moxie.model_selection._indices",
+            "validate_indices": "moxie.model_selection._indices",
+            "TypedScorer": "moxie.model_selection._evaluation",
+            "FitAdapter": "moxie.model_selection._evaluation",
+            "clone_fit_score": "moxie.model_selection._evaluation",
+            "ScoreTable": "moxie.model_selection._results",
+            "FitStatus": "moxie.model_selection._results",
+            "ErrorPolicy": "moxie.model_selection._results",
+            "RefitSelector": "moxie.model_selection._results",
+            "validate_refit_index": "moxie.model_selection._results",
+            "require_refit": "moxie.model_selection._results",
+            "Candidate": "moxie.model_selection._candidates",
+            "ParameterCandidates": "moxie.model_selection._candidates",
+            "ParameterDistribution": "moxie.model_selection._candidates",
+            "FixedThresholdClassifier": "moxie.model_selection._api",
+            "HalvingGridSearchCV": "moxie.model_selection._api",
+            "HalvingRandomSearchCV": "moxie.model_selection._api",
+            "TunedThresholdClassifierCV": "moxie.model_selection._api",
+            "ParameterAdapter": "moxie.model_selection._evaluation"
+          }
+        }
+      }
+    },
+    {
+      "id": "readiness-contract",
+      "path": "../../../../../shared/readiness",
+      "modules": {},
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    },
+    {
+      "id": "probe_a",
+      "path": ".",
+      "modules": {
+        "moxie.probe_a": {
+          "file": "src/moxie/probe_a.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {}
+        }
+      }
+    },
+    {
+      "id": "probe_b",
+      "path": "../b",
+      "modules": {
+        "moxie.probe_b": {
+          "file": "src/moxie/probe_b.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {}
+        }
+      }
+    },
+    {
+      "id": "splitters",
+      "path": "../../../algorithms/splitters",
+      "modules": {
+        "moxie.model_selection._split": {
+          "file": "src/moxie/model_selection/_split.mojo"
+        }
+      },
+      "assets": {
+        "licenses/model_selection-splitters-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "BaseCrossValidator": "moxie.model_selection._split",
+            "KFold": "moxie.model_selection._split",
+            "TimeSeriesSplit": "moxie.model_selection._split",
+            "LeaveOneOut": "moxie.model_selection._split",
+            "LeavePOut": "moxie.model_selection._split",
+            "PredefinedSplit": "moxie.model_selection._split",
+            "LeaveOneGroupOut": "moxie.model_selection._split",
+            "LeavePGroupsOut": "moxie.model_selection._split",
+            "StratifiedKFold": "moxie.model_selection._split",
+            "GroupKFold": "moxie.model_selection._split",
+            "RepeatedKFold": "moxie.model_selection._split",
+            "RepeatedStratifiedKFold": "moxie.model_selection._split",
+            "BaseShuffleSplit": "moxie.model_selection._split",
+            "ShuffleSplit": "moxie.model_selection._split",
+            "GroupShuffleSplit": "moxie.model_selection._split",
+            "SplitSize": "moxie.model_selection._split",
+            "StratifiedShuffleSplit": "moxie.model_selection._split",
+            "StratifiedGroupKFold": "moxie.model_selection._split",
+            "check_cv": "moxie.model_selection._split",
+            "train_test_split": "moxie.model_selection._split",
+            "CheckedCV": "moxie.model_selection._split",
+            "IterableCV": "moxie.model_selection._split",
+            "SplitLabels": "moxie.model_selection._split"
+          }
+        }
+      }
+    },
+    {
+      "id": "search",
+      "path": "../../../algorithms/search",
+      "modules": {
+        "moxie.model_selection._search_parameters": {
+          "file": "src/moxie/model_selection/_search_parameters.mojo"
+        },
+        "moxie.model_selection._search": {
+          "file": "src/moxie/model_selection/_search.mojo"
+        }
+      },
+      "assets": {
+        "licenses/model_selection-search-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "ParameterGrid": "moxie.model_selection._search_parameters",
+            "ParameterSampler": "moxie.model_selection._search_parameters",
+            "ParameterDomain": "moxie.model_selection._search_parameters",
+            "DiscreteDistribution": "moxie.model_selection._search_parameters",
+            "GridSearchCV": "moxie.model_selection._search",
+            "RandomizedSearchCV": "moxie.model_selection._search",
+            "SearchAdapter": "moxie.model_selection._search",
+            "SearchScorer": "moxie.model_selection._search",
+            "SearchRefitPolicy": "moxie.model_selection._search",
+            "SearchRefit": "moxie.model_selection._search",
+            "SearchResults": "moxie.model_selection._search",
+            "SearchParams": "moxie.model_selection._search"
+          }
+        }
+      }
+    },
+    {
+      "id": "validation",
+      "path": "../../../algorithms/validation",
+      "modules": {
+        "moxie.model_selection._validation": {
+          "file": "src/moxie/model_selection/_validation.mojo"
+        },
+        "moxie.model_selection._plot": {
+          "file": "src/moxie/model_selection/_plot.mojo"
+        }
+      },
+      "assets": {
+        "licenses/model_selection-validation-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "cross_validate": "moxie.model_selection._validation",
+            "cross_val_score": "moxie.model_selection._validation",
+            "cross_val_predict": "moxie.model_selection._validation",
+            "CVAdapter": "moxie.model_selection._validation",
+            "PredictionAdapter": "moxie.model_selection._validation",
+            "CVResult": "moxie.model_selection._validation",
+            "validation_curve": "moxie.model_selection._validation",
+            "learning_curve": "moxie.model_selection._validation",
+            "LearningCurveResult": "moxie.model_selection._validation",
+            "permutation_test_score": "moxie.model_selection._validation",
+            "PermutationTestResult": "moxie.model_selection._validation",
+            "PermutationCV": "moxie.model_selection._validation",
+            "FixedPermutationCV": "moxie.model_selection._validation",
+            "StringPredictionAdapter": "moxie.model_selection._validation",
+            "ClassPredictionAdapter": "moxie.model_selection._validation",
+            "ClassResponse": "moxie.model_selection._validation",
+            "CVClassPrediction": "moxie.model_selection._validation",
+            "encode_prediction_target": "moxie.model_selection._validation",
+            "LearningCurveDisplay": "moxie.model_selection._plot",
+            "ValidationCurveDisplay": "moxie.model_selection._plot",
+            "CurveArtist": "moxie.model_selection._plot",
+            "CurveAxes": "moxie.model_selection._plot",
+            "CurveFigure": "moxie.model_selection._plot",
+            "IncrementalCVAdapter": "moxie.model_selection._validation"
+          }
+        }
+      }
+    }
+  ]
+}

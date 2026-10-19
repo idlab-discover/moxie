@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.model_selection": {
+      "BaseCrossValidator": "moxie.model_selection._split",
+      "KFold": "moxie.model_selection._split",
+      "TimeSeriesSplit": "moxie.model_selection._split",
+      "LeaveOneOut": "moxie.model_selection._split",
+      "LeavePOut": "moxie.model_selection._split",
+      "PredefinedSplit": "moxie.model_selection._split",
+      "LeaveOneGroupOut": "moxie.model_selection._split",
+      "LeavePGroupsOut": "moxie.model_selection._split",
+      "StratifiedKFold": "moxie.model_selection._split",
+      "GroupKFold": "moxie.model_selection._split",
+      "RepeatedKFold": "moxie.model_selection._split",
+      "RepeatedStratifiedKFold": "moxie.model_selection._split",
+      "BaseShuffleSplit": "moxie.model_selection._split",
+      "ShuffleSplit": "moxie.model_selection._split",
+      "GroupShuffleSplit": "moxie.model_selection._split",
+      "SplitSize": "moxie.model_selection._split",
+      "StratifiedShuffleSplit": "moxie.model_selection._split",
+      "StratifiedGroupKFold": "moxie.model_selection._split",
+      "check_cv": "moxie.model_selection._split",
+      "train_test_split": "moxie.model_selection._split",
+      "CheckedCV": "moxie.model_selection._split",
+      "IterableCV": "moxie.model_selection._split",
+      "SplitLabels": "moxie.model_selection._split"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.model_selection": {
+      "cross_validate": "moxie.model_selection._validation",
+      "cross_val_score": "moxie.model_selection._validation",
+      "cross_val_predict": "moxie.model_selection._validation",
+      "CVAdapter": "moxie.model_selection._validation",
+      "PredictionAdapter": "moxie.model_selection._validation",
+      "CVResult": "moxie.model_selection._validation",
+      "validation_curve": "moxie.model_selection._validation",
+      "learning_curve": "moxie.model_selection._validation",
+      "LearningCurveResult": "moxie.model_selection._validation",
+      "permutation_test_score": "moxie.model_selection._validation",
+      "PermutationTestResult": "moxie.model_selection._validation",
+      "PermutationCV": "moxie.model_selection._validation",
+      "FixedPermutationCV": "moxie.model_selection._validation",
+      "StringPredictionAdapter": "moxie.model_selection._validation",
+      "ClassPredictionAdapter": "moxie.model_selection._validation",
+      "ClassResponse": "moxie.model_selection._validation",
+      "CVClassPrediction": "moxie.model_selection._validation",
+      "encode_prediction_target": "moxie.model_selection._validation",
+      "LearningCurveDisplay": "moxie.model_selection._plot",
+      "ValidationCurveDisplay": "moxie.model_selection._plot",
+      "CurveArtist": "moxie.model_selection._plot",
+      "CurveAxes": "moxie.model_selection._plot",
+      "CurveFigure": "moxie.model_selection._plot",
+      "IncrementalCVAdapter": "moxie.model_selection._validation"
+    }
+  }
+}

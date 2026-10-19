@@ -62,7 +62,7 @@ Integrated composition tests consume the LinearRegression subset of
 source dependencies; this integration does not import their entire families.
 
 Covariance uses the tested `../.worktrees/mojo-linalg-covariance` numerical checkout
-and the declared `../moxie-model_selection` subset for graphical cross-validation.
+and the integrated `families/model_selection` subset for graphical cross-validation.
 
 After `pixi run build`, compile a consumer from this repository root:
 
@@ -164,3 +164,6 @@ build dependency.
 [Mixture models](docs/mixture/README.md) are owned by Moxie core. GaussianMixture and
 BayesianGaussianMixture share their EM lifecycle and Gaussian kernels.
 The dedicated mixture linalg worktree remains an explicit numerical dependency.
+
+[Model selection](families/model_selection/README.md) is owned by Moxie, with
+splitters, typed search, CV, curves and native SVG displays.

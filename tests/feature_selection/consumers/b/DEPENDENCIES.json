@@ -496,7 +496,7 @@
           "file": "src/moxie/model_selection/_results.mojo"
         }
       },
-      "path": "../../../../../moxie-model_selection"
+      "path": "../../../../families/model_selection"
     },
     {
       "assets": {},
@@ -537,7 +537,7 @@
           "file": "src/moxie/model_selection/_split.mojo"
         }
       },
-      "path": "../../../../../moxie-model_selection/algorithms/splitters"
+      "path": "../../../../families/model_selection/algorithms/splitters"
     },
     {
       "assets": {},
@@ -562,7 +562,7 @@
           "file": "src/moxie/model_selection/_validation.mojo"
         }
       },
-      "path": "../../../../../moxie-model_selection/algorithms/validation"
+      "path": "../../../../families/model_selection/algorithms/validation"
     },
     {
       "assets": {},

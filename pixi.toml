@@ -6,6 +6,7 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+model-selection = "python tools/model_selection_checks.py all"
 build = "python tools/check.py build"
 test = { cmd = "python tools/check.py test", depends-on = ["build"] }
 parity = { cmd = "python tools/check.py parity", depends-on = ["build"], env = { OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", PYTHONDONTWRITEBYTECODE = "1" } }

@@ -193,3 +193,7 @@ build dependency.
 [Mixture models](mixture/README.md) are owned by Moxie core. GaussianMixture and
 BayesianGaussianMixture share their EM lifecycle and Gaussian kernels.
 The dedicated mixture linalg worktree remains an explicit numerical dependency.
+
+[Model selection](../families/model_selection/README.md) is owned by Moxie.
+Its typed adapters cover dense serial CV, search and incremental learning curves;
+threshold tuning and successive halving remain unsupported.

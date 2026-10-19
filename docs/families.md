@@ -45,7 +45,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | Integrated: `src/moxie/isotonic.mojo` | `sklearn/isotonic.py` |
 | `moxie-pipeline` | `sklearn/pipeline.py` |
 | `moxie-compose` | `sklearn/compose` |
-| `moxie-model_selection` | `sklearn/model_selection` |
+| Integrated: `families/model_selection` | `sklearn/model_selection` |
 | `moxie-frozen` | `sklearn/frozen` |
 
 ## Porting scope

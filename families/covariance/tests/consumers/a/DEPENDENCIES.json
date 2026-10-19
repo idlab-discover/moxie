@@ -646,7 +646,7 @@
     },
     {
       "id": "model_selection",
-      "path": "../../../../../../moxie-model_selection",
+      "path": "../../../../model_selection",
       "modules": {
         "moxie.model_selection._indices": {
           "file": "src/moxie/model_selection/_indices.mojo"
@@ -671,7 +671,7 @@
     },
     {
       "id": "splitters",
-      "path": "../../../../../../moxie-model_selection/algorithms/splitters",
+      "path": "../../../../model_selection/algorithms/splitters",
       "modules": {
         "moxie.model_selection._split": {
           "file": "src/moxie/model_selection/_split.mojo"
@@ -687,7 +687,7 @@
     },
     {
       "id": "validation",
-      "path": "../../../../../../moxie-model_selection/algorithms/validation",
+      "path": "../../../../model_selection/algorithms/validation",
       "modules": {
         "moxie.model_selection._validation": {
           "file": "src/moxie/model_selection/_validation.mojo"

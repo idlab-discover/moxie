@@ -1,0 +1,58 @@
+{
+  "source_repository": "moxie-model_selection",
+  "source_revision": "075ec417c0679e06dad070971cdefe54f4500310",
+  "retired_checkout": "../../../retired-moxie-model_selection",
+  "reference_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "toolchain": {
+    "mojo": "1.0.0",
+    "max-core": "26.5.0"
+  },
+  "preexisting_working_files": {
+    "algorithms/validation/src/moxie/model_selection/_plot.mojo": "ed052f10b429d625c96e581cea3935974bd3a1750279c8ed4e8e979799fabc00",
+    "algorithms/validation/tests/incremental.mojo": "53eb3d549982ff34d77e310d4dc491b7c0e8f9f9a41296869b619f2b58100816",
+    "algorithms/validation/tests/incremental_gaussian.mojo": "4e2563f4d0ce53c95104c9c7c9169274fa57f1652e7a8fb6b6f67388e1198655",
+    "DEPENDENCIES.json": "d112792df3fe5d2d8fbb821ee7ed76e13655d9b3bc268db61716c6025ae3ff7f",
+    "EXPORTS.json": "3c1f5cd7c1240611c541b0d5b28c15bf31dff7affd0a2cea451a4bfe48b808de",
+    "algorithms/search/DEPENDENCIES.json": "c0087f6f8e5afb9a5928de28afa4ecd8b07f94fde8c9f5031032af16a18db66e",
+    "algorithms/splitters/DEPENDENCIES.json": "e6c397e564d0e95093b3b2606992e9131f5f080995b8255b9bb122cc8d4ac6fc",
+    "algorithms/validation/DEPENDENCIES.json": "219b95f73135c72a8bb7ac2db9877ebf067348a2ab37cd75ac511f6f4e61e00b",
+    "algorithms/validation/EXPORTS.json": "d19d85fa25db70ae3604ba7273a6045784ce9db36de37369555ac9ca345ab080",
+    "algorithms/validation/src/moxie/model_selection/_validation.mojo": "9f651d14144f3f62c1794abe12bdca6d47d115a62319a32c35af6460857d3da3",
+    "tests/consumers/a/DEPENDENCIES.json": "d5d5e00b5ea8f46a5740c50ca417ab1cef69462f2784f6b5f129e4f4b9c8c277",
+    "tests/consumers/b/DEPENDENCIES.json": "16b72361de53c543e1ad2560a47446a68aadcd39bdc206bdc9bb13d3cb3ee5cb"
+  },
+  "toolchain_locks": {
+    "algorithms/search/pixi.lock": "0457ec8b774905df97ac285a944e92ed6672dc5595406740b470e2e5bb96affa",
+    "algorithms/splitters/pixi.lock": "0457ec8b774905df97ac285a944e92ed6672dc5595406740b470e2e5bb96affa",
+    "algorithms/validation/pixi.lock": "0457ec8b774905df97ac285a944e92ed6672dc5595406740b470e2e5bb96affa",
+    "pixi.lock": "0457ec8b774905df97ac285a944e92ed6672dc5595406740b470e2e5bb96affa"
+  },
+  "integration_notes": [
+    "The live working changes in validation, native displays and manifests were carried into Moxie.",
+    "Display tuple ownership and indexed assignment were corrected for Mojo 1.0.0.",
+    "Current Moxie working sources, including staged Naive Bayes, supplied test dependencies. Unrelated staged changes were not committed by this rollup.",
+    "Original uncommitted source bytes are archived under builds/rollup-source.tar.gz in the retired checkout.",
+    "Ignored threshold and halving worktrees are preserved in the retired checkout; draft assets are also copied to Moxie builds/model-selection-drafts. They have no supported public contract or validation suite."
+  ],
+  "deferred_worktrees": {
+    "thresholds": {
+      "path": "builds/worktrees/thresholds",
+      "status": "untracked draft, not in assembled public contract",
+      "source_files": [
+        "builds/worktrees/thresholds/algorithms/thresholds/src/moxie/model_selection/_classification_threshold.mojo"
+      ],
+      "source_sha256": {
+        "builds/worktrees/thresholds/algorithms/thresholds/src/moxie/model_selection/_classification_threshold.mojo": "9f5508e16ff8beeba05048930f9ff09d0cf23af1e699211adfab7cf057ad783b"
+      }
+    },
+    "halving": {
+      "path": "builds/worktrees/halving",
+      "status": "untracked draft, not in assembled public contract",
+      "source_files": [],
+      "source_sha256": {}
+    }
+  },
+  "original_working_tree_archive_sha256": "15b4749c8ccd7a87d93c67dd6cc69e2712409e9352bccf9f468023457e9a3f22",
+  "core_revision_before_rollup": "abb75d79481c467c230ead9ffb4017af0178d48f",
+  "preexisting_core_index_tree": "c6a7bb0ab235f7143d0a37235d4685b339336baf"
+}

@@ -235,13 +235,35 @@
         },
         "moxie._multioutput_contracts": {
           "file": "src/moxie/_multioutput_contracts.mojo"
+        },
+        "moxie.calibration": {
+          "file": "src/moxie/calibration.mojo"
+        },
+        "moxie._calibration_algorithms": {
+          "file": "src/moxie/_calibration_algorithms.mojo"
+        },
+        "moxie._calibration_curve": {
+          "file": "src/moxie/_calibration_curve.mojo"
+        },
+        "moxie._calibration_cv": {
+          "file": "src/moxie/_calibration_cv.mojo"
+        },
+        "moxie._calibration_splits": {
+          "file": "src/moxie/_calibration_splits.mojo"
+        },
+        "moxie._calibration_display": {
+          "file": "src/moxie/_calibration_display.mojo"
+        },
+        "moxie._calibration_frozen": {
+          "file": "src/moxie/_calibration_frozen.mojo"
         }
       },
       "assets": {
         "licenses/scikit-learn.txt": "LICENSES/scikit-learn.txt",
         "licenses/random_projection.txt": "docs/random_projection/THIRD_PARTY_NOTICES",
         "licenses/multiclass-sklearn.txt": "LICENSES/multiclass-scikit-learn.txt",
-        "licenses/multioutput-scikit-learn.txt": "LICENSES/multioutput-scikit-learn.txt"
+        "licenses/multioutput-scikit-learn.txt": "LICENSES/multioutput-scikit-learn.txt",
+        "licenses/calibration-scikit-learn.txt": "LICENSES/calibration-scikit-learn.txt"
       },
       "exports": {
         "packages": {

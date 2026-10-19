@@ -175,3 +175,7 @@ capabilities. The retired multiclass sibling is not a build dependency.
 [Multioutput estimators](multioutput/README.md) are owned by Moxie core, including independent
 classification/regression and both chain types. The retired sibling is not a build
 dependency.
+
+[Calibration](calibration/README.md) is owned by Moxie core, including all three calibration
+methods, curves and native SVG displays. Its retired sibling is not a build
+dependency.

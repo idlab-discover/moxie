@@ -9,6 +9,7 @@ import multioutput_checks
 import multiclass_checks
 import pipeline_checks
 import frozen_checks
+import calibration_checks
 import isotonic_checks
 import random_projection_checks
 import discriminant_analysis_checks
@@ -52,6 +53,7 @@ def build():
     sources += kernel_approximation_checks.sources()
     sources += discriminant_analysis_checks.sources()
     sources += isotonic_checks.sources()
+    sources += calibration_checks.sources()
     sources += random_projection_checks.sources()
     sources += sorted((ROOT / 'examples').glob('*.mojo'))
     for source in sources:
@@ -60,7 +62,7 @@ def build():
         extra = ('-I', ROOT / 'tests/multioutput') if source.is_relative_to(ROOT / 'tests/multioutput') else ()
         run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS, *extra,
             '-I', ROOT / 'tests/multiclass', '-I', ROOT / 'tests/discriminant_analysis', '-I', ROOT / 'tests/kernel_approximation', '-I', ROOT / 'tests/kernel_approximation/consumers', '-I', ROOT / 'tests/frozen', '-I', ROOT / 'examples/frozen',
-            '-I', ROOT / 'tests/pipeline', '-I', ROOT / 'examples', '-I', ROOT / 'tests/compose/support', source, '-o', binary)
+            '-I', ROOT / 'tests/pipeline', '-I', ROOT / 'examples', '-I', ROOT / 'examples/calibration_support', '-I', ROOT / 'tests/compose/support', source, '-o', binary)
 
 
 def compose_sources():
@@ -96,6 +98,7 @@ def parity():
     multiclass_checks.parity(run)
     random_projection_checks.parity(run)
     isotonic_checks.parity(run)
+    calibration_checks.parity(run)
     discriminant_analysis_checks.parity(run)
     kernel_approximation_checks.parity(run)
     run(sys.executable, ROOT / 'families/covariance/tools/check.py', 'parity-only')
@@ -115,6 +118,7 @@ def test():
     multiclass_checks.test(run, executable)
     random_projection_checks.test(run, executable)
     isotonic_checks.test(run, executable)
+    calibration_checks.test(run, executable)
     discriminant_analysis_checks.test(run, executable)
     kernel_approximation_checks.test(run, executable)
     run(sys.executable, ROOT / 'families/covariance/tools/check.py', 'test-only')

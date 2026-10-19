@@ -277,6 +277,45 @@
         },
         "moxie.gaussian_process._gpr": {
           "file": "src/moxie/gaussian_process/_gpr.mojo"
+        },
+        "moxie.tree._base": {
+          "file": "src/moxie/tree/_base.mojo"
+        },
+        "moxie.tree._dense_api": {
+          "file": "src/moxie/tree/_dense_api.mojo"
+        },
+        "moxie.tree._engine_api": {
+          "file": "src/moxie/tree/_engine_api.mojo"
+        },
+        "moxie.tree._records": {
+          "file": "src/moxie/tree/_records.mojo"
+        },
+        "moxie.tree._tree": {
+          "file": "src/moxie/tree/_tree.mojo"
+        },
+        "moxie.tree._criterion": {
+          "file": "src/moxie/tree/_criterion.mojo"
+        },
+        "moxie.tree._splitter": {
+          "file": "src/moxie/tree/_splitter.mojo"
+        },
+        "moxie.tree._utils": {
+          "file": "src/moxie/tree/_utils.mojo"
+        },
+        "moxie.tree._partitioner": {
+          "file": "src/moxie/tree/_partitioner.mojo"
+        },
+        "moxie.tree._builders": {
+          "file": "src/moxie/tree/_builders.mojo"
+        },
+        "moxie.tree._classes": {
+          "file": "src/moxie/tree/_classes.mojo"
+        },
+        "moxie.tree._extra_classes": {
+          "file": "src/moxie/tree/_extra_classes.mojo"
+        },
+        "moxie.tree._export": {
+          "file": "src/moxie/tree/_export.mojo"
         }
       },
       "assets": {
@@ -397,6 +436,29 @@
             "LogMarginalLikelihood": "moxie.gaussian_process._gpr",
             "PredictionResult": "moxie.gaussian_process._plumbing",
             "OptimizationResult": "moxie.gaussian_process._plumbing"
+          },
+          "moxie.tree": {
+            "TreeInspection": "moxie.tree._base",
+            "DecisionTreeClassifierAPI": "moxie.tree._base",
+            "DecisionTreeRegressorAPI": "moxie.tree._base",
+            "DenseTreeInspection": "moxie.tree._dense_api",
+            "DenseDecisionTreeClassifierAPI": "moxie.tree._dense_api",
+            "DenseDecisionTreeRegressorAPI": "moxie.tree._dense_api",
+            "TreeTable": "moxie.tree._records",
+            "TreeColumn": "moxie.tree._records",
+            "StringColumn": "moxie.tree._records",
+            "BaseDecisionTree": "moxie.tree._classes",
+            "DecisionTreeClassifier": "moxie.tree._classes",
+            "DecisionTreeRegressor": "moxie.tree._classes",
+            "ExtraTreeClassifier": "moxie.tree._extra_classes",
+            "ExtraTreeRegressor": "moxie.tree._extra_classes",
+            "export_treelite": "moxie.tree._export",
+            "export_text": "moxie.tree._export",
+            "export_graphviz": "moxie.tree._export",
+            "plot_tree": "moxie.tree._export",
+            "TreeParams": "moxie.tree._classes",
+            "TreeInputEncoder": "moxie.tree._classes",
+            "PreparedTreeInput": "moxie.tree._classes"
           }
         },
         "schema": 1
@@ -974,6 +1036,26 @@
         }
       },
       "path": "../mojo-optimize"
+    },
+    {
+      "id": "balsa",
+      "path": "../../../nvidiads/balsa",
+      "modules": {},
+      "assets": {
+        "balsa/__init__.mojo": "src/balsa/__init__.mojo",
+        "balsa/builder.mojo": "src/balsa/builder.mojo",
+        "balsa/codec.mojo": "src/balsa/codec.mojo",
+        "balsa/constants.mojo": "src/balsa/constants.mojo",
+        "balsa/model.mojo": "src/balsa/model.mojo",
+        "balsa/packed.mojo": "src/balsa/packed.mojo",
+        "balsa/packed_views.mojo": "src/balsa/packed_views.mojo",
+        "balsa/storage.mojo": "src/balsa/storage.mojo",
+        "balsa/validation.mojo": "src/balsa/validation.mojo",
+        "balsa/wire.mojo": "src/balsa/wire.mojo",
+        "licenses/Balsa-LICENSE": "LICENSE",
+        "licenses/Balsa-Treelite.txt": "LICENSES/Treelite.txt"
+      },
+      "exports": null
     }
   ],
   "overrides": []

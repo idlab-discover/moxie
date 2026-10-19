@@ -147,3 +147,7 @@ dependency.
 including dense regression and kernels. Classification remains unimplemented.
 The retired sibling is not a build dependency; the dedicated GP linalg worktree
 and external optimizer remain explicit numerical dependencies.
+
+Dense decision trees and extra trees are integrated in `src/moxie/tree`, with
+shared engines, prepared forest inputs and native text/DOT/SVG/Treelite exports.
+See [tree documentation](docs/tree/README.md).

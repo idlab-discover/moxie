@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+import tree_checks
 import gaussian_process_checks
 import multioutput_checks
 import multiclass_checks
@@ -42,6 +43,7 @@ def build():
     run(sys.executable, ROOT / 'shared/assembly/tools/assemble_family.py',
         '--consumer', ROOT, '--lock', ROOT / 'DEPENDENCIES.json', '--output', DEPS)
     run('mojo', 'precompile', DEPS / 'moxie', '-I', DEPS, '-o', ROOT / 'builds/moxie.mojoc')
+    tree_checks.build(run)
     run(sys.executable, ROOT / 'families/preprocessing/tools/check.py', 'build')
     run(sys.executable, ROOT / 'families/kernel_ridge/tools/check.py', 'build')
     sources = sorted((ROOT / 'tests').glob('*.mojo'))
@@ -96,6 +98,7 @@ def compose_test():
 
 
 def parity():
+    tree_checks.parity(run)
     gaussian_process_checks.parity(run)
     multioutput_checks.parity(run)
     multiclass_checks.parity(run)
@@ -117,6 +120,7 @@ def parity():
 
 
 def test():
+    tree_checks.test(run)
     gaussian_process_checks.test(run, executable)
     multioutput_checks.test(run, executable)
     multiclass_checks.test(run, executable)

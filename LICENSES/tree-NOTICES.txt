@@ -1,0 +1,40 @@
+The public API declarations are adapted from scikit-learn at revision
+4358542a1bd39af2e7e1cbace8b9fed067473c5b.
+
+BSD 3-Clause License
+
+Copyright (c) 2007-2026 The scikit-learn developers.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Treelite export uses Balsa (https://github.com/idlab-discover/balsa), revision
+3fc00dba12a32584b48a3efdc8f7838a2bfc91e7, licensed under the Apache License 2.0;
+see tree-Balsa.txt. Balsa's checkpoint layout and the export_treelite mapping
+are adapted from Treelite (https://github.com/dmlc/treelite; export mapping from
+tag 4.6.1, commit e14222bfdf02cba3ece0f3692f3574711cab0fc2,
+src/model_loader/sklearn.cc), Apache License 2.0, Copyright (c) by Contributors;
+see tree-Treelite.txt.

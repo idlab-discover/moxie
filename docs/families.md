@@ -18,7 +18,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-linear_model` | `sklearn/linear_model` |
 | `moxie-svm` | `sklearn/svm` |
 | `moxie-neighbors` | `sklearn/neighbors` |
-| `moxie-tree` | `sklearn/tree` |
+| `tree` | Integrated in `src/moxie/tree`; see [tree](tree/README.md) |
 | `moxie-ensemble` | `sklearn/ensemble` |
 | `moxie-naive_bayes` | `sklearn/naive_bayes.py` |
 | Integrated: `src/moxie/discriminant_analysis.mojo` | `sklearn/discriminant_analysis.py` |
@@ -99,3 +99,7 @@ dependency.
 including dense regression and kernels. Classification remains unimplemented.
 The retired sibling is not a build dependency; the dedicated GP linalg worktree
 and external optimizer remain explicit numerical dependencies.
+
+Dense decision trees and extra trees are integrated in `src/moxie/tree`, with
+shared engines, prepared forest inputs and native text/DOT/SVG/Treelite exports.
+See [tree documentation](tree/README.md).

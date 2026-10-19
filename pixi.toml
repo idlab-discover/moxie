@@ -17,6 +17,11 @@ covariance-parity = "python families/covariance/tools/check.py parity"
 covariance-audit = { cmd = "python families/covariance/tests/audit.py", depends-on = ["covariance-test"] }
 covariance-numerical-audit = { cmd = "python families/covariance/tests/numerical_focus.py", depends-on = ["covariance-test"] }
 
+tree-build = "python tools/tree_checks.py build"
+tree-test = "python tools/tree_checks.py test"
+tree-parity = "python tools/tree_checks.py parity"
+tree-prepare-oracle = "python tools/prepare_tree_oracle.py"
+
 [dependencies]
 mojo = "==1.0.0"
 max-core = "==26.5.0"

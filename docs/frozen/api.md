@@ -212,7 +212,11 @@ Moxie's `pixi run parity` includes both comparisons automatically.
 probabilities, decisions, transform and score, fitted clone) and a fitted
 `StandardScaler` as the frozen prefix or with a frozen final classifier inside
 `moxie.pipeline.Pipeline`, including pipeline clone, feature-name forwarding and
-Float32 transforms.
+Float32 transforms. The notebook
+`notebooks/frozen/plot_frozen_examples.ipynb` replays the official example and
+compares a frozen classifier, `CalibratedClassifierCV` over a frozen calibration
+adapter and a frozen pipeline step with sklearn
+(`pixi run -e notebooks notebooks notebooks/frozen`).
 
 Capability probes establish forwarding contracts, not numerical coverage of every
 wrapped estimator. Python object identity, arbitrary attribute/index forwarding,

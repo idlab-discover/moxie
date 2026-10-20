@@ -211,8 +211,9 @@ Moxie's `pixi run parity` includes both comparisons automatically.
 `LinearDiscriminantAnalysis` (no-op fit on different data, delegated
 probabilities, decisions, transform and score, fitted clone) and a fitted
 `StandardScaler` as the frozen prefix or with a frozen final classifier inside
-`moxie.pipeline.Pipeline`, including pipeline clone, feature-name forwarding and
-Float32 transforms. The notebook
+`moxie.pipeline.Pipeline`, including pipeline clone, feature-name forwarding,
+`moxie.model_selection.cross_val_score` (each fold scores the frozen model, as
+in sklearn, because clone keeps it and fit is a no-op) and Float32 transforms. The notebook
 `notebooks/frozen/plot_frozen_examples.ipynb` replays the official example and
 compares a frozen classifier, `CalibratedClassifierCV` over a frozen calibration
 adapter and a frozen pipeline step with sklearn

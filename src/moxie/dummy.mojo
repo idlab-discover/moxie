@@ -279,7 +279,10 @@ struct DummyRegressor[dtype: DType = DType.float64](BaselineRegressor, WeightedS
                         var a = _value(y, order[lower], j)
                         var b = _value(y, order[upper], j)
                         value = a + (b - a) * Self.Number(frac)
-                        if frac >= 0.5:
+                        if self.strategy == "median" and frac == 0.5:
+                            # np.median averages the middle pair; lerp can differ by one ulp.
+                            value = (a + b) / Self.Number(2)
+                        elif frac >= 0.5:
                             value = b - (b - a) * Self.Number(1.0 - frac)
                 result[Item(0, j)] = value
         self.constant_ = result^

@@ -196,7 +196,8 @@ def classifier_probe[multioutput: Bool, dtype: DType]() raises:
             else:
                 emit(rebind[Dense](p))
                 emit(rebind[Dense](lp))
-    if outputs == 1 and kind != 1:
+    # Accuracy rejects continuous and multiclass-multioutput targets; parity checks both outcomes.
+    try:
         if (mode == "mutable" or mode == "mutable32"):
             var optional_weights = Optional[NDArray[dtype]]()
             if weighted:
@@ -206,6 +207,8 @@ def classifier_probe[multioutput: Bool, dtype: DType]() raises:
             print(model.score(X, targets, weights.copy()))
         else:
             print(model.score(X, targets))
+    except:
+        print("SCORE_ERROR")
 
 
 def emit_prediction[multioutput: Bool, dtype: DType](y: DummyClassifier[multioutput, dtype].Prediction) raises:

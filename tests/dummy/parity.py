@@ -7,7 +7,7 @@ from oracle import load, ROOT
 oracle = load()
 CASES = 0
 
-def compare(mode, strategy, y, weights=None, constant=None, quantile=None, seed=42, count=11, dtype=np.float64):
+def compare(mode, strategy, y, weights=None, constant=None, quantile=None, seed=42, count=11, dtype=np.float64, exact=False):
     global CASES
     y = np.asarray(y, dtype=dtype if mode == 'reg' else None)
     if weights is not None: weights = np.asarray(weights, dtype=dtype)
@@ -38,12 +38,13 @@ def compare(mode, strategy, y, weights=None, constant=None, quantile=None, seed=
         return
     assert actual.returncode == 0, (args, actual.stderr)
     lines = iter(actual.stdout.splitlines())
-    def array(expected):
+    def array(expected, tolerance=tolerance):
         bits = int(next(lines))
         assert np.asarray(expected).dtype == np.dtype(f'float{bits}'), (native_mode, strategy, bits, np.asarray(expected).dtype)
         ndim = int(next(lines)); shape = tuple(int(next(lines)) for _ in range(ndim))
         assert shape == np.shape(expected), (args, shape, np.shape(expected))
-        got = np.array([float(next(lines)) for _ in range(np.size(expected))]).reshape(shape)
+        # Native output prints shortest round-trip decimals; parse them back in the emitted dtype.
+        got = np.array([float(next(lines)) for _ in range(np.size(expected))]).astype(f'float{bits}').reshape(shape)
         np.testing.assert_allclose(got, expected, atol=tolerance, rtol=tolerance, equal_nan=True, err_msg=str(args[:12]))
     def labels(expected):
         got = [next(lines) for _ in range(np.size(expected))]
@@ -52,8 +53,9 @@ def compare(mode, strategy, y, weights=None, constant=None, quantile=None, seed=
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         if mode == 'reg':
-            array(model.constant_)
-            array(prediction)
+            # np.median is a plain middle-pair average, so median results are compared exactly.
+            array(model.constant_, 0 if exact else tolerance)
+            array(prediction, 0 if exact else tolerance)
             array(model.predict(test, return_std=True)[1])
             np.testing.assert_allclose(float(next(lines)), model.score(X, y, sample_weight=weights), atol=tolerance, rtol=tolerance, equal_nan=True)
         else:
@@ -72,8 +74,15 @@ def compare(mode, strategy, y, weights=None, constant=None, quantile=None, seed=
                 for j in range(outputs):
                     array(p[j])
                     if mode not in ('mutable', 'global'): array(lp[j])
-            if outputs == 1 and kind != 1:
-                np.testing.assert_allclose(float(next(lines)), model.score(X, y, sample_weight=weights), atol=tolerance, rtol=tolerance, equal_nan=True)
+            try:
+                expected_score = model.score(X, y, sample_weight=weights)
+            except ValueError:
+                expected_score = None
+            line = next(lines)
+            if expected_score is None:
+                assert line == 'SCORE_ERROR', (args[:12], line)
+            else:
+                np.testing.assert_allclose(float(line), expected_score, atol=tolerance, rtol=tolerance, equal_nan=True)
     assert list(lines) == []
     CASES += 1
 
@@ -97,10 +106,17 @@ for dtype in [np.float64, np.float32]:
         for weights in [None, [.1, .2, .3, .4]]:
             for q in ([0., .1, .3, .5, .9, 1.] if strategy == 'quantile' else [None]):
                 compare('reg', strategy, [.125, -.3, 1.1, 7.25], weights, quantile=q)
+    # Even-length unweighted medians average the middle pair exactly like np.median.
+    values = np.random.RandomState(7).normal(size=(6, 3)) * np.array([1e-4, 1., 1e3])
+    for n in [2, 4, 6]:
+        compare('reg', 'median', values[:n, 0], exact=True)
+        compare('reg', 'median', values[:n], exact=True)
     for strategy in ['bad', 'quantile', 'constant']:
         compare('reg',strategy,[1.,2.])
     for q in [-1., 2.]: compare('reg','quantile',[1.,2.],quantile=q)
-    for y in [[3,1,1,2,3], [[3],[1],[1],[2],[3]], [[2,0],[2,1],[1,0],[1,1],[3,1]], ['東京','Paris','Paris','Berlin','α'], [2**60,2**60+1,2**60,2**60+1,2**60], [1.5,2.5,1.5,3.25,2.5]]:
+    # Multilabel indicators, integral floats and string multioutput exercise accuracy target types.
+    for y in [[3,1,1,2,3], [[3],[1],[1],[2],[3]], [[2,0],[2,1],[1,0],[1,1],[3,1]], ['東京','Paris','Paris','Berlin','α'], [2**60,2**60+1,2**60,2**60+1,2**60], [1.5,2.5,1.5,3.25,2.5],
+              [[0,1],[1,1],[0,0],[1,0],[1,1]], [1.,2.,2.,3.,1.], [['a','x'],['b','x'],['a','y'],['a','x'],['b','y']]]:
         for strategy in ['prior','most_frequent','constant','uniform','stratified']:
             for weights in [None, [0.,1.,2.,0.,3.]]:
                 for seed in [0,42,4294967295]:

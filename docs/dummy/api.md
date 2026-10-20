@@ -36,7 +36,10 @@ during learning or inference.
 `constant` accepts a scalar `Scalar[dtype]` or an optional `NDArray[dtype]` vector with one value
 per output. Scalars are normalized into a length-one vector in the typed
 configuration; scalar `set_params(constant=...)` updates are also supported.
-`constant_` has shape `(1, n_outputs)`. `predict(X)` returns shape `(n_samples,)`
+`constant_` has shape `(1, n_outputs)`. A constant whose length differs from
+`n_outputs_` raises during `fit`. For single-output targets the reference instead
+stores the mismatched `constant_` and fails at `predict` when broadcasting; Moxie
+rejects it one step earlier and leaves the previous fitted state unchanged. `predict(X)` returns shape `(n_samples,)`
 for one output, including one-column training targets, or `(n_samples, n_outputs)`
 otherwise.
 
@@ -47,7 +50,8 @@ runtime-dependent tuple return. `score(X, y, sample_weight=None)` computes
 uniform-average R2, including finite constant-target handling and NaN for fewer
 than two test samples. `score(Optional[NDArray[dtype]](), y)` ignores X.
 
-Unweighted quantiles use linear interpolation; weighted quantiles use the first
+Unweighted quantiles use NumPy's linear interpolation; the unweighted median
+averages the middle pair exactly as `np.median` does. Weighted quantiles use the first
 sorted observation whose cumulative weight reaches the requested fraction.
 Weighted median thus differs from unweighted median for an even sample count.
 Negative finite weights follow the reference arithmetic; they are not interpreted
@@ -73,7 +77,9 @@ integer 0/1. Arbitrary Python object labels and object identity are binding work
 with samples in rows. `constant` accepts a scalar integer, Float64, string or
 `Label`, or an optional `List[Label]` with one value per output. Scalars normalize to a length-one list
 in the typed configuration. Named scalar `set_params(constant=...)` updates
-use the same conversion.
+use the same conversion. A constant must use its target column's label kind:
+`Label(Float64(1.0))` does not match integer label `1`, whereas NumPy's `1.0 == 1`
+lets the reference accept it. Convert the constant explicitly.
 
 `DummyClassifier()` is the single-output form: `predict` returns `List[Label]`,
 `classes_` is `List[Label]`, `n_classes_` is `Int`, `class_prior_` is a one-dimensional
@@ -141,7 +147,10 @@ Parity executes the pinned local Dummy classes, weighted percentile, class
 counting, inherited score and metric bodies; installed sklearn only supplies supporting infrastructure.
 Comparisons allow 2e-12 relative/absolute error for Float64 and 3e-6 for Float32
 to accommodate rounding and summation order on the tested cases;
-class labels and seeded predictions must match exactly. Log probabilities use
+class labels and seeded predictions must match exactly, as must unweighted
+median constants and predictions. Classifier scores are compared for every
+target kind, including multilabel indicators; continuous and
+multiclass-multioutput targets must raise on both sides. Log probabilities use
 the standard LLVM log primitive to avoid the pinned stdlib approximation error.
 
 ## Cost model

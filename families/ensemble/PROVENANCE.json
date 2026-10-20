@@ -1,0 +1,40 @@
+{
+  "source_repository": "moxie-ensemble",
+  "source_revision": "39f740679795cc4785d97f17a742bfba554177cb",
+  "scaffold_base": "4843da32ff0f4c49887c10efe45b85d21939737f",
+  "sklearn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "owner": "moxie",
+  "modules": {
+    "src/moxie/ensemble/__init__.mojo": "c9aa7d72f2dd00c03b945fb6ef2551ad137bb3bdd2d5385cd7a60ded7d8d5045",
+    "src/moxie/ensemble/_aggregation.mojo": "9e92a46fc1aa742e50e92eb4a8e9eefdb496997f8642258640a7c9fac472cfbc",
+    "src/moxie/ensemble/_api.mojo": "4ebb8c60442db9ce52c34254507ab172d5da02c79c03492f7540690cfe1d6307",
+    "src/moxie/ensemble/_api_types.mojo": "111bebddcc903affb326dd4988ab17e65b07e824be3bd9aee2f74f3fb25cfde7",
+    "src/moxie/ensemble/_base.mojo": "2eef647271aaa31c679576bd0871cc34a9d4a16caa8c5d4d049d9a184bfe4f2c",
+    "src/moxie/ensemble/_engine_api.mojo": "75af7079596dd449c719bdd234f18e6df1120fc4efc00d5cfbced864b342d65a",
+    "src/moxie/ensemble/_forest.mojo": "b12ed5e688f10352ebc7295ff211d86fd283596da420c2e7d02bcfd4f419f555",
+    "src/moxie/ensemble/_forest_engine.mojo": "c8508c346f11c0a20d53168c1bb42022d11406335d07eeceea7739eacec0bee0",
+    "src/moxie/ensemble/_plumbing.mojo": "c053bf8b728f1bb1b80780545b14456e56babdc12e1d1aa9fef957005596a4cd",
+    "src/moxie/ensemble/_records.mojo": "764934166ee37b988d32ed74aa16bc30ab75c183cb1d1528f816eafb9ae7adca",
+    "src/moxie/ensemble/_sampling.mojo": "03dd18934c097ad3186622c9879694803dcd4979f6285fb5c77ee02b262251e1"
+  },
+  "validation": [
+    {
+      "command": "pixi run ensemble-prepare-oracle",
+      "result": "Passed. Built local sklearn revision 4358542a1bd39af2e7e1cbace8b9fed067473c5b; archive SHA256 73e5390771a740a0e78d7b903167aad3aa9f39f27d2c4cc5b168c2e798f0c910."
+    },
+    {
+      "command": "pixi run ensemble-test",
+      "result": "Passed twice, including a fresh assembly/build with standalone checkout absent. Full namespace precompile, eight native suites, two negative compile probes, two isolated consumers and three assembly failure probes passed."
+    },
+    {
+      "command": "pixi run python families/ensemble/tools/check.py parity-only",
+      "result": "Passed twice, including with standalone checkout absent. Sampling: 660 cases, 38 matched errors, 253174 identical values. Engine: 29 cases, 36 fits, 3 matched errors, 93884 comparisons. Public forests: 20 configurations, 24 fits. Existing documented tree impurity/importances tolerances retained."
+    },
+    {
+      "command": "families/ensemble/builds/example && families/ensemble/builds/plumbing_example && families/ensemble/builds/forest_engine_example",
+      "result": "All three passed with standalone checkout absent."
+    }
+  ],
+  "independence": "The standalone checkout was temporarily moved to .ensemble-independence-source. Fresh assembly, full build, contracts, parity and examples passed without moxie-ensemble at its original path. Generated manifests use current Moxie owners; all assembled ensemble module bytes and ownership are checked.",
+  "retired_checkout": "retired-moxie-ensemble"
+}

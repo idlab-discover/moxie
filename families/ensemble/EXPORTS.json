@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.ensemble": {
+      "EnsembleClassifier": "moxie.ensemble._base",
+      "EnsembleRegressor": "moxie.ensemble._base",
+      "ProbabilisticEnsemble": "moxie.ensemble._base",
+      "DecisionEnsemble": "moxie.ensemble._base",
+      "ForestInspection": "moxie.ensemble._base",
+      "StagedPredictor": "moxie.ensemble._base",
+      "IsolationDetector": "moxie.ensemble._base",
+      "DenseForestInspection": "moxie.ensemble._engine_api",
+      "AdaBoostClassifier": "moxie.ensemble._api",
+      "AdaBoostRegressor": "moxie.ensemble._api",
+      "BaggingClassifier": "moxie.ensemble._api",
+      "BaggingRegressor": "moxie.ensemble._api",
+      "BaseEnsemble": "moxie.ensemble._forest_engine",
+      "ExtraTreesClassifier": "moxie.ensemble._forest",
+      "ExtraTreesRegressor": "moxie.ensemble._forest",
+      "GradientBoostingClassifier": "moxie.ensemble._api",
+      "GradientBoostingRegressor": "moxie.ensemble._api",
+      "HistGradientBoostingClassifier": "moxie.ensemble._api",
+      "HistGradientBoostingRegressor": "moxie.ensemble._api",
+      "IsolationForest": "moxie.ensemble._api",
+      "RandomForestClassifier": "moxie.ensemble._forest",
+      "RandomForestRegressor": "moxie.ensemble._forest",
+      "RandomTreesEmbedding": "moxie.ensemble._api",
+      "StackingClassifier": "moxie.ensemble._api",
+      "StackingRegressor": "moxie.ensemble._api",
+      "VotingClassifier": "moxie.ensemble._api",
+      "VotingRegressor": "moxie.ensemble._api"
+    }
+  }
+}

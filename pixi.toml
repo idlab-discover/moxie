@@ -6,6 +6,11 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+ensemble-build = "python families/ensemble/tools/check.py build"
+ensemble-test = "python families/ensemble/tools/check.py test"
+ensemble-parity = "python families/ensemble/tools/check.py parity"
+ensemble-start = "python families/ensemble/tools/check.py start"
+ensemble-prepare-oracle = "python families/ensemble/tools/prepare_oracle.py"
 impute-build = "python tools/impute_checks.py build"
 impute-test = "python tools/impute_checks.py test"
 impute-parity = "python tools/impute_checks.py parity"

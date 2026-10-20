@@ -213,3 +213,8 @@ query engine and spatial trees. Sparse graph APIs remain deferred.
 [Imputation](../families/impute/README.md) is owned by Moxie, including dense simple, integer,
 string and KNN imputers and numeric/string indicators. IterativeImputer remains
 deferred. The standalone checkout is not a build dependency.
+
+[Ensemble](../families/ensemble/README.md) is owned by Moxie, including the four
+dense RandomForest/ExtraTrees estimators and shared forest engine. Other ensemble
+estimators remain explicit declarations; sparse input and decision paths are deferred.
+The retired ensemble checkout is not a build dependency.

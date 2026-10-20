@@ -469,6 +469,36 @@
         },
         "moxie.linear_model._bayes": {
           "file": "src/moxie/linear_model/_bayes.mojo"
+        },
+        "moxie.ensemble._aggregation": {
+          "file": "src/moxie/ensemble/_aggregation.mojo"
+        },
+        "moxie.ensemble._api": {
+          "file": "src/moxie/ensemble/_api.mojo"
+        },
+        "moxie.ensemble._api_types": {
+          "file": "src/moxie/ensemble/_api_types.mojo"
+        },
+        "moxie.ensemble._base": {
+          "file": "src/moxie/ensemble/_base.mojo"
+        },
+        "moxie.ensemble._engine_api": {
+          "file": "src/moxie/ensemble/_engine_api.mojo"
+        },
+        "moxie.ensemble._forest_engine": {
+          "file": "src/moxie/ensemble/_forest_engine.mojo"
+        },
+        "moxie.ensemble._plumbing": {
+          "file": "src/moxie/ensemble/_plumbing.mojo"
+        },
+        "moxie.ensemble._records": {
+          "file": "src/moxie/ensemble/_records.mojo"
+        },
+        "moxie.ensemble._sampling": {
+          "file": "src/moxie/ensemble/_sampling.mojo"
+        },
+        "moxie.ensemble._forest": {
+          "file": "src/moxie/ensemble/_forest.mojo"
         }
       },
       "assets": {
@@ -481,7 +511,9 @@
         "licenses/gaussian-process-NOTICES": "LICENSES/gaussian-process-NOTICES",
         "licenses/feature-selection-scikit-learn.txt": "LICENSES/feature-selection-scikit-learn.txt",
         "licenses/mixture-scikit-learn.txt": "LICENSES/mixture-scikit-learn.txt",
-        "licenses/linear_model-scikit-learn.txt": "families/linear_model/LICENSES/scikit-learn.txt"
+        "licenses/linear_model-scikit-learn.txt": "families/linear_model/LICENSES/scikit-learn.txt",
+        "licenses/ensemble-scikit-learn.txt": "families/ensemble/LICENSES/scikit-learn.txt",
+        "licenses/ensemble-NumPy.txt": "families/ensemble/LICENSES/NumPy.txt"
       },
       "exports": {
         "packages": {
@@ -716,6 +748,35 @@
             "LassoParams": "moxie.linear_model._coordinate_descent",
             "BayesianRidge": "moxie.linear_model._bayes",
             "BayesianRidgeParams": "moxie.linear_model._bayes"
+          },
+          "moxie.ensemble": {
+            "EnsembleClassifier": "moxie.ensemble._base",
+            "EnsembleRegressor": "moxie.ensemble._base",
+            "ProbabilisticEnsemble": "moxie.ensemble._base",
+            "DecisionEnsemble": "moxie.ensemble._base",
+            "ForestInspection": "moxie.ensemble._base",
+            "StagedPredictor": "moxie.ensemble._base",
+            "IsolationDetector": "moxie.ensemble._base",
+            "DenseForestInspection": "moxie.ensemble._engine_api",
+            "AdaBoostClassifier": "moxie.ensemble._api",
+            "AdaBoostRegressor": "moxie.ensemble._api",
+            "BaggingClassifier": "moxie.ensemble._api",
+            "BaggingRegressor": "moxie.ensemble._api",
+            "BaseEnsemble": "moxie.ensemble._forest_engine",
+            "ExtraTreesClassifier": "moxie.ensemble._forest",
+            "ExtraTreesRegressor": "moxie.ensemble._forest",
+            "GradientBoostingClassifier": "moxie.ensemble._api",
+            "GradientBoostingRegressor": "moxie.ensemble._api",
+            "HistGradientBoostingClassifier": "moxie.ensemble._api",
+            "HistGradientBoostingRegressor": "moxie.ensemble._api",
+            "IsolationForest": "moxie.ensemble._api",
+            "RandomForestClassifier": "moxie.ensemble._forest",
+            "RandomForestRegressor": "moxie.ensemble._forest",
+            "RandomTreesEmbedding": "moxie.ensemble._api",
+            "StackingClassifier": "moxie.ensemble._api",
+            "StackingRegressor": "moxie.ensemble._api",
+            "VotingClassifier": "moxie.ensemble._api",
+            "VotingRegressor": "moxie.ensemble._api"
           }
         },
         "schema": 1

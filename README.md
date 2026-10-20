@@ -179,3 +179,7 @@ query engine and spatial trees. Sparse graph APIs remain deferred.
 [Imputation](families/impute/README.md) is owned by Moxie, including dense simple, integer,
 string and KNN imputers and numeric/string indicators. IterativeImputer remains
 deferred. The standalone checkout is not a build dependency.
+
+Dense [ensemble estimators](families/ensemble/README.md) are integrated in
+`moxie.ensemble`. Run `pixi run ensemble-test` and `pixi run ensemble-parity`
+for their focused checks.

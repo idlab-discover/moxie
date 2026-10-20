@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "projects": [
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.ensemble": {
+            "consumer_a": "moxie.ensemble.consumer_a"
+          }
+        },
+        "schema": 1
+      },
+      "id": "consumer_a",
+      "modules": {
+        "moxie.ensemble.consumer_a": {
+          "file": "src/moxie/ensemble/consumer_a.mojo"
+        }
+      },
+      "path": "."
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.ensemble": {
+            "consumer_b": "moxie.ensemble.consumer_b"
+          }
+        },
+        "schema": 1
+      },
+      "id": "consumer_b",
+      "modules": {
+        "moxie.ensemble.consumer_b": {
+          "file": "src/moxie/ensemble/consumer_b.mojo"
+        }
+      },
+      "path": "../b"
+    }
+  ],
+  "overrides": []
+}

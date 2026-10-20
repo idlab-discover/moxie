@@ -41,6 +41,7 @@ def executable(source):
 
 
 def build():
+    run(sys.executable, ROOT / "families/ensemble/tools/check.py", "build")
     impute_checks.main("build")
     neighbors_checks.main("build")
     linear_model_checks.main("build")
@@ -114,6 +115,7 @@ def compose_test():
 
 
 def parity():
+    run(sys.executable, ROOT / "families/ensemble/tools/check.py", "parity-only")
     impute_checks.main("parity-only")
     neighbors_checks.main("parity-only")
     linear_model_checks.main("parity-only")
@@ -143,6 +145,7 @@ def parity():
 
 
 def test():
+    run(sys.executable, ROOT / "families/ensemble/tools/check.py", "test-only")
     impute_checks.main("test-only")
     neighbors_checks.main("test-only")
     linear_model_checks.main("test-only")

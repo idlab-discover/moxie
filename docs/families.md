@@ -19,7 +19,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-svm` | `sklearn/svm` |
 | Integrated: `families/neighbors`; [guide](../families/neighbors/README.md) | `sklearn/neighbors` |
 | `tree` | Integrated in `src/moxie/tree`; see [tree](tree/README.md) |
-| `moxie-ensemble` | `sklearn/ensemble` |
+| Integrated: `src/moxie/ensemble`; [guide](../families/ensemble/README.md) | `sklearn/ensemble` |
 | Integrated: `src/moxie/naive_bayes.mojo` | `sklearn/naive_bayes.py` |
 | Integrated: `src/moxie/discriminant_analysis.mojo` | `sklearn/discriminant_analysis.py` |
 | Integrated: `src/moxie/gaussian_process/` | `sklearn/gaussian_process` |

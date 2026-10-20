@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.neural_network": {
+      "MLPClassifierAPI": "moxie.neural_network._base",
+      "MLPRegressorAPI": "moxie.neural_network._base",
+      "RBMTransformer": "moxie.neural_network._base",
+      "BernoulliRBM": "moxie.neural_network._rbm",
+      "MLPClassifier": "moxie.neural_network._api",
+      "MLPRegressor": "moxie.neural_network._api"
+    }
+  }
+}

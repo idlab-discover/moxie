@@ -1,0 +1,11 @@
+{
+  "source_repository": "moxie-neural_network",
+  "source_revision": "f46cb8f53d53707e57820d497b0339986ec0b7bb",
+  "sklearn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "source_guidance": "source-AGENTS.md",
+  "owner": "moxie/families/neural_network",
+  "scope": "dense RBM subset and private MLP parameter helpers; MLP estimators remain declarations",
+  "preexisting_changes": {
+    "AGENTS.md": "preserved verbatim in source-AGENTS.md; current ownership guidance supersedes historical containment rules"
+  }
+}

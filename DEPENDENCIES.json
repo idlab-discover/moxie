@@ -2576,6 +2576,82 @@
           }
         }
       }
+    },
+    {
+      "assets": {
+        "licenses/neural-network-NOTICES.txt": "THIRD_PARTY_NOTICES"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.neural_network": {
+            "MLPClassifierAPI": "moxie.neural_network._base",
+            "MLPRegressorAPI": "moxie.neural_network._base",
+            "RBMTransformer": "moxie.neural_network._base",
+            "MLPClassifier": "moxie.neural_network._api",
+            "MLPRegressor": "moxie.neural_network._api"
+          }
+        },
+        "schema": 1
+      },
+      "id": "neural_network.scaffold",
+      "modules": {
+        "moxie.neural_network._base": {
+          "file": "src/moxie/neural_network/_base.mojo"
+        },
+        "moxie.neural_network._contracts": {
+          "file": "src/moxie/neural_network/_contracts.mojo"
+        },
+        "moxie.neural_network._plumbing": {
+          "file": "src/moxie/neural_network/_plumbing.mojo"
+        },
+        "moxie.neural_network._api": {
+          "file": "src/moxie/neural_network/_api.mojo"
+        },
+        "moxie.neural_network._api_types": {
+          "file": "src/moxie/neural_network/_api_types.mojo"
+        }
+      },
+      "path": "families/neural_network"
+    },
+    {
+      "id": "neural_network.rbm",
+      "path": "families/neural_network/algorithms/rbm",
+      "modules": {
+        "moxie.neural_network._rbm": {
+          "file": "src/moxie/neural_network/_rbm.mojo"
+        }
+      },
+      "assets": {
+        "licenses/neural-network-rbm-scikit-learn.txt": "LICENSES/scikit-learn-BSD-3-Clause.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neural_network": {
+            "BernoulliRBM": "moxie.neural_network._rbm"
+          }
+        }
+      }
+    },
+    {
+      "id": "neural_network.mlp_engine",
+      "path": "families/neural_network/shared/mlp_engine",
+      "modules": {
+        "moxie.neural_network._mlp_engine": {
+          "file": "src/moxie/neural_network/_mlp_engine.mojo"
+        }
+      },
+      "assets": {
+        "licenses/mlp-engine-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.neural_network": {}
+        }
+      }
     }
   ],
   "overrides": []

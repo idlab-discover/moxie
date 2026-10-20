@@ -23,7 +23,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | Integrated: `src/moxie/naive_bayes.mojo` | `sklearn/naive_bayes.py` |
 | Integrated: `src/moxie/discriminant_analysis.mojo` | `sklearn/discriminant_analysis.py` |
 | Integrated: `src/moxie/gaussian_process/` | `sklearn/gaussian_process` |
-| `moxie-neural_network` | `sklearn/neural_network` |
+| Integrated: `families/neural_network` | `sklearn/neural_network` |
 | Integrated: `families/kernel_ridge` | `sklearn/kernel_ridge.py` |
 | `moxie-dummy` | `sklearn/dummy.py` |
 | `moxie-semi_supervised` | `sklearn/semi_supervised` |
@@ -107,3 +107,8 @@ and external optimizer remain explicit numerical dependencies.
 Dense decision trees and extra trees are integrated in `src/moxie/tree`, with
 shared engines, prepared forest inputs and native text/DOT/SVG/Treelite exports.
 See [tree documentation](tree/README.md).
+
+[Neural networks](../families/neural_network/README.md) are owned by Moxie. The
+dense RBM subset and MLP parameter helpers are implemented; MLP training and
+Float32 RBM partial_fit remain unfinished. The standalone checkout is not a
+build dependency.

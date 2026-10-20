@@ -90,3 +90,30 @@ def test(run, executable):
             raise RuntimeError(f'Unexpected negative compilation result for {name}: {result.stderr}')
     isolated(run)
     print('PASS: Pipeline contracts, capability rejection, isolated consumers and ownership conflicts')
+
+
+def parity(run):
+    for name in ('parity.py', 'union_parity.py', 'compose_parity.py'):
+        run(sys.executable, TESTS / name)
+    run(sys.executable, ROOT / 'tests/compose/pipeline/parity.py')
+
+
+if __name__ == '__main__':
+    import check
+    action = sys.argv[1]
+    if action in ('build', 'test', 'parity'):
+        check.run(sys.executable, ROOT / 'shared/assembly/tools/assemble_family.py',
+                  '--consumer', ROOT, '--lock', ROOT / 'DEPENDENCIES.json', '--output', DEPS)
+        extra = [ROOT / 'examples/feature_union.mojo', ROOT / 'tests/compose/pipeline/main.mojo']
+        for source in sources() + extra:
+            binary = check.executable(source)
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            check.run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,
+                      '-I', TESTS, '-I', ROOT / 'examples', '-I', ROOT / 'tests/compose/support',
+                      source, '-o', binary)
+    if action in ('test', 'test-only'):
+        test(check.run, check.executable)
+    elif action in ('parity', 'parity-only'):
+        parity(check.run)
+    elif action != 'build':
+        raise ValueError(action)

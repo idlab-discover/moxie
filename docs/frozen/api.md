@@ -216,6 +216,8 @@ Moxie's `pixi run parity` includes both comparisons automatically.
 probabilities, decisions, transform and score, fitted clone) and a fitted
 `StandardScaler` as the frozen prefix or with a frozen final classifier inside
 `moxie.pipeline.Pipeline`, including pipeline clone, feature-name forwarding,
+frozen branches in `FeatureUnion` and `ColumnTransformer` (training statistics
+and `frozen__name` feature names, as in sklearn),
 `moxie.model_selection.cross_val_score` (each fold scores the frozen model, as
 in sklearn, because clone keeps it and fit is a no-op) and Float32 transforms. The notebook
 `notebooks/frozen/plot_frozen_examples.ipynb` replays the official example and

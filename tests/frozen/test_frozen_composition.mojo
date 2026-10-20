@@ -11,7 +11,8 @@ from moxie._feature_metadata import InputFeatureCount
 from moxie.frozen import FrozenEstimator
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.preprocessing import StandardScaler
-from moxie.pipeline import Pipeline
+from moxie.pipeline import Pipeline, FeatureUnion, union_step
+from moxie.compose import ColumnTransformer, ColumnEntry
 from moxie.model_selection import (
     CVAdapter, TypedScorer, IndexArray, IndexSplit, KFold, cross_val_score,
 )
@@ -231,6 +232,24 @@ def frozen_cross_validation() raises:
     assert_same(frozen.predict_proba(X_train), original)
 
 
+def frozen_union_and_columns() raises:
+    # FeatureUnion.fit_transform and ColumnTransformer.fit_transform call the
+    # frozen branch's no-op fit, then transform with the training statistics.
+    var X_train = dataset(12, 0.0)
+    var X_new = dataset(12, 6.0)
+    var scaler = StandardScaler()
+    _ = scaler.fit(X_train)
+    var expected = scaler.transform(X_new)
+    var union = FeatureUnion(union_step[DType.float64]("frozen", FrozenEstimator(scaler.copy())))
+    assert_same(union.fit_transform(X_new, None), expected)
+    var columns = ColumnTransformer(ColumnEntry("frozen", FrozenEstimator(scaler.copy()), [0, 1]))
+    assert_same(columns.fit_transform(X_new), expected)
+    var names: List[String] = ["a", "b"]
+    var expected_names: List[String] = ["frozen__a", "frozen__b"]
+    assert_equal(columns.get_feature_names_out(names.copy()), expected_names)
+    assert_equal(union.get_feature_names_out(names^), expected_names)
+
+
 def frozen_float32() raises:
     var X = nm.zeros[DType.float32](nm.Shape(6, 2))
     for i in range(6):
@@ -257,5 +276,6 @@ def main() raises:
     frozen_pipeline_prefix()
     frozen_pipeline_final()
     frozen_cross_validation()
+    frozen_union_and_columns()
     frozen_float32()
     print("Frozen composition contracts passed")

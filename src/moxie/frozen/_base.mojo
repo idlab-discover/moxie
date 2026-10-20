@@ -1,4 +1,4 @@
-"""Interfaces for the frozen family contracts; no algorithms are implemented. See docs/family.md."""
+"""Interface trait for the frozen family; FrozenEstimator lives in _frozen. See docs/frozen/api.md."""
 from moxie.base import BaseEstimator
 
 

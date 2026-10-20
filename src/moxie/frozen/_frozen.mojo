@@ -77,7 +77,7 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     Transfer an estimator with `FrozenEstimator(model^)`. Clones and parameter
     records share ownership. Explicit partial_fit updates that shared state.
     Replacement is local to this wrapper.
-    See docs/family.md for the native ownership and capability contract.
+    See docs/frozen/api.md for the native ownership and capability contract.
     """
 
     comptime Classes = Self.E.Classes if conforms_to(

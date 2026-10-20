@@ -14,7 +14,7 @@ Native heterogeneous inputs use `Some[Movable]`. Configuration and learned
 attributes and deferred results use the family-local opaque `APIValue` marker;
 this marker supplies no array, estimator or Python runtime implementation.
 Python `**kwargs` is an optional named native argument, retaining its source name.
-Fit and parameter updates mutate in place without fluent returns. Properties are
+Declaration-only fit and parameter updates mutate in place without fluent returns. Properties are
 opaque fields. Inherited public methods are declared directly on each struct.
 Dynamic metadata request generation and Python reflection remain unsupported.
 Exact Python signatures accompany the declarations.
@@ -30,7 +30,9 @@ pixi run mojo precompile builds/api-surface/imports/moxie \
   -I builds/api-surface/imports -o builds/api-surface/moxie.mojoc
 ```
 
-No tests were added or run for these API declarations.
+`tests/test_deferred.mojo` checks that the threshold and successive-halving
+declarations raise a `NotImplementedError` prefix at construction; no other
+declaration-only behavior is tested.
 
 NaN defaults use the native IEEE Float64 NaN value. The implemented learning
 curve uses the five reference fractions when its native `train_sizes` argument

@@ -135,6 +135,26 @@ random search's `param_distributions`, `n_iter`, and `random_state`. Clones own
 unfitted constructor configuration. A new fit first clears learned state;
 failed repeated fits and failed final refits cannot expose an old winner.
 
+## Composition limits
+
+`fit(X, y, fit_metadata, score_metadata)` mutates in place and returns None,
+unlike the shared fluent `fit` contract, and the explicit metadata arguments
+mean the search structs do not conform to `SupervisedEstimator`. A search
+therefore cannot be the final step of `moxie.pipeline.Pipeline`.
+
+On Mojo 1.0 a struct with a struct-level `where` clause cannot be named as a
+parameter, field or associated type outside its own generic context: the
+compiler reports "cannot implicitly convert 'GridSearchCV[...]' value to
+'GridSearchCV[...]'" or crashes. `GridSearchCV`, `RandomizedSearchCV` and
+`moxie.pipeline.Pipeline` all carry such clauses, so none of them can be a
+scorer's `Estimator`: `cross_validate`, `cross_val_score`, the curves, the
+permutation test and the searches do not accept a search or a pipeline as the
+evaluated estimator. Write nested cross-validation as an explicit loop: `clone`
+the search per outer fold, `fit` on the outer training rows and `score` the
+outer test rows (see `notebooks/model_selection/plot_nested_cross_validation_iris.ipynb`).
+Inner folds that must follow each training subset belong in the adapter's
+`default_cv`, because `cv` holds materialized indices for one sample count.
+
 ## Failures and supported scope
 
 Default `error_score` is `ErrorPolicy(False, NaN)`; pass

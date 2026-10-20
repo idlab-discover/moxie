@@ -1,0 +1,25 @@
+{
+  "projects": [
+    {
+      "id": "decomposition-engine",
+      "path": "../decomposition",
+      "modules": {
+        "moxie.decomposition._svd_engine": {
+          "file": "shared/svd_engine/src/moxie/decomposition/_svd_engine.mojo"
+        },
+        "moxie.decomposition._contracts": {
+          "file": "src/moxie/decomposition/_contracts.mojo"
+        }
+      },
+      "assets": {
+        "licenses/decomposition-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.decomposition": {}
+        }
+      }
+    }
+  ]
+}

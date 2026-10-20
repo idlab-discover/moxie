@@ -191,3 +191,7 @@ modes remain unfinished. The standalone checkout is not a build dependency.
 Dense [SVM estimators](families/svm/README.md) and their native LIBSVM/LIBLINEAR
 engines are integrated. Run `pixi run svm-test` and `pixi run svm-parity` for
 focused validation.
+
+[Manifold](families/manifold/README.md) is owned by Moxie, including ClassicalMDS,
+trustworthiness and dense exchange helpers. Other manifold algorithms remain
+explicit unsupported declarations. The standalone checkout is not a build dependency.

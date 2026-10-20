@@ -1,0 +1,22 @@
+{
+  "sklearn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "commands": [
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml manifold-test",
+      "result": "Passed full assembled namespace precompile, seven native test binaries, two consumer builds/runs, negative compilation, live-source and atomic collision checks."
+    },
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml manifold-parity",
+      "result": "Passed 120 trustworthiness and 40 ClassicalMDS comparisons for float32/float64 against pinned local sklearn sources."
+    },
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml manifold-independence",
+      "result": "Passed manifest ownership and license checks; compiled and ran ClassicalMDS, trustworthiness and deferred API tests with only copied assembly inputs in a temporary directory."
+    },
+    {
+      "command": "moxie/families/manifold/builds/classical_example",
+      "result": "Passed: 7 samples, 2 components, trustworthiness 1.0."
+    }
+  ],
+  "scope": "ClassicalMDS, trustworthiness and dense helpers. Other algorithms remain explicit unsupported declarations. No full sklearn parity claim."
+}

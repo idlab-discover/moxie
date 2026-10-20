@@ -35,7 +35,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | Integrated: `families/covariance` | `sklearn/covariance` |
 | Integrated: `families/decomposition`; [guide](../families/decomposition/README.md) | `sklearn/decomposition` |
 | Integrated: `src/moxie/cross_decomposition/` | `sklearn/cross_decomposition`; [guide](cross_decomposition/README.md) |
-| `moxie-manifold` | `sklearn/manifold` |
+| Integrated: `families/manifold` | `sklearn/manifold` |
 | `moxie-preprocessing` | `sklearn/preprocessing` |
 | Integrated: `families/impute`; [guide](../families/impute/README.md) | `sklearn/impute` |
 | Integrated: `src/moxie/feature_selection/` | `sklearn/feature_selection`; [guide](feature_selection/README.md) |
@@ -117,3 +117,7 @@ build dependency.
 including dense LabelPropagation, LabelSpreading and SelfTrainingClassifier.
 Sparse inputs and KNN graphs remain deferred. The retired standalone checkout
 is not a build dependency.
+
+[Manifold](../families/manifold/README.md) is owned by Moxie, including ClassicalMDS,
+trustworthiness and dense exchange helpers. Other manifold algorithms remain
+explicit unsupported declarations. The standalone checkout is not a build dependency.

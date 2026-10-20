@@ -1,0 +1,6 @@
+{
+  "source_repository": "moxie-manifold",
+  "source_revision": "6bf2f1dd4e262ed909d443bcd6f517fc2e17e7a2",
+  "sklearn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "baseline": "4843da32ff0f4c49887c10efe45b85d21939737f"
+}

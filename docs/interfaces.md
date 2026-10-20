@@ -240,3 +240,7 @@ raising declarations. See the family scope for explicit deferrals.
 including dense LabelPropagation, LabelSpreading and SelfTrainingClassifier.
 Sparse inputs and KNN graphs remain deferred. The retired standalone checkout
 is not a build dependency.
+
+[Manifold](../families/manifold/README.md) is owned by Moxie, including ClassicalMDS,
+trustworthiness and dense exchange helpers. Other manifold algorithms remain
+explicit unsupported declarations. The standalone checkout is not a build dependency.

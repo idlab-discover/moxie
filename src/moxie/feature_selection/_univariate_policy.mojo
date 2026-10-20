@@ -57,7 +57,10 @@ struct UnivariatePolicy[dt: DType](SelectionPolicy, Copyable, Movable):
             var keep = Int(self.param)
             var threshold = ordered.unsafe_get(n - keep) if self.mode == "k_best" else ordered.unsafe_get(0)
             if self.mode == "percentile":
-                var position = Float64(n - 1) * (100 - self.param) / 100
+                # np.percentile divides q by 100 before scaling by n - 1; the
+                # other association rounds differently and can change the count.
+                var quantile = (100 - self.param) / 100
+                var position = Float64(n - 1) * quantile
                 var lower = Int(position)
                 var upper = min(lower + 1, n - 1)
                 var weight = position - Float64(lower)
@@ -73,6 +76,12 @@ struct UnivariatePolicy[dt: DType](SelectionPolicy, Copyable, Movable):
                 mask[i] = clean.unsafe_get(i) > threshold
                 selected += Int(mask[i])
             var remaining = keep - selected
+            if remaining < 0:
+                # ties[:remaining] keeps all but the last -remaining ties.
+                var ties = 0
+                for i in range(n):
+                    ties += Int(clean.unsafe_get(i) == threshold)
+                remaining = max(ties + remaining, 0)
             for offset in range(n):
                 var i = n - 1 - offset if self.mode == "k_best" else offset
                 if remaining > 0 and clean.unsafe_get(i) == threshold:

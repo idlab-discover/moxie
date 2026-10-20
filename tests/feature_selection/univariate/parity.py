@@ -152,6 +152,19 @@ def main():
                     truth=ns[cls](SimpleNamespace(scores_=a,pvalues_=p,**{attr:value}));name=f'pol{len(expected)}'
                     lines.append(f'    var {name} = UnivariatePolicy[DType.float64]("{mode}", {literal(value)}).select(sr{case})')
                     for j,v in enumerate(truth):emit(f'Int({name}[{j}])',v)
+        # Percentile positions where (n-1)*(100-p)/100 and NumPy's (n-1)*((100-p)/100)
+        # round to different sides of an integer or of the 0.5 lerp switch, with and
+        # without ties at the interpolated threshold.
+        sweep=[(26,42),(46,30),(51,42),(51,43),(51,71),(76,18),(86,30),(91,30),(91,65),(101,42)]
+        for case,(n,pct) in enumerate(sweep):
+            for tied in (False,True):
+                a=np.arange(1.,n+1)
+                if tied:a=np.floor(a/3)
+                name=f'sweep{case}{"t" if tied else ""}';array(name,a,'float64');array(name+'p',np.ones(n),'float64')
+                lines.append(f'    var {name}r = ScoreResult[DType.float64]({name}^, {name}p^)')
+                truth=ns['SelectPercentile'](SimpleNamespace(scores_=a,pvalues_=np.ones(n),percentile=pct))
+                lines.append(f'    var {name}m = UnivariatePolicy[DType.float64]("percentile", {literal(pct)}).select({name}r)')
+                for j,v in enumerate(truth):exact.append(len(expected));emit(f'Int({name}m[{j}])',v)
     # Compile one fixture at a time: a single optimized module containing all
     # specializations previously exhausted RAM and spilled tens of GiB to swap.
     main_index = lines.index('def main() raises:')

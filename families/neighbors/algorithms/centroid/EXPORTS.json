@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.neighbors": {
+      "NearestCentroid": "moxie.neighbors._nearest_centroid"
+    }
+  }
+}

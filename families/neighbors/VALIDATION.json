@@ -1,0 +1,103 @@
+{
+  "status": "passed",
+  "date": "2026-10-20T11:22:59.247224+02:00",
+  "working_directory": "/home/strgenix/postdoc/projects/mojods/porting-sklearn",
+  "implementation": "24 neighbors modules relocated without numerical source changes; 34 assembled exports.",
+  "toolchain": {
+    "mojo": "1.0.0",
+    "max-core": "26.5.0",
+    "oracle_python": "3.12.14",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1"
+  },
+  "sklearn_reference": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "oracle": "Existing compiled pinned sklearn artifact copied into Moxie builds/neighbors/oracle-deps; parity verifies local revision and relevant source bytes. No standalone paths are used.",
+  "checks": [
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml neighbors-build",
+      "result": "exit 0; family package, all native tests/evaluators/examples and two independent consumers compiled"
+    },
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml python moxie/families/neighbors/shared/query_engine/tools/check.py build",
+      "result": "exit 0; query-engine package, native tests, evaluator and example compiled"
+    },
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml python moxie/tools/neighbors_checks.py test-only",
+      "result": "exit 0",
+      "evidence": [
+        "PASS: Float32/Float64 dense query contracts and raising extension probes",
+        "PASS public nearest, KNN and radius estimators",
+        "PASS native callable metric contracts",
+        "PASS string, exact Int64, multioutput, multilabel and outlier labels",
+        "PASS concrete capability dispatch and stored callable weights",
+        "PASS NearestCentroid native contracts",
+        "PASS: NCA",
+        "PASS: NCA solver budgets, convergence, warnings, rollback and retry",
+        "PASS KDTree",
+        "PASS KDTree",
+        "PASS BallTree",
+        "PASS BallTree",
+        "PASS: two consumers share pinned snapshot, dense and RNG modules",
+        "PASS: assembled NearestCentroid consumer",
+        "PASS: independently assembled NCA consumer",
+        "PASS native callable metric contracts",
+        "PASS: assembled KDTree consumer",
+        "PASS: assembled BallTree consumer",
+        "PASS: two consumers share pinned snapshot, dense and RNG modules",
+        "PASS: assembled NearestCentroid consumer",
+        "PASS: independently assembled NCA consumer",
+        "PASS native callable metric contracts",
+        "PASS: assembled KDTree consumer",
+        "PASS: assembled BallTree consumer",
+        "PASS: dense contracts, isolated composed consumers, sparse exclusion, missing sources and conflicts",
+        "PASS dense query lifecycle, ties, radius, precomputed, weights and inferred Mahalanobis",
+        "PASS sparse export exclusion"
+      ]
+    },
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml python moxie/tools/neighbors_checks.py parity-only",
+      "result": "exit 0",
+      "evidence": [
+        "PASS 144 callable-metric sklearn configurations and 6 reference error contracts; 4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+        "PASS pinned sklearn exact Int64 and multioutput string predictions",
+        "PASS 192 public estimator configurations: KNN/radius, both dtypes, uniform/distance/native callable, multi-output, self queries, precomputed, duplicates and empty neighborhoods; reference 4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+        "PASS LOF: both dtypes, training factors, novelty scores/decisions/labels, contamination percentile and native lifecycle/duplicate checks",
+        "PASS 576 KDE configurations: six kernels, both input dtypes, weighted/uniform, numeric/Scott/Silverman bandwidth; Gaussian seeded samples execute pinned sklearn sample; maximum log-density absolute error 1.63e-09",
+        "PASS 216 tophat sampling configurations: dtypes, dimensions 1\u20131000, seeds, zero/nonuniform weights, bandwidths, continued RNG state; maximum absolute error 9.12e-10",
+        "PASS NearestCentroid: 432 pinned-source configurations, learned state, labels, decision/probability outputs and pamr fixture",
+        "PASS: SciPy 1.18.1 dcstep/search cases (8, 24, 1, 8) unbounded solver cases 14",
+        "PASS: NCA {'gradient': 12, 'initialization': 28, 'optimization': 24, 'trajectory': 12} plus toy collapse, nearest-neighbor geometry, one class, singleton classes and extreme distances",
+        "PASS KDTree 336 independent dense parity configurations",
+        "PASS 205 original local sklearn test invocations through native adapter; oracle 1.10.dev0",
+        "PASS BallTree 602 independent metric/query/density configurations",
+        "PASS BallTree 238 original pinned sklearn test invocations",
+        "PASS 108 dtype/metric configurations (incl. inferred Mahalanobis); pinned top-k/radius reducers, ties, self exclusion and weights"
+      ]
+    },
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml python moxie/tools/neighbors_checks.py example-only",
+      "result": "exit 0; estimator and query-engine examples ran"
+    },
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml python moxie/tools/neighbors_independence.py",
+      "result": "exit 0 before and after renaming the standalone checkout; full Moxie namespace precompiled and five isolated public consumers compiled and ran"
+    },
+    {
+      "command": "git -C moxie diff --cached --check",
+      "result": "exit 0"
+    }
+  ],
+  "original_checkout_absent_during_final_independence_check": true,
+  "additional_checks": [
+    "All family toolchain lock files preserved byte-for-byte.",
+    "All relocated implementation modules match original source bytes.",
+    "Both existing feature-selection consumer manifests assemble after redirecting neighbors paths; their unrelated suites were not run."
+  ],
+  "resolved_integration_issues": [
+    "Added the existing Moxie-owned _special dependency required by KDE sampling.",
+    "Created the ignored query-engine parity report directory on fresh checkouts.",
+    "Used the assembler-required builds/deps output.",
+    "Selected Python 3.12 for the existing compiled oracle."
+  ],
+  "limitations": "Coverage is the existing documented dense subset, not full sklearn parity. Sparse storage/graph APIs, Python reflection/metadata routing and documented numerical-domain limitations remain deferred."
+}

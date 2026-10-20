@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.neighbors": {
+      "KNeighborsQuery": "moxie.neighbors._base",
+      "RadiusNeighborsQuery": "moxie.neighbors._base",
+      "KNeighborsClassifierAPI": "moxie.neighbors._base",
+      "KNeighborsRegressorAPI": "moxie.neighbors._base",
+      "RadiusNeighborsClassifierAPI": "moxie.neighbors._base",
+      "RadiusNeighborsRegressorAPI": "moxie.neighbors._base",
+      "NeighborDensity": "moxie.neighbors._base",
+      "NoveltyDetector": "moxie.neighbors._base",
+      "DenseMetric": "moxie.neighbors._contracts",
+      "DenseQueryBackend": "moxie.neighbors._contracts",
+      "TopKResult": "moxie.neighbors._contracts",
+      "RadiusResult": "moxie.neighbors._contracts",
+      "validate_matrix": "moxie.neighbors._contracts",
+      "fit_snapshot": "moxie.neighbors._contracts",
+      "validate_k": "moxie.neighbors._contracts",
+      "validate_radius_options": "moxie.neighbors._contracts"
+    }
+  }
+}

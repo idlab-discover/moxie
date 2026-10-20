@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.neighbors": {
+      "NeighborhoodComponentsAnalysis": "moxie.neighbors._nca",
+      "NCAParams": "moxie.neighbors._nca",
+      "NCACallback": "moxie.neighbors._nca",
+      "NoNCACallback": "moxie.neighbors._nca"
+    }
+  }
+}

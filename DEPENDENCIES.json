@@ -1354,63 +1354,6 @@
       "assets": {},
       "exports": {
         "packages": {
-          "moxie.neighbors": {
-            "BuiltinWeights": "moxie.neighbors._query_engine",
-            "NeighborWeights": "moxie.neighbors._query_engine"
-          }
-        },
-        "schema": 1
-      },
-      "id": "query_engine",
-      "modules": {
-        "moxie.neighbors._distance": {
-          "file": "src/moxie/neighbors/_distance.mojo"
-        },
-        "moxie.neighbors._query_engine": {
-          "file": "src/moxie/neighbors/_query_engine.mojo"
-        }
-      },
-      "path": "../moxie-neighbors/shared/query_engine"
-    },
-    {
-      "assets": {},
-      "exports": {
-        "packages": {
-          "moxie.neighbors": {}
-        },
-        "schema": 1
-      },
-      "id": "nearest",
-      "modules": {
-        "moxie.neighbors._unsupervised": {
-          "file": "src/moxie/neighbors/_unsupervised.mojo"
-        }
-      },
-      "path": "../moxie-neighbors/algorithms/nearest"
-    },
-    {
-      "assets": {},
-      "exports": {
-        "packages": {
-          "moxie.neighbors": {}
-        },
-        "schema": 1
-      },
-      "id": "neighbors.contracts",
-      "modules": {
-        "moxie.neighbors._base": {
-          "file": "src/moxie/neighbors/_base.mojo"
-        },
-        "moxie.neighbors._contracts": {
-          "file": "src/moxie/neighbors/_contracts.mojo"
-        }
-      },
-      "path": "../moxie-neighbors"
-    },
-    {
-      "assets": {},
-      "exports": {
-        "packages": {
           "moxie": {},
           "moxie.decomposition": {
             "IncrementalPCA": "moxie.decomposition._incremental_pca",
@@ -1441,34 +1384,6 @@
         }
       },
       "path": "../moxie-decomposition"
-    },
-    {
-      "assets": {},
-      "exports": {
-        "packages": {
-          "moxie.neighbors": {}
-        },
-        "schema": 1
-      },
-      "id": "neighbors.spatial_trees",
-      "modules": {
-        "moxie.neighbors._ball_tree": {
-          "file": "src/moxie/neighbors/_ball_tree.mojo"
-        },
-        "moxie.neighbors._binary_tree": {
-          "file": "src/moxie/neighbors/_binary_tree.mojo"
-        },
-        "moxie.neighbors._kd_tree": {
-          "file": "src/moxie/neighbors/_kd_tree.mojo"
-        },
-        "moxie.neighbors._metrics": {
-          "file": "src/moxie/neighbors/_metrics.mojo"
-        },
-        "moxie.neighbors._tree_engine": {
-          "file": "src/moxie/neighbors/_tree_engine.mojo"
-        }
-      },
-      "path": "../moxie-neighbors/shared/spatial_trees"
     },
     {
       "id": "mixture-linalg",
@@ -1764,6 +1679,275 @@
       },
       "path": "../.worktrees/mojo-linalg-linear_model",
       "revision": "a3c4f91ad4639eda64eb0214f74699e1dfa97a0f"
+    },
+    {
+      "id": "neighbors",
+      "path": "families/neighbors",
+      "modules": {
+        "moxie.neighbors._base": {
+          "file": "src/moxie/neighbors/_base.mojo"
+        },
+        "moxie.neighbors._contracts": {
+          "file": "src/moxie/neighbors/_contracts.mojo"
+        }
+      },
+      "assets": {
+        "licenses/neighbors-scipy.txt": "LICENSES/scipy.txt",
+        "licenses/neighbors-sklearn.txt": "LICENSES/sklearn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.neighbors": {
+            "KNeighborsQuery": "moxie.neighbors._base",
+            "RadiusNeighborsQuery": "moxie.neighbors._base",
+            "KNeighborsClassifierAPI": "moxie.neighbors._base",
+            "KNeighborsRegressorAPI": "moxie.neighbors._base",
+            "RadiusNeighborsClassifierAPI": "moxie.neighbors._base",
+            "RadiusNeighborsRegressorAPI": "moxie.neighbors._base",
+            "NeighborDensity": "moxie.neighbors._base",
+            "NoveltyDetector": "moxie.neighbors._base",
+            "DenseMetric": "moxie.neighbors._contracts",
+            "DenseQueryBackend": "moxie.neighbors._contracts",
+            "TopKResult": "moxie.neighbors._contracts",
+            "RadiusResult": "moxie.neighbors._contracts",
+            "validate_matrix": "moxie.neighbors._contracts",
+            "fit_snapshot": "moxie.neighbors._contracts",
+            "validate_k": "moxie.neighbors._contracts",
+            "validate_radius_options": "moxie.neighbors._contracts"
+          }
+        }
+      }
+    },
+    {
+      "id": "density",
+      "path": "families/neighbors/algorithms/density",
+      "modules": {
+        "moxie.neighbors._kde": {
+          "file": "src/moxie/neighbors/_kde.mojo"
+        },
+        "moxie.neighbors._kde_sampling": {
+          "file": "src/moxie/neighbors/_kde_sampling.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "KernelDensity": "moxie.neighbors._kde"
+          }
+        }
+      }
+    },
+    {
+      "id": "lof",
+      "path": "families/neighbors/algorithms/lof",
+      "modules": {
+        "moxie.neighbors._lof": {
+          "file": "src/moxie/neighbors/_lof.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "LocalOutlierFactor": "moxie.neighbors._lof"
+          }
+        }
+      }
+    },
+    {
+      "id": "query_engine",
+      "path": "families/neighbors/shared/query_engine",
+      "modules": {
+        "moxie.neighbors._distance": {
+          "file": "src/moxie/neighbors/_distance.mojo"
+        },
+        "moxie.neighbors._query_engine": {
+          "file": "src/moxie/neighbors/_query_engine.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "NeighborWeights": "moxie.neighbors._query_engine",
+            "BuiltinWeights": "moxie.neighbors._query_engine"
+          }
+        }
+      }
+    },
+    {
+      "id": "nearest",
+      "path": "families/neighbors/algorithms/nearest",
+      "modules": {
+        "moxie.neighbors._unsupervised": {
+          "file": "src/moxie/neighbors/_unsupervised.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "NearestNeighbors": "moxie.neighbors._unsupervised",
+            "NeighborParams": "moxie.neighbors._unsupervised"
+          }
+        }
+      }
+    },
+    {
+      "id": "knn",
+      "path": "families/neighbors/algorithms/knn",
+      "modules": {
+        "moxie.neighbors._classification": {
+          "file": "src/moxie/neighbors/_classification.mojo"
+        },
+        "moxie.neighbors._regression": {
+          "file": "src/moxie/neighbors/_regression.mojo"
+        },
+        "moxie.neighbors._supervised": {
+          "file": "src/moxie/neighbors/_supervised.mojo"
+        },
+        "moxie.neighbors._classification_targets": {
+          "file": "src/moxie/neighbors/_classification_targets.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "KNeighborsClassifier": "moxie.neighbors._classification",
+            "KNeighborsRegressor": "moxie.neighbors._regression"
+          }
+        }
+      }
+    },
+    {
+      "id": "radius",
+      "path": "families/neighbors/algorithms/radius",
+      "modules": {
+        "moxie.neighbors._radius_classification": {
+          "file": "src/moxie/neighbors/_radius_classification.mojo"
+        },
+        "moxie.neighbors._radius_regression": {
+          "file": "src/moxie/neighbors/_radius_regression.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "RadiusNeighborsClassifier": "moxie.neighbors._radius_classification",
+            "RadiusNeighborsRegressor": "moxie.neighbors._radius_regression"
+          }
+        }
+      }
+    },
+    {
+      "id": "centroid",
+      "path": "families/neighbors/algorithms/centroid",
+      "modules": {
+        "moxie.neighbors._nearest_centroid": {
+          "file": "src/moxie/neighbors/_nearest_centroid.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "NearestCentroid": "moxie.neighbors._nearest_centroid"
+          }
+        }
+      }
+    },
+    {
+      "id": "spatial_trees",
+      "path": "families/neighbors/shared/spatial_trees",
+      "modules": {
+        "moxie.neighbors._kd_tree": {
+          "file": "src/moxie/neighbors/_kd_tree.mojo"
+        },
+        "moxie.neighbors._binary_tree": {
+          "file": "src/moxie/neighbors/_binary_tree.mojo"
+        },
+        "moxie.neighbors._metrics": {
+          "file": "src/moxie/neighbors/_metrics.mojo"
+        },
+        "moxie.neighbors._tree_engine": {
+          "file": "src/moxie/neighbors/_tree_engine.mojo"
+        },
+        "moxie.neighbors._ball_tree": {
+          "file": "src/moxie/neighbors/_ball_tree.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "KDTree": "moxie.neighbors._kd_tree",
+            "BallTree": "moxie.neighbors._ball_tree",
+            "VALID_METRICS": "moxie.neighbors._metrics"
+          }
+        }
+      }
+    },
+    {
+      "id": "nca",
+      "path": "families/neighbors/algorithms/nca",
+      "modules": {
+        "moxie.neighbors._nca_math": {
+          "file": "src/moxie/neighbors/_nca_math.mojo"
+        },
+        "moxie.neighbors._nca_lbfgs": {
+          "file": "src/moxie/neighbors/_nca_lbfgs.mojo"
+        },
+        "moxie.neighbors._nca_linesearch": {
+          "file": "src/moxie/neighbors/_nca_linesearch.mojo"
+        },
+        "moxie.neighbors._nca": {
+          "file": "src/moxie/neighbors/_nca.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "NeighborhoodComponentsAnalysis": "moxie.neighbors._nca",
+            "NCAParams": "moxie.neighbors._nca",
+            "NCACallback": "moxie.neighbors._nca",
+            "NoNCACallback": "moxie.neighbors._nca"
+          }
+        }
+      }
+    },
+    {
+      "id": "special",
+      "path": "shared/special",
+      "modules": {
+        "moxie._special": {
+          "file": "src/moxie/_special.mojo"
+        }
+      },
+      "assets": {
+        "licenses/fdlibm.txt": "LICENSES/fdlibm.txt",
+        "licenses/special-sklearn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      }
     }
   ],
   "overrides": []

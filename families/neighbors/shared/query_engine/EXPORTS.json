@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.neighbors": {
+      "NeighborWeights": "moxie.neighbors._query_engine",
+      "BuiltinWeights": "moxie.neighbors._query_engine"
+    }
+  }
+}

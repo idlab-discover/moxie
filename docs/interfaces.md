@@ -206,3 +206,6 @@ threshold tuning and successive halving remain unsupported.
 supported dense LinearRegression, Ridge/RidgeClassifier, ElasticNet/Lasso and
 BayesianRidge contracts. The standalone checkout is not a build dependency;
 remaining dense algorithms and sparse support are explicitly unfinished.
+
+[Neighbors](../families/neighbors/README.md) is owned by Moxie, including its dense estimators, NCA,
+query engine and spatial trees. Sparse graph APIs remain deferred.

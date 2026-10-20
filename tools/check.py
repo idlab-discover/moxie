@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+import neighbors_checks
 import linear_model_checks
 import feature_selection_checks
 from compiler_limits import compiler_command
@@ -39,6 +40,7 @@ def executable(source):
 
 
 def build():
+    neighbors_checks.main("build")
     linear_model_checks.main("build")
     feature_selection_checks.main("build")
     run(sys.executable, ROOT / 'families/covariance/tools/check.py', 'build')
@@ -110,6 +112,7 @@ def compose_test():
 
 
 def parity():
+    neighbors_checks.main("parity-only")
     linear_model_checks.main("parity-only")
     feature_selection_checks.main("parity-only")
     tree_checks.parity(run)
@@ -137,6 +140,7 @@ def parity():
 
 
 def test():
+    neighbors_checks.main("test-only")
     linear_model_checks.main("test-only")
     feature_selection_checks.main("test-only")
     tree_checks.test(run)

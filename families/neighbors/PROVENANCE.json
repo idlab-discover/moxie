@@ -1,0 +1,9 @@
+{
+  "source_repository": "moxie-neighbors",
+  "source_revision": "e6088b41bf2c511e0a3f7da92abeff8c537df08a",
+  "scaffold_base": "4843da32ff0f4c49887c10efe45b85d21939737f",
+  "sklearn_reference": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "owner": "moxie/families/neighbors",
+  "numerical_changes": "None; source relocation and validation tooling only.",
+  "unsupported": "Sparse features/precomputed storage and graph APIs; Python reflection and metadata routing; numerical domains beyond documented coverage."
+}

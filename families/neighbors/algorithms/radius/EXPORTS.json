@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.neighbors": {
+      "RadiusNeighborsClassifier": "moxie.neighbors._radius_classification",
+      "RadiusNeighborsRegressor": "moxie.neighbors._radius_regression"
+    }
+  }
+}

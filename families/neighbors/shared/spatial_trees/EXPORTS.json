@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.neighbors": {
+      "KDTree": "moxie.neighbors._kd_tree",
+      "BallTree": "moxie.neighbors._ball_tree",
+      "VALID_METRICS": "moxie.neighbors._metrics"
+    }
+  }
+}

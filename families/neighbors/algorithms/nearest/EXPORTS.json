@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.neighbors": {
+      "NearestNeighbors": "moxie.neighbors._unsupervised",
+      "NeighborParams": "moxie.neighbors._unsupervised"
+    }
+  }
+}

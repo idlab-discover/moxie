@@ -172,3 +172,6 @@ The dedicated mixture linalg worktree remains an explicit numerical dependency.
 
 [Model selection](families/model_selection/README.md) is owned by Moxie, with
 splitters, typed search, CV, curves and native SVG displays.
+
+[Neighbors](families/neighbors/README.md) is owned by Moxie, including its dense estimators, NCA,
+query engine and spatial trees. Sparse graph APIs remain deferred.

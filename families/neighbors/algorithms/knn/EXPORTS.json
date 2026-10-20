@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.neighbors": {
+      "KNeighborsClassifier": "moxie.neighbors._classification",
+      "KNeighborsRegressor": "moxie.neighbors._regression"
+    }
+  }
+}

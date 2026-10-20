@@ -414,7 +414,7 @@
           "file": "src/moxie/neighbors/_query_engine.mojo"
         }
       },
-      "path": "../../../../../moxie-neighbors/shared/query_engine"
+      "path": "../../../../families/neighbors/shared/query_engine"
     },
     {
       "assets": {},
@@ -430,7 +430,7 @@
           "file": "src/moxie/neighbors/_unsupervised.mojo"
         }
       },
-      "path": "../../../../../moxie-neighbors/algorithms/nearest"
+      "path": "../../../../families/neighbors/algorithms/nearest"
     },
     {
       "assets": {},
@@ -449,7 +449,7 @@
           "file": "src/moxie/neighbors/_contracts.mojo"
         }
       },
-      "path": "../../../../../moxie-neighbors"
+      "path": "../../../../families/neighbors"
     },
     {
       "assets": {
@@ -673,7 +673,7 @@
           "file": "src/moxie/neighbors/_tree_engine.mojo"
         }
       },
-      "path": "../../../../../moxie-neighbors/shared/spatial_trees"
+      "path": "../../../../families/neighbors/shared/spatial_trees"
     },
     {
       "assets": {},

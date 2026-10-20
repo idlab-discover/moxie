@@ -46,12 +46,14 @@ exports, selections and layouts, both dtypes, parameter ownership, clone/refit,
 invalid and unfitted inputs, named tables, parallel components and failed-fit
 state preservation. Negative compilation checks reject missing prediction and
 block-assembly capabilities. Consumer tests compose real estimators through
-ColumnTransformer, TransformedTargetRegressor, Pipeline and DummyRegressor.
+ColumnTransformer, TransformedTargetRegressor, Pipeline and DummyRegressor,
+and run SimpleImputer, StandardScaler and MinMaxScaler (including as the
+remainder) on NaN-containing named and positional columns.
 
 Parity scripts under `tests/compose` execute estimator code from the local
 scikit-learn revision recorded in [interfaces](../interfaces.md). They cover
 column outputs and metadata, named selections, target predictions/scores,
-warnings and invalid inputs, and both real consumer compositions. Tolerances
+warnings and invalid inputs, and the real consumer compositions. Tolerances
 and numerical adaptations are recorded in those scripts. Raw reports stay
 under ignored `builds/tests/compose`. Pandas is an oracle-only dependency for
 named-column comparisons, never a native runtime dependency.

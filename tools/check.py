@@ -146,7 +146,7 @@ def parity():
         run(sys.executable, ROOT / "tests/pipeline" / name)
     run(sys.executable, ROOT / 'tests/dummy/parity.py')
     for relative in ['columns/parity.py', 'columns/named_parity.py', 'target/parity.py',
-                     'models/parity.py', 'pipeline/parity.py']:
+                     'models/parity.py', 'models/real_parity.py', 'pipeline/parity.py']:
         run(sys.executable, ROOT / 'tests/compose' / relative)
 
 

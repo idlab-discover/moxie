@@ -88,8 +88,14 @@ TypeError), `get_feature_names_out(input_features)`, `fit`, `fit_transform`,
   numeric arrays, not schema-carrying containers. Array selection callables
   receive the underlying matrix and may return positional or named keys.
 - Output feature names need components conforming to the compose
-  `FeatureNamesOut` trait (sklearn checks `hasattr`); others raise sklearn's
-  AttributeError text.
+  `FeatureNamesOut` trait or `moxie._feature_metadata.FeatureNamesOut`
+  (sklearn checks `hasattr`); others raise sklearn's AttributeError text.
+  Preprocessing scalers and the dense imputers conform. Some other families'
+  transformers define the method without declaring a trait, so their names
+  are not yet available through ColumnTransformer.
+- `moxie.pipeline.Pipeline` ends in a predictor, so a transformer chain such
+  as `make_pipeline(SimpleImputer(), StandardScaler())` cannot yet be one
+  entry; use consecutive ColumnTransformers instead.
 - Errors are Mojo `Error`s whose text starts with the sklearn exception type
   and message (`InvalidParameterError: The 'remainder' parameter ...`).
 

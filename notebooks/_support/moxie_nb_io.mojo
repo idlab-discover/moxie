@@ -9,6 +9,7 @@ from std.os import getenv
 from std.python import Python, PythonObject
 
 from numojo import NDArray
+from numojo.core.layout import NDArrayShape
 from numojo.routines.creation import array
 
 
@@ -39,7 +40,15 @@ def load[dtype: DType = DType.float64](name: String) raises -> NDArray[dtype]:
     var data = np.ascontiguousarray(
         np.load(exchange_path(name)), dtype=_dtype_name[dtype]()
     )
-    return array[dtype](data=data)
+    var result = array[dtype](data=data)
+    # NuMojo's array(data=...) drops every unit dimension ((500, 1) becomes
+    # (500,)); restore NumPy's shape so one-column matrices stay rank 2.
+    var shape = List[Int]()
+    for i in range(Int(py=data.ndim)):
+        shape.append(Int(py=data.shape[i]))
+    if len(shape) != result.ndim:
+        return result.reshape(NDArrayShape(shape))
+    return result^
 
 
 def load_strings(name: String) raises -> List[String]:

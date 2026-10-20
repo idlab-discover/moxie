@@ -1,0 +1,8 @@
+{
+  "source_repository": "moxie-feature_extraction",
+  "source_revision": "1b2810de61b3526f0868931f7969adef1630cb64",
+  "scikit_learn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "owner": "moxie/families/feature_extraction",
+  "history": "retired-moxie-feature_extraction/.git",
+  "note": "Native dictionary/image implementations retained; framework copies and superseded DictVectorizer/image declarations removed."
+}

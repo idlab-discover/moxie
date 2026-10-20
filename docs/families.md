@@ -39,7 +39,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-preprocessing` | `sklearn/preprocessing` |
 | Integrated: `families/impute`; [guide](../families/impute/README.md) | `sklearn/impute` |
 | Integrated: `src/moxie/feature_selection/` | `sklearn/feature_selection`; [guide](feature_selection/README.md) |
-| `moxie-feature_extraction` | `sklearn/feature_extraction` |
+| Integrated: `families/feature_extraction` | `sklearn/feature_extraction` |
 | Integrated: `src/moxie/kernel_approximation.mojo` | `sklearn/kernel_approximation.py` |
 | Integrated: `src/moxie/random_projection.mojo` | `sklearn/random_projection.py` |
 | Integrated: `src/moxie/isotonic.mojo` | `sklearn/isotonic.py` |
@@ -121,3 +121,8 @@ is not a build dependency.
 [Manifold](../families/manifold/README.md) is owned by Moxie, including ClassicalMDS,
 trustworthiness and dense exchange helpers. Other manifold algorithms remain
 explicit unsupported declarations. The standalone checkout is not a build dependency.
+
+[Feature extraction](../families/feature_extraction/README.md) is owned by Moxie,
+including dense dictionary vectorization, image patches and dense graphs.
+Text, TF-IDF, hashing and sparse output remain deferred; complex and extended
+dictionary dtypes remain unfinished. The standalone checkout is not a build dependency.

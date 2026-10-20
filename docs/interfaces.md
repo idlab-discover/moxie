@@ -244,3 +244,8 @@ is not a build dependency.
 [Manifold](../families/manifold/README.md) is owned by Moxie, including ClassicalMDS,
 trustworthiness and dense exchange helpers. Other manifold algorithms remain
 explicit unsupported declarations. The standalone checkout is not a build dependency.
+
+[Feature extraction](../families/feature_extraction/README.md) is owned by Moxie,
+including dense dictionary vectorization, image patches and dense graphs.
+Text, TF-IDF, hashing and sparse output remain deferred; complex and extended
+dictionary dtypes remain unfinished. The standalone checkout is not a build dependency.

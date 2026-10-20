@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.feature_extraction": {
+      "FeatureExtractor": "moxie.feature_extraction._base",
+      "DictVectorizer": "moxie.feature_extraction._dict_vectorizer",
+      "FeatureHasher": "moxie.feature_extraction._api",
+      "grid_to_graph": "moxie.feature_extraction.image",
+      "img_to_graph": "moxie.feature_extraction.image"
+    }
+  }
+}

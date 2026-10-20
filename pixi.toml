@@ -6,6 +6,11 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+feature-extraction-build = "python families/feature_extraction/tools/integration.py build"
+feature-extraction-test = "python families/feature_extraction/tools/integration.py test"
+feature-extraction-parity = "python families/feature_extraction/tools/integration.py parity"
+feature-extraction-start = "python families/feature_extraction/tools/integration.py start"
+feature-extraction-independence = "python families/feature_extraction/tools/integration.py independence"
 manifold-build = "python families/manifold/tools/check.py build"
 manifold-test = "python families/manifold/tools/check.py test"
 manifold-parity = "python families/manifold/tools/parity.py"

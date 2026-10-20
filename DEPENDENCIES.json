@@ -2746,6 +2746,95 @@
           }
         }
       }
+    },
+    {
+      "assets": {
+        "licenses/feature-extraction-scikit-learn.txt": "algorithms/image/LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.feature_extraction": {
+            "FeatureExtractor": "moxie.feature_extraction._base",
+            "FeatureHasher": "moxie.feature_extraction._api"
+          }
+        }
+      },
+      "id": "feature_extraction",
+      "modules": {
+        "moxie.feature_extraction._api": {
+          "file": "src/moxie/feature_extraction/_api.mojo"
+        },
+        "moxie.feature_extraction._api_types": {
+          "file": "src/moxie/feature_extraction/_api_types.mojo"
+        },
+        "moxie.feature_extraction._base": {
+          "file": "src/moxie/feature_extraction/_base.mojo"
+        },
+        "moxie.feature_extraction._image_contracts": {
+          "file": "src/moxie/feature_extraction/_image_contracts.mojo"
+        },
+        "moxie.feature_extraction._mapping": {
+          "file": "src/moxie/feature_extraction/_mapping.mojo"
+        },
+        "moxie.feature_extraction._stop_words": {
+          "file": "src/moxie/feature_extraction/_stop_words.mojo"
+        },
+        "moxie.feature_extraction._text_contracts": {
+          "file": "src/moxie/feature_extraction/_text_contracts.mojo"
+        },
+        "moxie.feature_extraction._validation": {
+          "file": "src/moxie/feature_extraction/_validation.mojo"
+        },
+        "moxie.feature_extraction.text": {
+          "file": "src/moxie/feature_extraction/text.mojo"
+        }
+      },
+      "path": "families/feature_extraction"
+    },
+    {
+      "assets": {
+        "licenses/feature-extraction-dictionary-scikit-learn.txt": "LICENSE.sklearn"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.feature_extraction": {
+            "DictVectorizer": "moxie.feature_extraction._dict_vectorizer"
+          }
+        },
+        "schema": 1
+      },
+      "id": "feature-extraction-dict_hash",
+      "modules": {
+        "moxie.feature_extraction._dict_vectorizer": {
+          "file": "src/moxie/feature_extraction/_dict_vectorizer.mojo"
+        }
+      },
+      "path": "families/feature_extraction/algorithms/dict_hash"
+    },
+    {
+      "assets": {
+        "licenses/feature-extraction-image-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.feature_extraction": {
+            "grid_to_graph": "moxie.feature_extraction.image",
+            "img_to_graph": "moxie.feature_extraction.image"
+          }
+        },
+        "schema": 1
+      },
+      "id": "feature-extraction-image",
+      "modules": {
+        "moxie.feature_extraction.image": {
+          "file": "src/moxie/feature_extraction/image.mojo"
+        }
+      },
+      "path": "families/feature_extraction/algorithms/image"
     }
   ],
   "overrides": []

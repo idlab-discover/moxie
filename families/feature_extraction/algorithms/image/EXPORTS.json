@@ -1,0 +1,1 @@
+{"schema":1,"packages":{"moxie":{},"moxie.feature_extraction":{"grid_to_graph":"moxie.feature_extraction.image","img_to_graph":"moxie.feature_extraction.image"}}}

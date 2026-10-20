@@ -183,3 +183,7 @@ deferred. The standalone checkout is not a build dependency.
 Dense [ensemble estimators](families/ensemble/README.md) are integrated in
 `moxie.ensemble`. Run `pixi run ensemble-test` and `pixi run ensemble-parity`
 for their focused checks.
+
+[Decomposition](families/decomposition/README.md) is owned by Moxie, including its SVD and threshold
+sparse-coding engines. Dictionary learning, SparsePCA and regression coding
+modes remain unfinished. The standalone checkout is not a build dependency.

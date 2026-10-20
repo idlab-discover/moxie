@@ -1,0 +1,16 @@
+# Local environments
+.pixi/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Generated output and private working files
+builds/
+benchmarks/
+profiling/
+docs/private/
+
+# Algorithm comparison sources (at any nesting depth)
+references/
+
+build/

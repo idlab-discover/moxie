@@ -597,7 +597,7 @@
           "file": "shared/svd_engine/src/moxie/decomposition/_svd_engine.mojo"
         }
       },
-      "path": "../../../../../moxie-decomposition"
+      "path": "../../../../families/decomposition"
     },
     {
       "assets": {},

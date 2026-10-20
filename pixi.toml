@@ -6,6 +6,10 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+decomposition-build = "python families/decomposition/tools/family.py build"
+decomposition-test = "python families/decomposition/tools/family.py test"
+decomposition-parity = "python families/decomposition/tools/family.py parity"
+decomposition-start = "python families/decomposition/tools/family.py start"
 ensemble-build = "python families/ensemble/tools/check.py build"
 ensemble-test = "python families/ensemble/tools/check.py test"
 ensemble-parity = "python families/ensemble/tools/check.py parity"

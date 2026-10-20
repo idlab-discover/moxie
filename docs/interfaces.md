@@ -218,3 +218,7 @@ deferred. The standalone checkout is not a build dependency.
 dense RandomForest/ExtraTrees estimators and shared forest engine. Other ensemble
 estimators remain explicit declarations; sparse input and decision paths are deferred.
 The retired ensemble checkout is not a build dependency.
+
+[Decomposition](../families/decomposition/docs/api-surface.md) is owned by Moxie, including its SVD and threshold
+sparse-coding engines. Dictionary learning, SparsePCA and regression coding
+modes remain unfinished. The standalone checkout is not a build dependency.

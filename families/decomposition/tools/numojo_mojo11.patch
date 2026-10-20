@@ -1,0 +1,584 @@
+--- a/numojo/core/memory/data_container.mojo
++++ b/numojo/core/memory/data_container.mojo
+@@ -117,7 +117,7 @@
+     var ptr: Pointer[Scalar[Self.dtype], Self.origin]
+     """Pointer to the data array."""
+ 
+-    var _refcount: Pointer[Atomic[DType.uint64], Self.origin]
++    var _refcount: Pointer[Atomic[UInt64], Self.origin]
+     """Pointer to the atomic reference count."""
+ 
+     var ownership: Ownership
+@@ -135,8 +135,8 @@
+         Create an empty, managed DataContainer.
+         """
+         self.ptr = Pointer[Scalar[Self.dtype], Self.origin].unsafe_dangling()
+-        self._refcount = unsafe_alloc[Atomic[DType.uint64]](1)
+-        self._refcount[] = Atomic[DType.uint64](1)
++        self._refcount = unsafe_alloc[Atomic[UInt64]](1)
++        self._refcount[] = Atomic[UInt64](1)
+         self.ownership = Ownership.Managed
+         self.size = 0
+ 
+@@ -152,8 +152,8 @@
+             abort("DataContainer: __init__() size must be non-negative")
+ 
+         self.size = size
+-        self._refcount = unsafe_alloc[Atomic[DType.uint64]](1)
+-        self._refcount[] = Atomic[DType.uint64](1)
++        self._refcount = unsafe_alloc[Atomic[UInt64]](1)
++        self._refcount[] = Atomic[UInt64](1)
+         self.ownership = Ownership.Managed
+ 
+         if size == 0:
+@@ -186,14 +186,14 @@
+             abort("DataContainer: __init__() size must be non-negative")
+         self.size = size
+         if copy:
+-            self._refcount = unsafe_alloc[Atomic[DType.uint64]](1)
+-            self._refcount[] = Atomic[DType.uint64](1)
++            self._refcount = unsafe_alloc[Atomic[UInt64]](1)
++            self._refcount[] = Atomic[UInt64](1)
+             self.ptr = unsafe_alloc[Scalar[Self.dtype]](size)
+             unsafe_memcpy(dest=self.ptr, src=ptr, count=size)
+             self.ownership = Ownership.Managed
+         else:
+             self._refcount = Pointer[
+-                Atomic[DType.uint64], Self.origin
++                Atomic[UInt64], Self.origin
+             ].unsafe_dangling()
+             self.ptr = ptr
+             self.ownership = Ownership.External
+@@ -204,7 +204,7 @@
+         *,
+         ptr: Pointer[Scalar[Self.dtype], Self.origin],
+         size: Int,
+-        refcount: Pointer[Atomic[DType.uint64], Self.origin],
++        refcount: Pointer[Atomic[UInt64], Self.origin],
+         ownership: Ownership,
+     ):
+         """Create a DataContainer that shares an existing buffer and refcount.
+@@ -234,8 +234,8 @@
+         """
+         self.size = copy.size
+         self.ownership = Ownership.Managed
+-        self._refcount = unsafe_alloc[Atomic[DType.uint64]](1)
+-        self._refcount[] = Atomic[DType.uint64](1)
++        self._refcount = unsafe_alloc[Atomic[UInt64]](1)
++        self._refcount[] = Atomic[UInt64](1)
+         if copy.size == 0:
+             self.ptr = Pointer[
+                 Scalar[Self.dtype], Self.origin
+--- a/numojo/routines/functional.mojo
++++ b/numojo/routines/functional.mojo
+@@ -91,7 +91,7 @@
+ #             except e:
+ #                 print("Error in parallelized_func", e)
+ 
+-#         parallelize[parallelized_func](a.size // a.shape[axis])
++#         parallelize(parallelized_func, a.size // a.shape[axis])
+ 
+ #     return res^
+ 
+@@ -130,15 +130,13 @@
+ 
+     else:
+         res = NDArray[DType.int](a.shape.pop(axis=axis))
+-
+-        @parameter
+-        def parallelized_func(i: Int):
++        def parallelized_func(i: Int) {imm, mut res}:
+             try:
+                 res.unsafe_set(i, func1d[dtype](iterator.ith(i)))
+             except e:
+                 print("Error in parallelized_func", e)
+ 
+-        parallelize[parallelized_func](a.size // a.shape[axis])
++        parallelize(parallelized_func, a.size // a.shape[axis])
+ 
+     return res^
+ 
+@@ -186,9 +184,7 @@
+         #     var ith = iterator.ith(i)
+         #     var func_result = func1d[dtype](ith)
+         #     res._buf.store(i, func_result)
+-
+-        @parameter
+-        def parallelized_func(i: Int):
++        def parallelized_func(i: Int) {imm, mut res}:
+             try:
+                 res.unsafe_set(i, func1d[dtype](iterator.ith(i)))
+             except e:
+@@ -200,7 +196,7 @@
+             # except e:
+             #     print("Error in parallelized_func", e)
+ 
+-        parallelize[parallelized_func](a.size // a.shape[axis])
++        parallelize(parallelized_func, a.size // a.shape[axis])
+ 
+     return res^
+ 
+@@ -241,9 +237,7 @@
+ 
+     else:
+         res = NDArray[returned_dtype](a.shape.pop(axis=axis))
+-
+-        @parameter
+-        def parallelized_func(i: Int):
++        def parallelized_func(i: Int) {imm, mut res}:
+             try:
+                 res.unsafe_set(
+                     i, func1d[dtype, returned_dtype](iterator.ith(i))
+@@ -251,7 +245,7 @@
+             except e:
+                 print("Error in parallelized_func", e)
+ 
+-        parallelize[parallelized_func](a.size // a.shape[axis])
++        parallelize(parallelized_func, a.size // a.shape[axis])
+ 
+     return res^
+ 
+@@ -289,8 +283,7 @@
+ 
+     if a.is_c_contiguous() and (axis == a.ndim - 1):
+         # The memory layout is C-contiguous
+-        @parameter
+-        def parallelized_func_c(i: Int):
++        def parallelized_func_c(i: Int) {mut}:
+             try:
+                 var elements: NDArray[dtype] = func1d[dtype](iterator.ith(i))
+                 unsafe_memcpy(
+@@ -301,12 +294,11 @@
+             except e:
+                 print("Error in parallelized_func", e)
+ 
+-        parallelize[parallelized_func_c](a.size // a.shape[axis])
++        parallelize(parallelized_func_c, a.size // a.shape[axis])
+ 
+     else:
+         # The memory layout is not contiguous
+-        @parameter
+-        def parallelized_func(i: Int):
++        def parallelized_func(i: Int) {imm, mut res}:
+             try:
+                 # The indices of the input array in each iteration
+                 var indices: NDArray[DType.int]
+@@ -327,7 +319,7 @@
+             except e:
+                 print("Error in parallelized_func", e)
+ 
+-        parallelize[parallelized_func](a.size // a.shape[axis])
++        parallelize(parallelized_func, a.size // a.shape[axis])
+ 
+     return result^
+ 
+@@ -362,8 +354,7 @@
+ 
+     if a.is_c_contiguous() and (axis == a.ndim - 1):
+         # The memory layout is C-contiguous
+-        @parameter
+-        def parallelized_func_c(i: Int):
++        def parallelized_func_c(i: Int) {mut}:
+             try:
+                 var elements: NDArray[dtype] = iterator.ith(i)
+                 func1d[dtype](elements)
+@@ -375,12 +366,11 @@
+             except e:
+                 print("Error in parallelized_func", e)
+ 
+-        parallelize[parallelized_func_c](a.size // a.shape[axis])
++        parallelize(parallelized_func_c, a.size // a.shape[axis])
+ 
+     else:
+         # The memory layout is not contiguous
+-        @parameter
+-        def parallelized_func(i: Int):
++        def parallelized_func(i: Int) {imm, mut res}:
+             try:
+                 # The indices of the input array in each iteration
+                 var indices: NDArray[DType.int]
+@@ -398,7 +388,7 @@
+             except e:
+                 print("Error in parallelized_func", e)
+ 
+-        parallelize[parallelized_func](a.size // a.shape[axis])
++        parallelize(parallelized_func, a.size // a.shape[axis])
+ 
+     return None
+ 
+@@ -434,8 +424,7 @@
+ 
+     if a.is_c_contiguous() and (axis == a.ndim - 1):
+         # The memory layout is C-contiguous
+-        @parameter
+-        def parallelized_func_c(i: Int):
++        def parallelized_func_c(i: Int) {mut}:
+             try:
+                 var elements: NDArray[DType.int] = func1d[dtype](
+                     iterator.ith(i)
+@@ -448,12 +437,11 @@
+             except e:
+                 print("Error in parallelized_func", e)
+ 
+-        parallelize[parallelized_func_c](a.size // a.shape[axis])
++        parallelize(parallelized_func_c, a.size // a.shape[axis])
+ 
+     else:
+         # The memory layout is not contiguous
+-        @parameter
+-        def parallelized_func(i: Int):
++        def parallelized_func(i: Int) {imm, mut res}:
+             try:
+                 # The indices of the input array in each iteration
+                 var indices: NDArray[DType.int]
+@@ -473,7 +461,7 @@
+             except e:
+                 print("Error in parallelized_func", e)
+ 
+-        parallelize[parallelized_func](a.size // a.shape[axis])
++        parallelize(parallelized_func, a.size // a.shape[axis])
+ 
+     return res^
+ 
+--- a/numojo/routines/operations/backend.mojo
++++ b/numojo/routines/operations/backend.mojo
+@@ -530,15 +530,14 @@
+         comptime width = simd_width_of[dtype]()
+         var num_tasks = _num_tasks_for(array.size, width)
+         var src = array.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         if num_tasks == 1:
+             _apply_unary_chunk[dtype, width, kernel](src, dst, 0, array.size)
+         else:
+             var chunk_size = (array.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+                 var end = min(start + chunk_size, array.size)
+                 if end > start:
+@@ -546,7 +545,7 @@
+                         src, dst, start, end
+                     )
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+@@ -599,6 +598,7 @@
+         comptime width = simd_width_of[dtype]()
+         var src1 = array1.unsafe_ptr()
+         var src2 = array2.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         var num_tasks = _num_tasks_for(result_array.size, width)
+@@ -608,17 +608,15 @@
+             )
+         else:
+             var chunk_size = (result_array.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+-                var end = min(start + chunk_size, result_array.size)
++                var end = min(start + chunk_size, result_size)
+                 if end > start:
+                     _apply_binary_chunk[dtype, width, kernel](
+                         src1, src2, dst, start, end
+                     )
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+@@ -656,6 +654,7 @@
+         var result_array: NDArray[dtype] = NDArray[dtype](array.shape)
+         comptime width = simd_width_of[dtype]()
+         var src = array.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         var num_tasks = _num_tasks_for(result_array.size, width)
+@@ -665,17 +664,15 @@
+             ](src, dst, scalar, 0, result_array.size)
+         else:
+             var chunk_size = (result_array.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+-                var end = min(start + chunk_size, result_array.size)
++                var end = min(start + chunk_size, result_size)
+                 if end > start:
+                     _apply_binary_scalar_chunk[
+                         dtype, width, kernel, scalar_first=False
+                     ](src, dst, scalar, start, end)
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+@@ -714,6 +711,7 @@
+         var result_array: NDArray[dtype] = NDArray[dtype](array.shape)
+         comptime width = simd_width_of[dtype]()
+         var src = array.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         var num_tasks = _num_tasks_for(result_array.size, width)
+@@ -723,17 +721,15 @@
+             )
+         else:
+             var chunk_size = (result_array.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+-                var end = min(start + chunk_size, result_array.size)
++                var end = min(start + chunk_size, result_size)
+                 if end > start:
+                     _apply_binary_scalar_chunk[
+                         dtype, width, kernel, scalar_first=True
+                     ](src, dst, scalar, start, end)
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+@@ -765,6 +761,7 @@
+         var result_array: NDArray[dtype] = NDArray[dtype](array.shape)
+         comptime width = simd_width_of[dtype]()
+         var src = array.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         var num_tasks = _num_tasks_for(array.size, width)
+@@ -774,9 +771,7 @@
+             )
+         else:
+             var chunk_size = (array.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+                 var end = min(start + chunk_size, array.size)
+                 if end > start:
+@@ -784,7 +779,7 @@
+                         src, dst, intval, start, end
+                     )
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+@@ -846,6 +841,7 @@
+         comptime width = simd_width_of[DType.bool]()
+         var src1 = array1.unsafe_ptr()
+         var src2 = array2.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         var num_tasks = _num_tasks_for(array1.size, width)
+@@ -855,9 +851,7 @@
+             )
+         else:
+             var chunk_size = (array1.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+                 var end = min(start + chunk_size, array1.size)
+                 if end > start:
+@@ -865,7 +859,7 @@
+                         src1, src2, dst, start, end
+                     )
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+@@ -909,6 +903,7 @@
+         )
+         comptime width = simd_width_of[DType.bool]()
+         var src = array1.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         var num_tasks = _num_tasks_for(array1.size, width)
+@@ -918,9 +913,7 @@
+             )
+         else:
+             var chunk_size = (array1.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+                 var end = min(start + chunk_size, array1.size)
+                 if end > start:
+@@ -928,7 +921,7 @@
+                         src, dst, scalar, start, end
+                     )
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+@@ -959,6 +952,7 @@
+         var result_array: NDArray[DType.bool] = NDArray[DType.bool](array.shape)
+         comptime width = simd_width_of[DType.bool]()
+         var src = array.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         var num_tasks = _num_tasks_for(array.size, width)
+@@ -968,9 +962,7 @@
+             )
+         else:
+             var chunk_size = (array.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+                 var end = min(start + chunk_size, array.size)
+                 if end > start:
+@@ -978,7 +970,7 @@
+                         src, dst, start, end
+                     )
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+@@ -1045,6 +1037,7 @@
+         var src1 = array1.unsafe_ptr()
+         var src2 = array2.unsafe_ptr()
+         var src3 = array3.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         var num_tasks = _num_tasks_for(array1.size, width)
+@@ -1054,9 +1047,7 @@
+             )
+         else:
+             var chunk_size = (array1.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+                 var end = min(start + chunk_size, array1.size)
+                 if end > start:
+@@ -1064,7 +1055,7 @@
+                         src1, src2, src3, dst, start, end
+                     )
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+@@ -1122,6 +1113,7 @@
+         comptime width = simd_width_of[dtype]()
+         var src1 = array1.unsafe_ptr()
+         var src2 = array2.unsafe_ptr()
++        var result_size = result_array.size
+         var dst = result_array.unsafe_ptr()
+ 
+         var num_tasks = _num_tasks_for(array1.size, width)
+@@ -1131,9 +1123,7 @@
+             )
+         else:
+             var chunk_size = (array1.size + num_tasks - 1) // num_tasks
+-
+-            @parameter
+-            def worker(tid: Int):
++            def worker(tid: Int) {imm}:
+                 var start = tid * chunk_size
+                 var end = min(start + chunk_size, array1.size)
+                 if end > start:
+@@ -1141,7 +1131,7 @@
+                         src1, src2, dst, scalar, start, end
+                     )
+ 
+-            parallelize[worker](num_tasks)
++            parallelize(worker, num_tasks)
+ 
+         return result_array^
+ 
+--- a/numojo/routines/linalg/products.mojo
++++ b/numojo/routines/linalg/products.mojo
+@@ -179,9 +179,7 @@
+     var t0 = A.shape[0]
+     var t1 = A.shape[1]
+     var t2 = B.shape[1]
+-
+-    @parameter
+-    def calculate_A_rows(m: Int):
++    def calculate_A_rows(m: Int) {imm, mut result}:
+         @parameter
+         def calc_tile[tile_x: Int, tile_y: Int](x: Int, y: Int):
+             for k in range(y, y + tile_y):
+@@ -213,7 +211,7 @@
+         comptime tile_size = 4
+         tile[calc_tile, width * tile_size, tile_size](t1, t2)
+ 
+-    parallelize[calculate_A_rows](t0, t0)
++    parallelize(calculate_A_rows, t0, t0)
+     return result^
+ 
+ 
+@@ -329,9 +327,7 @@
+     var t0 = A.shape[0]
+     var t1 = A.shape[1]
+     var t2 = B.shape[1]
+-
+-    @parameter
+-    def calculate_A_rows(m: Int):
++    def calculate_A_rows(m: Int) {imm, mut result}:
+         for k in range(t1):
+ 
+             def dot[
+@@ -348,7 +344,7 @@
+ 
+             vectorize[width](t2, dot)
+ 
+-    parallelize[calculate_A_rows](t0, t0)
++    parallelize(calculate_A_rows, t0, t0)
+ 
+     return result^
+ 
+--- a/moxie/_random.mojo
++++ b/moxie/_random.mojo
+@@ -699,11 +699,11 @@
+ 
+ struct _GlobalRandomStorage(Movable):
+     var state: Optional[RandomState]
+-    var active: Atomic[DType.int32]
++    var active: Atomic[Int32]
+ 
+     def __init__(out self):
+         self.state = Optional[RandomState]()
+-        self.active = Atomic[DType.int32](0)
++        self.active = Atomic[Int32](0)
+ 
+ 
+ def _init_global_random_storage() -> _GlobalRandomStorage:

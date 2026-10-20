@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.decomposition": {
+      "SparseCoder": "moxie.decomposition._sparse_coding",
+      "SparseCoderParams": "moxie.decomposition._sparse_coding",
+      "sparse_encode": "moxie.decomposition._sparse_coding"
+    }
+  }
+}

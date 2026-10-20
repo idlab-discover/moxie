@@ -24,8 +24,8 @@ resource-limit and namespace-collision checks are part of the native test comman
 ## External sources
 
 Trees come from `src/moxie/tree`. Linear models remain in `../moxie-linear_model`,
-including its coordinate engine. PCA, IncrementalPCA and the SVD engine remain
-in `../moxie-decomposition`. CV and splitters remain in `../moxie-model_selection`.
+including its coordinate engine. PCA, IncrementalPCA and the SVD engine are owned by
+`families/decomposition` in Moxie. CV and splitters remain in `../moxie-model_selection`.
 Nearest-neighbor queries and their transitive spatial trees remain in
 `../moxie-neighbors`. Shared dense arrays, labels, random state and linear algebra
 retain their current owners. The root assembly uses Moxie's existing

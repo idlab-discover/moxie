@@ -1,0 +1,32 @@
+{
+  "source_repository": "moxie-semi_supervised",
+  "source_revision": "94ebc1e7ce7943661a4c3e0136f829d4560ab64f",
+  "core_owner": "families/semi_supervised",
+  "reference_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "baseline": "4843da32ff0f4c49887c10efe45b85d21939737f",
+  "changes": [
+    "Relocated implementation, tests, examples and licenses into Moxie",
+    "Resolved GaussianNB against Moxie core",
+    "Migrated estimator fit/set_params and conformance fixtures to fluent mutation contracts"
+  ],
+  "validation": [
+    {
+      "command": "cd moxie && pixi run semi-supervised-test",
+      "result": "Passed full assembled namespace precompile, native contracts and examples, Float32/Float64 fluent chaining, two isolated consumers, negative capability compilation and module/export collision checks."
+    },
+    {
+      "command": "cd moxie && pixi run semi-supervised-parity",
+      "result": "Passed 106 oracle cases against local sklearn 4358542a1bd39af2e7e1cbace8b9fed067473c5b; Float64 tolerance 2e-9, Float32 graphs 3e-5 and GaussianNB 5e-5, with documented near-tie label rules."
+    },
+    {
+      "command": "cd moxie && pixi run semi-supervised-independence",
+      "result": "Passed core ownership, assembled source/license byte checks and compilation/execution from a detached copied namespace."
+    }
+  ],
+  "deferred": [
+    "Sparse inputs and callable affinities",
+    "KNN graphs",
+    "Python callbacks, bindings and metadata routing",
+    "Feature names, reflection and persistence"
+  ]
+}

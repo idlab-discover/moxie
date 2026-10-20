@@ -235,3 +235,8 @@ standalone checkout is not a build dependency.
 [Neural networks](../families/neural_network/README.md) are owned by Moxie, with a
 dense BernoulliRBM subset and private MLP parameter helpers. MLP estimators remain
 raising declarations. See the family scope for explicit deferrals.
+
+[Semi-supervised learning](../families/semi_supervised/README.md) is owned by Moxie,
+including dense LabelPropagation, LabelSpreading and SelfTrainingClassifier.
+Sparse inputs and KNN graphs remain deferred. The retired standalone checkout
+is not a build dependency.

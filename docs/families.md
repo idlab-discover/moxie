@@ -26,7 +26,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | Integrated: `families/neural_network` | `sklearn/neural_network` |
 | Integrated: `families/kernel_ridge` | `sklearn/kernel_ridge.py` |
 | `moxie-dummy` | `sklearn/dummy.py` |
-| `moxie-semi_supervised` | `sklearn/semi_supervised` |
+| Integrated: `families/semi_supervised` | `sklearn/semi_supervised` |
 | Integrated: `src/moxie/multiclass.mojo` | `sklearn/multiclass.py` |
 | Integrated: `src/moxie/multioutput.mojo` | `sklearn/multioutput.py` |
 | Integrated: `src/moxie/calibration.mojo` | `sklearn/calibration.py` |
@@ -112,3 +112,8 @@ See [tree documentation](tree/README.md).
 dense RBM subset and MLP parameter helpers are implemented; MLP training and
 Float32 RBM partial_fit remain unfinished. The standalone checkout is not a
 build dependency.
+
+[Semi-supervised learning](../families/semi_supervised/README.md) is owned by Moxie,
+including dense LabelPropagation, LabelSpreading and SelfTrainingClassifier.
+Sparse inputs and KNN graphs remain deferred. The retired standalone checkout
+is not a build dependency.

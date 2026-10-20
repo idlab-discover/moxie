@@ -6,6 +6,10 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+semi-supervised-build = "python families/semi_supervised/tools/check.py build"
+semi-supervised-test = "python families/semi_supervised/tools/check.py test"
+semi-supervised-parity = "python families/semi_supervised/tools/parity.py"
+semi-supervised-independence = "python families/semi_supervised/tools/independence.py"
 neural-network-build = "python families/neural_network/tools/integration.py build"
 neural-network-test = "python families/neural_network/tools/integration.py test"
 neural-network-parity = "python families/neural_network/tools/integration.py parity"

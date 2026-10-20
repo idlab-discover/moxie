@@ -2652,6 +2652,53 @@
           "moxie.neural_network": {}
         }
       }
+    },
+    {
+      "id": "semi-supervised",
+      "path": "families/semi_supervised",
+      "modules": {
+        "moxie.semi_supervised._affinity": {
+          "file": "src/moxie/semi_supervised/_affinity.mojo"
+        },
+        "moxie.semi_supervised._api": {
+          "file": "src/moxie/semi_supervised/_api.mojo"
+        },
+        "moxie.semi_supervised._base": {
+          "file": "src/moxie/semi_supervised/_base.mojo"
+        },
+        "moxie.semi_supervised._contracts": {
+          "file": "src/moxie/semi_supervised/_contracts.mojo"
+        },
+        "moxie.semi_supervised._gaussian_adapter": {
+          "file": "src/moxie/semi_supervised/_gaussian_adapter.mojo"
+        },
+        "moxie.semi_supervised._label_propagation": {
+          "file": "src/moxie/semi_supervised/_label_propagation.mojo"
+        },
+        "moxie.semi_supervised._probability": {
+          "file": "src/moxie/semi_supervised/_probability.mojo"
+        },
+        "moxie.semi_supervised._self_training": {
+          "file": "src/moxie/semi_supervised/_self_training.mojo"
+        }
+      },
+      "assets": {
+        "licenses/semi-supervised-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.semi_supervised": {
+            "SemiSupervisedClassifier": "moxie.semi_supervised._base",
+            "LabelPropagation": "moxie.semi_supervised._label_propagation",
+            "LabelSpreading": "moxie.semi_supervised._label_propagation",
+            "SelfTrainingClassifier": "moxie.semi_supervised._self_training",
+            "GraphClassifierAdapter": "moxie.semi_supervised._self_training",
+            "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter"
+          }
+        }
+      }
     }
   ],
   "overrides": []

@@ -6,6 +6,7 @@ Statistics come from the family's bounded-memory engines (`_moments`): fitting
 keeps O(features) state and never materializes masks, casts or residual
 tables. Affine application uses `_dense_transforms`. See docs/api/scalers.md.
 """
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
 from std.math import sqrt, log, isnan, abs, inf, nan
 from numojo import NDArray, Shape, NDArrayStrides
 from moxie.preprocessing._base import InvertiblePreprocessor, OnlinePreprocessor
@@ -178,7 +179,7 @@ struct StandardScalerParams(Copyable, Movable):
     var with_std: Bool
 
 
-struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor):
+struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut):
     """Standardize features by removing the mean and scaling to unit variance.
 
     `fit`, `partial_fit` and weighted variants keep O(features) Float64 moments
@@ -518,7 +519,7 @@ struct MinMaxScalerParams(Copyable, Movable):
     var clip: Bool
 
 
-struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor):
+struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut):
     """Scale each feature to `feature_range`; learned values keep X's dtype."""
     comptime Params = MinMaxScalerParams
     comptime Input = NDArray[Self.dtype]
@@ -709,7 +710,7 @@ struct MaxAbsScalerParams(Copyable, Movable):
     var clip: Bool
 
 
-struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor):
+struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut):
     """Scale each feature by its maximum absolute value; learned values keep X's dtype."""
     comptime Params = MaxAbsScalerParams
     comptime Input = NDArray[Self.dtype]
@@ -881,7 +882,7 @@ struct RobustScalerParams(Copyable, Movable):
     var unit_variance: Bool
 
 
-struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor):
+struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
     """Center on the median and scale by a quantile range (exact quantiles).
 
     `center_` keeps X's dtype; `scale_` is Float64, matching sklearn.

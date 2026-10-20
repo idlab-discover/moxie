@@ -21,6 +21,7 @@ Float64 or Int per row), a fold vector and one training-row list; there is no
 n x p code or mask table and no n x classes indicator matrix.
 See docs/api/encoders.md.
 """
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
 from std.math import isnan
 from numojo import NDArray, Shape, Item
 from moxie._categorical import CategoricalColumn
@@ -308,7 +309,7 @@ struct TargetEncoderParams[K: CategoryKind](Copyable):
 struct TargetEncoder[
     K: CategoryKind = StringKind, Y: LabelKind = NumericLabels[DType.float64],
     L: Copyable & Deinitable = Y.Labels,
-](TargetPreprocessor):
+](TargetPreprocessor, NativeFeatureNamesOut):
     """Encode categories by shrunk target means; Float64 output.
 
     `K` is the feature kind (as for OneHotEncoder) and `Y` the target label

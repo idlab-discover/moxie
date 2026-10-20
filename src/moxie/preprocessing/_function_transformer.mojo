@@ -11,6 +11,7 @@ the instance may carry its own configuration. `Identity`, `Elementwise`,
 `ArrayFn` and `KwArrayFn` adapt plain `def` functions. Feature-name callables
 conform to `FeatureNamesCallable`. See docs/api/function.md.
 """
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
 from std.math import isfinite, isnan
 from numojo import NDArray, Shape, zeros
 from moxie.preprocessing._base import InvertiblePreprocessor
@@ -384,7 +385,7 @@ struct FunctionTransformer[
     F: ArrayFunction = Identity[DType.float64],
     G: ArrayFunction = Identity[F.OutDType],
     N: FeatureNamesCallable = NoNamesCallable,
-](InvertiblePreprocessor):
+](InvertiblePreprocessor, Copyable, NativeFeatureNamesOut):
     """Construct a transformer from a typed callable; stateless (transform works unfitted).
 
     `func=None` / `inverse_func=None` select the identity. F's dtypes fix

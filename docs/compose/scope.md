@@ -20,7 +20,9 @@ Sparse input/output, mixed sparse/dense stacking and density-based sparse
 output remain deferred (`sklearn/compose/_column_transformer.py::_hstack`).
 Sparse X in TransformedTargetRegressor is unavailable; sklearn also rejects
 sparse y. No implicit densification is provided. Use dense components, such
-as OneHotEncoder configured with `sparse_output=False`. The default
+as KBinsDiscretizer with `encode="onehot-dense"`. OneHotEncoder takes typed
+categorical columns rather than an `NDArray`, so it cannot be a component
+yet; see the [preprocessing composition notes](../../families/preprocessing/docs/api.md#composition). The default
 `sparse_threshold=0.3` is valid for wholly dense components; zero explicitly
 requests dense output.
 

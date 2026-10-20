@@ -5,6 +5,7 @@
 See docs/api.md for the native adaptations (typed dtypes, in-place methods,
 normalize_with_norms) shared by the family.
 """
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
 from numojo import NDArray, Shape
 from moxie.preprocessing._base import Preprocessor
 from moxie.preprocessing._common import (
@@ -109,7 +110,7 @@ struct NormalizerParams(Copyable, Movable):
     var copy_input: Bool
 
 
-struct Normalizer[dtype: DType = DType.float64](Preprocessor):
+struct Normalizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNamesOut):
     """Normalize samples individually to unit norm. Stateless: transform works unfitted."""
     comptime Params = NormalizerParams
     comptime Input = NDArray[Self.dtype]
@@ -232,7 +233,7 @@ struct BinarizerParams(Copyable, Movable):
     var copy_input: Bool
 
 
-struct Binarizer[dtype: DType = DType.float64](Preprocessor):
+struct Binarizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNamesOut):
     """Threshold features: values > threshold map to 1, others to 0. Stateless."""
     comptime Params = BinarizerParams
     comptime Input = NDArray[Self.dtype]
@@ -350,7 +351,7 @@ struct KernelCentererParams(Copyable, Movable):
     pass
 
 
-struct KernelCenterer[dtype: DType = DType.float64](Preprocessor):
+struct KernelCenterer[dtype: DType = DType.float64](Preprocessor, Copyable, NativeFeatureNamesOut):
     """Center an arbitrary kernel matrix K (equivalent to centering phi(X))."""
     comptime Params = KernelCentererParams
     comptime Input = NDArray[Self.dtype]

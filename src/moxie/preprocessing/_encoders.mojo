@@ -8,6 +8,7 @@ missing values, infrequent grouping, drop and unknown handling follow sklearn.
 Output is built feature by feature: besides the result, a transform holds one
 rows-long Int64 code vector. See docs/api/encoders.md.
 """
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
 from std.math import isnan, isfinite, nan
 from numojo import NDArray, Shape, Item
 from moxie._categorical import CategoricalColumn
@@ -265,7 +266,7 @@ struct OneHotEncoderParams[K: CategoryKind](Copyable):
     var feature_name_combiner: String
 
 
-struct OneHotEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64](InvertiblePreprocessor):
+struct OneHotEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
     """Encode categorical features as a dense one-hot matrix.
 
     `sparse_output` must be False: sparse output is deferred. `dtype` is the
@@ -630,7 +631,7 @@ struct OrdinalEncoderParams[K: CategoryKind](Copyable):
     var max_categories: Optional[Int]
 
 
-struct OrdinalEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64](InvertiblePreprocessor):
+struct OrdinalEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
     """Encode categorical features as one integer-valued column per feature.
 
     `dtype` is the output dtype (Float32, Float64 or Int64). `unknown_value`

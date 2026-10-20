@@ -15,6 +15,7 @@ guard) maximum-likelihood lambdas, then the family StandardScaler.
 
 See docs/api/quantiles.md for adaptations, memory and tolerances.
 """
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
 from std.math import isnan, isinf, abs, inf
 from numojo import NDArray, Shape, NDArrayStrides
 from moxie._random import RandomState, check_random_state
@@ -200,7 +201,7 @@ def _quantile_into[d: DType](
                 put(out, i, j, Scalar[d](v))
 
 
-struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor):
+struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
     """Map each feature to a uniform or normal distribution through its quantiles.
 
     Learned `quantiles_` (n_quantiles_, n_features) and `references_` are Float64,
@@ -696,7 +697,7 @@ struct PowerTransformerParams(Copyable, Movable):
     var copy_input: Bool
 
 
-struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor):
+struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
     """Featurewise Yeo-Johnson / Box-Cox power transform, optionally standardized.
 
     `lambdas_` has X's dtype (as in sklearn); standardization is a fitted

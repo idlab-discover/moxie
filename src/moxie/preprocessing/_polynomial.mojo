@@ -12,6 +12,7 @@
 See docs/api/polynomial.md for the native signatures, adaptations, memory
 bounds and verified tolerances.
 """
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
 from std.math import isnan, isfinite, floor, nan
 from std.memory import bitcast
 from numojo import NDArray, Shape, full
@@ -293,7 +294,7 @@ struct PolynomialFeaturesParams(Copyable, Movable):
     var order: String
 
 
-struct PolynomialFeatures[dtype: DType = DType.float64](Preprocessor):
+struct PolynomialFeatures[dtype: DType = DType.float64](Preprocessor, Copyable, NativeFeatureNamesOut):
     """Generate polynomial and interaction features of a dense matrix.
 
     `degree` is the maximal degree; the `(min_degree, max_degree)` tuple form is
@@ -903,7 +904,7 @@ struct SplineTransformerParams(Copyable, Movable):
     var sparse_output: Bool
 
 
-struct SplineTransformer[dtype: DType = DType.float64](Preprocessor):
+struct SplineTransformer[dtype: DType = DType.float64](Preprocessor, Copyable, NativeFeatureNamesOut):
     """Univariate B-spline bases for each feature (dense output only).
 
     `knots` is `"uniform"` or `"quantile"`; explicit knot positions are the

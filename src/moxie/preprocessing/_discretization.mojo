@@ -19,6 +19,7 @@ cluster.kmeans). It reproduces only sklearn's call
 sample_weight)`: explicit init, one run, algorithm='lloyd', max_iter=300,
 tol=1e-4 scaled by the column variance, single-threaded accumulation.
 """
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
 from numojo import NDArray, Shape
 from std.math import sqrt, isinf, isnan, inf
 from moxie._random import RandomState, check_random_state
@@ -238,7 +239,7 @@ def _contains(options: List[String], value: String) -> Bool:
 # Estimator
 
 
-struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](Preprocessor):
+struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](Preprocessor, Copyable, NativeFeatureNamesOut):
     """Bin continuous data into intervals.
 
     `dtype` is the input dtype. `out_dtype` is sklearn's `dtype` argument, the

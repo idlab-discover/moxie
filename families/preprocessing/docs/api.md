@@ -85,12 +85,38 @@ require a writable array and allocate nothing. No method materializes
 full-table masks, casts or residual temporaries (the reference does so in
 several scalers); see each module page for its memory bound.
 
+## Composition
+
+`tests/test_composition.mojo` checks that compositions give exactly what the
+same steps give by hand.
+
+* Every Float32/Float64 `NDArray` transformer can be a `moxie.pipeline.Pipeline`
+  step, including nested pipelines, `clone` and typed `set_params` followed by
+  a refit.
+* Estimators with `get_feature_names_out` conform to
+  `moxie._feature_metadata.FeatureNamesOut`, so ColumnTransformer and Pipeline
+  forward their feature names.
+* `moxie.compose.ColumnTransformer` copies its components, which must be
+  `Copyable`. KernelCenterer, PolynomialFeatures, SplineTransformer,
+  KBinsDiscretizer and FunctionTransformer qualify. The four scalers,
+  Normalizer, Binarizer, QuantileTransformer and PowerTransformer keep sklearn's
+  `copy` parameter as a field named `copy`. That name collides with the `copy()`
+  method that `Copyable` reserves, so these estimators cannot be
+  ColumnTransformer components yet.
+* OneHotEncoder, OrdinalEncoder and TargetEncoder take typed categorical
+  columns rather than an `NDArray`, so they are not ColumnTransformer
+  components either.
+* `moxie.model_selection.cross_val_score` with a `Pipeline` estimator crashes
+  the Mojo 1.0 compiler during parameter inference. A plain estimator compiles.
+
 ## Not supported
 
 Python containers, pandas/polars output (`set_output` accepts only `None` or
 `"default"`), metadata routing (`get_metadata_routing`, `set_*_request`),
 sklearn tags, pickling and Python bindings are not provided. Python callables
-become typed Mojo callables where an estimator needs them.
+become typed Mojo callables where an estimator needs them. The reference's
+experimental callback API (`sklearn.callback`, `StandardScaler.set_callbacks`)
+has no Moxie counterpart.
 
 ## Validation
 

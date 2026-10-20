@@ -58,7 +58,8 @@ clear `ValueError` at fit).
   replaces the configuration, and keyword overloads such as
   `set_params(with_mean=False)` update individual parameters. As in sklearn,
   set_params does not clear learned state; the next `fit` replaces it. Records
-  name the `copy` parameter `copy_input` because `Copyable` reserves `copy()`.
+  and estimator fields name the `copy` parameter `copy_input` because
+  `Copyable` reserves `copy()`; the constructor keyword stays `copy=`.
 * `moxie.clone(est)` returns an unfitted estimator with copied configuration.
 * Learned attributes use sklearn names (`mean_`, `scale_`, `n_features_in_`).
   Before fit, arrays are empty and counts zero; methods that need learned state
@@ -97,12 +98,10 @@ same steps give by hand.
   `moxie._feature_metadata.FeatureNamesOut`, so ColumnTransformer and Pipeline
   forward their feature names.
 * `moxie.compose.ColumnTransformer` copies its components, which must be
-  `Copyable`. KernelCenterer, PolynomialFeatures, SplineTransformer,
-  KBinsDiscretizer and FunctionTransformer qualify. The four scalers,
-  Normalizer, Binarizer, QuantileTransformer and PowerTransformer keep sklearn's
-  `copy` parameter as a field named `copy`. That name collides with the `copy()`
-  method that `Copyable` reserves, so these estimators cannot be
-  ColumnTransformer components yet.
+  `Copyable`. Every dense `NDArray` transformer qualifies. `Copyable` reserves
+  `copy()`, so sklearn's `copy` parameter is stored in a field named
+  `copy_input`, as in the `Params` records. The constructor keyword remains
+  `copy=`.
 * OneHotEncoder, OrdinalEncoder and TargetEncoder take typed categorical
   columns rather than an `NDArray`, so they are not ColumnTransformer
   components either.

@@ -12,7 +12,7 @@ from moxie.compose import ColumnTransformer, ColumnEntry
 from moxie.linear_model import Ridge
 from moxie.pipeline import Pipeline
 from moxie.preprocessing import (
-    StandardScaler, PolynomialFeatures, FunctionTransformer,
+    StandardScaler, MinMaxScaler, RobustScaler, PolynomialFeatures, FunctionTransformer,
     QuantileTransformer, PowerTransformer, SplineTransformer, KBinsDiscretizer,
 )
 
@@ -104,9 +104,7 @@ def test_nested_pipelines() raises:
 
 
 def test_column_transformer() raises:
-    # ColumnTransformer copies its components, so they must be Copyable. Estimators
-    # with a `copy` constructor field (the scalers, Normalizer, Binarizer and the
-    # quantile/power transformers) cannot conform yet: Copyable reserves copy().
+    # ColumnTransformer copies its components, so they must be Copyable.
     var X = data(12, 4)
     var X_new = data(5, 4, 3.0)
     var ct = ColumnTransformer(
@@ -150,6 +148,31 @@ def test_column_transformer() raises:
             assert_equal(S.item(i, j), D.item(i, j))
         assert_equal(S.item(i, D.shape[1]), X_new.item(i, 0))
     assert_false(clone(spline).__sklearn_is_fitted__())
+    # The scalers are Copyable once their `copy` field is named `copy_input`.
+    var scaled = ColumnTransformer(
+        ColumnEntry("std", StandardScaler(), [0, 1]),
+        ColumnEntry("mm", MinMaxScaler(), [3]),
+        ColumnEntry("rob", RobustScaler(), [2]),
+    )
+    var W = scaled.fit(X).transform(X_new)
+    var std = StandardScaler()
+    var mm = MinMaxScaler()
+    var rob = RobustScaler()
+    _ = std.fit(_columns(X, [0, 1]))
+    _ = mm.fit(_columns(X, [3]))
+    _ = rob.fit(_columns(X, [2]))
+    var a = std.transform(_columns(X_new, [0, 1]))
+    var b = mm.transform(_columns(X_new, [3]))
+    var c = rob.transform(_columns(X_new, [2]))
+    for i in range(5):
+        assert_equal(W.item(i, 0), a.item(i, 0))
+        assert_equal(W.item(i, 1), a.item(i, 1))
+        assert_equal(W.item(i, 2), b.item(i, 0))
+        assert_equal(W.item(i, 3), c.item(i, 0))
+    var scaled_names = scaled.get_feature_names_out()
+    assert_equal(scaled_names[0], "std__x0")
+    assert_equal(scaled_names[3], "rob__x2")
+    assert_true(StandardScaler(copy=False).get_params().copy_input == False)
 
 
 def _columns(X: Dense, columns: List[Int]) raises -> Dense:

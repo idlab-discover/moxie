@@ -201,7 +201,7 @@ def _quantile_into[d: DType](
                 put(out, i, j, Scalar[d](v))
 
 
-struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
+struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut, Copyable):
     """Map each feature to a uniform or normal distribution through its quantiles.
 
     Learned `quantiles_` (n_quantiles_, n_features) and `references_` are Float64,
@@ -218,7 +218,7 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor,
     var ignore_implicit_zeros: Bool
     var subsample: Optional[Int]
     var random_state: Optional[Int]
-    var copy: Bool
+    var copy_input: Bool
     var n_quantiles_: Int
     var quantiles_: NDArray[DType.float64]
     var references_: NDArray[DType.float64]
@@ -233,7 +233,7 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor,
         self.ignore_implicit_zeros = ignore_implicit_zeros
         self.subsample = subsample
         self.random_state = random_state
-        self.copy = copy
+        self.copy_input = copy
         self.n_quantiles_ = 0
         self.quantiles_ = matrix[DType.float64](0, 0)
         self.references_ = vector[DType.float64](0)
@@ -242,7 +242,7 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor,
         self._fitted = False
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.n_quantiles, self.output_distribution, self.ignore_implicit_zeros, self.subsample, self.random_state, self.copy)
+        return Self.Params(self.n_quantiles, self.output_distribution, self.ignore_implicit_zeros, self.subsample, self.random_state, self.copy_input)
 
     def set_params[
         origin: MutOrigin,
@@ -256,7 +256,7 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor,
         self.ignore_implicit_zeros = params.ignore_implicit_zeros
         self.subsample = params.subsample
         self.random_state = params.random_state
-        self.copy = params.copy_input
+        self.copy_input = params.copy_input
         return self
 
     def set_params[
@@ -283,11 +283,11 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor,
         if random_state:
             self.random_state = random_state.value()
         if copy:
-            self.copy = copy.value()
+            self.copy_input = copy.value()
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(n_quantiles=self.n_quantiles, output_distribution=self.output_distribution, ignore_implicit_zeros=self.ignore_implicit_zeros, subsample=self.subsample, random_state=self.random_state, copy=self.copy)
+        return Self(n_quantiles=self.n_quantiles, output_distribution=self.output_distribution, ignore_implicit_zeros=self.ignore_implicit_zeros, subsample=self.subsample, random_state=self.random_state, copy=self.copy_input)
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted
@@ -697,7 +697,7 @@ struct PowerTransformerParams(Copyable, Movable):
     var copy_input: Bool
 
 
-struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
+struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut, Copyable):
     """Featurewise Yeo-Johnson / Box-Cox power transform, optionally standardized.
 
     `lambdas_` has X's dtype (as in sklearn); standardization is a fitted
@@ -711,7 +711,7 @@ struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, Na
     comptime Transformed = NDArray[Self.dtype]
     var method: String
     var standardize: Bool
-    var copy: Bool
+    var copy_input: Bool
     var lambdas_: NDArray[Self.dtype]
     var n_features_in_: Int
     var feature_names_in_: Optional[List[String]]
@@ -722,7 +722,7 @@ struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, Na
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, "Float32/Float64 only"
         self.method = method
         self.standardize = standardize
-        self.copy = copy
+        self.copy_input = copy
         self.lambdas_ = vector[Self.dtype](0)
         self.n_features_in_ = 0
         self.feature_names_in_ = None
@@ -730,7 +730,7 @@ struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, Na
         self._fitted = False
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.method, self.standardize, self.copy)
+        return Self.Params(self.method, self.standardize, self.copy_input)
 
     def set_params[
         origin: MutOrigin,
@@ -741,7 +741,7 @@ struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, Na
     ) raises -> ref[self] Self:
         self.method = params.method
         self.standardize = params.standardize
-        self.copy = params.copy_input
+        self.copy_input = params.copy_input
         return self
 
     def set_params[
@@ -758,11 +758,11 @@ struct PowerTransformer[dtype: DType = DType.float64](InvertiblePreprocessor, Na
         if standardize:
             self.standardize = standardize.value()
         if copy:
-            self.copy = copy.value()
+            self.copy_input = copy.value()
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(self.method, standardize=self.standardize, copy=self.copy)
+        return Self(self.method, standardize=self.standardize, copy=self.copy_input)
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted

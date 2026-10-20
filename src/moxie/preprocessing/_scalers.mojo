@@ -179,7 +179,7 @@ struct StandardScalerParams(Copyable, Movable):
     var with_std: Bool
 
 
-struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut):
+struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut, Copyable):
     """Standardize features by removing the mean and scaling to unit variance.
 
     `fit`, `partial_fit` and weighted variants keep O(features) Float64 moments
@@ -189,7 +189,7 @@ struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Onli
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
     comptime Transformed = NDArray[Self.dtype]
-    var copy: Bool
+    var copy_input: Bool
     var with_mean: Bool
     var with_std: Bool
     var mean_: Optional[NDArray[DType.float64]]
@@ -206,7 +206,7 @@ struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Onli
 
     def __init__(out self, *, copy: Bool = True, with_mean: Bool = True, with_std: Bool = True) raises:
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, "Float32/Float64 only"
-        self.copy = copy
+        self.copy_input = copy
         self.with_mean = with_mean
         self.with_std = with_std
         self.mean_ = None
@@ -222,7 +222,7 @@ struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Onli
         self._divisor = vector[Self.dtype](0)
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.copy, self.with_mean, self.with_std)
+        return Self.Params(self.copy_input, self.with_mean, self.with_std)
 
     def set_params[
         origin: MutOrigin,
@@ -231,7 +231,7 @@ struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Onli
         ref[origin] self,
         ref[params_origin] params: Self.Params,
     ) raises -> ref[self] Self:
-        self.copy = params.copy_input
+        self.copy_input = params.copy_input
         self.with_mean = params.with_mean
         self.with_std = params.with_std
         return self
@@ -246,7 +246,7 @@ struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Onli
         with_std: Optional[Bool] = None,
     ) raises -> ref[self] Self:
         if copy:
-            self.copy = copy.value()
+            self.copy_input = copy.value()
         if with_mean:
             self.with_mean = with_mean.value()
         if with_std:
@@ -254,7 +254,7 @@ struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Onli
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(copy=self.copy, with_mean=self.with_mean, with_std=self.with_std)
+        return Self(copy=self.copy_input, with_mean=self.with_mean, with_std=self.with_std)
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._state)
@@ -519,14 +519,14 @@ struct MinMaxScalerParams(Copyable, Movable):
     var clip: Bool
 
 
-struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut):
+struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut, Copyable):
     """Scale each feature to `feature_range`; learned values keep X's dtype."""
     comptime Params = MinMaxScalerParams
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
     comptime Transformed = NDArray[Self.dtype]
     var feature_range: Tuple[Float64, Float64]
-    var copy: Bool
+    var copy_input: Bool
     var clip: Bool
     var min_: NDArray[Self.dtype]
     var scale_: NDArray[Self.dtype]
@@ -541,7 +541,7 @@ struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
     def __init__(out self, feature_range: Tuple[Float64, Float64] = (0, 1), *, copy: Bool = True, clip: Bool = False) raises:
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, "Float32/Float64 only"
         self.feature_range = feature_range
-        self.copy = copy
+        self.copy_input = copy
         self.clip = clip
         self.min_ = vector[Self.dtype](0)
         self.scale_ = vector[Self.dtype](0)
@@ -554,7 +554,7 @@ struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
         self._state = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.feature_range, self.copy, self.clip)
+        return Self.Params(self.feature_range, self.copy_input, self.clip)
 
     def set_params[
         origin: MutOrigin,
@@ -564,7 +564,7 @@ struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
         ref[params_origin] params: Self.Params,
     ) raises -> ref[self] Self:
         self.feature_range = params.feature_range
-        self.copy = params.copy_input
+        self.copy_input = params.copy_input
         self.clip = params.clip
         return self
 
@@ -580,13 +580,13 @@ struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
         if feature_range:
             self.feature_range = feature_range.value()
         if copy:
-            self.copy = copy.value()
+            self.copy_input = copy.value()
         if clip:
             self.clip = clip.value()
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(self.feature_range, copy=self.copy, clip=self.clip)
+        return Self(self.feature_range, copy=self.copy_input, clip=self.clip)
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._state)
@@ -710,13 +710,13 @@ struct MaxAbsScalerParams(Copyable, Movable):
     var clip: Bool
 
 
-struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut):
+struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut, Copyable):
     """Scale each feature by its maximum absolute value; learned values keep X's dtype."""
     comptime Params = MaxAbsScalerParams
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
     comptime Transformed = NDArray[Self.dtype]
-    var copy: Bool
+    var copy_input: Bool
     var clip: Bool
     var scale_: NDArray[Self.dtype]
     var max_abs_: NDArray[Self.dtype]
@@ -728,7 +728,7 @@ struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
 
     def __init__(out self, *, copy: Bool = True, clip: Bool = False) raises:
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, "Float32/Float64 only"
-        self.copy = copy
+        self.copy_input = copy
         self.clip = clip
         self.scale_ = vector[Self.dtype](0)
         self.max_abs_ = vector[Self.dtype](0)
@@ -739,7 +739,7 @@ struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
         self._zero = vector[Self.dtype](0)
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.copy, self.clip)
+        return Self.Params(self.copy_input, self.clip)
 
     def set_params[
         origin: MutOrigin,
@@ -748,7 +748,7 @@ struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
         ref[origin] self,
         ref[params_origin] params: Self.Params,
     ) raises -> ref[self] Self:
-        self.copy = params.copy_input
+        self.copy_input = params.copy_input
         self.clip = params.clip
         return self
 
@@ -761,13 +761,13 @@ struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
         clip: Optional[Bool] = None,
     ) raises -> ref[self] Self:
         if copy:
-            self.copy = copy.value()
+            self.copy_input = copy.value()
         if clip:
             self.clip = clip.value()
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(copy=self.copy, clip=self.clip)
+        return Self(copy=self.copy_input, clip=self.clip)
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._state)
@@ -882,7 +882,7 @@ struct RobustScalerParams(Copyable, Movable):
     var unit_variance: Bool
 
 
-struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
+struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut, Copyable):
     """Center on the median and scale by a quantile range (exact quantiles).
 
     `center_` keeps X's dtype; `scale_` is Float64, matching sklearn.
@@ -895,7 +895,7 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Native
     var with_centering: Bool
     var with_scaling: Bool
     var quantile_range: Tuple[Float64, Float64]
-    var copy: Bool
+    var copy_input: Bool
     var unit_variance: Bool
     var center_: Optional[NDArray[Self.dtype]]
     var scale_: Optional[NDArray[DType.float64]]
@@ -910,7 +910,7 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Native
         self.with_centering = with_centering
         self.with_scaling = with_scaling
         self.quantile_range = quantile_range
-        self.copy = copy
+        self.copy_input = copy
         self.unit_variance = unit_variance
         self.center_ = None
         self.scale_ = None
@@ -921,7 +921,7 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Native
         self._divisor = vector[DType.float64](0)
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.with_centering, self.with_scaling, self.quantile_range, self.copy, self.unit_variance)
+        return Self.Params(self.with_centering, self.with_scaling, self.quantile_range, self.copy_input, self.unit_variance)
 
     def set_params[
         origin: MutOrigin,
@@ -933,7 +933,7 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Native
         self.with_centering = params.with_centering
         self.with_scaling = params.with_scaling
         self.quantile_range = params.quantile_range
-        self.copy = params.copy_input
+        self.copy_input = params.copy_input
         self.unit_variance = params.unit_variance
         return self
 
@@ -955,13 +955,13 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Native
         if quantile_range:
             self.quantile_range = quantile_range.value()
         if copy:
-            self.copy = copy.value()
+            self.copy_input = copy.value()
         if unit_variance:
             self.unit_variance = unit_variance.value()
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(with_centering=self.with_centering, with_scaling=self.with_scaling, quantile_range=self.quantile_range, copy=self.copy, unit_variance=self.unit_variance)
+        return Self(with_centering=self.with_centering, with_scaling=self.with_scaling, quantile_range=self.quantile_range, copy=self.copy_input, unit_variance=self.unit_variance)
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted

@@ -110,26 +110,26 @@ struct NormalizerParams(Copyable, Movable):
     var copy_input: Bool
 
 
-struct Normalizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNamesOut):
+struct Normalizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNamesOut, Copyable):
     """Normalize samples individually to unit norm. Stateless: transform works unfitted."""
     comptime Params = NormalizerParams
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
     comptime Transformed = NDArray[Self.dtype]
     var norm: String
-    var copy: Bool
+    var copy_input: Bool
     var n_features_in_: Int
     var feature_names_in_: Optional[List[String]]
 
     def __init__(out self, norm: String = "l2", *, copy: Bool = True):
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, "Float32/Float64 only"
         self.norm = norm
-        self.copy = copy
+        self.copy_input = copy
         self.n_features_in_ = 0
         self.feature_names_in_ = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.norm, self.copy)
+        return Self.Params(self.norm, self.copy_input)
 
     def set_params[
         origin: MutOrigin,
@@ -139,7 +139,7 @@ struct Normalizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNames
         ref[params_origin] params: Self.Params,
     ) raises -> ref[self] Self:
         self.norm = params.norm
-        self.copy = params.copy_input
+        self.copy_input = params.copy_input
         return self
 
     def set_params[
@@ -153,11 +153,11 @@ struct Normalizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNames
         if norm:
             self.norm = norm.value()
         if copy:
-            self.copy = copy.value()
+            self.copy_input = copy.value()
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(self.norm, copy=self.copy)
+        return Self(self.norm, copy=self.copy_input)
 
     def __sklearn_is_fitted__(self) -> Bool:
         # Stateless (sklearn requires_fit=False).
@@ -233,26 +233,26 @@ struct BinarizerParams(Copyable, Movable):
     var copy_input: Bool
 
 
-struct Binarizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNamesOut):
+struct Binarizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNamesOut, Copyable):
     """Threshold features: values > threshold map to 1, others to 0. Stateless."""
     comptime Params = BinarizerParams
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
     comptime Transformed = NDArray[Self.dtype]
     var threshold: Float64
-    var copy: Bool
+    var copy_input: Bool
     var n_features_in_: Int
     var feature_names_in_: Optional[List[String]]
 
     def __init__(out self, *, threshold: Float64 = 0.0, copy: Bool = True):
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, "Float32/Float64 only"
         self.threshold = threshold
-        self.copy = copy
+        self.copy_input = copy
         self.n_features_in_ = 0
         self.feature_names_in_ = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.threshold, self.copy)
+        return Self.Params(self.threshold, self.copy_input)
 
     def set_params[
         origin: MutOrigin,
@@ -262,7 +262,7 @@ struct Binarizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNamesO
         ref[params_origin] params: Self.Params,
     ) raises -> ref[self] Self:
         self.threshold = params.threshold
-        self.copy = params.copy_input
+        self.copy_input = params.copy_input
         return self
 
     def set_params[
@@ -276,11 +276,11 @@ struct Binarizer[dtype: DType = DType.float64](Preprocessor, NativeFeatureNamesO
         if threshold:
             self.threshold = threshold.value()
         if copy:
-            self.copy = copy.value()
+            self.copy_input = copy.value()
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(threshold=self.threshold, copy=self.copy)
+        return Self(threshold=self.threshold, copy=self.copy_input)
 
     def __sklearn_is_fitted__(self) -> Bool:
         return True

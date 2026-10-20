@@ -157,6 +157,10 @@ pixi run parity
 builds/examples/frozen/frozen
 ```
 
+To check only this family against the current Moxie sources, run
+`pixi run python tools/frozen_checks.py all` (or `build`, `test`, `parity`).
+It refreshes the assembly and rebuilds only the frozen tests and example.
+
 The native suite checks shared contracts, unfitted errors, repeated fitting,
 clone lifetime and shared allocation, parameter replacement and restoration,
 nested wrappers, conditional traits, successful forwarding, and error propagation.

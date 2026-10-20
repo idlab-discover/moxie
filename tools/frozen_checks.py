@@ -48,3 +48,26 @@ def parity(run):
     run(sys.executable, TESTS / 'compare_frozen_updates.py',
         '--sklearn-root', ROOT.parent / 'scikit-learn',
         '--native', ROOT / 'builds/tests/frozen/test_frozen_updates')
+
+
+def main(action):
+    """Focused entry point: refresh the assembly, then build, test or parity only this family."""
+    import check
+    if action in ('build', 'all'):
+        check.run(sys.executable, ROOT / 'shared/assembly/tools/assemble_family.py',
+                  '--consumer', ROOT, '--lock', ROOT / 'DEPENDENCIES.json', '--output', DEPS)
+        for source in sources():
+            binary = check.executable(source)
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            check.run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,
+                      '-I', TESTS, '-I', EXAMPLES, source, '-o', binary)
+    if action in ('test', 'all'):
+        test(check.run, check.executable)
+    if action in ('parity', 'all'):
+        parity(check.run)
+    if action not in ('build', 'test', 'parity', 'all'):
+        raise SystemExit(f'unknown action {action!r}; use build, test, parity or all')
+
+
+if __name__ == '__main__':
+    main(sys.argv[1])

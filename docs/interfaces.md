@@ -168,6 +168,10 @@ The retired isotonic sibling is not a build dependency.
 projections with Float32/Float64 dense and CSR storage. The retired sibling
 is not a build dependency.
 
+[Naive Bayes](naive_bayes/README.md) is owned by Moxie core, with all five dense
+classifiers, List/NDArray inputs and typed labels. The retired sibling is not a
+build dependency.
+
 [Multiclass classifiers](multiclass/README.md) are owned by Moxie core, including OvR, OvO,
 and OutputCode with dense numeric/string labels and their documented optional
 capabilities. The retired multiclass sibling is not a build dependency.

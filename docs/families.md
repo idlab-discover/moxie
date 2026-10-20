@@ -20,7 +20,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | `moxie-neighbors` | `sklearn/neighbors` |
 | `tree` | Integrated in `src/moxie/tree`; see [tree](tree/README.md) |
 | `moxie-ensemble` | `sklearn/ensemble` |
-| `moxie-naive_bayes` | `sklearn/naive_bayes.py` |
+| Integrated: `src/moxie/naive_bayes.mojo` | `sklearn/naive_bayes.py` |
 | Integrated: `src/moxie/discriminant_analysis.mojo` | `sklearn/discriminant_analysis.py` |
 | Integrated: `src/moxie/gaussian_process/` | `sklearn/gaussian_process` |
 | `moxie-neural_network` | `sklearn/neural_network` |
@@ -86,6 +86,10 @@ The retired isotonic sibling is not a build dependency.
 [Random projection](random_projection/README.md) is owned by Moxie, including Gaussian and sparse
 projections with Float32/Float64 dense and CSR storage. The retired sibling
 is not a build dependency.
+
+[Naive Bayes](naive_bayes/README.md) is owned by Moxie core, with all five dense
+classifiers, List/NDArray inputs and typed labels. The retired sibling is not a
+build dependency.
 
 [Multioutput estimators](multioutput/README.md) are owned by Moxie core, including independent
 classification/regression and both chain types. The retired sibling is not a build

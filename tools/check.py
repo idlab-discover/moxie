@@ -14,6 +14,7 @@ import cross_decomposition_checks
 import gaussian_process_checks
 import multioutput_checks
 import multiclass_checks
+import naive_bayes_checks
 import pipeline_checks
 import frozen_checks
 import calibration_checks
@@ -60,6 +61,7 @@ def build():
     sources += gaussian_process_checks.sources()
     sources += multioutput_checks.sources()
     sources += multiclass_checks.sources()
+    sources += naive_bayes_checks.sources()
     sources += pipeline_checks.sources()
     sources += frozen_checks.sources()
     sources += kernel_approximation_checks.sources()
@@ -113,6 +115,7 @@ def parity():
     gaussian_process_checks.parity(run)
     multioutput_checks.parity(run)
     multiclass_checks.parity(run)
+    naive_bayes_checks.parity(run)
     random_projection_checks.parity(run)
     isotonic_checks.parity(run)
     calibration_checks.parity(run)
@@ -138,6 +141,7 @@ def test():
     gaussian_process_checks.test(run, executable)
     multioutput_checks.test(run, executable)
     multiclass_checks.test(run, executable)
+    naive_bayes_checks.test(run, executable)
     random_projection_checks.test(run, executable)
     isotonic_checks.test(run, executable)
     calibration_checks.test(run, executable)

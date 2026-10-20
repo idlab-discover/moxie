@@ -187,3 +187,7 @@ for their focused checks.
 [Decomposition](families/decomposition/README.md) is owned by Moxie, including its SVD and threshold
 sparse-coding engines. Dictionary learning, SparsePCA and regression coding
 modes remain unfinished. The standalone checkout is not a build dependency.
+
+Dense [SVM estimators](families/svm/README.md) and their native LIBSVM/LIBLINEAR
+engines are integrated. Run `pixi run svm-test` and `pixi run svm-parity` for
+focused validation.

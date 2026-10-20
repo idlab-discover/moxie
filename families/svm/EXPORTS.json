@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.svm": {
+      "SupportVectorClassifier": "moxie.svm._base",
+      "ProbabilisticSVC": "moxie.svm._base",
+      "SupportVectorRegressor": "moxie.svm._base",
+      "OneClassSupportVector": "moxie.svm._base",
+      "ClassWeight": "moxie.svm._linear",
+      "Dual": "moxie.svm._linear",
+      "LinearSVC": "moxie.svm._linear",
+      "LinearSVR": "moxie.svm._linear",
+      "l1_min_c": "moxie.svm._bounds",
+      "SVC": "moxie.svm._c_svm",
+      "SVR": "moxie.svm._c_svm",
+      "Gamma": "moxie.svm._classification",
+      "Probability": "moxie.svm._classification",
+      "SVCParams": "moxie.svm._c_svm",
+      "SVRParams": "moxie.svm._c_svm",
+      "NuSVC": "moxie.svm._nu_svm",
+      "NuSVR": "moxie.svm._nu_svm",
+      "NuSVCParams": "moxie.svm._nu_svm",
+      "NuSVRParams": "moxie.svm._nu_svm",
+      "OneClassSVM": "moxie.svm._one_class",
+      "OneClassSVMParams": "moxie.svm._one_class"
+    }
+  }
+}

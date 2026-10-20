@@ -226,3 +226,8 @@ modes remain unfinished. The standalone checkout is not a build dependency.
 [Clustering](../families/cluster/README.md) is owned by Moxie, including the documented
 dense affinity, centroid, density, linkage and Birch implementations. Spectral
 clustering, biclustering, HDBSCAN and sparse inputs remain deferred.
+
+[SVM estimators](../families/svm/README.md) are owned by Moxie, including all seven
+dense estimators, l1_min_c and both native engines. Sparse input, Python runtime
+integration and persistence remain outside the supported contract. The retired
+standalone checkout is not a build dependency.

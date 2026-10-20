@@ -1,0 +1,4 @@
+.pixi/
+builds/
+docs/private/
+__pycache__/

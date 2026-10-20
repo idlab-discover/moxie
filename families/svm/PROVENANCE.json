@@ -1,0 +1,37 @@
+{
+  "source_repository": "moxie-svm",
+  "source_revision": "651f443284a433b6dbfd99ab1d2de74f97ea3c99",
+  "scaffold_base": "4843da32ff0f4c49887c10efe45b85d21939737f",
+  "sklearn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "relocation": "Family implementations, engines, tests, examples, docs, manifests and license assets retained. Estimator and engine implementations unchanged; inherited framework duplicates omitted in favor of current core owners.",
+  "omitted_inherited_sources": [
+    "src/moxie/__init__.mojo",
+    "src/moxie/base.mojo",
+    "src/moxie/utils/__init__.mojo",
+    "src/moxie/utils/validation.mojo"
+  ],
+  "test_adjustment": "The linear lifecycle test now expects rejection of obsolete explicit class weights before resetting weights and refitting new labels, matching pinned sklearn/utils/class_weight.py.",
+  "validation": {
+    "reference_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+    "mojo": "1.0.0",
+    "max_core": "26.5.0",
+    "standalone_source_unavailable": true,
+    "liblinear_cases": 356,
+    "rng_words": 15003,
+    "linear_wrapper_cases": 174,
+    "linear_edge_cases": 32,
+    "l1_min_c_cases": 36,
+    "kernel_arithmetic_cases": 24,
+    "libsvm_cases": 144,
+    "public_kernel_cases": 125,
+    "commands": [
+      "pixi run svm-build",
+      "pixi run svm-independence",
+      "pixi run python families/svm/tools/check.py test-only",
+      "pixi run python families/svm/tools/check.py parity-only",
+      "pixi run families/svm/builds/plumbing",
+      "pixi run families/svm/algorithms/linear/builds/linear"
+    ],
+    "result": "passed; the corrected linear lifecycle test was recompiled before the final contract run"
+  }
+}

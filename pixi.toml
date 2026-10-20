@@ -6,6 +6,11 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+svm-independence = "python families/svm/tools/independence.py"
+svm-build = "python families/svm/tools/check.py build"
+svm-test = "python families/svm/tools/check.py test"
+svm-parity = "python families/svm/tools/check.py parity"
+svm-start = "python families/svm/tools/check.py start"
 decomposition-build = "python families/decomposition/tools/family.py build"
 decomposition-test = "python families/decomposition/tools/family.py test"
 decomposition-parity = "python families/decomposition/tools/family.py parity"

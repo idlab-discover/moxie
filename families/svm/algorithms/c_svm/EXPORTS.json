@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.svm": {
+      "SVC": "moxie.svm._c_svm",
+      "SVR": "moxie.svm._c_svm",
+      "Gamma": "moxie.svm._classification",
+      "Probability": "moxie.svm._classification",
+      "SVCParams": "moxie.svm._c_svm",
+      "SVRParams": "moxie.svm._c_svm"
+    }
+  }
+}

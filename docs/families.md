@@ -16,7 +16,7 @@ compile checks, and API guide. `SCAFFOLD_BASE` records its exact foundation.
 | Repository | Reference module |
 | --- | --- |
 | Integrated: `src/moxie/linear_model` | `sklearn/linear_model` |
-| `moxie-svm` | `sklearn/svm` |
+| Integrated: `families/svm`; [guide](../families/svm/README.md) | `sklearn/svm` |
 | Integrated: `families/neighbors`; [guide](../families/neighbors/README.md) | `sklearn/neighbors` |
 | `tree` | Integrated in `src/moxie/tree`; see [tree](tree/README.md) |
 | Integrated: `src/moxie/ensemble`; [guide](../families/ensemble/README.md) | `sklearn/ensemble` |

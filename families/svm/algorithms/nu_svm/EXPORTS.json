@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.svm": {
+      "NuSVC": "moxie.svm._nu_svm",
+      "NuSVR": "moxie.svm._nu_svm",
+      "NuSVCParams": "moxie.svm._nu_svm",
+      "NuSVRParams": "moxie.svm._nu_svm"
+    }
+  }
+}

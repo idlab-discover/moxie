@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.svm": {
+      "LinearSVC": "moxie.svm._linear",
+      "LinearSVR": "moxie.svm._linear",
+      "Dual": "moxie.svm._linear",
+      "ClassWeight": "moxie.svm._linear",
+      "l1_min_c": "moxie.svm._bounds"
+    }
+  }
+}

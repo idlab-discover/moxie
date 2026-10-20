@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.svm": {
+      "OneClassSVM": "moxie.svm._one_class",
+      "OneClassSVMParams": "moxie.svm._one_class"
+    }
+  }
+}

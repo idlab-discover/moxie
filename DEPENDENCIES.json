@@ -1948,6 +1948,58 @@
         },
         "schema": 1
       }
+    },
+    {
+      "assets": {
+        "licenses/impute-sklearn.txt": "LICENSES/sklearn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.impute": {
+            "Imputer": "moxie.impute._base",
+            "IntegerSimpleImputer": "moxie.impute._simple",
+            "IterativeImputer": "moxie.impute._api",
+            "KNNImputer": "moxie.impute._knn",
+            "MissingIndicator": "moxie.impute._indicator",
+            "SimpleImputer": "moxie.impute._simple",
+            "StringImputationResult": "moxie.impute._string",
+            "StringMatrix": "moxie.impute._string",
+            "StringSimpleImputer": "moxie.impute._string",
+            "StringMissingIndicator": "moxie.impute._string"
+          },
+          "moxie.utils": {}
+        },
+        "schema": 1
+      },
+      "id": "impute",
+      "modules": {
+        "moxie.impute._api": {
+          "file": "src/moxie/impute/_api.mojo"
+        },
+        "moxie.impute._api_types": {
+          "file": "src/moxie/impute/_api_types.mojo"
+        },
+        "moxie.impute._base": {
+          "file": "src/moxie/impute/_base.mojo"
+        },
+        "moxie.impute._indicator": {
+          "file": "algorithms/simple/src/moxie/impute/_indicator.mojo"
+        },
+        "moxie.impute._knn": {
+          "file": "algorithms/knn/src/moxie/impute/_knn.mojo"
+        },
+        "moxie.impute._plumbing": {
+          "file": "src/moxie/impute/_plumbing.mojo"
+        },
+        "moxie.impute._simple": {
+          "file": "algorithms/simple/src/moxie/impute/_simple.mojo"
+        },
+        "moxie.impute._string": {
+          "file": "algorithms/simple/src/moxie/impute/_string.mojo"
+        }
+      },
+      "path": "families/impute"
     }
   ],
   "overrides": []

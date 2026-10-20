@@ -6,6 +6,11 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+impute-build = "python tools/impute_checks.py build"
+impute-test = "python tools/impute_checks.py test"
+impute-parity = "python tools/impute_checks.py parity"
+impute-start = "python tools/impute_checks.py start"
+impute-independence = "python tools/impute_independence.py"
 neighbors-build = "python tools/neighbors_checks.py build"
 neighbors-test = "python tools/neighbors_checks.py test"
 neighbors-parity = "python tools/neighbors_checks.py parity"

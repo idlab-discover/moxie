@@ -1,0 +1,7 @@
+{
+  "source_repository": "moxie-impute",
+  "source_revision": "48e5795528916c4d4ef4ecb60f76ec0547c25121",
+  "scikit_learn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "core_owner": "moxie/families/impute",
+  "layout": "Family and child implementation paths preserved; manifests resolve current owners."
+}

@@ -175,3 +175,7 @@ splitters, typed search, CV, curves and native SVG displays.
 
 [Neighbors](families/neighbors/README.md) is owned by Moxie, including its dense estimators, NCA,
 query engine and spatial trees. Sparse graph APIs remain deferred.
+
+[Imputation](families/impute/README.md) is owned by Moxie, including dense simple, integer,
+string and KNN imputers and numeric/string indicators. IterativeImputer remains
+deferred. The standalone checkout is not a build dependency.

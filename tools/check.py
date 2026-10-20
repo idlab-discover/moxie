@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 
+import impute_checks
 import neighbors_checks
 import linear_model_checks
 import feature_selection_checks
@@ -40,6 +41,7 @@ def executable(source):
 
 
 def build():
+    impute_checks.main("build")
     neighbors_checks.main("build")
     linear_model_checks.main("build")
     feature_selection_checks.main("build")
@@ -112,6 +114,7 @@ def compose_test():
 
 
 def parity():
+    impute_checks.main("parity-only")
     neighbors_checks.main("parity-only")
     linear_model_checks.main("parity-only")
     feature_selection_checks.main("parity-only")
@@ -140,6 +143,7 @@ def parity():
 
 
 def test():
+    impute_checks.main("test-only")
     neighbors_checks.main("test-only")
     linear_model_checks.main("test-only")
     feature_selection_checks.main("test-only")

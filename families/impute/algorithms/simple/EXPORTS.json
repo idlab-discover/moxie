@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.impute": {
+      "MissingIndicator": "moxie.impute._indicator",
+      "SimpleImputer": "moxie.impute._simple",
+      "IntegerSimpleImputer": "moxie.impute._simple",
+      "StringSimpleImputer": "moxie.impute._string",
+      "StringMatrix": "moxie.impute._string",
+      "StringImputationResult": "moxie.impute._string",
+      "StringMissingIndicator": "moxie.impute._string"
+    }
+  }
+}

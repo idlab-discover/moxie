@@ -1,0 +1,67 @@
+{
+  "status": "passed",
+  "date": "2026-10-20T11:35:21.317227+02:00",
+  "source_revision": "48e5795528916c4d4ef4ecb60f76ec0547c25121",
+  "scikit_learn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "initial_git_status": {
+    "moxie": [
+      " M COMMON-FAMILY-REQUIREMENTS.md"
+    ],
+    "moxie-impute": []
+  },
+  "source_changes": "All Mojo modules, compatible toolchain locks and license assets copied byte-for-byte. Manifests and tooling now resolve integrated owners. String parity creates its ignored evidence directory on a fresh checkout.",
+  "validation": [
+    {
+      "cwd": "porting-sklearn",
+      "command": "date --iso-8601=seconds > output/overnight-rollups/impute.write-check",
+      "result": "PASS before repository inspection"
+    },
+    {
+      "cwd": "porting-sklearn",
+      "command": "pixi run --manifest-path moxie/pixi.toml impute-test",
+      "result": "PASS: family and child modules/examples, native contracts, generic estimator checks, negative compilation, two isolated consumer builds and assembly failure contracts"
+    },
+    {
+      "cwd": "moxie",
+      "command": "pixi run python tools/impute_checks.py parity-only",
+      "result": "PASS: 88 floating cases (196 records), 440 integer cases (1134 records), 222 string cases (671 records, including 64 standalone indicator cases), 118 KNN cases"
+    },
+    {
+      "cwd": "moxie",
+      "command": "pixi run impute-independence",
+      "result": "PASS: complete Moxie assembly and precompile; module owner/source-byte/license checks; isolated public, integer, string, string indicator and KNN consumers"
+    },
+    {
+      "cwd": "moxie",
+      "command": "pixi run families/impute/builds/simple/simple",
+      "result": "PASS: runnable SimpleImputer example"
+    },
+    {
+      "cwd": "porting-sklearn",
+      "command": "git -C moxie diff --cached --check",
+      "result": "PASS"
+    }
+  ],
+  "independence": {
+    "standalone_unavailable": true,
+    "method": "Temporarily renamed moxie-impute to .moxie-impute-independence for the successful parity, full namespace and example commands; restored by shell EXIT trap before retirement. The isolated consumer compiler used only a temporary copy of Moxie builds/deps."
+  },
+  "corrected_validation_failures": [
+    {
+      "command": "pixi run --manifest-path moxie/pixi.toml python tools/impute_checks.py parity-only",
+      "cwd": "porting-sklearn",
+      "result": "Failed before tests: ad hoc Pixi command retained parent working directory; corrected by running from moxie."
+    },
+    {
+      "command": "pixi run python tools/impute_checks.py parity-only",
+      "cwd": "moxie",
+      "result": "Initial run passed floating/integer/string comparisons, then failed saving strings/parity.json because the ignored parent directory did not exist. Added mkdir(parents=True, exist_ok=True); full parity rerun passed."
+    }
+  ],
+  "limits": [
+    "IterativeImputer remains an explicit deferred declaration.",
+    "Sparse and heterogeneous categorical behavior remains unsupported.",
+    "Native API, dtype, ownership and KNN Float32 reference adaptations remain documented; this is not full sklearn parity."
+  ],
+  "raw_logs": "Untracked output/overnight-rollups/impute-*.log; numerical oracle reports remain in ignored family docs/private directories."
+}

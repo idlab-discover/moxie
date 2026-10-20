@@ -516,6 +516,32 @@ actual_dense_samples = [list(map(float, line.split()[1:])) for line in native_sa
 assert actual_samples == expected_samples, (actual_samples, expected_samples)
 assert actual_dense_samples == expected_dense_samples, (actual_dense_samples, expected_dense_samples)
 
+# Unsupervised prefix whose target type differs from the final estimator's: sklearn
+# passes y to StandardScaler, which ignores it; Moxie passes y=None (same result).
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+
+
+def prefix_data():
+    """Must match `data()` in test_pipeline_prefix_target.mojo."""
+    i = np.arange(12)
+    label = (i % 2).astype(np.float64)
+    X = np.column_stack([i * 10.0 + label * 25.0, ((i * 7) % 5) * 0.01 - label * 0.02,
+                         1000.0 + (i * 3) % 4])
+    return X, label
+
+
+X_prefix, y_prefix = prefix_data()
+reference_prefix = Pipeline([('standardscaler', StandardScaler()), ('svc', SVC())]).fit(X_prefix, y_prefix)
+native_prefix = subprocess.check_output([ROOT / 'builds/tests/pipeline/test_pipeline_prefix_target'], text=True)
+fields = [line.split()[1:] for line in native_prefix.splitlines() if line.startswith('prefix_svc ')][0]
+prefix_accuracy, prefix_values = float(fields[0]), np.array(fields[1:], dtype=float).reshape(12, 2)
+assert prefix_accuracy == reference_prefix.score(X_prefix, y_prefix), prefix_accuracy
+assert np.array_equal(prefix_values[:, 0], reference_prefix.predict(X_prefix))
+# Same SMO/libsvm working-set algorithm; decision values agree far below tol=1e-3.
+prefix_error = float(np.max(np.abs(prefix_values[:, 1] - reference_prefix.decision_function(X_prefix))))
+assert prefix_error <= 1e-6, prefix_error
+
 report = {'reference': REVISION, 'support_sklearn': sklearn.__version__,
           'source_sha256': {f: hashlib.sha256((SOURCE/f).read_bytes()).hexdigest() for f in FILES},
           'sequential': expected, 'real': actual, 'feature_names': actual_names, 'input_features': actual_features,
@@ -523,8 +549,9 @@ report = {'reference': REVISION, 'support_sklearn': sklearn.__version__,
           'probability': actual_probability, 'dense_probability': dense_probability,
           'decision': actual_decision, 'dense_decision': actual_dense_decision,
           'samples': actual_samples, 'dense_samples': actual_dense_samples,
+          'prefix_svc_max_decision_error': prefix_error,
           'probability_tolerance': 'probabilities exact; logs rtol/atol 1e-12 (Float64 outputs for both input dtypes)',
           'tolerance': 'exact: feature-name strings, small integer scalar cases and exactly representable dense means/medians'}
 out = ROOT / 'builds/pipeline-parity.json'
 out.write_text(json.dumps(report, indent=2) + '\n')
-print('PASS: 7 sequential cases, 7 feature-name cases, 6 input-feature cases, 6 score cases, 8 probability cases, 8 decision cases, 6 sample-score cases and real DummyRegressor Float32/Float64 integration')
+print('PASS: 7 sequential cases, 7 feature-name cases, 6 input-feature cases, 6 score cases, 8 probability cases, 8 decision cases, 6 sample-score cases, StandardScaler+SVC target-type prefix and real DummyRegressor Float32/Float64 integration')

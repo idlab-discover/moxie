@@ -24,8 +24,13 @@ The prefix must implement `TransformerMixin` and either `FitTransformer`,
 `SupervisedEstimator`, or `UnsupervisedEstimator`. Its `fit_transform` is preferred;
 otherwise execution calls `fit` and then `transform`. The target is forwarded to
 every fit. The final estimator implements `SupervisedEstimator` and `Predictor`.
-Intermediate output and successor input types must match exactly, as must target
-types. Targets must be copyable and destructible, and intermediate results and
+Intermediate output and successor input types must match exactly. When an
+unsupervised prefix (`UnsupervisedEstimator`, optional target) declares a
+different target type than the final estimator, as `StandardScaler`
+(`NDArray`) before `SVC` (`List[Label]`) does, the prefix is fitted with
+`y=None`. sklearn passes `y` to such steps and they ignore it, so results are
+identical; a prefix that actually needs `y` raises its own missing-target error.
+Otherwise target types must match at compile time. Targets must be copyable and destructible, and intermediate results and
 constructor parameter records must be destructible. Optional-target foundation
 methods currently require an owned target copy; no implicit dtype conversion
 occurs. Inputs are borrowed and intermediate results live until the next method

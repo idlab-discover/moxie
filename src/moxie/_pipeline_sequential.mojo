@@ -1,5 +1,6 @@
 # Adapted from scikit-learn pipeline.py; BSD-3-Clause, see LICENSES/scikit-learn.txt.
 """Typed supervised two-stage composition, using existing estimator capabilities."""
+from std.iter import downcast
 from moxie._feature_metadata import InputFeatureCount
 from moxie.base import (
     BaseEstimator, SupervisedEstimator, UnsupervisedEstimator, Predictor,
@@ -23,19 +24,31 @@ struct PipelineParams[P: Copyable & Deinitable, E: Copyable & Deinitable](Copyab
 def _fit_transform[P: TransformerMixin, T: Copyable & Deinitable](
     mut step: P, X: P.Input, y: T,
 ) raises -> P.Transformed:
-    """Prefer fit_transform; otherwise fit then transform, like sklearn."""
+    """Prefer fit_transform; otherwise fit then transform, like sklearn.
+
+    sklearn passes y to every step and unsupervised steps ignore it. An
+    unsupervised step whose target type differs from the final estimator's
+    (e.g. StandardScaler before SVC) therefore receives y=None.
+    """
     comptime if conforms_to(P, FitTransformer):
-        comptime assert P.Target == T, "pipeline target types must match"
-        var target = Optional[T](y.copy())
-        return step.fit_transform(X, rebind[Optional[P.Target]](target))
+        comptime if P.Target != T and conforms_to(P, UnsupervisedEstimator):
+            var none = Optional[downcast[P.Target, Movable & Deinitable]](None)
+            return step.fit_transform(X, rebind[Optional[P.Target]](none))
+        else:
+            comptime assert P.Target == T, "pipeline target types must match"
+            var target = Optional[T](y.copy())
+            return step.fit_transform(X, rebind[Optional[P.Target]](target))
     elif conforms_to(P, SupervisedEstimator):
         comptime assert P.Target == T, "pipeline target types must match"
         _ = step.fit(X, rebind[P.Target](y))
         return step.transform(X)
     elif conforms_to(P, UnsupervisedEstimator):
-        comptime assert P.Target == T, "pipeline target types must match"
-        var target = Optional[T](y.copy())
-        _ = step.fit(X, rebind[Optional[P.Target]](target))
+        comptime if P.Target != T:
+            var none = Optional[downcast[P.Target, Movable & Deinitable]](None)
+            _ = step.fit(X, rebind[Optional[P.Target]](none))
+        else:
+            var target = Optional[T](y.copy())
+            _ = step.fit(X, rebind[Optional[P.Target]](target))
         return step.transform(X)
     else:
         comptime assert False, "pipeline transformer must support fit or fit_transform"

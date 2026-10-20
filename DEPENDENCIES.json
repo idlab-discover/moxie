@@ -2158,6 +2158,256 @@
         }
       },
       "path": "families/decomposition/shared/sparse_coding"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.cluster": {
+            "Biclusterer": "moxie.cluster._base",
+            "ClusterDistanceTransformer": "moxie.cluster._base",
+            "Clusterer": "moxie.cluster._base",
+            "IncrementalClusterer": "moxie.cluster._base",
+            "PredictiveClusterer": "moxie.cluster._base"
+          }
+        },
+        "schema": 1
+      },
+      "id": "cluster",
+      "modules": {
+        "moxie.cluster._base": {
+          "file": "src/moxie/cluster/_base.mojo"
+        },
+        "moxie.cluster._contracts": {
+          "file": "src/moxie/cluster/_contracts.mojo"
+        },
+        "moxie.cluster._api": {
+          "file": "src/moxie/cluster/_api.mojo"
+        },
+        "moxie.cluster._api_types": {
+          "file": "src/moxie/cluster/_api_types.mojo"
+        }
+      },
+      "path": "families/cluster"
+    },
+    {
+      "assets": {
+        "licenses/affinity-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.cluster": {
+            "AffinityPropagation": "moxie.cluster._affinity_propagation",
+            "affinity_propagation": "moxie.cluster._affinity_propagation"
+          }
+        },
+        "schema": 1
+      },
+      "id": "affinity",
+      "modules": {
+        "moxie.cluster._affinity_propagation": {
+          "file": "src/moxie/cluster/_affinity_propagation.mojo"
+        }
+      },
+      "path": "families/cluster/algorithms/affinity"
+    },
+    {
+      "id": "centroid_engine",
+      "path": "families/cluster/shared/centroid_engine",
+      "modules": {
+        "moxie.cluster._centroid_engine": {
+          "file": "src/moxie/cluster/_centroid_engine.mojo"
+        },
+        "moxie.cluster._centroid_selection": {
+          "file": "src/moxie/cluster/_centroid_selection.mojo"
+        }
+      },
+      "assets": {
+        "licenses/centroid-x86-simd-sort.txt": "LICENSES/x86-simd-sort.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.cluster": {}
+        }
+      }
+    },
+    {
+      "id": "kmeans",
+      "path": "families/cluster/algorithms/kmeans",
+      "modules": {
+        "moxie.cluster._kmeans": {
+          "file": "src/moxie/cluster/_kmeans.mojo"
+        }
+      },
+      "assets": {
+        "licenses/kmeans-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "KMeans": "moxie.cluster._kmeans",
+            "k_means": "moxie.cluster._kmeans",
+            "kmeans_plusplus": "moxie.cluster._kmeans"
+          }
+        }
+      }
+    },
+    {
+      "id": "minibatch",
+      "path": "families/cluster/algorithms/minibatch",
+      "modules": {
+        "moxie.cluster._mini_batch_kmeans": {
+          "file": "src/moxie/cluster/_mini_batch_kmeans.mojo"
+        }
+      },
+      "assets": {
+        "licenses/minibatch-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "MiniBatchKMeans": "moxie.cluster._mini_batch_kmeans"
+          }
+        }
+      }
+    },
+    {
+      "id": "bisecting",
+      "path": "families/cluster/algorithms/bisecting",
+      "modules": {
+        "moxie.cluster._bisect_k_means": {
+          "file": "src/moxie/cluster/_bisect_k_means.mojo"
+        }
+      },
+      "assets": {
+        "licenses/bisecting-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "BisectingKMeans": "moxie.cluster._bisect_k_means"
+          }
+        }
+      }
+    },
+    {
+      "id": "dbscan",
+      "path": "families/cluster/algorithms/dbscan",
+      "modules": {
+        "moxie.cluster._dbscan": {
+          "file": "src/moxie/cluster/_dbscan.mojo"
+        }
+      },
+      "assets": {
+        "licenses/dbscan-scikit-learn.txt": "LICENSES/scikit-learn.txt",
+        "licenses/dbscan-NumPy.txt": "LICENSES/NumPy.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "DBSCAN": "moxie.cluster._dbscan",
+            "dbscan": "moxie.cluster._dbscan"
+          }
+        }
+      }
+    },
+    {
+      "id": "mean_shift",
+      "path": "families/cluster/algorithms/mean_shift",
+      "modules": {
+        "moxie.cluster._mean_shift": {
+          "file": "src/moxie/cluster/_mean_shift.mojo"
+        }
+      },
+      "assets": {
+        "licenses/mean_shift-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "MeanShift": "moxie.cluster._mean_shift",
+            "mean_shift": "moxie.cluster._mean_shift",
+            "estimate_bandwidth": "moxie.cluster._mean_shift",
+            "get_bin_seeds": "moxie.cluster._mean_shift"
+          }
+        }
+      }
+    },
+    {
+      "id": "optics",
+      "path": "families/cluster/algorithms/optics",
+      "modules": {
+        "moxie.cluster._optics": {
+          "file": "src/moxie/cluster/_optics.mojo"
+        }
+      },
+      "assets": {
+        "licenses/optics-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "OPTICS": "moxie.cluster._optics",
+            "compute_optics_graph": "moxie.cluster._optics",
+            "cluster_optics_dbscan": "moxie.cluster._optics",
+            "cluster_optics_xi": "moxie.cluster._optics"
+          }
+        }
+      }
+    },
+    {
+      "id": "agglomerative",
+      "path": "families/cluster/algorithms/agglomerative",
+      "modules": {
+        "moxie.cluster._agglomerative": {
+          "file": "src/moxie/cluster/_agglomerative.mojo"
+        }
+      },
+      "assets": {
+        "licenses/agglomerative-scikit-learn.txt": "LICENSES/scikit-learn.txt",
+        "licenses/agglomerative-SciPy.txt": "LICENSES/SciPy.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "AgglomerativeClustering": "moxie.cluster._agglomerative",
+            "FeatureAgglomeration": "moxie.cluster._agglomerative",
+            "linkage_tree": "moxie.cluster._agglomerative",
+            "ward_tree": "moxie.cluster._agglomerative"
+          }
+        }
+      }
+    },
+    {
+      "id": "birch",
+      "path": "families/cluster/algorithms/birch",
+      "modules": {
+        "moxie.cluster._birch": {
+          "file": "src/moxie/cluster/_birch.mojo"
+        }
+      },
+      "assets": {
+        "licenses/birch-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "Birch": "moxie.cluster._birch"
+          }
+        }
+      }
     }
   ],
   "overrides": []

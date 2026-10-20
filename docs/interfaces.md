@@ -222,3 +222,7 @@ The retired ensemble checkout is not a build dependency.
 [Decomposition](../families/decomposition/docs/api-surface.md) is owned by Moxie, including its SVD and threshold
 sparse-coding engines. Dictionary learning, SparsePCA and regression coding
 modes remain unfinished. The standalone checkout is not a build dependency.
+
+[Clustering](../families/cluster/README.md) is owned by Moxie, including the documented
+dense affinity, centroid, density, linkage and Birch implementations. Spectral
+clustering, biclustering, HDBSCAN and sparse inputs remain deferred.

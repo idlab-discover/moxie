@@ -1,0 +1,4 @@
+BisectingKMeans adapts scikit-learn's BSD-3-Clause implementation at
+4358542a1bd39af2e7e1cbace8b9fed067473c5b (sklearn/cluster/_bisect_k_means.py).
+See LICENSES/scikit-learn.txt. Existing KMeans/centroid kernels retain their
+respective notices. Python and scikit-learn are validation dependencies only.

@@ -1,0 +1,115 @@
+{
+  "family": "cluster",
+  "validated_at": "2026-10-20T12:29:32.739959+02:00",
+  "working_directory": "moxie",
+  "source_revision": "add90d7b250a8863d949d4c119d2a1a906d0fae9",
+  "scikit_learn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "toolchain": {
+    "mojo": "1.0.0",
+    "max-core": "26.5.0"
+  },
+  "compiler_flags": [
+    "-O3",
+    "--fp-mode=contract=off"
+  ],
+  "threads": 1,
+  "independence": "The entire standalone checkout was temporarily moved out of moxie-cluster before all four commands and remained unavailable until all four completed. All manifests resolve current owners in Moxie and external numerical dependencies.",
+  "validation": [
+    {
+      "command": "pixi run cluster-test",
+      "exit_code": 0,
+      "standalone_checkout_absent": true,
+      "log": "output/overnight-rollups/cluster-integrated-test.log",
+      "summary": [
+        "PASS: core cluster owners, source bytes, licenses and supported exports",
+        "Capability conformance checks passed",
+        "Core estimator contract checks passed",
+        "Capability conformance checks passed",
+        "PASS: fluent cluster fit, set_params and partial_fit",
+        "cluster plumbing contracts passed",
+        "PASS native affinity dtype float64",
+        "PASS native affinity dtype float32",
+        "PASS KMeans lifecycle, weights, RNG, ownership and invalid inputs",
+        "PASS MiniBatchKMeans lifecycle, configuration, ownership and incremental contracts",
+        "PASS: Birch lifecycle, tree invariants and native API float32",
+        "PASS: Birch lifecycle, tree invariants and native API float64",
+        "PASS: BisectingKMeans lifecycle and native API",
+        "PASS: agglomerative contracts, lifecycle, layouts, pooling and errors",
+        "PASS: OPTICS lifecycle, extraction and validation",
+        "PASS DBSCAN contracts float32",
+        "PASS DBSCAN contracts float64",
+        "PASS: MeanShift lifecycle, native API, RNG and invalid inputs",
+        "isolated cluster consumer passed",
+        "isolated cluster consumer passed",
+        "PASS: live source edits consumed on the next build",
+        "PASS: isolated composition, missing sources and ownership/export rejection"
+      ]
+    },
+    {
+      "command": "pixi run python families/cluster/tools/check.py parity-only",
+      "exit_code": 0,
+      "standalone_checkout_absent": true,
+      "log": "output/overnight-rollups/cluster-integrated-parity.log",
+      "summary": [
+        "PASS 298 dense dtype/algorithm/wrapper differential cases against local sklearn 4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+        "PASS: 62 exact centroid feature-name comparisons",
+        "PASS 2256 KMeans/seeding differential cases",
+        "PASS 244 MiniBatchKMeans cases; 1378 batch/prefix states; 120 count sorts",
+        "PASS: 432 Birch dense tree and estimator comparisons, plus strided inputs; 18 documented ordering-roundoff cases",
+        "PASS 832 BisectingKMeans differential cases; 112 matching sampling errors; 2 documented label-roundoff cases",
+        "PASS: 2030 agglomerative differential configurations",
+        "PASS: 2380 OPTICS differential configurations",
+        "PASS: 700 DBSCAN differential configurations and 52 signed reductions",
+        "PASS: 568 MeanShift differential configurations"
+      ]
+    },
+    {
+      "command": "pixi run python families/cluster/shared/centroid_engine/tools/check.py test",
+      "exit_code": 0,
+      "standalone_checkout_absent": true,
+      "log": "output/overnight-rollups/cluster-centroid-test.log",
+      "summary": [
+        "engine contracts passed float32",
+        "engine contracts passed float64",
+        "edge contracts passed float32",
+        "edge contracts passed float64",
+        "shared centroid engine consumer passed",
+        "shared centroid engine consumer passed",
+        "PASS: two isolated consumers, missing sources/ownership rejection, sparse negative capability"
+      ]
+    },
+    {
+      "command": "pixi run python families/cluster/shared/centroid_engine/tests/parity.py",
+      "exit_code": 0,
+      "standalone_checkout_absent": true,
+      "log": "output/overnight-rollups/cluster-centroid-parity.log",
+      "summary": [
+        "PASS 140 dense kernel cases, 4 iterations each, local Cython oracle",
+        "PASS 2738 exact selection / weighted relocation cases; 352 std::sort fallbacks"
+      ]
+    },
+    {
+      "command": "pixi run bash families/cluster/tests/check_compile_fail.sh",
+      "exit_code": 0,
+      "standalone_checkout_absent": true,
+      "summary": [
+        "Missing prediction capability correctly rejected"
+      ],
+      "stage": "After retirement; helper updated to resolve its family directory and use the assembled namespace."
+    }
+  ],
+  "scope": "Existing dense contracts only. Spectral clustering, biclustering, HDBSCAN and sparse inputs remain deferred. Existing algorithm-specific exclusions and roundoff allowances remain in the API docs. No full sklearn parity or performance claim.",
+  "artifacts": {
+    "builds/agglomerative-parity.json": "f4f00601529a7446c28070bcf769e9c8957b5601ab3e6e9ec99511614f851ed2",
+    "builds/birch-parity.json": "053b06dbd8fe516c3737f4bc99d52a0f7ff7e7f12cb0c2d82543383a38721f7d",
+    "builds/bisecting-parity.json": "10f95fc9c1ca07032ea32a794d2f9ff79deea80f714769198c795510cc6cfb9c",
+    "builds/dbscan-parity.json": "e8540e05bbb8d9dec35e4eae501a2953e7e6f9ff061cfc544287ce0bf39e1236",
+    "builds/feature-names-parity.json": "73fd9a9d819a98be7b37ce25bce41869d5d04a20b38535d21be5afa5c7a65101",
+    "builds/kmeans-parity.json": "3a7c4243b37418ff7768d8b0692653961e1678bca924c9950ec798389101984d",
+    "builds/mean_shift-parity.json": "0097d5ed3d9447cb76539a67c70bad57fcfb08ec18c897f1ee7607ac78ea276b",
+    "builds/minibatch-parity.json": "d388c3a0bb79b92d48e18905f3db17c885cc575bfa8b4940ad1f3df0ec437393",
+    "builds/optics-parity.json": "c28770dbdcd2811904b34097a9a4e75384be9262d24abd12158e34104a95db2b",
+    "builds/parity.json": "4b9e1e1cff808280f187655bccdf1761110c872ee7d5c16ee01b2b598a586431"
+  },
+  "source_preservation": "All 77 retained Mojo files are byte-identical to the standalone revision. Four inherited framework files are deduplicated against current Moxie. The inherited blank line at EOF in src/moxie/cluster/_api.mojo is preserved."
+}

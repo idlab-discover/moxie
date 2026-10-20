@@ -1,0 +1,5 @@
+KMeans fitting policy and greedy seeding are adapted from scikit-learn:
+https://github.com/scikit-learn/scikit-learn
+Revision 4358542a1bd39af2e7e1cbace8b9fed067473c5b
+sklearn/cluster/_kmeans.py (BSD-3-Clause)
+The full license is retained in LICENSES/scikit-learn.txt.

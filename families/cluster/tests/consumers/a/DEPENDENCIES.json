@@ -1,0 +1,531 @@
+{
+  "overrides": [],
+  "projects": [
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {
+            "BaseEstimator": "moxie.base",
+            "ClassifierMixin": "moxie.base",
+            "Predictor": "moxie.base",
+            "RegressorMixin": "moxie.base",
+            "SupervisedEstimator": "moxie.base",
+            "TransformerMixin": "moxie.base",
+            "UnsupervisedEstimator": "moxie.base",
+            "clone": "moxie.base"
+          },
+          "moxie.utils": {
+            "FittedState": "moxie.utils.validation",
+            "check_is_fitted": "moxie.utils.validation"
+          }
+        },
+        "schema": 1
+      },
+      "id": "moxie",
+      "modules": {
+        "moxie.base": {
+          "file": "src/moxie/base.mojo"
+        },
+        "moxie.utils.validation": {
+          "file": "src/moxie/utils/validation.mojo"
+        }
+      },
+      "path": "../../../../.."
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {},
+        "schema": 1
+      },
+      "id": "numerics",
+      "modules": {
+        "moxie._dense": {
+          "file": "src/moxie/_dense.mojo"
+        }
+      },
+      "path": "../../../../../shared/numerics"
+    },
+    {
+      "assets": {
+        "licenses/NuMojo-LICENSE": "LICENSE",
+        "numojo/__init__.mojo": "numojo/__init__.mojo",
+        "numojo/core/__init__.mojo": "numojo/core/__init__.mojo",
+        "numojo/core/accelerator/__init__.mojo": "numojo/core/accelerator/__init__.mojo",
+        "numojo/core/accelerator/device.mojo": "numojo/core/accelerator/device.mojo",
+        "numojo/core/accelerator/kernels/__init__.mojo": "numojo/core/accelerator/kernels/__init__.mojo",
+        "numojo/core/accelerator/kernels/binary_ops.mojo": "numojo/core/accelerator/kernels/binary_ops.mojo",
+        "numojo/core/accelerator/kernels/reduction_ops.mojo": "numojo/core/accelerator/kernels/reduction_ops.mojo",
+        "numojo/core/accelerator/kernels/unary_ops.mojo": "numojo/core/accelerator/kernels/unary_ops.mojo",
+        "numojo/core/accelerator_ndarray.mojo": "numojo/core/accelerator_ndarray.mojo",
+        "numojo/core/complex/__init__.mojo": "numojo/core/complex/__init__.mojo",
+        "numojo/core/complex/complex_ndarray.mojo": "numojo/core/complex/complex_ndarray.mojo",
+        "numojo/core/complex/complex_simd.mojo": "numojo/core/complex/complex_simd.mojo",
+        "numojo/core/dtype/__init__.mojo": "numojo/core/dtype/__init__.mojo",
+        "numojo/core/dtype/complex_dtype.mojo": "numojo/core/dtype/complex_dtype.mojo",
+        "numojo/core/dtype/default_dtype.mojo": "numojo/core/dtype/default_dtype.mojo",
+        "numojo/core/dtype/utility.mojo": "numojo/core/dtype/utility.mojo",
+        "numojo/core/error.mojo": "numojo/core/error.mojo",
+        "numojo/core/indexing/__init__.mojo": "numojo/core/indexing/__init__.mojo",
+        "numojo/core/indexing/index_buffer.mojo": "numojo/core/indexing/index_buffer.mojo",
+        "numojo/core/indexing/item.mojo": "numojo/core/indexing/item.mojo",
+        "numojo/core/indexing/offset.mojo": "numojo/core/indexing/offset.mojo",
+        "numojo/core/indexing/slicing.mojo": "numojo/core/indexing/slicing.mojo",
+        "numojo/core/indexing/traversal.mojo": "numojo/core/indexing/traversal.mojo",
+        "numojo/core/indexing/utility.mojo": "numojo/core/indexing/utility.mojo",
+        "numojo/core/indexing/validation.mojo": "numojo/core/indexing/validation.mojo",
+        "numojo/core/layout/__init__.mojo": "numojo/core/layout/__init__.mojo",
+        "numojo/core/layout/array_methods.mojo": "numojo/core/layout/array_methods.mojo",
+        "numojo/core/layout/flags.mojo": "numojo/core/layout/flags.mojo",
+        "numojo/core/layout/ndshape.mojo": "numojo/core/layout/ndshape.mojo",
+        "numojo/core/layout/ndstrides.mojo": "numojo/core/layout/ndstrides.mojo",
+        "numojo/core/memory/__init__.mojo": "numojo/core/memory/__init__.mojo",
+        "numojo/core/memory/data_container.mojo": "numojo/core/memory/data_container.mojo",
+        "numojo/core/memory/dlpack.mojo": "numojo/core/memory/dlpack.mojo",
+        "numojo/core/memory/storage.mojo": "numojo/core/memory/storage.mojo",
+        "numojo/core/ndarray.mojo": "numojo/core/ndarray.mojo",
+        "numojo/core/traits/__init__.mojo": "numojo/core/traits/__init__.mojo",
+        "numojo/core/traits/array_like.mojo": "numojo/core/traits/array_like.mojo",
+        "numojo/core/traits/backend.mojo": "numojo/core/traits/backend.mojo",
+        "numojo/core/traits/buffered.mojo": "numojo/core/traits/buffered.mojo",
+        "numojo/core/traits/indexer_collection_element.mojo": "numojo/core/traits/indexer_collection_element.mojo",
+        "numojo/core/type_aliases.mojo": "numojo/core/type_aliases.mojo",
+        "numojo/prelude.mojo": "numojo/prelude.mojo",
+        "numojo/routines/__init__.mojo": "numojo/routines/__init__.mojo",
+        "numojo/routines/bitwise.mojo": "numojo/routines/bitwise.mojo",
+        "numojo/routines/constants.mojo": "numojo/routines/constants.mojo",
+        "numojo/routines/creation.mojo": "numojo/routines/creation.mojo",
+        "numojo/routines/functional.mojo": "numojo/routines/functional.mojo",
+        "numojo/routines/indexing.mojo": "numojo/routines/indexing.mojo",
+        "numojo/routines/io/__init__.mojo": "numojo/routines/io/__init__.mojo",
+        "numojo/routines/io/files.mojo": "numojo/routines/io/files.mojo",
+        "numojo/routines/io/formatting.mojo": "numojo/routines/io/formatting.mojo",
+        "numojo/routines/linalg/__init__.mojo": "numojo/routines/linalg/__init__.mojo",
+        "numojo/routines/linalg/decompositions.mojo": "numojo/routines/linalg/decompositions.mojo",
+        "numojo/routines/linalg/misc.mojo": "numojo/routines/linalg/misc.mojo",
+        "numojo/routines/linalg/norms.mojo": "numojo/routines/linalg/norms.mojo",
+        "numojo/routines/linalg/products.mojo": "numojo/routines/linalg/products.mojo",
+        "numojo/routines/linalg/solving.mojo": "numojo/routines/linalg/solving.mojo",
+        "numojo/routines/logic/__init__.mojo": "numojo/routines/logic/__init__.mojo",
+        "numojo/routines/logic/comparison.mojo": "numojo/routines/logic/comparison.mojo",
+        "numojo/routines/logic/contents.mojo": "numojo/routines/logic/contents.mojo",
+        "numojo/routines/logic/logical_ops.mojo": "numojo/routines/logic/logical_ops.mojo",
+        "numojo/routines/logic/truth.mojo": "numojo/routines/logic/truth.mojo",
+        "numojo/routines/manipulation.mojo": "numojo/routines/manipulation.mojo",
+        "numojo/routines/math/__init__.mojo": "numojo/routines/math/__init__.mojo",
+        "numojo/routines/math/arithmetic.mojo": "numojo/routines/math/arithmetic.mojo",
+        "numojo/routines/math/differences.mojo": "numojo/routines/math/differences.mojo",
+        "numojo/routines/math/exponents.mojo": "numojo/routines/math/exponents.mojo",
+        "numojo/routines/math/extrema.mojo": "numojo/routines/math/extrema.mojo",
+        "numojo/routines/math/floating.mojo": "numojo/routines/math/floating.mojo",
+        "numojo/routines/math/hyper.mojo": "numojo/routines/math/hyper.mojo",
+        "numojo/routines/math/misc.mojo": "numojo/routines/math/misc.mojo",
+        "numojo/routines/math/products.mojo": "numojo/routines/math/products.mojo",
+        "numojo/routines/math/rounding.mojo": "numojo/routines/math/rounding.mojo",
+        "numojo/routines/math/sums.mojo": "numojo/routines/math/sums.mojo",
+        "numojo/routines/math/trig.mojo": "numojo/routines/math/trig.mojo",
+        "numojo/routines/operations/__init__.mojo": "numojo/routines/operations/__init__.mojo",
+        "numojo/routines/operations/backend.mojo": "numojo/routines/operations/backend.mojo",
+        "numojo/routines/random.mojo": "numojo/routines/random.mojo",
+        "numojo/routines/searching.mojo": "numojo/routines/searching.mojo",
+        "numojo/routines/sorting.mojo": "numojo/routines/sorting.mojo",
+        "numojo/routines/statistics/__init__.mojo": "numojo/routines/statistics/__init__.mojo",
+        "numojo/routines/statistics/averages.mojo": "numojo/routines/statistics/averages.mojo"
+      },
+      "exports": null,
+      "id": "numojo",
+      "modules": {},
+      "path": "../../../../../../../NuMojo"
+    },
+    {
+      "assets": {
+        "licenses/random-MT19937.txt": "LICENSES/MT19937.txt",
+        "licenses/random-NumPy-distributions.md": "LICENSES/NumPy-distributions.md",
+        "licenses/random-NumPy-random.md": "LICENSES/NumPy-random.md",
+        "licenses/random-NumPy.txt": "LICENSES/NumPy.txt",
+        "licenses/random-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "random",
+      "modules": {
+        "moxie._random": {
+          "file": "src/moxie/_random.mojo"
+        }
+      },
+      "path": "../../../../../shared/random"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.cluster": {
+            "Biclusterer": "moxie.cluster._base",
+            "ClusterDistanceTransformer": "moxie.cluster._base",
+            "Clusterer": "moxie.cluster._base",
+            "IncrementalClusterer": "moxie.cluster._base",
+            "PredictiveClusterer": "moxie.cluster._base"
+          }
+        },
+        "schema": 1
+      },
+      "id": "cluster",
+      "modules": {
+        "moxie.cluster._base": {
+          "file": "src/moxie/cluster/_base.mojo"
+        },
+        "moxie.cluster._contracts": {
+          "file": "src/moxie/cluster/_contracts.mojo"
+        },
+        "moxie.cluster._api": {
+          "file": "src/moxie/cluster/_api.mojo"
+        },
+        "moxie.cluster._api_types": {
+          "file": "src/moxie/cluster/_api_types.mojo"
+        }
+      },
+      "path": "../../.."
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {
+            "ConsumerA": "moxie.consumer_a"
+          }
+        },
+        "schema": 1
+      },
+      "id": "consumer_a",
+      "modules": {
+        "moxie.consumer_a": {
+          "file": "src/moxie/consumer_a.mojo"
+        }
+      },
+      "path": "."
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
+          "moxie": {
+            "ConsumerB": "moxie.consumer_b"
+          }
+        },
+        "schema": 1
+      },
+      "id": "consumer_b",
+      "modules": {
+        "moxie.consumer_b": {
+          "file": "src/moxie/consumer_b.mojo"
+        }
+      },
+      "path": "../b"
+    },
+    {
+      "assets": {
+        "mojo_linalg/__init__.mojo": "src/mojo_linalg/__init__.mojo",
+        "mojo_linalg/_determinant.mojo": "src/mojo_linalg/_determinant.mojo",
+        "mojo_linalg/_spectral.mojo": "src/mojo_linalg/_spectral.mojo",
+        "mojo_linalg/_storage.mojo": "src/mojo_linalg/_storage.mojo",
+        "mojo_linalg/cholesky.mojo": "src/mojo_linalg/cholesky.mojo",
+        "mojo_linalg/indefinite.mojo": "src/mojo_linalg/indefinite.mojo",
+        "mojo_linalg/qr.mojo": "src/mojo_linalg/qr.mojo",
+        "mojo_linalg/svd.mojo": "src/mojo_linalg/svd.mojo",
+        "mojo_linalg/symmetric.mojo": "src/mojo_linalg/symmetric.mojo",
+        "mojo_linalg/triangular.mojo": "src/mojo_linalg/triangular.mojo"
+      },
+      "exports": null,
+      "id": "mojo-linalg",
+      "modules": {},
+      "path": "../../../../../../mojo-linalg"
+    },
+    {
+      "assets": {
+        "licenses/affinity-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {},
+          "moxie.cluster": {
+            "AffinityPropagation": "moxie.cluster._affinity_propagation",
+            "affinity_propagation": "moxie.cluster._affinity_propagation"
+          }
+        },
+        "schema": 1
+      },
+      "id": "affinity",
+      "modules": {
+        "moxie.cluster._affinity_propagation": {
+          "file": "src/moxie/cluster/_affinity_propagation.mojo"
+        }
+      },
+      "path": "../../../algorithms/affinity"
+    },
+    {
+      "id": "centroid_engine",
+      "path": "../../../shared/centroid_engine",
+      "modules": {
+        "moxie.cluster._centroid_engine": {
+          "file": "src/moxie/cluster/_centroid_engine.mojo"
+        },
+        "moxie.cluster._centroid_selection": {
+          "file": "src/moxie/cluster/_centroid_selection.mojo"
+        }
+      },
+      "assets": {
+        "licenses/centroid-x86-simd-sort.txt": "LICENSES/x86-simd-sort.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.cluster": {}
+        }
+      }
+    },
+    {
+      "id": "kmeans",
+      "path": "../../../algorithms/kmeans",
+      "modules": {
+        "moxie.cluster._kmeans": {
+          "file": "src/moxie/cluster/_kmeans.mojo"
+        }
+      },
+      "assets": {
+        "licenses/kmeans-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "KMeans": "moxie.cluster._kmeans",
+            "k_means": "moxie.cluster._kmeans",
+            "kmeans_plusplus": "moxie.cluster._kmeans"
+          }
+        }
+      }
+    },
+    {
+      "id": "minibatch",
+      "path": "../../../algorithms/minibatch",
+      "modules": {
+        "moxie.cluster._mini_batch_kmeans": {
+          "file": "src/moxie/cluster/_mini_batch_kmeans.mojo"
+        }
+      },
+      "assets": {
+        "licenses/minibatch-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "MiniBatchKMeans": "moxie.cluster._mini_batch_kmeans"
+          }
+        }
+      }
+    },
+    {
+      "id": "bisecting",
+      "path": "../../../algorithms/bisecting",
+      "modules": {
+        "moxie.cluster._bisect_k_means": {
+          "file": "src/moxie/cluster/_bisect_k_means.mojo"
+        }
+      },
+      "assets": {
+        "licenses/bisecting-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "BisectingKMeans": "moxie.cluster._bisect_k_means"
+          }
+        }
+      }
+    },
+    {
+      "id": "linalg",
+      "path": "../../../../../shared/linalg",
+      "modules": {
+        "moxie._linalg": {
+          "file": "src/moxie/_linalg.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    },
+    {
+      "id": "neighbors.nearest",
+      "path": "../../../../neighbors",
+      "modules": {
+        "moxie.neighbors._contracts": {
+          "file": "src/moxie/neighbors/_contracts.mojo"
+        },
+        "moxie.neighbors._distance": {
+          "file": "shared/query_engine/src/moxie/neighbors/_distance.mojo"
+        },
+        "moxie.neighbors._query_engine": {
+          "file": "shared/query_engine/src/moxie/neighbors/_query_engine.mojo"
+        },
+        "moxie.neighbors._binary_tree": {
+          "file": "shared/spatial_trees/src/moxie/neighbors/_binary_tree.mojo"
+        },
+        "moxie.neighbors._metrics": {
+          "file": "shared/spatial_trees/src/moxie/neighbors/_metrics.mojo"
+        },
+        "moxie.neighbors._tree_engine": {
+          "file": "shared/spatial_trees/src/moxie/neighbors/_tree_engine.mojo"
+        },
+        "moxie.neighbors._kd_tree": {
+          "file": "shared/spatial_trees/src/moxie/neighbors/_kd_tree.mojo"
+        },
+        "moxie.neighbors._ball_tree": {
+          "file": "shared/spatial_trees/src/moxie/neighbors/_ball_tree.mojo"
+        },
+        "moxie.neighbors._unsupervised": {
+          "file": "algorithms/nearest/src/moxie/neighbors/_unsupervised.mojo"
+        },
+        "moxie.neighbors._base": {
+          "file": "src/moxie/neighbors/_base.mojo"
+        }
+      },
+      "assets": {
+        "licenses/neighbors-sklearn.txt": "LICENSES/sklearn.txt",
+        "licenses/neighbors-scipy.txt": "LICENSES/scipy.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {
+            "NearestNeighbors": "moxie.neighbors._unsupervised"
+          }
+        }
+      }
+    },
+    {
+      "id": "dbscan",
+      "path": "../../../algorithms/dbscan",
+      "modules": {
+        "moxie.cluster._dbscan": {
+          "file": "src/moxie/cluster/_dbscan.mojo"
+        }
+      },
+      "assets": {
+        "licenses/dbscan-scikit-learn.txt": "LICENSES/scikit-learn.txt",
+        "licenses/dbscan-NumPy.txt": "LICENSES/NumPy.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "DBSCAN": "moxie.cluster._dbscan",
+            "dbscan": "moxie.cluster._dbscan"
+          }
+        }
+      }
+    },
+    {
+      "id": "mean_shift",
+      "path": "../../../algorithms/mean_shift",
+      "modules": {
+        "moxie.cluster._mean_shift": {
+          "file": "src/moxie/cluster/_mean_shift.mojo"
+        }
+      },
+      "assets": {
+        "licenses/mean_shift-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "MeanShift": "moxie.cluster._mean_shift",
+            "mean_shift": "moxie.cluster._mean_shift",
+            "estimate_bandwidth": "moxie.cluster._mean_shift",
+            "get_bin_seeds": "moxie.cluster._mean_shift"
+          }
+        }
+      }
+    },
+    {
+      "id": "optics",
+      "path": "../../../algorithms/optics",
+      "modules": {
+        "moxie.cluster._optics": {
+          "file": "src/moxie/cluster/_optics.mojo"
+        }
+      },
+      "assets": {
+        "licenses/optics-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "OPTICS": "moxie.cluster._optics",
+            "compute_optics_graph": "moxie.cluster._optics",
+            "cluster_optics_dbscan": "moxie.cluster._optics",
+            "cluster_optics_xi": "moxie.cluster._optics"
+          }
+        }
+      }
+    },
+    {
+      "id": "agglomerative",
+      "path": "../../../algorithms/agglomerative",
+      "modules": {
+        "moxie.cluster._agglomerative": {
+          "file": "src/moxie/cluster/_agglomerative.mojo"
+        }
+      },
+      "assets": {
+        "licenses/agglomerative-scikit-learn.txt": "LICENSES/scikit-learn.txt",
+        "licenses/agglomerative-SciPy.txt": "LICENSES/SciPy.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "AgglomerativeClustering": "moxie.cluster._agglomerative",
+            "FeatureAgglomeration": "moxie.cluster._agglomerative",
+            "linkage_tree": "moxie.cluster._agglomerative",
+            "ward_tree": "moxie.cluster._agglomerative"
+          }
+        }
+      }
+    },
+    {
+      "id": "birch",
+      "path": "../../../algorithms/birch",
+      "modules": {
+        "moxie.cluster._birch": {
+          "file": "src/moxie/cluster/_birch.mojo"
+        }
+      },
+      "assets": {
+        "licenses/birch-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.cluster": {
+            "Birch": "moxie.cluster._birch"
+          }
+        }
+      }
+    }
+  ],
+  "schema": 1
+}

@@ -1,0 +1,3 @@
+Agglomerative tree construction, cutting and pooling follow scikit-learn
+(BSD-3-Clause) and SciPy's nearest-neighbor-chain and MST linkage algorithms
+(BSD-3-Clause). See LICENSES/scikit-learn.txt and LICENSES/SciPy.txt.

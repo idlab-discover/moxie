@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.cluster": {
+      "AffinityPropagation": "moxie.cluster._affinity_propagation",
+      "affinity_propagation": "moxie.cluster._affinity_propagation"
+    }
+  }
+}

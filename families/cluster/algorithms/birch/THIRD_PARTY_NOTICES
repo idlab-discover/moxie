@@ -1,0 +1,5 @@
+Birch CF-tree insertion, splitting, and public behavior are adapted from
+scikit-learn (sklearn/cluster/_birch.py), revision
+4358542a1bd39af2e7e1cbace8b9fed067473c5b, under BSD-3-Clause.
+The copyright and license notice are retained in LICENSES/scikit-learn.txt.
+Python reference execution is validation tooling only.

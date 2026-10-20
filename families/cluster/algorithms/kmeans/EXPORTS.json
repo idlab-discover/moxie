@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.cluster": {
+      "KMeans": "moxie.cluster._kmeans",
+      "k_means": "moxie.cluster._kmeans",
+      "kmeans_plusplus": "moxie.cluster._kmeans"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+MeanShift control flow and public behavior are adapted from scikit-learn
+(sklearn/cluster/_mean_shift.py), revision
+4358542a1bd39af2e7e1cbace8b9fed067473c5b, licensed under BSD-3-Clause.
+The license and copyright notice are retained in LICENSES/scikit-learn.txt.
+Python reference execution is validation tooling only, never library runtime.

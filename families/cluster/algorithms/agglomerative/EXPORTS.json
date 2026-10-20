@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.cluster": {
+      "AgglomerativeClustering": "moxie.cluster._agglomerative",
+      "FeatureAgglomeration": "moxie.cluster._agglomerative",
+      "linkage_tree": "moxie.cluster._agglomerative",
+      "ward_tree": "moxie.cluster._agglomerative"
+    }
+  }
+}

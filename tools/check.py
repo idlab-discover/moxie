@@ -41,6 +41,7 @@ def executable(source):
 
 
 def build():
+    run(sys.executable, ROOT / "families/cluster/tools/check.py", "build")
     run(sys.executable, ROOT / "families/decomposition/tools/family.py", "build")
     run(sys.executable, ROOT / "families/ensemble/tools/check.py", "build")
     impute_checks.main("build")
@@ -116,6 +117,7 @@ def compose_test():
 
 
 def parity():
+    run(sys.executable, ROOT / "families/cluster/tools/check.py", "parity-only")
     run(sys.executable, ROOT / "families/decomposition/tools/family.py", "parity-only")
     run(sys.executable, ROOT / "families/ensemble/tools/check.py", "parity-only")
     impute_checks.main("parity-only")
@@ -147,6 +149,7 @@ def parity():
 
 
 def test():
+    run(sys.executable, ROOT / "families/cluster/tools/check.py", "test-only")
     run(sys.executable, ROOT / "families/decomposition/tools/family.py", "test-only")
     run(sys.executable, ROOT / "families/ensemble/tools/check.py", "test-only")
     impute_checks.main("test-only")

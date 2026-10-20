@@ -53,6 +53,10 @@ mixture-build = "python tools/mixture_checks.py build"
 mixture-test = "python tools/mixture_checks.py test"
 mixture-parity = "python tools/mixture_checks.py parity"
 
+cluster-build = "python families/cluster/tools/check.py build"
+cluster-test = "python families/cluster/tools/check.py test"
+cluster-parity = "python families/cluster/tools/check.py parity"
+
 [dependencies]
 mojo = "==1.0.0"
 max-core = "==26.5.0"

@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.cluster": {
+      "Birch": "moxie.cluster._birch"
+    }
+  }
+}

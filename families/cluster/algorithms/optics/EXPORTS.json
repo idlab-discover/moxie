@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.cluster": {
+      "OPTICS": "moxie.cluster._optics",
+      "compute_optics_graph": "moxie.cluster._optics",
+      "cluster_optics_dbscan": "moxie.cluster._optics",
+      "cluster_optics_xi": "moxie.cluster._optics"
+    }
+  }
+}

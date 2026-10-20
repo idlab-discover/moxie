@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.cluster": {
+      "DBSCAN": "moxie.cluster._dbscan",
+      "dbscan": "moxie.cluster._dbscan"
+    }
+  }
+}

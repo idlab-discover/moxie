@@ -93,3 +93,18 @@ cython = ">=3.2,<4"
 setuptools = ">=80"
 scikit-learn = ">=1.9.1,<2"
 pandas = ">=3,<4"
+
+[feature.notebooks.dependencies]
+ipykernel = "*"
+nbclient = "*"
+nbformat = "*"
+matplotlib-base = "*"
+jupyterlab = "*"
+
+[feature.notebooks.tasks]
+notebooks = "python tools/run_notebooks.py"
+notebooks-lab = "jupyter lab notebooks"
+
+[environments]
+default = { solve-group = "default" }
+notebooks = { features = ["notebooks"], solve-group = "default" }

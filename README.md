@@ -24,6 +24,9 @@ pixi run start
 original contract demonstration. The locked environment uses Mojo 1.0.0 and
 MAX 26.5.0. Python and scikit-learn are validation/build tools only.
 
+[Verification notebooks](notebooks/README.md) replay official scikit-learn
+examples next to the same scenario in Moxie: `pixi run -e notebooks notebooks`.
+
 `FrozenEstimator` preserves fitted state and conditionally forwards supported
 methods; see the [Frozen API and coverage](docs/frozen/api.md).
 

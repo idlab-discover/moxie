@@ -201,3 +201,8 @@ The dedicated mixture linalg worktree remains an explicit numerical dependency.
 [Model selection](../families/model_selection/README.md) is owned by Moxie.
 Its typed adapters cover dense serial CV, search and incremental learning curves;
 threshold tuning and successive halving remain unsupported.
+
+[Linear models](../families/linear_model/README.md) are owned by Moxie, with the
+supported dense LinearRegression, Ridge/RidgeClassifier, ElasticNet/Lasso and
+BayesianRidge contracts. The standalone checkout is not a build dependency;
+remaining dense algorithms and sparse support are explicitly unfinished.

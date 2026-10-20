@@ -142,6 +142,18 @@
         },
         "moxie.covariance._lars_gram": {
           "file": "src/moxie/covariance/_lars_gram.mojo"
+        },
+        "moxie.linear_model._base": {
+          "file": "src/moxie/linear_model/_base.mojo"
+        },
+        "moxie.linear_model._contracts": {
+          "file": "src/moxie/linear_model/_contracts.mojo"
+        },
+        "moxie.linear_model._linear_base": {
+          "file": "src/moxie/linear_model/_linear_base.mojo"
+        },
+        "moxie.linear_model._least_squares": {
+          "file": "src/moxie/linear_model/_least_squares.mojo"
         }
       },
       "assets": {
@@ -238,6 +250,15 @@
             "GraphicalLasso": "moxie.covariance._graph_lasso",
             "graphical_lasso": "moxie.covariance._graph_lasso",
             "GraphicalLassoCV": "moxie.covariance._graph_lasso"
+          },
+          "moxie.linear_model": {
+            "LinearClassifier": "moxie.linear_model._base",
+            "LinearRegressor": "moxie.linear_model._base",
+            "OnlineLinearClassifier": "moxie.linear_model._base",
+            "OnlineLinearRegressor": "moxie.linear_model._base",
+            "ProbabilisticLinearClassifier": "moxie.linear_model._base",
+            "LinearRegression": "moxie.linear_model._least_squares",
+            "LinearRegressionParams": "moxie.linear_model._least_squares"
           }
         },
         "schema": 1
@@ -421,55 +442,6 @@
         "mojo_optimize/nnls.mojo": "src/mojo_optimize/nnls.mojo"
       },
       "exports": null
-    },
-    {
-      "id": "linear_model",
-      "path": "../../../../../../moxie-linear_model",
-      "modules": {
-        "moxie.linear_model._base": {
-          "file": "src/moxie/linear_model/_base.mojo"
-        },
-        "moxie.linear_model._contracts": {
-          "file": "src/moxie/linear_model/_contracts.mojo"
-        },
-        "moxie.linear_model._linear_base": {
-          "file": "src/moxie/linear_model/_linear_base.mojo"
-        }
-      },
-      "assets": {},
-      "exports": {
-        "packages": {
-          "moxie": {},
-          "moxie.linear_model": {
-            "LinearClassifier": "moxie.linear_model._base",
-            "LinearRegressor": "moxie.linear_model._base",
-            "OnlineLinearClassifier": "moxie.linear_model._base",
-            "OnlineLinearRegressor": "moxie.linear_model._base",
-            "ProbabilisticLinearClassifier": "moxie.linear_model._base"
-          }
-        },
-        "schema": 1
-      }
-    },
-    {
-      "id": "least_squares",
-      "path": "../../../../../../moxie-linear_model/algorithms/least_squares",
-      "modules": {
-        "moxie.linear_model._least_squares": {
-          "file": "src/moxie/linear_model/_least_squares.mojo"
-        }
-      },
-      "assets": {},
-      "exports": {
-        "packages": {
-          "moxie": {},
-          "moxie.linear_model": {
-            "LinearRegression": "moxie.linear_model._least_squares",
-            "LinearRegressionParams": "moxie.linear_model._least_squares"
-          }
-        },
-        "schema": 1
-      }
     },
     {
       "assets": {},
@@ -736,6 +708,77 @@
         }
       },
       "path": "."
+    },
+    {
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie._linear_linalg": {
+            "NumericalError": "moxie._linear_linalg._storage",
+            "compact_copy": "moxie._linear_linalg._storage",
+            "triangular_solve": "moxie._linear_linalg.triangular",
+            "triangular_solve_inplace": "moxie._linear_linalg.triangular",
+            "CholeskyFactor": "moxie._linear_linalg.cholesky",
+            "cholesky": "moxie._linear_linalg.cholesky",
+            "QRFactor": "moxie._linear_linalg.qr",
+            "qr": "moxie._linear_linalg.qr",
+            "SVDFactor": "moxie._linear_linalg.svd",
+            "svd": "moxie._linear_linalg.svd",
+            "LeastSquaresResult": "moxie._linear_linalg.svd",
+            "least_squares": "moxie._linear_linalg.svd",
+            "SymmetricEigenFactor": "moxie._linear_linalg.symmetric",
+            "PseudoinverseResult": "moxie._linear_linalg.symmetric",
+            "symmetric_eigh": "moxie._linear_linalg.symmetric",
+            "symmetric_pinv": "moxie._linear_linalg.symmetric",
+            "IndefiniteFactor": "moxie._linear_linalg.indefinite",
+            "symmetric_indefinite": "moxie._linear_linalg.indefinite",
+            "symmetric_slogdet": "moxie._linear_linalg.indefinite",
+            "SignedLogDet": "moxie._linear_linalg._determinant",
+            "LinearOperator": "moxie._linear_linalg.krylov",
+            "DenseOperator": "moxie._linear_linalg.krylov",
+            "CGResult": "moxie._linear_linalg.krylov",
+            "LSQRResult": "moxie._linear_linalg.krylov",
+            "conjugate_gradient": "moxie._linear_linalg.krylov",
+            "lsqr": "moxie._linear_linalg.krylov"
+          }
+        }
+      },
+      "id": "linear-model-linalg",
+      "modules": {
+        "moxie._linear_linalg._determinant": {
+          "file": "src/mojo_linalg/_determinant.mojo"
+        },
+        "moxie._linear_linalg._spectral": {
+          "file": "src/mojo_linalg/_spectral.mojo"
+        },
+        "moxie._linear_linalg._storage": {
+          "file": "src/mojo_linalg/_storage.mojo"
+        },
+        "moxie._linear_linalg.cholesky": {
+          "file": "src/mojo_linalg/cholesky.mojo"
+        },
+        "moxie._linear_linalg.indefinite": {
+          "file": "src/mojo_linalg/indefinite.mojo"
+        },
+        "moxie._linear_linalg.krylov": {
+          "file": "src/mojo_linalg/krylov.mojo"
+        },
+        "moxie._linear_linalg.qr": {
+          "file": "src/mojo_linalg/qr.mojo"
+        },
+        "moxie._linear_linalg.svd": {
+          "file": "src/mojo_linalg/svd.mojo"
+        },
+        "moxie._linear_linalg.symmetric": {
+          "file": "src/mojo_linalg/symmetric.mojo"
+        },
+        "moxie._linear_linalg.triangular": {
+          "file": "src/mojo_linalg/triangular.mojo"
+        }
+      },
+      "path": "../../../../../../.worktrees/mojo-linalg-linear_model",
+      "revision": "a3c4f91ad4639eda64eb0214f74699e1dfa97a0f"
     }
   ],
   "overrides": []

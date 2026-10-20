@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.linear_model": {
+      "Ridge": "moxie.linear_model._ridge",
+      "RidgeParams": "moxie.linear_model._ridge",
+      "RidgeClassifier": "moxie.linear_model._ridge",
+      "RidgeClassifierParams": "moxie.linear_model._ridge",
+      "RidgeRegressionResult": "moxie.linear_model._ridge",
+      "ridge_regression": "moxie.linear_model._ridge",
+      "ClassWeight": "moxie.linear_model._ridge_labels"
+    }
+  }
+}

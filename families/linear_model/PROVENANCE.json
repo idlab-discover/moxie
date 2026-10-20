@@ -1,0 +1,51 @@
+{
+  "source_repository": "../../../retired-moxie-linear_model",
+  "source_revision": "4c6037827c4a81df4fd9f228732d2789ae1e2d13",
+  "sklearn_revision": "4358542a1bd39af2e7e1cbace8b9fed067473c5b",
+  "modules": [
+    {
+      "source": "src/moxie/linear_model/_base.mojo",
+      "destination": "src/moxie/linear_model/_base.mojo"
+    },
+    {
+      "source": "src/moxie/linear_model/_contracts.mojo",
+      "destination": "src/moxie/linear_model/_contracts.mojo"
+    },
+    {
+      "source": "src/moxie/linear_model/_linear_base.mojo",
+      "destination": "src/moxie/linear_model/_linear_base.mojo"
+    },
+    {
+      "source": "algorithms/least_squares/src/moxie/linear_model/_least_squares.mojo",
+      "destination": "src/moxie/linear_model/_least_squares.mojo"
+    },
+    {
+      "source": "algorithms/ridge/src/moxie/linear_model/_ridge.mojo",
+      "destination": "src/moxie/linear_model/_ridge.mojo"
+    },
+    {
+      "source": "algorithms/ridge/src/moxie/linear_model/_ridge_labels.mojo",
+      "destination": "src/moxie/linear_model/_ridge_labels.mojo"
+    },
+    {
+      "source": "algorithms/elastic_net/src/moxie/linear_model/_coordinate_descent.mojo",
+      "destination": "src/moxie/linear_model/_coordinate_descent.mojo"
+    },
+    {
+      "source": "shared/coordinate_engine/src/moxie/linear_model/_cd_fast.mojo",
+      "destination": "src/moxie/linear_model/_cd_fast.mojo"
+    },
+    {
+      "source": "algorithms/bayesian/src/moxie/linear_model/_bayes.mojo",
+      "destination": "src/moxie/linear_model/_bayes.mojo"
+    }
+  ],
+  "linalg_owner": "../../../.worktrees/mojo-linalg-linear_model",
+  "adaptation": "Imports use moxie._linear_linalg to preserve the existing solver worktree alongside other Moxie numerical dependencies.",
+  "source_repository_name": "moxie-linear_model",
+  "preserved_artifacts": "Child tests, examples, documentation, licenses and toolchain locks are under families/linear_model. Ignored artifacts remain in the retired checkout.",
+  "omitted_scaffolds": [
+    "src/moxie/linear_model/_api.mojo",
+    "src/moxie/linear_model/_api_types.mojo"
+  ]
+}

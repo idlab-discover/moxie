@@ -1,0 +1,1 @@
+{"schema": 1, "packages": {"moxie": {}, "moxie.linear_model": {"ElasticNet": "moxie.linear_model._coordinate_descent", "Lasso": "moxie.linear_model._coordinate_descent", "ElasticNetParams": "moxie.linear_model._coordinate_descent", "LassoParams": "moxie.linear_model._coordinate_descent"}}}

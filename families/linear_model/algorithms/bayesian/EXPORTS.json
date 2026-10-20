@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie.linear_model": {
+      "BayesianRidge": "moxie.linear_model._bayes",
+      "BayesianRidgeParams": "moxie.linear_model._bayes"
+    }
+  }
+}

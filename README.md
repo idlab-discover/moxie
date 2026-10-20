@@ -56,10 +56,11 @@ optional Snappy codec. Keep those checkouts at the declared paths. Missing
 sources and module ownership conflicts fail explicitly. The `moxie-dummy`,
 `moxie-compose`, `moxie-pipeline`, `moxie-frozen`, and `moxie-preprocessing`
 checkouts, as well as `moxie-kernel_ridge` and `moxie-covariance`, are not required to build or use Moxie.
-Integrated composition tests consume the LinearRegression subset of
-`../moxie-linear_model`, and its existing NNLS dependency at
-`../.worktrees/mojo-optimize-linear_model`. These remain separately owned live
-source dependencies; this integration does not import their entire families.
+Linear models are owned by Moxie under `src/moxie/linear_model`, including
+LinearRegression, Ridge/RidgeClassifier, ElasticNet/Lasso and BayesianRidge.
+See [supported scope and commands](families/linear_model/README.md).
+Their existing external linalg and optimizer worktrees remain declared live
+numerical dependencies; the standalone family checkout is not required.
 
 Covariance uses the tested `../.worktrees/mojo-linalg-covariance` numerical checkout
 and the integrated `families/model_selection` subset for graphical cross-validation.

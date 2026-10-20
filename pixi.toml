@@ -6,6 +6,10 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+linear-model-build = "python tools/linear_model_checks.py build"
+linear-model-test = "python tools/linear_model_checks.py test"
+linear-model-parity = "python tools/linear_model_checks.py parity"
+linear-model-start = "python tools/linear_model_checks.py start"
 model-selection = "python tools/model_selection_checks.py all"
 build = "python tools/check.py build"
 test = { cmd = "python tools/check.py test", depends-on = ["build"] }

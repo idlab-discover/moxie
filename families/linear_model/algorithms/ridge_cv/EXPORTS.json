@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.linear_model": {
+      "RidgeCV": "moxie.linear_model._ridge_cv",
+      "RidgeCVParams": "moxie.linear_model._ridge_cv",
+      "RidgeClassifierCV": "moxie.linear_model._ridge_cv",
+      "RidgeClassifierCVParams": "moxie.linear_model._ridge_cv"
+    }
+  }
+}

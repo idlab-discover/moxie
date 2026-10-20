@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "packages": {
+    "moxie": {},
+    "moxie.linear_model": {
+      "LinearRegression": "moxie.linear_model._least_squares",
+      "LinearRegressionParams": "moxie.linear_model._least_squares"
+    }
+  }
+}

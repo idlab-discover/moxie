@@ -1,6 +1,7 @@
 """Dense missing indicators using the family-owned missingness layout."""
 import numojo as nm
 from std.utils import Variant
+from moxie._feature_metadata import FeatureNamesOut
 from moxie.base import UnsupervisedEstimator, TransformerMixin, FitTransformer
 from moxie.impute._plumbing import MissingValue, missing_mask, FeatureLayout, validate_matrix
 
@@ -33,7 +34,7 @@ struct IndicatorParams[dtype: DType](Copyable, Movable):
         self.error_on_new = error_on_new
 
 
-struct MissingIndicator[dtype: DType = DType.float64](UnsupervisedEstimator, TransformerMixin, FitTransformer, Copyable, Movable):
+struct MissingIndicator[dtype: DType = DType.float64](UnsupervisedEstimator, TransformerMixin, FitTransformer, FeatureNamesOut, Copyable, Movable):
     comptime Params = IndicatorParams[Self.dtype]
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = nm.NDArray[Self.dtype]

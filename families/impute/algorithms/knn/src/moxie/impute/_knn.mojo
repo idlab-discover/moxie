@@ -1,6 +1,7 @@
 """Dense nearest-neighbor imputation using the shared neighbors query engine."""
 import numojo as nm
 from std.math import isnan, isfinite
+from moxie._feature_metadata import FeatureNamesOut
 from moxie.impute._base import Imputer
 from moxie.impute._indicator import MissingIndicator
 from moxie.impute._plumbing import MissingValue, FeatureLayout, missing_mask, select_features, append_indicator
@@ -29,7 +30,7 @@ struct KNNParams[dtype: DType, M: DenseMetric & Deinitable, W: NeighborWeights &
     var weights_callback: Optional[Self.W]
 
 
-struct KNNImputer[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](Imputer, Copyable, Movable):
+struct KNNImputer[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](Imputer, FeatureNamesOut, Copyable, Movable):
     comptime Params = KNNParams[Self.dtype, Self.M, Self.W]
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = nm.NDArray[Self.dtype]

@@ -2,6 +2,7 @@
 import numojo as nm
 from std.math import isfinite
 from std.utils import Variant
+from moxie._feature_metadata import FeatureNamesOut
 from moxie.impute._base import Imputer
 from moxie.impute._plumbing import MissingValue, missing_mask, FeatureLayout, select_features, append_indicator, validate_matrix
 from moxie.impute._indicator import MissingIndicator, _indicator_mask
@@ -42,7 +43,7 @@ struct SimpleParams[dtype: DType, Callback: ColumnStrategy = NoCallable](Copyabl
         self.callback = callback.copy()
 
 
-struct SimpleImputer[dtype: DType = DType.float64, Callback: ColumnStrategy = NoCallable, Result: Copyable = nm.NDArray[dtype]](Imputer, Copyable, Movable):
+struct SimpleImputer[dtype: DType = DType.float64, Callback: ColumnStrategy = NoCallable, Result: Copyable = nm.NDArray[dtype]](Imputer, FeatureNamesOut, Copyable, Movable):
     comptime Params = SimpleParams[Self.dtype, Self.Callback]
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = nm.NDArray[Self.dtype]

@@ -24,6 +24,9 @@
       },
       "id": "moxie",
       "modules": {
+        "moxie._feature_metadata": {
+          "file": "src/moxie/_feature_metadata.mojo"
+        },
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },

@@ -223,18 +223,49 @@ Native contracts additionally cover failed fits, invalid shapes, empty rows,
 output ownership, and capability rejection. These are explicit composition
 fixtures, not implemented density or outlier algorithms.
 
+## Factories
+
+`make_pipeline(transformer, estimator)` builds the two-stage Pipeline with
+sklearn's automatic names: lowercased type names (from `std.reflection`),
+numbered `-1`, `-2`, ... on collision. `make_union(a, b)` and
+`make_union(a, b, c)` build a flat FeatureUnion the same way and accept
+`n_jobs`, `verbose` and `verbose_feature_names_out`; select Float32 branches
+with `make_union[DType.float32](...)`.
+
+```mojo
+from moxie.pipeline import make_pipeline, make_union
+var pipe = make_pipeline(StandardScaler(), SVC())   # "standardscaler", "svc"
+var union = make_union(PCA(n_components=1), StandardScaler(), PCA(n_components=2))
+# branches "pca-1", "standardscaler", "pca-2"
+```
+
+**Mojo adaptations:** sklearn's variadic `*steps` is a fixed-arity overload
+set (two pipeline steps; two or three union branches), because each step has
+its own static type. Longer pipelines nest `Pipeline` explicitly, choosing the
+inner names. `memory`, `transform_input` and `verbose` are not accepted
+because Pipeline does not implement them. Four naming cases compare exactly
+with the pinned factories.
+
 ## Current boundary
 
-This implementation exposes fit, predict, conditional score, per-sample scores, decision and probability
-methods, feature names, input feature counts, configuration, and cloning.
-It does not yet provide transformer-final/unsupervised-final pipelines,
-inverse transforms, fit sample-weight routing, passthrough
-sentinels, indexing, other learned attribute forwarding, automatic step naming,
-metadata routing, caching, callbacks, output-container selection, or verbose
-execution. These methods/settings are absent from the typed API.
-`make_pipeline` and `make_union` remain explicit error-raising scaffolds.
-[Dense FeatureUnion](feature-union.md) is implemented and can be a Pipeline prefix. Sparse execution remains deferred. This is not full sklearn parity
-and now owns Moxie's pipeline module.
+This implementation exposes fit, predict, conditional score, per-sample scores,
+decision and probability methods, feature names, input feature counts,
+configuration, cloning and the two factories. The following sklearn Pipeline
+API is **deferred** (absent from the typed API, so use fails at compile time):
+
+- transformer-final pipelines: `transform`, `fit_transform`, `inverse_transform`
+  (a Pipeline therefore cannot be a FeatureUnion/ColumnTransformer branch or
+  a Pipeline prefix);
+- unsupervised-final pipelines and `fit_predict` (e.g. a clusterer final step);
+- `classes_` forwarding (read `pipe.estimator.classes_`);
+- `passthrough`/`None` steps, `__len__`, integer/slice `__getitem__` and
+  `named_steps` (use the typed `transformer`/`estimator` fields and names);
+- constructor options `memory`, `verbose` and `transform_input`;
+- fit parameter / sample-weight routing, metadata routing, callbacks,
+  `set_output` and `feature_names_in_`.
+
+[Dense FeatureUnion](feature-union.md) is implemented and can be a Pipeline
+prefix. Sparse execution remains deferred. This is not full sklearn parity.
 
 ## Validation and reuse
 

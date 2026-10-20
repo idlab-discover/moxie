@@ -1,7 +1,7 @@
 # Composition contracts and validation
 
 Moxie owns `moxie.pipeline`, `_pipeline`, `_pipeline_contracts`,
-`_pipeline_sequential`, `_pipeline_union`, the factory scaffolds, and shared
+`_pipeline_sequential`, `_pipeline_union`, the factories (`_pipeline_api`), and shared
 `_feature_metadata` contracts. The implementations were integrated from
 `moxie-pipeline` commit `5a948f1`. The scikit-learn reference remains
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`; BSD notices remain in the source
@@ -54,7 +54,7 @@ small well-conditioned fixture. It also checks clone independence, unsupported
 final feature names, and unfitted metadata. Raw comparisons and source hashes
 remain under ignored `builds/tests/pipeline/compose-parity`.
 
-Factory scaffolds, transformer-final/unsupervised-final pipelines, sparse
+Variadic factories beyond two/three steps, transformer-final/unsupervised-final pipelines, sparse
 execution, fit-weight routing, persistence schemas, and metadata routing remain
 unfinished. See [Pipeline](sequential.md) and [FeatureUnion](feature-union.md)
 for their full implemented boundaries. Integration does not extend these claims.

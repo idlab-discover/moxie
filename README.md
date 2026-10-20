@@ -8,7 +8,7 @@ native model persistence. Dense `ColumnTransformer`, `make_column_transformer`,
 `make_column_selector`, and `TransformedTargetRegressor` are also implemented.
 Typed supervised `Pipeline` and dense `FeatureUnion` are integrated; see the
 [Pipeline API](docs/pipeline/sequential.md) and [FeatureUnion API](docs/pipeline/feature-union.md).
-Their `make_pipeline` and `make_union` factories remain explicit scaffolds.
+`make_pipeline` (two steps) and `make_union` (two or three transformers) name steps like sklearn.
 All 29 preprocessing public names have dense implementations; see the
 [Preprocessing API](families/preprocessing/docs/api.md) for native scope and limitations.
 

@@ -166,5 +166,6 @@ Sparse inputs/outputs, mixed-dtype promotion, pandas/polars output, Python
 reflection, dynamic heterogeneous indexing, arbitrary fit metadata and shared
 metadata routing, serialization, and parallel scheduling remain unsupported.
 Unsupported methods such as `set_output` and `get_metadata_routing` are absent;
-extra arguments fail at compile time. `make_union` and `make_pipeline` remain
-explicit scaffolds. This implementation does not claim complete sklearn parity.
+extra arguments fail at compile time. `make_union` accepts two or three
+transformers (see [factories](sequential.md#factories)). `named_transformers`
+and `union[name]` lookup are absent; use the typed tree. This implementation does not claim complete sklearn parity.

@@ -542,6 +542,23 @@ assert np.array_equal(prefix_values[:, 0], reference_prefix.predict(X_prefix))
 prefix_error = float(np.max(np.abs(prefix_values[:, 1] - reference_prefix.decision_function(X_prefix))))
 assert prefix_error <= 1e-6, prefix_error
 
+# make_pipeline/make_union automatic names and union feature names.
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import MinMaxScaler
+make_pipeline, make_union = pipeline_module.make_pipeline, pipeline_module.make_union
+reference_union = make_union(StandardScaler(), MinMaxScaler()).fit(X_prefix)
+expected_factories = {
+    'factory_pipeline': [name for name, _ in make_pipeline(StandardScaler(), SVC()).steps],
+    'factory_union': [name for name, _ in reference_union.transformer_list]
+                     + ['|'] + list(reference_union.get_feature_names_out()),
+    'factory_duplicates': [name for name, _ in make_union(StandardScaler(), StandardScaler()).transformer_list],
+    'factory_three': [name for name, _ in make_union(PCA(1), StandardScaler(), PCA(2)).transformer_list],
+}
+native_factories = subprocess.check_output([ROOT / 'builds/tests/pipeline/test_pipeline_factories'], text=True)
+actual_factories = {fields[0]: fields[1:] for line in native_factories.splitlines()
+                    if (fields := line.split())[0] in expected_factories}
+assert actual_factories == expected_factories, (actual_factories, expected_factories)
+
 report = {'reference': REVISION, 'support_sklearn': sklearn.__version__,
           'source_sha256': {f: hashlib.sha256((SOURCE/f).read_bytes()).hexdigest() for f in FILES},
           'sequential': expected, 'real': actual, 'feature_names': actual_names, 'input_features': actual_features,
@@ -549,9 +566,9 @@ report = {'reference': REVISION, 'support_sklearn': sklearn.__version__,
           'probability': actual_probability, 'dense_probability': dense_probability,
           'decision': actual_decision, 'dense_decision': actual_dense_decision,
           'samples': actual_samples, 'dense_samples': actual_dense_samples,
-          'prefix_svc_max_decision_error': prefix_error,
+          'prefix_svc_max_decision_error': prefix_error, 'factories': actual_factories,
           'probability_tolerance': 'probabilities exact; logs rtol/atol 1e-12 (Float64 outputs for both input dtypes)',
           'tolerance': 'exact: feature-name strings, small integer scalar cases and exactly representable dense means/medians'}
 out = ROOT / 'builds/pipeline-parity.json'
 out.write_text(json.dumps(report, indent=2) + '\n')
-print('PASS: 7 sequential cases, 7 feature-name cases, 6 input-feature cases, 6 score cases, 8 probability cases, 8 decision cases, 6 sample-score cases, StandardScaler+SVC target-type prefix and real DummyRegressor Float32/Float64 integration')
+print('PASS: 7 sequential cases, 7 feature-name cases, 6 input-feature cases, 6 score cases, 8 probability cases, 8 decision cases, 6 sample-score cases, StandardScaler+SVC target-type prefix, 4 factory naming cases and real DummyRegressor Float32/Float64 integration')

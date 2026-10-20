@@ -71,6 +71,8 @@ also rejected. This is deliberately stricter than Python's mutable
 | `TransformerMixin`, `InverseTransformer` | `transform`, `inverse_transform` |
 | `SampleScorer`, `DensityMixin` | `score_samples`, estimator-specific density `score` |
 | `OutlierMixin` | Corresponding trait identity and inference methods |
+| `FeatureNamesOut` (`moxie._feature_metadata`) | `get_feature_names_out(input_features=None)`, so `Pipeline.get_feature_names_out` works through a frozen step |
+| `InputFeatureCount` | `get_n_features_in()`, the native counterpart of delegated `n_features_in_` |
 
 Each capability is conditional on the wrapped type's trait conformance. Missing
 capabilities fail compilation, and configuration-dependent errors from supported
@@ -204,6 +206,13 @@ Moxie's `pixi run parity` includes both comparisons automatically.
 | `test_frozen_params` | Typed parameter records, restoration, same-type replacement, and compile-time rejection of nested updates |
 | `test_frozen_tags` | Classifier, regressor and outlier trait identity plus recursive cluster identity; arbitrary Python tags are unsupported |
 | `test_frozen_metadata_routing` | Unsupported: dynamic metadata routing and indexing require a separate native design |
+
+`test_frozen_composition.mojo` wraps production estimators: a fitted
+`LinearDiscriminantAnalysis` (no-op fit on different data, delegated
+probabilities, decisions, transform and score, fitted clone) and a fitted
+`StandardScaler` as the frozen prefix or with a frozen final classifier inside
+`moxie.pipeline.Pipeline`, including pipeline clone, feature-name forwarding and
+Float32 transforms.
 
 Capability probes establish forwarding contracts, not numerical coverage of every
 wrapped estimator. Python object identity, arbitrary attribute/index forwarding,

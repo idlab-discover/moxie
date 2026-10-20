@@ -23,6 +23,7 @@ from moxie.base import (
     IncrementalTransformer,
     ClusterMixin,
 )
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie.utils.validation import check_is_fitted
 from ._base import FrozenEstimatorAPI
 
@@ -48,12 +49,14 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     Copyable,
     DecisionFunction where conforms_to(E, DecisionFunction),
     DensityMixin where conforms_to(E, DensityMixin),
+    FeatureNamesOut where conforms_to(E, FeatureNamesOut),
     FrozenEstimatorAPI,
     _FrozenIdentity,
     IncrementalClassifier where conforms_to(E, IncrementalClassifier),
     IncrementalRegressor where conforms_to(E, IncrementalRegressor),
     IncrementalTransformer where conforms_to(E, IncrementalTransformer),
     InputEstimator where conforms_to(E, InputEstimator),
+    InputFeatureCount where conforms_to(E, InputFeatureCount),
     InverseTransformer where conforms_to(E, InverseTransformer),
     LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
     OutlierMixin where conforms_to(E, OutlierMixin),
@@ -312,6 +315,16 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
         self, X: Self.Input
     ) raises -> Self.SampleScores where conforms_to(Self.E, SampleScorer):
         return self._estimator[].score_samples(X)
+
+    def get_feature_names_out(
+        self, input_features: Optional[List[String]] = None
+    ) raises -> List[String] where conforms_to(Self.E, FeatureNamesOut):
+        return self._estimator[].get_feature_names_out(input_features)
+
+    def get_n_features_in(
+        self,
+    ) raises -> Int where conforms_to(Self.E, InputFeatureCount):
+        return self._estimator[].get_n_features_in()
 
 
 def is_clusterer[E: BaseEstimator](estimator: E) -> Bool:

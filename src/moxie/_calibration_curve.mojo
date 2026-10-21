@@ -54,17 +54,27 @@ def _curve_float64(
         raise Error("ValueError: strategy must be uniform or quantile")
     var indices = order(y_prob)
     var edges = nm.zeros[DType.float64](nm.Shape(bins + 1))
+    # Reproduce numpy's rounding: linspace edges are j * (1 / n) with an exact
+    # endpoint, and percentile divides q * 100 by 100, then interpolates from
+    # the upper neighbour when the fraction is at least one half.
+    var step = 1.0 / Float64(bins)
     for j in range(bins + 1):
-        var fraction = Float64(j) / Float64(bins)
+        var fraction = Float64(j) * step if j < bins else 1.0
         if strategy == "uniform":
             edges[nm.Item(j)] = fraction
         else:
-            var position = fraction * Float64(y_prob.size - 1)
+            var position = Float64(y_prob.size - 1) * (fraction * 100.0 / 100.0)
+            if position >= Float64(y_prob.size - 1):
+                edges[nm.Item(j)] = y_prob.item(indices[y_prob.size - 1])
+                continue
             var lo = Int(position)
-            var hi = min(lo + 1, y_prob.size - 1)
+            var t = position - Float64(lo)
             var lower = y_prob.item(indices[lo])
-            edges[nm.Item(j)] = lower + (position - Float64(lo)) * (
-                y_prob.item(indices[hi]) - lower
+            var upper = y_prob.item(indices[lo + 1])
+            var difference = upper - lower
+            edges[nm.Item(j)] = (
+                upper - difference * (1 - t) if t >= 0.5 else lower
+                + difference * t
             )
     var counts = nm.zeros[DType.float64](nm.Shape(bins))
     var sums = nm.zeros[DType.float64](nm.Shape(bins))

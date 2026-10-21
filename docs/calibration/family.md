@@ -129,7 +129,11 @@ probability and its complement.
 `calibration_curve(y_true, y_prob, pos_label=None, n_bins=5, strategy="uniform")`
 returns a tuple `(prob_true, prob_pred)` of one-dimensional Float64 arrays.
 Only occupied bins are returned. Interior boundaries belong to the lower bin.
-Quantile edges use linear percentile interpolation. `n_bins` accepts a positive
+Uniform edges are `j * (1 / n_bins)` with an exact final edge, as computed by
+`numpy.linspace`, so probabilities one ulp around an edge fall in the same bin
+as in the reference. Quantile edges reproduce `numpy.percentile`'s linear
+method, including its `q * 100 / 100` rounding and its interpolation from the
+upper neighbour when the fractional position is at least one half. `n_bins` accepts a positive
 integer or `"cube_root"`. Numeric labels outside the usual `{0, 1}` or `{-1, 1}`
 sets require `pos_label`. Float32 inputs are widened exactly before binning;
 output statistics remain Float64, matching the reference's weighted bin counts.

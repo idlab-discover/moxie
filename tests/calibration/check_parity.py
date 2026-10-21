@@ -142,6 +142,24 @@ def main():
             y = rng.choice([-3., 2.], size=37)
             a, b = ref.calibration_curve(y, p, n_bins=bins, strategy=strategy, pos_label=2)
             add('curve', p, y, None, b, a, bins, strategy, 2)
+    # Bin-edge arithmetic: numpy's linspace edges are j * (1 / n) and its
+    # percentile lerp switches formula at t >= 0.5. Probabilities one ulp
+    # around those edges and tied quantiles must land in the same bins.
+    for bins in [3, 7, 10, 29, 100]:
+        edges = np.linspace(0, 1, bins + 1)[1:-1]
+        p = np.concatenate([edges, np.nextafter(edges, 0), np.nextafter(edges, 1),
+            [j / bins for j in range(1, bins)]])
+        p = np.clip(p, 0, 1)
+        y = rng.integers(0, 2, size=p.size).astype(float)
+        a, b = ref.calibration_curve(y, p, n_bins=bins, strategy='uniform', pos_label=1)
+        add('curve', p, y, None, b, a, bins, 'uniform', 1)
+    for size in [2, 7, 40, 97]:
+        for bins in [2, 3, 6, 13]:
+            p = np.round(rng.uniform(size=size), 2)
+            p = np.concatenate([p, np.nextafter(p, 1)])
+            y = rng.integers(0, 2, size=p.size).astype(float)
+            a, b = ref.calibration_curve(y, p, n_bins=bins, strategy='quantile', pos_label=1)
+            add('curve', p, y, None, b, a, bins, 'quantile', 1)
     for classes in [2, 3]:
         X = rng.normal(size=(60, 4))
         y = np.tile(np.arange(classes), 60 // classes).astype(float)

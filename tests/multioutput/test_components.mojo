@@ -109,7 +109,7 @@ def main() raises:
     var chain32 = RegressorChain[Ridge[DType.float32], DType.float32](Ridge[DType.float32](0.5), order=List[Int]([2, 0, 1]))
     parity("ComponentsRegressorChain32Weighted", chain32.fit(X32, Y32, sample_weight=w).predict(X32))
 
-    var chain = RegressorChain(Ridge(0.5), order=List[Int]([2, 0, 1]))
+    var chain = RegressorChain(Ridge(0.5), order=List[Int]([2, 0, 1]), verbose=True)
     parity("ComponentsRegressorChain", chain.fit(X, Y).predict(X))
     print("PARITY ComponentsRegressorChainScore", chain.score(X, Y))
     var wrong = nm.zeros[DType.float64](Shape(2, FEATURES + 1))

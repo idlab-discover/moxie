@@ -32,7 +32,7 @@ record and pass it to `set_params`. `clone(model)` recursively clones component
 configuration into an unfitted wrapper. A successful ordinary fit replaces all
 fitted components; a failed ordinary fit leaves the prior model intact.
 
-Independent estimators accept `n_jobs=None` or `1`. Their `partial_fit` exists
+Independent estimators accept any `n_jobs` except `0` and fit serially. Their `partial_fit` exists
 only when the component has the appropriate incremental trait. A classifier's
 first incremental fit requires `classes=List[NDArray[label]]`, one complete
 class vector per output. Subsequent calls retain each fitted component.
@@ -42,7 +42,8 @@ Chain constructors accept `order=None`, `random_state=None`,
 `random_order=False`, and `verbose=False`. `ClassifierChain` also accepts a
 `chain_method` string, defaulting to `"predict"`. Random order is requested with
 `random_order=True`; it is mutually exclusive with an explicit permutation.
-`verbose=True` reports completed links during ordinary fit. Native CV uses
+`verbose=True` prints sklearn's `[Chain] ... (i of n) Processing order k, total=...`
+line after each link is fitted, in ordinary and CV fit. Native CV uses
 `fit(X, Y, cv=provider)` with the `ChainResponses` protocol. Its returned vector
 must contain one out-of-fold response per original sample; the final link does
 not request a CV response.

@@ -26,8 +26,10 @@ fold construction, independent fold clones and out-of-fold coverage.
   Float32 or Float64 parameter. Targets are numeric NDArray matrices; numeric
   classification labels retain their dtype. String/object labels are not yet
   supported and are not converted to floats.
-- Independent execution is serial. `n_jobs=None` and `n_jobs=1` are supported;
-  other settings raise. Sparse inputs remain deferred.
+- Independent execution is serial. `n_jobs` follows joblib: `0` raises
+  `n_jobs == 0 in Parallel has no meaning`; every other value fits the
+  components one after another, which gives the same model as sklearn's
+  parallel fit. Sparse inputs remain deferred.
 - Random chain order uses `random_order=True`, with an optional integer
   `random_state`. Mutable RNG objects and response-method preference lists
   are not supported.

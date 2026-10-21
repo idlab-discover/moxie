@@ -71,6 +71,12 @@ def oracle():
     print(json.dumps(expected))
 
 
+def verbose_lines(text):
+    """[Chain] progress lines with the elapsed time masked (layout stays exact)."""
+    import re
+    return [re.sub(r'total=.*$', 'total=<time>', line) for line in text.splitlines() if line.startswith('[Chain]')]
+
+
 def components(module, np):
     """Production-component scenario mirrored by test_components.mojo."""
     from sklearn.linear_model import Ridge, RidgeClassifier
@@ -93,7 +99,11 @@ def components(module, np):
     out['ComponentsRidge32Weighted'] = narrow.predict(X32).ravel().tolist()
     chain32 = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1]).fit(X32, Y32, sample_weight=w)
     out['ComponentsRegressorChain32Weighted'] = chain32.predict(X32).ravel().tolist()
-    chain = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1]).fit(X, Y)
+    import contextlib, io
+    log = io.StringIO()
+    with contextlib.redirect_stdout(log):
+        chain = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1], verbose=True).fit(X, Y)
+    out['ComponentsChainVerbose'] = verbose_lines(log.getvalue())
     out['ComponentsRegressorChain'] = chain.predict(X).ravel().tolist()
     out['ComponentsRegressorChainScore'] = [chain.score(X, Y)]
     decision = module.ClassifierChain(RidgeClassifier(), order=[1, 0, 2], chain_method='decision_function').fit(X, binary)
@@ -120,14 +130,18 @@ if __name__ == '__main__':
         reference = json.loads(subprocess.check_output([python, __file__, '--oracle'], env=env, text=True))
         output = ''.join(subprocess.check_output([str(ROOT/'builds/tests/multioutput'/name)], env=env, text=True)
                          for name in ('test_estimators', 'test_components'))
-        actual = {}
+        actual = {'ComponentsChainVerbose': verbose_lines(output)}
         for line in output.splitlines():
             if line.startswith('PARITY '):
                 _, name, *values = line.split()
                 actual[name] = [float(v) for v in values]
         assert actual.keys() == reference.keys(), (actual, reference)
+        assert actual['ComponentsChainVerbose'] == reference['ComponentsChainVerbose'], (
+            actual['ComponentsChainVerbose'], reference['ComponentsChainVerbose'])
         for name in reference:
             assert len(actual[name]) == len(reference[name]), name
+            if name == 'ComponentsChainVerbose':
+                continue
             # Scores perform floating-point reductions; discrete predictions,
             # one-neighbor probabilities and seeded permutations must be exact.
             if name.startswith('Components') and name.endswith('32Weighted'):

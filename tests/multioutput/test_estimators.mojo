@@ -324,9 +324,20 @@ def main() raises:
     var wide_pred = wide.predict(X)
     for i in range(8):
         assert_equal(wide_pred.unsafe_get(i), wide_labels.unsafe_get(i))
-    var invalid_jobs = MultiOutputRegressor(Nearest[DType.float64](), n_jobs=2)
-    with assert_raises():
+    # joblib rejects n_jobs=0; every other value yields the serial result.
+    var invalid_jobs = MultiOutputRegressor(Nearest[DType.float64](), n_jobs=0)
+    with assert_raises(contains="n_jobs == 0 in Parallel has no meaning"):
         _ = invalid_jobs.fit(X, y)
+    assert_false(invalid_jobs.__sklearn_is_fitted__())
+    for jobs in [-1, 2]:
+        var parallel = MultiOutputRegressor(Nearest[DType.float64](), n_jobs=jobs)
+        var expected = reg.predict(query)
+        var observed = parallel.fit(X, y).predict(query)
+        for i in range(6):
+            assert_equal(observed.unsafe_get(i), expected.unsafe_get(i))
+        var parallel_clf = MultiOutputClassifier(Nearest[DType.int64](), n_jobs=jobs)
+        _ = parallel_clf.partial_fit(X, labels, clf.classes_.copy())
+        assert_equal(parallel_clf.score(X, labels), Float64(1))
     var weighted = MultiOutputRegressor(WeightedMean())
     for i in range(4):
         weights.unsafe_set(i, Float64(i + 1))

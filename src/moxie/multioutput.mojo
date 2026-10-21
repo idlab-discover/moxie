@@ -3,6 +3,7 @@
 import numojo as nm
 from numojo import NDArray, Shape
 from std.math import isfinite, floor, nan, log
+from std.time import perf_counter_ns
 from moxie.base import (BaseEstimator, SupervisedEstimator, Predictor, ProbabilityPredictor,
     DecisionFunction, LogProbabilityPredictor, IncrementalClassifier, IncrementalRegressor,
     WeightedSupervisedEstimator, clone)
@@ -25,6 +26,31 @@ struct ChainParams[P: Copyable & Deinitable](Copyable, Movable):
     var random_order: Bool
     var verbose: Bool
     var chain_method: String
+
+
+def _chain_message(index: Int, total: Int, column: Int, nanoseconds: Int) -> String:
+    """sklearn `_message_with_time("Chain", "(i of n) Processing order k", t)`."""
+    var seconds = Float64(nanoseconds) / 1e9
+    var time_text: String
+    if seconds > 60:
+        time_text = _fixed(seconds / 60, 4) + "min"
+    else:
+        time_text = " " + _fixed(seconds, 5) + "s"
+    var start = String("[Chain] ")
+    var end = String(" (", index, " of ", total, ") Processing order ", column, ", total=", time_text)
+    var out = start
+    for _ in range(70 - start.byte_length() - end.byte_length()):
+        out += "."
+    return out + end
+
+
+def _fixed(value: Float64, width: Int) -> String:
+    """`'%{width}.1f' % value` for nonnegative values."""
+    var tenths = Int(value * 10 + 0.5)
+    var text = String(tenths // 10, ".", tenths % 10)
+    while text.byte_length() < width:
+        text = " " + text
+    return text^
 
 
 def _features[dtype: DType](X: NDArray[dtype], expected: Optional[Int] = None) raises:
@@ -267,8 +293,8 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         _features(X)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("ValueError: native execution supports n_jobs=None or 1")
+        if self.n_jobs and self.n_jobs.value() == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         if self.chain_method != "predict":
             raise Error("ValueError: this implementation supports chain_method='predict'")
         var order = List[Int]()
@@ -318,8 +344,8 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         _features(X, self.n_features_in_)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("ValueError: native execution supports n_jobs=None or 1")
+        if self.n_jobs and self.n_jobs.value() == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         if self.__sklearn_is_fitted__() and y.shape[1] != len(self.estimators_):
             raise Error("ValueError: partial_fit output count differs from fit")
         if not self.__sklearn_is_fitted__():
@@ -415,8 +441,8 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         _features(X)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("ValueError: native execution supports n_jobs=None or 1")
+        if self.n_jobs and self.n_jobs.value() == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         if self.chain_method != "predict":
             raise Error("ValueError: this implementation supports chain_method='predict'")
         var order = List[Int]()
@@ -481,8 +507,8 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         _features(X, self.n_features_in_)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("ValueError: native execution supports n_jobs=None or 1")
+        if self.n_jobs and self.n_jobs.value() == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         if self.__sklearn_is_fitted__() and y.shape[1] != len(self.estimators_):
             raise Error("ValueError: partial_fit output count differs from fit")
         if classes and len(classes.value()) != y.shape[1]:
@@ -585,8 +611,8 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         _finite(X)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("ValueError: native execution supports n_jobs=None or 1")
+        if self.n_jobs and self.n_jobs.value() == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         if self.chain_method != "predict":
             raise Error("ValueError: this implementation supports chain_method='predict'")
         var order = List[Int]()
@@ -610,6 +636,7 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         for j in range(y.shape[1]):
             var target = target_column(y, order[j])
             var input = augment_features(X, responses, j)
+            var started = perf_counter_ns()
             if sample_weight:
                 comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
                     comptime if Self.E.SampleWeight == NDArray[DType.float32]:
@@ -624,7 +651,7 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
                 _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target))
             _put_column(responses, j, target)
             if self.verbose:
-                print("Chain: fitted output", order[j])
+                print(_chain_message(j + 1, y.shape[1], order[j], perf_counter_ns() - started))
         self.estimators_ = models^
         self.classes_ = classes^
         self.order_ = order^
@@ -659,8 +686,8 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         _finite(y)
         if self.chain_method != "predict":
             raise Error("ValueError: this implementation supports chain_method='predict'")
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("ValueError: native execution supports n_jobs=None or 1")
+        if self.n_jobs and self.n_jobs.value() == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         for j in range(y.shape[1]):
             candidate.order_.append(j)
         if self.order:
@@ -682,9 +709,10 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         for j in range(y.shape[1]):
             var target = target_column(y, candidate.order_[j])
             var input = augment_features(X, responses, j)
+            var started = perf_counter_ns()
             _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target))
             if self.verbose:
-                print("Chain: fitted output", candidate.order_[j])
+                print(_chain_message(j + 1, y.shape[1], candidate.order_[j], perf_counter_ns() - started))
             if j + 1 < y.shape[1]:
                 var response = rebind_var[Self.Input](cv.cross_val_response(rebind[CV.Estimator](self.estimator), rebind[CV.Input](input), rebind[CV.Target](target), candidate.chain_method_))
                 _put_column(responses, j, response)
@@ -774,8 +802,8 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
         _finite(X)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("ValueError: native execution supports n_jobs=None or 1")
+        if self.n_jobs and self.n_jobs.value() == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         _check_method[Self.E](self.chain_method)
         var order = List[Int]()
         for j in range(y.shape[1]):
@@ -799,6 +827,7 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
             var target = target_column(y, order[j])
             classes.append(_classes(target))
             var input = augment_features(X, responses, j)
+            var started = perf_counter_ns()
             if sample_weight:
                 comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
                     comptime if Self.E.SampleWeight == NDArray[DType.float32]:
@@ -813,7 +842,7 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
                 _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target))
             _put_column(responses, j, target)
             if self.verbose:
-                print("Chain: fitted output", order[j])
+                print(_chain_message(j + 1, y.shape[1], order[j], perf_counter_ns() - started))
         self.estimators_ = models^
         self.classes_ = classes^
         self.order_ = order^
@@ -882,8 +911,8 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
         validate_targets(y, X.shape[0])
         _finite(y)
         _check_method[Self.E](self.chain_method)
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("ValueError: native execution supports n_jobs=None or 1")
+        if self.n_jobs and self.n_jobs.value() == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         for j in range(y.shape[1]):
             candidate.order_.append(j)
         if self.order:
@@ -906,9 +935,10 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
             var target = target_column(y, candidate.order_[j])
             candidate.classes_.append(_classes(target))
             var input = augment_features(X, responses, j)
+            var started = perf_counter_ns()
             _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target))
             if self.verbose:
-                print("Chain: fitted output", candidate.order_[j])
+                print(_chain_message(j + 1, y.shape[1], candidate.order_[j], perf_counter_ns() - started))
             if j + 1 < y.shape[1]:
                 var response = rebind_var[Self.Input](cv.cross_val_response(rebind[CV.Estimator](self.estimator), rebind[CV.Input](input), rebind[CV.Target](target), candidate.chain_method_))
                 _put_column(responses, j, response)

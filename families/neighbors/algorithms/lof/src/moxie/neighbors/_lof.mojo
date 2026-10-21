@@ -60,6 +60,20 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
         self.novelty = params.novelty
         return self
 
+    def set_params[origin: MutOrigin](ref[origin] self, *, n_neighbors: Optional[Int] = None,
+                                      algorithm: Optional[String] = None, leaf_size: Optional[Int] = None,
+                                      metric: Optional[String] = None, p: Optional[Float64] = None,
+                                      metric_params: Optional[Self.M] = None, contamination: Optional[Float64] = None,
+                                      novelty: Optional[Bool] = None, n_jobs: Optional[Int] = None) raises -> ref[self] Self:
+        """Update only the supplied parameters; reset contamination to "auto" (None) through the Params record."""
+        var neighbors = self._query.get_params()
+        neighbors.update(n_neighbors=n_neighbors, algorithm=algorithm, leaf_size=leaf_size, p=p, metric=metric,
+                         metric_params=metric_params.copy(), n_jobs=n_jobs)
+        _ = self._query.set_params(neighbors)
+        if contamination: self.contamination = contamination
+        if novelty: self.novelty = novelty.value()
+        return self
+
     def __sklearn_clone__(self) raises -> Self:
         var result = Self(metric_params=self._query.get_params().metric_params.copy())
         result.set_params(self.get_params())
@@ -130,6 +144,12 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
         self.effective_metric_params_ = self._query.effective_metric_params_.copy()
         return self
 
+    def kneighbors(self, X: Optional[nm.NDArray[Self.dtype]] = None,
+                   n_neighbors: Optional[Int] = None, return_distance: Bool = True) raises -> TopKResult[Self.dtype]:
+        """KNeighborsMixin.kneighbors on the fitted data; the default k is the n_neighbors parameter."""
+        if not self.__sklearn_is_fitted__(): raise Error("NotFittedError: LOF has not been fitted")
+        return self._query.kneighbors(X, n_neighbors, return_distance)
+
     def score_samples(self, X: nm.NDArray[Self.dtype]) raises -> nm.NDArray[Self.dtype]:
         if not self.novelty: raise Error("AttributeError: score_samples requires novelty=True")
         if not self.__sklearn_is_fitted__(): raise Error("NotFittedError: LOF has not been fitted")
@@ -138,11 +158,13 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
         return Self._scores(result,density,self._lrd)
 
     def decision_function(self, X: nm.NDArray[Self.dtype]) raises -> nm.NDArray[Self.dtype]:
+        if not self.novelty: raise Error("AttributeError: decision_function requires novelty=True")
         var scores = self.score_samples(X)
         for i in range(scores.shape[0]): scores.unsafe_set(i,(Float64(scores.unsafe_get(i))-self.offset_).cast[Self.dtype]())
         return scores^
 
     def predict(self, X: nm.NDArray[Self.dtype]) raises -> nm.NDArray[Self.dtype]:
+        if not self.novelty: raise Error("AttributeError: predict requires novelty=True")
         var scores = self.decision_function(X)
         for i in range(scores.shape[0]): scores.unsafe_set(i,Scalar[Self.dtype](-1) if scores.unsafe_get(i)<0 else Scalar[Self.dtype](1))
         return scores^

@@ -40,8 +40,10 @@ centroids also causes inference to raise rather than fabricating results.
 `set_params(params)` copies configuration and preserves fitted state; refit for
 fit-time changes. Cloning and constructor/get/set parameter vectors own independent
 copies. Fit publishes learned state only after success and retains no input alias.
-Python fluent returns, partial keyword parameter updates, warning objects and
-reflection are not supplied.
+Keyword `set_params(metric=..., shrink_threshold=..., priors="empirical")` updates
+only the supplied fields (a string priors value clears explicit probabilities), and
+`set_params(priors=array)` selects explicit priors. Warning objects and reflection
+are not supplied.
 
 Training uses dtype-preserving NuMojo means, shared pooled-variance reductions
 and the pinned NuMojo median on compact Float64 vectors. Queries are made

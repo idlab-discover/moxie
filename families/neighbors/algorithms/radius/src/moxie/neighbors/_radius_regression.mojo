@@ -68,6 +68,20 @@ struct RadiusNeighborsRegressor[dtype: DType = DType.float64, M: DenseMetric & D
         self._outlier_most_frequent = params.outlier_most_frequent
         return self
 
+    def set_params[origin: MutOrigin](ref[origin] self, *, radius: Optional[Float64] = None,
+                                      weights: Optional[String] = None, weighting: Optional[Self.W] = None,
+                                      algorithm: Optional[String] = None, leaf_size: Optional[Int] = None,
+                                      p: Optional[Float64] = None, metric: Optional[String] = None,
+                                      metric_params: Optional[Self.M] = None, n_jobs: Optional[Int] = None) raises -> ref[self] Self:
+        """Update only the supplied parameters (use the Params record to reset Optionals to None)."""
+        var neighbors = self._query.get_params()
+        neighbors.update(radius=radius, algorithm=algorithm, leaf_size=leaf_size, p=p, metric=metric,
+                         metric_params=metric_params.copy(), n_jobs=n_jobs)
+        _ = self._query.set_params(neighbors)
+        if weights: self.weights = weights.value()
+        if weighting: self.weighting = weighting.copy()
+        return self
+
     def __sklearn_clone__(self) raises -> Self:
         var result = Self(metric_params=self._query.get_params().metric_params.copy())
         result.set_params(self.get_params())

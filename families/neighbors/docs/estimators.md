@@ -27,8 +27,14 @@ a typed record; supervised records contain `neighbors: NeighborParams` and
 `weights`. Modify that record and call `set_params(params)`, then refit when changing
 fit-time options. Parameter updates preserve learned state, as in sklearn.
 Fit and set_params return a mutable borrow of self, supporting fluent chaining.
-Read constructor options through `get_params()`; direct
-Python-style attribute assignment and partial keyword `set_params` are not provided.
+Read constructor options through `get_params()`; direct Python-style attribute
+assignment is not provided. Keyword `set_params` updates only the supplied fields on
+NearestNeighbors, the KNN/radius estimators (`n_neighbors`/`radius`, `weights`,
+`weighting`, `algorithm`, `leaf_size`, `p`, `metric`, `metric_params`, `n_jobs`, and
+`outlier_label`/`outlier_most_frequent` on RadiusNeighborsClassifier), LOF and KDE,
+for example `model.set_params(n_neighbors=3, weights="distance")`. A supplied value
+cannot reset an Optional to None (such as LOF `contamination` back to `"auto"`); use
+the record for that. As in sklearn, `outlier_label` takes effect at the next fit.
 
 `kneighbors(X=None, n_neighbors=None, return_distance=True)` returns `TopKResult`.
 `radius_neighbors(X=None, radius=None, return_distance=True, sort_results=False)`
@@ -157,6 +163,8 @@ LOF uses the same exact queries. `n_neighbors_` is clipped to n_samples-1;
 singleton fitting fails. Training factors are available as
 `negative_outlier_factor_`. `contamination=None` represents sklearn's `"auto"`
 and gives `offset_=-1.5`; a value in (0,0.5] uses the linear percentile.
+`kneighbors(X=None, n_neighbors=None, return_distance=True)` is public as in sklearn
+(default k is the `n_neighbors` parameter, not `n_neighbors_`) and returns `TopKResult`.
 `fit_predict` requires `novelty=False`; `score_samples`, `decision_function` and
 `predict` require `novelty=True`. Novelty queries include training matches when
 explicitly supplied, preserving the distinction from training factors. Scores
@@ -174,7 +182,8 @@ Input may be Float32 or Float64; output log densities and samples are Float64.
 `score` sums log densities. Weighted fitting requires finite nonnegative weights
 with positive total; all-zero weights explicitly raise. Numeric bandwidth uses
 `bandwidth`; `bandwidth_rule="scott"` or `"silverman"` represents the reference's
-string bandwidth alternatives. Constructor tolerance and traversal options are
+string bandwidth alternatives. Keyword `set_params(bandwidth=...)` clears any bandwidth rule, like sklearn's single
+`bandwidth` parameter; `set_params(bandwidth_rule="scott")` selects a rule. Constructor tolerance and traversal options are
 used by the tree density routine. `algorithm="auto"`, `"kd_tree"` and
 `"ball_tree"` support their advertised metrics; probability normalization is
 correct only for Euclidean distance. Optional typed `metric_params: Metric[dtype]`

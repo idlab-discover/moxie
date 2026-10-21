@@ -20,7 +20,7 @@ documented sparse scope. Export counts are not behavioral parity percentages.
 | KNeighborsRegressor | Partial dense | fit, predict, score and queries |
 | RadiusNeighborsClassifier | Partial dense | fit, predict, predict_proba, score and queries; string/Int64/floating labels |
 | RadiusNeighborsRegressor | Partial dense | fit, predict, score and queries |
-| LocalOutlierFactor | Partial dense | fit, fit_predict, novelty-gated predict/decision_function/score_samples |
+| LocalOutlierFactor | Partial dense | fit, fit_predict, kneighbors, novelty-gated predict/decision_function/score_samples; no kneighbors_graph |
 | KernelDensity | Partial dense | fit, score_samples, score, seeded/default-stream Gaussian/tophat sample; six Euclidean kernels |
 | NearestCentroid | Partial dense | fit, predict, score, both metrics, shrinkage, priors and Euclidean decision/probability methods; string/Int64/floating labels |
 | NeighborhoodComponentsAnalysis | Implemented dense slice | All initialization modes, supervised fit/transform, warm starts, native callbacks; [numerical/API limits](nca.md) |
@@ -34,7 +34,7 @@ documented sparse scope. Export counts are not behavioral parity percentages.
 | radius_neighbors_graph | Deferred | Sparse graph function |
 | sort_graph_by_row_values | Deferred | Sparse graph utility |
 
-Existing estimators also expose typed get_params/set_params and unfitted cloning.
+Existing estimators also expose typed get_params/set_params (record and keyword forms) and unfitted cloning.
 NearestNeighbors, LOF and KNN/radius estimators accept native callable metrics
 with brute, auto and BallTree selection; KDTree rejects them. General classification
 labels use the shared label owner. Self queries infer omitted standardized-Euclidean

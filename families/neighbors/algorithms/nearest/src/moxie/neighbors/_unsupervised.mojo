@@ -22,6 +22,20 @@ struct NeighborParams[dtype: DType, M: DenseMetric & Deinitable = Metric[dtype]]
     var metric_params: Optional[Self.M]
     var n_jobs: Optional[Int]
 
+    def update(mut self, n_neighbors: Optional[Int] = None, radius: Optional[Float64] = None,
+               algorithm: Optional[String] = None, leaf_size: Optional[Int] = None,
+               p: Optional[Float64] = None, metric: Optional[String] = None,
+               metric_params: Optional[Self.M] = None, n_jobs: Optional[Int] = None):
+        """Replace only the supplied fields; keyword set_params overloads share this."""
+        if n_neighbors: self.n_neighbors = n_neighbors.value()
+        if radius: self.radius = radius.value()
+        if algorithm: self.algorithm = algorithm.value()
+        if leaf_size: self.leaf_size = leaf_size.value()
+        if p: self.p = p.value()
+        if metric: self.metric = metric.value()
+        if metric_params: self.metric_params = metric_params.copy()
+        if n_jobs: self.n_jobs = n_jobs
+
     def resolved_metric(self) raises -> Self.M:
         if self.metric_params:
             return self.metric_params.value().copy()
@@ -85,6 +99,15 @@ struct NearestNeighbors[dtype: DType = DType.float64, M: DenseMetric & Deinitabl
     def set_params[origin: MutOrigin, params_origin: ImmOrigin](ref[origin] self, ref[params_origin] params: Self.Params) raises -> ref[self] Self:
         # sklearn parameter changes do not discard the fitted snapshot.
         self._params = params.copy()
+        return self
+
+    def set_params[origin: MutOrigin](ref[origin] self, *, n_neighbors: Optional[Int] = None,
+                                      radius: Optional[Float64] = None, algorithm: Optional[String] = None,
+                                      leaf_size: Optional[Int] = None, metric: Optional[String] = None,
+                                      p: Optional[Float64] = None, metric_params: Optional[Self.M] = None,
+                                      n_jobs: Optional[Int] = None) raises -> ref[self] Self:
+        """Update only the supplied parameters (use the Params record to reset Optionals to None)."""
+        self._params.update(n_neighbors, radius, algorithm, leaf_size, p, metric, metric_params.copy(), n_jobs)
         return self
 
     def __sklearn_clone__(self) raises -> Self:

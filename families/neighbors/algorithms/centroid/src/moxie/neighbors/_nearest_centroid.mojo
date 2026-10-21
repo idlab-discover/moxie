@@ -61,6 +61,23 @@ struct NearestCentroid[dtype: DType = DType.float64, Y: Copyable & Deinitable = 
         self._params = params.copy()
         return self
 
+    def set_params[origin: MutOrigin](ref[origin] self, *, metric: Optional[String] = None,
+                                      shrink_threshold: Optional[Float64] = None,
+                                      priors: Optional[String] = None) raises -> ref[self] Self:
+        """Update only the supplied parameters; a string priors value clears explicit probabilities."""
+        if metric: self._params.metric = metric.value()
+        if shrink_threshold: self._params.shrink_threshold = shrink_threshold
+        if priors:
+            self._params.priors = priors.value()
+            self._params.prior_probabilities = None
+        return self
+
+    def set_params[origin: MutOrigin](ref[origin] self, *, priors: nm.NDArray[DType.float64]) raises -> ref[self] Self:
+        """Explicit class prior probabilities, the array form of sklearn's priors parameter."""
+        self._params.priors = "explicit"
+        self._params.prior_probabilities = priors.copy()
+        return self
+
     def __sklearn_clone__(self) raises -> Self:
         var result = Self()
         result.set_params(self.get_params())

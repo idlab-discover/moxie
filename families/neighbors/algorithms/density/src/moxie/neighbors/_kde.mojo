@@ -63,6 +63,28 @@ struct KernelDensity[dtype: DType = DType.float64](NeighborDensity):
         self._params = params.copy()
         return self
 
+    def set_params[origin: MutOrigin](ref[origin] self, *, bandwidth: Optional[Float64] = None,
+                                      algorithm: Optional[String] = None, kernel: Optional[String] = None,
+                                      metric: Optional[String] = None, atol: Optional[Float64] = None,
+                                      rtol: Optional[Float64] = None, breadth_first: Optional[Bool] = None,
+                                      leaf_size: Optional[Int] = None, bandwidth_rule: Optional[String] = None,
+                                      metric_params: Optional[Metric[Self.dtype]] = None) raises -> ref[self] Self:
+        """Update only the supplied parameters. A numeric bandwidth replaces any rule, like sklearn's single
+        `bandwidth` parameter; `bandwidth_rule` selects "scott" or "silverman"."""
+        if bandwidth:
+            self._params.bandwidth = bandwidth.value()
+            self._params.bandwidth_rule = ""
+        if bandwidth_rule: self._params.bandwidth_rule = bandwidth_rule.value()
+        if algorithm: self._params.algorithm = algorithm.value()
+        if kernel: self._params.kernel = kernel.value()
+        if metric: self._params.metric = metric.value()
+        if atol: self._params.atol = atol.value()
+        if rtol: self._params.rtol = rtol.value()
+        if breadth_first: self._params.breadth_first = breadth_first.value()
+        if leaf_size: self._params.leaf_size = leaf_size.value()
+        if metric_params: self._params.metric_params = metric_params.copy()
+        return self
+
     def __sklearn_clone__(self) raises -> Self:
         var result = Self()
         result.set_params(self.get_params())

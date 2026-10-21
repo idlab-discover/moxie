@@ -13,6 +13,9 @@ Root `pixi run build`, `pixi run test`, and `pixi run parity` include isotonic.
 Focused checks use `pixi run python tools/isotonic_checks.py test` or `parity`.
 Tests in `tests/isotonic/` cover numerical behavior, lifecycle, fluent concrete
 and generic calls, dtype preservation, and rejected mixed-dtype inputs.
+`test_reference_edges.mojo` pins hand-derived reference values for pooling,
+crossed bounds, negative score weights, tied-rank direction, refit after
+`set_params` and the documented `check_increasing` validation difference.
 The root shared-contract tests cover missing prediction capabilities.
 An isolated consumer assembles the current Moxie manifest and exercises all
 three exports and both estimator dtypes. Ownership checks verify the assembled

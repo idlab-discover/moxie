@@ -118,6 +118,22 @@ Python's confidence-interval and constant-input warnings are not emitted;
 small-sample R² warnings are also not emitted. The corresponding numerical
 results are covered by native and reference-comparison tests.
 
+## Composition
+
+- `clone(model)` and `model.copy()` follow the estimator rules above.
+- `moxie.model_selection` `cross_val_score`, `cross_validate` and `GridSearchCV`
+  work through a caller-written `CVAdapter`/`SearchAdapter` that slices
+  `List[Scalar[dtype]]` rows; this family ships no adapter. The verification
+  notebook `notebooks/isotonic/plot_isotonic_regression.ipynb` defines one and
+  matches the reference KFold scores and grid-search results.
+- `moxie.calibration` uses `IsotonicRegression` internally for
+  `method="isotonic"`.
+- `moxie.pipeline` is not supported: Moxie transformers produce `NDArray`,
+  while `IsotonicRegression.Input` and `Target` are lists, so
+  `make_pipeline(StandardScaler(), IsotonicRegression())` fails to compile
+  (sklearn accepts the scaler's one-column output). Other NDArray-typed
+  meta-estimators were not verified.
+
 ## Scope and validation
 
 Python bindings, automatic heterogeneous dtype coercion, scalar sample

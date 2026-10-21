@@ -8,6 +8,7 @@ from moxie.feature_selection._variance_threshold import VarianceThreshold
 from ._from_model import SelectFromModel, SelectFromModelParams, ModelThreshold, MaxFeatures, FeatureLimitPolicy
 from ._model_importance import SelectionEstimator, IncrementalSelectionEstimator, SelectionClassLabels
 from ._linear_model_importance import LassoImportance, ElasticNetImportance
+from ._ridge_importance import RidgeImportance
 from ._selector_mixin import SelectorMixin
 from ._rfe import RFE, RFEParams, FeatureCount
 

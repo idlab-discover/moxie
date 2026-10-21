@@ -24,7 +24,7 @@ var ranking = selector.ranking_()
 
 See [the runnable example](../../examples/feature_selection/rfe.mojo). Both Float32 and Float64 are
 supported; the adapter and feature dtypes must agree. The target type belongs
-to the estimator. Supplied adapters wrap real Lasso and ElasticNet estimators
+to the estimator. Supplied adapters wrap real Lasso, ElasticNet and Ridge estimators
 (including dense multi-output and sample weights) and single-output
 DecisionTreeClassifier with independent numeric or string labels. Estimator
 restrictions still apply.

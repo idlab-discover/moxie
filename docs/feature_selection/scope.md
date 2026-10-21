@@ -51,7 +51,7 @@ Root parity runs both variance and univariate reference harnesses against the
 root assembly; no score or policy implementation is duplicated for integration.
 
 SelectFromModel is implemented for dense Float32/Float64 inputs through typed
-SelectionEstimator adapters. Supplied adapters wrap real Lasso/ElasticNet, DecisionTreeClassifier and IncrementalPCA models
+SelectionEstimator adapters. Supplied adapters wrap real Lasso/ElasticNet/Ridge, DecisionTreeClassifier and IncrementalPCA models
 and support fit/prefit, multi-output importances, norm aggregation, thresholds,
 integer/callable feature limits, array sample weights, cloning, feature names,
 and shared transforms. See [from_model.md](from_model.md) for defaults, tested
@@ -67,7 +67,7 @@ RFE and the public SelectorMixin are implemented for dense Float32/Float64.
 RFE supports count/fraction selection and elimination steps, stable squared
 importance ranking, final refitting, sample weights, names and conditional
 prediction/scoring through typed adapters. Supplied supervised adapters are Lasso,
-ElasticNet and DecisionTreeClassifier. See [RFE](rfe.md) and [SelectorMixin](selector-mixin.md) for native
+ElasticNet, Ridge and DecisionTreeClassifier. See [RFE](rfe.md) and [SelectorMixin](selector-mixin.md) for native
 adaptations, validation and remaining estimator coverage. RFE itself does not
 use cross-validation; sequential selection adopts
 the shared CV engine as described below. Sparse branches remain deferred.

@@ -368,6 +368,9 @@
         "moxie.feature_selection._rfe": {
           "file": "src/moxie/feature_selection/_rfe.mojo"
         },
+        "moxie.feature_selection._ridge_importance": {
+          "file": "src/moxie/feature_selection/_ridge_importance.mojo"
+        },
         "moxie.feature_selection._selection": {
           "file": "src/moxie/feature_selection/_selection.mojo"
         },
@@ -675,6 +678,7 @@
             "RFECVResultColumn": "moxie.feature_selection._rfe",
             "RFECVResults": "moxie.feature_selection._rfe",
             "RFEParams": "moxie.feature_selection._rfe",
+            "RidgeImportance": "moxie.feature_selection._ridge_importance",
             "ScoreResult": "moxie.feature_selection._contracts",
             "SelectFdr": "moxie.feature_selection._univariate_selection",
             "SelectFpr": "moxie.feature_selection._univariate_selection",

@@ -22,7 +22,7 @@ Reference: `../scikit-learn` at
 | chi2, f_classif, f_oneway, f_regression, r_regression | Dense Float32/Float64 inputs in the root and univariate assemblies; native results and dtype differences apply |
 | VarianceThreshold | Dense Float32/Float64 implementation in the root assembly; see [usage and limits](variance.md) |
 | SelectorMixin | Implemented native trait delegating to SelectionState; see [SelectorMixin](selector-mixin.md) |
-| SelectFromModel | Dense wrapper with typed Lasso/ElasticNet/DecisionTreeClassifier adapters and conditional partial_fit using IncrementalPCA; see [usage and limits](from_model.md) |
+| SelectFromModel | Dense wrapper with typed Lasso/ElasticNet/Ridge/DecisionTreeClassifier adapters and conditional partial_fit using IncrementalPCA; see [usage and limits](from_model.md) |
 | RFE | Dense recursive elimination with typed estimator adapters; see [RFE](rfe.md) |
 | SequentialFeatureSelector | Dense greedy selection through the shared CV engine; see [usage and limits](sequential.md) |
 | RFECV | Dense RFE paths with shared CV contracts; see [usage and limits](rfecv.md) |

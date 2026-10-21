@@ -63,9 +63,10 @@ at least one feature and finite values, matching the shared selector contract.
 
 `SelectionEstimator` extends the family's `ImportanceProvider` and base estimator
 contracts. An adapter supplies cloning, fitting, feature count, raw importances,
-and the default-threshold and NaN policies. The supplied `LassoImportance` and
-`ElasticNetImportance` own a real model in `.model`; their `"auto"` and `"coef_"`
-getters return its coefficients. Other getter strings fail clearly. An adapter
+and the default-threshold and NaN policies. The supplied `LassoImportance`,
+`ElasticNetImportance` and `RidgeImportance` own a real model in `.model`; their
+`"auto"` and `"coef_"` getters return its coefficients. Ridge is not
+l1-penalized, so its default threshold is the mean, as in sklearn. Other getter strings fail clearly. An adapter
 for an estimator exposing both attributes must prefer `coef_` for `"auto"`.
 Custom getter logic belongs in a typed adapter's `importances` method; Python
 attribute paths and dynamic callable objects are not interpreted.

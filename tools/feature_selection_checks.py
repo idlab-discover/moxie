@@ -38,7 +38,7 @@ def main(action=None):
         compile_file(ROOT, EXAMPLES/'mutual_info.mojo','mutual-info-example')
         compile_file(ROOT, EXAMPLES/'sequential.mojo','sequential-example')
         compile_file(ROOT, EXAMPLES/'rfecv.mojo','rfecv-example')
-        for name in ['contracts','capabilities','family','selection','extensions','variance','univariate','from_model','from_model_incremental','rfe','rfe_path','mutual_info','sequential','rfecv','classifier_int','classifier_string','fluent','pipeline']:
+        for name in ['contracts','capabilities','family','selection','extensions','variance','univariate','from_model','from_model_incremental','ridge_importance','rfe','rfe_path','mutual_info','sequential','rfecv','classifier_int','classifier_string','fluent','pipeline']:
             source = ROOT/f'tests/test_{name}.mojo' if name in ('contracts', 'capabilities') else TESTS/f'test_{name}.mojo'
             compile_file(ROOT, source, 'feature-selection-' + name)
         for source in sorted(UNIVARIATE.glob('test_*.mojo')):
@@ -50,7 +50,7 @@ def main(action=None):
         run(sys.executable, TESTS/'test_compiler_limits.py')
         run(sys.executable, TESTS/'test_assembly.py')
         run(sys.executable, TESTS/'test_ownership.py')
-        for name in ['contracts','capabilities','family','selection','extensions','variance','univariate','from_model','from_model_incremental','rfe','rfe_path','mutual_info','sequential','rfecv','classifier_int','classifier_string','fluent','pipeline']: run(ROOT/'builds'/('feature-selection-' + name))
+        for name in ['contracts','capabilities','family','selection','extensions','variance','univariate','from_model','from_model_incremental','ridge_importance','rfe','rfe_path','mutual_info','sequential','rfecv','classifier_int','classifier_string','fluent','pipeline']: run(ROOT/'builds'/('feature-selection-' + name))
         for source in sorted(UNIVARIATE.glob('test_*.mojo')):
             run(ROOT/'builds'/('univariate-' + source.stem))
         run(ROOT/'builds/univariate-example')

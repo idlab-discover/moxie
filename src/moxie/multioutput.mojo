@@ -111,7 +111,6 @@ def _dense[T: Movable, dtype: DType](var values: T) raises -> NDArray[dtype]:
         return rebind_var[NDArray[DType.float32]](values^).astype[dtype]()
     else:
         comptime assert False, "component probabilities and decisions must be Float32 or Float64 NDArrays"
-        raise Error("ValueError: unsupported component response type")
 
 
 def _response[E: Predictor, dtype: DType, label: DType](estimator: E, X: NDArray[dtype], method: String) raises -> NDArray[dtype]:

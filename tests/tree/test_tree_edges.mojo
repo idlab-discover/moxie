@@ -50,8 +50,23 @@ def main() raises:
     _ = r.set_params(rp)
     _ = r.fit(X, single)
     assert_equal(r.score(X, single), 1.0)
+    # sklearn maps the deprecated friedman_mse alias in the constructor and rejects it
+    # afterwards; fractional min_samples_leaf excludes 1.0 while min_samples_split includes it.
+    var friedman = DecisionTreeRegressor(criterion="friedman_mse", random_state=0)
+    assert_equal(friedman.get_params().criterion, "squared_error")
+    var fp = friedman.get_params()
+    fp.criterion = "friedman_mse"
+    _ = friedman.set_params(fp)
+    with assert_raises(contains="invalid regression criterion"):
+        _ = friedman.fit(X, single)
+    var leaf_all = DecisionTreeClassifier(min_samples_leaf=Float64(1.0))
+    with assert_raises(contains="min_samples_leaf fraction must be in (0,1)"):
+        _ = leaf_all.fit(X, single)
+    var split_all = DecisionTreeClassifier(min_samples_split=Float64(1.0))
+    _ = split_all.fit(X, y)
+    assert_true(split_all.tree_.node_count >= 3)
     var tx = TreeRandom()
     tx.state = 0
     assert_equal(tx.draw(), 270369)
     assert_equal(tx.draw(), 67634689)
-    print("PASS multioutput, strides, refit, invalid parameters, failed-fit state, RNG vectors")
+    print("PASS multioutput, strides, refit, invalid parameters, friedman alias, fraction bounds, failed-fit state, RNG vectors")

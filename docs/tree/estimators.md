@@ -66,9 +66,15 @@ after fitting an unnamed table or numeric matrix. Named inference inputs must
 match the fitted names and order for predict, probability, apply and score.
 As in sklearn, named/unnamed transitions use positional columns; the Python
 warning for these transitions is not emitted.
+`DecisionTreeRegressor(criterion="friedman_mse")` and the ExtraTree regressor store
+`"squared_error"`, like sklearn's constructor; the FutureWarning is not emitted.
+Setting `"friedman_mse"` afterwards through `set_params` fails at fit, as sklearn's
+parameter validation does.
 
 `min_samples_split` and `min_samples_leaf` accept `Variant[Int,Float64]`:
 integers are counts, fractions are resolved with ceiling against training rows.
+As in sklearn, a `min_samples_split` fraction lies in (0,1] and a `min_samples_leaf`
+fraction in (0,1); integer counts are at least 2 and 1.
 `max_features` accepts `Variant[Int,Float64,String,NoneType]`: count, fraction,
 `"sqrt"`, `"log2"`, or `NoneType()`. Defaults follow sklearn. Optional integer
 parameters (`max_depth`, `max_leaf_nodes`, `random_state`) use `Optional[Int]`.

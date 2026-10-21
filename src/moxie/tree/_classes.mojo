@@ -23,15 +23,16 @@ comptime CategoricalFeatures = Variant[NoneType, type_of(None), Optional[List[In
 comptime SampleCount = Variant[Int, Float64]
 comptime FeatureCount = Variant[Int, Float64, String, NoneType]
 
-def resolve_samples(option: SampleCount, n: Int, minimum: Int) raises -> Int:
+def resolve_samples(option: SampleCount, n: Int, minimum: Int, include_one: Bool = True) raises -> Int:
+    """Resolve a count or fraction. sklearn's min_samples_leaf fraction excludes 1.0."""
     if option.isa[Int]():
         var count = option[Int]
         if count < minimum or count > 4611686018427387903:
             raise Error("ValueError: invalid minimum sample count")
         return count
     var fraction = option[Float64]
-    if not (fraction > 0 and fraction <= 1):
-        raise Error("ValueError: sample fraction must be in (0,1]")
+    if not (fraction > 0 and (fraction <= 1 if include_one else fraction < 1)):
+        raise Error("ValueError: sample fraction must be in (0,1]" if include_one else "ValueError: min_samples_leaf fraction must be in (0,1)")
     return max(minimum, Int(ceil(fraction * Float64(n))))
 
 @fieldwise_init
@@ -213,6 +214,9 @@ struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DTyp
         var selected = criterion
         if selected == "":
             selected = "gini" if Self.classifier else "squared_error"
+        elif not Self.classifier and selected == "friedman_mse":
+            # sklearn's deprecated alias maps here; its FutureWarning is not emitted.
+            selected = "squared_error"
         self.params = Self.Params(selected, splitter, max_depth, min_samples_split, min_samples_leaf,
             min_weight_fraction_leaf, max_features, random_state, max_leaf_nodes,
             min_impurity_decrease, class_weight.copy(), ccp_alpha, monotonic_cst.copy(), categorical_features.copy())
@@ -419,7 +423,7 @@ struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DTyp
     def _build_settings(self, n: Int, p: Int) raises -> Int:
         """Validate build-only parameters for n samples and p features; return max_features_."""
         _ = resolve_samples(self.params.min_samples_split, n, 2)
-        _ = resolve_samples(self.params.min_samples_leaf, n, 1)
+        _ = resolve_samples(self.params.min_samples_leaf, n, 1, False)
         if not (self.params.min_weight_fraction_leaf >= 0 and self.params.min_weight_fraction_leaf <= 0.5) or not (self.params.min_impurity_decrease >= 0) or not (self.params.ccp_alpha >= 0):
             raise Error("ValueError: invalid impurity or weight parameter")
         if self.params.max_depth and self.params.max_depth.value() < 1:
@@ -447,7 +451,7 @@ struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DTyp
             raise Error("ValueError: max_features must be positive")
         return features
     def _fit_kind[kind: Int](self, data: TrainingData, nc: List[Int], features: Int, weight: Float64, mut rng: RandomState) raises -> TreeData:
-        var min_leaf = resolve_samples(self.params.min_samples_leaf, data.X.shape[0], 1)
+        var min_leaf = resolve_samples(self.params.min_samples_leaf, data.X.shape[0], 1, False)
         var min_split = resolve_samples(self.params.min_samples_split, data.X.shape[0], 2)
         var splitter = DenseSplitter[kind](CriterionConfig(data.y.shape[1], nc.copy(), data.y.shape[0]),
             SplitterConfig(features, min_leaf, weight * self.params.min_weight_fraction_leaf), self.params.splitter == "random")
@@ -550,7 +554,7 @@ struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DTyp
             if self.params.criterion != "gini" and self.params.criterion != "entropy" and self.params.criterion != "log_loss":
                 raise Error("ValueError: invalid classification criterion")
         else:
-            if self.params.criterion != "squared_error" and self.params.criterion != "friedman_mse" and self.params.criterion != "poisson" and self.params.criterion != "absolute_error":
+            if self.params.criterion != "squared_error" and self.params.criterion != "poisson" and self.params.criterion != "absolute_error":
                 raise Error("ValueError: invalid regression criterion")
         var missing = nm.zeros[DType.uint8](nm.Shape(p))
         var signs = nm.zeros[DType.int8](nm.Shape(p))

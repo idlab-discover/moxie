@@ -51,7 +51,7 @@ def main():
     parser.add_argument('--assembly-root', type=Path, default=ROOT)
     assembly_root=parser.parse_args().assembly_root.resolve()
     spec=importlib.util.spec_from_file_location('check',ROOT/'tools/feature_selection_checks.py'); checker=importlib.util.module_from_spec(spec);spec.loader.exec_module(checker)
-    ns=oracle(); rng=np.random.default_rng(417); lines=['import numojo as nm','from std.math import nan, inf','from moxie.feature_selection import f_classif, chi2, r_regression, f_regression','from moxie.feature_selection._univariate_probability import f_survival, chi_survival','from moxie.feature_selection._univariate_policy import UnivariatePolicy','from moxie.feature_selection._contracts import ScoreResult','from moxie.feature_selection import SelectKBest, SelectPercentile, SelectFpr, SelectFdr, SelectFwe, GenericUnivariateSelect, BuiltinScorer, SelectionParameter','def main() raises:']; expected=[]; exact=[]; transformed=[]; cases=[]
+    ns=oracle(); rng=np.random.default_rng(417); lines=['import numojo as nm','from std.math import nan, inf','from moxie.feature_selection import f_classif, chi2, r_regression, f_regression','from moxie.feature_selection._univariate_probability import f_survival, chi_survival','from moxie.feature_selection._univariate_policy import UnivariatePolicy','from moxie.feature_selection._contracts import ScoreResult','from moxie.feature_selection import SelectKBest, SelectPercentile, SelectFpr, SelectFdr, SelectFwe, GenericUnivariateSelect, BuiltinScorer, SelectionParameter','def main() raises:']; expected=[]; exact=[]; transformed=[]; tails=[]; cases=[]
     def array(name,a,dt):
         shape=', '.join(map(str,a.shape)); lines.append(f'    var {name} = nm.zeros[DType.{dt}](nm.Shape({shape}))')
         for j,v in enumerate(a.ravel()):lines.append(f'    {name}.unsafe_set({j}, SIMD[DType.{dt}, 1]({literal(v)}))')
@@ -139,11 +139,13 @@ def main():
                                 (transformed if dt == 'float32' else exact).append(len(expected));emit(f'Float64({name}_output.unsafe_get({j}))',v)
             cases.append((f'case{case}', lines[case_start:]))
             del lines[case_start:]
+        # Tail functions are checked tightly below (rtol=1e-12): deep tails scale
+        # log errors by df/2, which exposed std.math log's ~1e-10 accuracy.
         for df1 in (1,2,5,30):
-            for df2 in (1,2,10,1000):
-                for value in (0,1e-10,.1,1,10,1e6):emit(f'f_survival({literal(value)}, {literal(df1)}, {literal(df2)})',stats.f.sf(value,df1,df2))
+            for df2 in (1,2,10,998,1000):
+                for value in (0,1e-10,.1,1,10,52.5,187.4,1e6):tails.append(len(expected));emit(f'f_survival({literal(value)}, {literal(df1)}, {literal(df2)})',stats.f.sf(value,df1,df2))
         for df in (1,2,5,100):
-            for value in (0,1e-10,.1,1,10,100,1000):emit(f'chi_survival({literal(value)}, {literal(df)})',special.chdtrc(df,value))
+            for value in (0,1e-10,.1,1,10,80,100,250,1000):tails.append(len(expected));emit(f'chi_survival({literal(value)}, {literal(df)})',special.chdtrc(df,value))
         for case,scores in enumerate(([1,1,1,1],[np.nan,2,2,1],[1,2,3,4],[-np.inf,np.nan,1,np.inf])):
             a=np.asarray(scores); p=np.array([.01,.04,.03,np.nan]);array(f's{case}',a,'float64');array(f'p{case}',p,'float64')
             lines.append(f'    var sr{case} = ScoreResult[DType.float64](s{case}^, p{case}^)')
@@ -183,6 +185,7 @@ def main():
     actual=np.array([float(line.split()[1]) for line in output.splitlines()]); truth=np.array(expected)
     assert len(actual)==len(truth)
     np.testing.assert_array_equal(actual[exact],truth[exact])
+    np.testing.assert_allclose(actual[tails],truth[tails],rtol=1e-12,atol=1e-300)
     np.testing.assert_array_equal(actual[transformed].astype(np.float32),truth[transformed].astype(np.float32))
     try:np.testing.assert_allclose(actual,truth,rtol=5e-5,atol=2e-12,equal_nan=True)
     except AssertionError:

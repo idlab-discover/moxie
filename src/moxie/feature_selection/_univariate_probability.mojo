@@ -1,5 +1,10 @@
 """Scalar F and chi-square survival functions; DLMF 8.17 and 8.9."""
-from std.math import exp, log, log1p, lgamma, isnan, isinf, nan
+from std.math import lgamma, isnan, isinf, nan
+# std.math log/exp/log1p are only ~1e-10 (log1p ~1e-7) accurate for Float64;
+# deep tails multiply the log by df/2, so use Numax's fdlibm transcriptions.
+# Callers pass x and its complement y = 1 - x separately so neither is formed
+# by cancellation.
+from numax.core.libm import exp, log
 
 def _nonzero(x: Float64) -> Float64:
     if abs(x) < 1e-300:
@@ -26,15 +31,16 @@ def _beta_fraction(a: Float64, b: Float64, x: Float64) raises -> Float64:
             return h
     raise Error("ArithmeticError: incomplete beta failed to converge")
 
-def _beta(a: Float64, b: Float64, x: Float64) raises -> Float64:
+def _beta(a: Float64, b: Float64, x: Float64, y: Float64) raises -> Float64:
+    """Regularized I_x(a, b) with y = 1 - x supplied accurately."""
     if x <= 0:
         return 0
-    if x >= 1:
+    if y <= 0:
         return 1
-    var factor = exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * log(x) + b * log1p(-x))
+    var factor = exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * log(x) + b * log(y))
     if x < (a + 1) / (a + b + 2):
         return factor * _beta_fraction(a, b, x) / a
-    return 1 - factor * _beta_fraction(b, a, 1 - x) / b
+    return 1 - factor * _beta_fraction(b, a, y) / b
 
 def f_survival(f: Float64, df1: Float64, df2: Float64) raises -> Float64:
     if isnan(f) or df1 <= 0 or df2 <= 0:
@@ -43,7 +49,8 @@ def f_survival(f: Float64, df1: Float64, df2: Float64) raises -> Float64:
         return 1
     if isinf(f):
         return 0
-    return _beta(df2 / 2, df1 / 2, 1 / (1 + df1 * f / df2))
+    var t = df1 * f / df2
+    return _beta(df2 / 2, df1 / 2, 1 / (1 + t), t / (1 + t))
 
 def chi_survival(statistic: Float64, degrees: Float64) raises -> Float64:
     if isnan(statistic) or statistic < 0 or degrees <= 0:

@@ -109,7 +109,11 @@ selector.fit(X, y.copy())
 
 For Int64 use `BuiltinScorer[DType.float32, DType.int64]("f_classif")`.
 The optional `target_type` parameter defaults to `NDArray[target_dt]`; its only
-other supported value is `StringTarget`. String regression scorers raise a
+other supported value is `StringTarget`. `List[Label]` targets, which `moxie.svm`
+classifiers such as `LinearSVC` use, are not accepted. A `Pipeline` needs one
+target type, so `Pipeline(SelectKBest(...), LinearSVC())` does not compile;
+chain the fitted steps explicitly (see
+`notebooks/feature_selection/plot_feature_selection.ipynb`). String regression scorers raise a
 clear error. As in sklearn, ANOVA groups finite fractional numeric labels,
 while chi-square requires discrete labels. Column-vector warnings are not emitted.
 

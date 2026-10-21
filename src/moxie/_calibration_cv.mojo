@@ -191,6 +191,16 @@ def response[
     return values^
 
 
+def _clip_rounding(var proba: Array) raises -> Array:
+    """Set probabilities in (1, 1 + 1e-5] to one, as the reference does."""
+    for i in range(proba.shape[0]):
+        for j in range(proba.shape[1]):
+            var p = proba.item(i, j)
+            if p > 1.0 and p <= 1.0 + 1e-5:
+                proba[nm.Item(i, j)] = 1.0
+    return proba^
+
+
 struct _CalibratedClassifier[E: CalibrationEstimator](Copyable, Movable):
     var estimator: Self.E
     var classes: Array
@@ -243,7 +253,7 @@ struct _CalibratedClassifier[E: CalibrationEstimator](Copyable, Movable):
     def predict_proba(self, X: Array) raises -> Array:
         var values = response(self.estimator, X, self.classes, self.method)
         if self.method == "temperature":
-            return self.temperature.predict(values)
+            return _clip_rounding(self.temperature.predict(values))
         var n = X.shape[0]
         var c = self.classes.size
         var out = nm.zeros[DType.float64](nm.Shape(n, c))
@@ -265,7 +275,7 @@ struct _CalibratedClassifier[E: CalibrationEstimator](Copyable, Movable):
                     out[nm.Item(i, j)] = out.item(
                         i, j
                     ) / total if total > 0 else 1 / Float64(c)
-        return out^
+        return _clip_rounding(out^)
 
 
 struct CalibratedClassifierCV[E: CalibrationEstimator](
@@ -319,6 +329,31 @@ struct CalibratedClassifierCV[E: CalibrationEstimator](
         self.cv = params.cv.copy()
         self.n_jobs = params.n_jobs
         self.ensemble = params.ensemble.copy()
+        return self
+
+    def set_params[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        var estimator: Optional[Self.E] = None,
+        var method: Optional[String] = None,
+        var cv: Optional[CalibrationCV] = None,
+        n_jobs: Optional[Int] = None,
+        var ensemble: Optional[Variant[Bool, String]] = None,
+    ) raises -> ref[self] Self:
+        """Named partial update; omitted keywords keep their current values.
+
+        Resetting n_jobs to None requires the full Params record.
+        """
+        if estimator:
+            self.estimator = estimator.take()
+        if method:
+            self.method = method.take()
+        if cv:
+            self.cv = cv.take()
+        if n_jobs:
+            self.n_jobs = n_jobs
+        if ensemble:
+            self.ensemble = ensemble.take()
         return self
 
     def __sklearn_clone__(self) raises -> Self:

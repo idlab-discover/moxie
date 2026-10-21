@@ -2,6 +2,9 @@ from std.testing import assert_equal, assert_true, assert_raises
 import numojo as nm
 from moxie.calibration import CalibratedClassifierCV, calibration_curve
 from moxie.base import clone
+from moxie.calibration import CalibrationCV
+from moxie._calibration_cv import _clip_rounding
+from std.utils import Variant
 from moxie._calibration_algorithms import (
     Array,
     _SigmoidCalibration,
@@ -80,9 +83,26 @@ def main() raises:
     _ = model.set_params(params)
     _ = model.fit(X, Y)
     assert_equal(len(model.calibrated_classifiers_), 1)
-    model.method = "temperature"
+    # Keyword partial updates leave omitted parameters untouched.
+    _ = model.set_params(method="temperature", cv=CalibrationCV(4))
+    assert_equal(model.method, "temperature")
+    assert_equal(model.cv[Int], 4)
+    assert_true(model.ensemble.isa[Bool]() and not model.ensemble[Bool])
+    _ = model.set_params(ensemble=Variant[Bool, String]("auto"), cv=CalibrationCV(3))
+    assert_equal(model.ensemble[String], "auto")
+    _ = model.set_params(ensemble=Variant[Bool, String](False))
     _ = model.fit(X, Y)
+    assert_equal(len(model.calibrated_classifiers_), 1)
     assert_true(model.score(X, Y) >= 0)
+    # The reference sets probabilities in (1, 1 + 1e-5] to exactly one.
+    var rounded = nm.zeros[DType.float64](nm.Shape(1, 3))
+    rounded[nm.Item(0, 0)] = 1.0 + 1e-6
+    rounded[nm.Item(0, 1)] = 1.0 + 1e-4
+    rounded[nm.Item(0, 2)] = 0.25
+    var clipped = _clip_rounding(rounded^)
+    assert_equal(clipped.item(0, 0), 1.0)
+    assert_equal(clipped.item(0, 1), 1.0 + 1e-4)
+    assert_equal(clipped.item(0, 2), 0.25)
     var frozen = Centroid()
     frozen.fit(X, Y)
     frozen.frozen = True

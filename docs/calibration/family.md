@@ -86,7 +86,9 @@ classifier or a substitute for another family's estimator.
 base estimator. Its nested typed parameters remain accessible through
 `params.estimator.get_params()`. No flattened `estimator__name` mapping is
 provided. Change the record and call `set_params(params)`; refit to use the new
-configuration. `fit` and `set_params` return a mutable borrow of the calibrator, following
+configuration. The keyword overload `set_params(estimator=..., method=...,
+cv=..., n_jobs=..., ensemble=...)` updates only the named parameters; resetting
+`n_jobs` to None requires the full record. `fit` and `set_params` return a mutable borrow of the calibrator, following
 Moxie's fluent estimator contract. The family adapter's optional-weight `fit`
 method remains a no-result operation.
 
@@ -122,7 +124,8 @@ that reference defect, covered by the nonconsecutive-label cases.
 
 Multiclass sigmoid/isotonic fits one calibrator per class, then normalizes.
 If all return zero, the output is uniform. Binary outputs use the positive
-probability and its complement.
+probability and its complement. As in the reference, each fold's
+probabilities in `(1, 1 + 1e-5]` are set to exactly one before averaging.
 
 ## Calibration curves
 

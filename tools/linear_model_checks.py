@@ -48,7 +48,7 @@ def public_namespace():
         '--consumer', ROOT, '--lock', ROOT / 'DEPENDENCIES.json', '--output', DEPS)
     ownership()
     run('mojo', 'precompile', DEPS / 'moxie', '-I', DEPS, '-o', ROOT / 'builds/linear_model-public.mojoc')
-    for relative in ('examples/dense_estimators.mojo', 'tests/test_fluent.mojo',
+    for relative in ('examples/dense_estimators.mojo', 'tests/test_fluent.mojo', 'tests/test_composition.mojo',
                      'algorithms/bayesian/examples/bayesian_ridge.mojo'):
         source = FAMILY / relative
         binary = ROOT / 'builds/linear_model-public' / source.stem

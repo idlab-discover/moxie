@@ -12,8 +12,11 @@ pixi run linear-model-start
 The focused commands assemble the complete Moxie namespace, verify that Moxie
 owns every linear-model implementation module, compare the private numerical
 modules with their external owner, and check the retained license asset.
-They precompile the package and execute public estimator examples plus fluent
-trait consumers. The family checker then uses isolated dependency trees for
+They precompile the package and execute public estimator examples, fluent
+trait consumers and `tests/test_composition.mojo`. That test puts every
+estimator behind `StandardScaler` in a `Pipeline` and checks coefficients
+and scores against the pinned reference, plus nested clone and typed nested
+`set_params`. The family checker then uses isolated dependency trees for
 its contracts and algorithm suites. A successful compile alone is not parity.
 
 The test command covers shared capabilities, shape/weight validation, snapshots,

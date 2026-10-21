@@ -151,7 +151,8 @@ the tree family's criterion and does not come from the forest engine.
 
 ## Not included
 
-- Parallel member building (`n_jobs`): members are built serially, in order.
+- Parallel member building: members are built serially, in order. The public
+  forests accept any nonzero `n_jobs` because it does not change the members.
 - `verbose` progress output.
 - `decision_path` and sparse input.
 - Callable OOB scorers: the public estimators can score `oob_prediction_` or

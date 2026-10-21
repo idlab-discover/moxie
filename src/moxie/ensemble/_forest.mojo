@@ -273,8 +273,10 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Features, ref[y_origin] y: Self.Target, sample_weight: Optional[Values]) raises -> ref[self] Self:
         if self.verbose != 0:
             raise Error("NotImplementedError: verbose progress is not implemented")
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("NotImplementedError: forests currently support n_jobs=None or 1")
+        # n_jobs only distributes member building in sklearn; members are built
+        # serially here, with the same seeds and therefore the same results.
+        if self.n_jobs and self.n_jobs.value() == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         if y.ndim != 1 and y.ndim != 2:
             raise Error("ValueError: y must have rank one or two")
         var outputs = 1 if y.ndim == 1 else y.shape[1]

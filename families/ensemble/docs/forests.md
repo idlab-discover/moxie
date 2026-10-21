@@ -71,7 +71,13 @@ supports them. Unfitted prediction and inspection raise `NotFittedError`-prefixe
 Mojo errors. Learned fields have empty initial values rather than Python's
 attribute absence.
 
-Current limits: dense inputs only, `n_jobs=None` or `1`, `verbose=0`, no callable
+`n_jobs` accepts every value scikit-learn accepts except 0, which raises joblib's
+`ValueError`; members are always built serially, which yields the same members
+as any parallel schedule. scikit-learn's fit warnings (few bootstrap rows, rows
+without OOB predictions, warm starts that add no trees) are printed to stderr as
+`UserWarning: ...` lines instead of Python warnings.
+
+Current limits: dense inputs only, `verbose=0`, no callable
 OOB scorer, no `decision_path`, feature-name metadata, partial dependence, or
 Python metadata routing. These are not full scikit-learn parity claims.
 

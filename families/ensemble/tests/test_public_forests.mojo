@@ -178,9 +178,21 @@ def main() raises:
     assert_equal(extra_regressor.predict(X).shape[1], 2)
     with assert_raises():
         _ = classifier.fit(X, multiple)
-    var invalid = RandomForestRegressor(n_jobs=2)
-    with assert_raises():
+    # joblib rejects n_jobs=0; any other value only changes worker scheduling,
+    # so serially built members equal the default ones.
+    var invalid = RandomForestRegressor(n_jobs=0)
+    with assert_raises(contains="n_jobs == 0 in Parallel has no meaning"):
         _ = invalid.fit(X, y)
+    var serial = RandomForestRegressor(5, random_state=3)
+    _ = serial.fit(X, y)
+    var job_counts: List[Int] = [2, -1]
+    for jobs in job_counts:
+        var workers = RandomForestRegressor(5, random_state=3, n_jobs=Int(jobs))
+        _ = workers.fit(X, y)
+        var a = serial.predict(X)
+        var b = workers.predict(X)
+        for i in range(a.size):
+            assert_equal(a.unsafe_get(i), b.unsafe_get(i))
     var weights = nm.full[DType.float64](nm.Shape(12), 2)
     _ = classifier.fit(X, y, sample_weight=weights)
     assert_equal(classifier.score(X, y, weights.copy()), Float64(1))

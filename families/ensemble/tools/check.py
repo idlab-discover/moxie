@@ -70,7 +70,7 @@ def build():
     execute('mojo','precompile',ROOT/'builds/deps/moxie','-I',ROOT/'builds/deps','-o',ROOT/'builds/moxie.mojoc')
     for p in sorted((ROOT/'tests').glob('test_*.mojo')):
         compile_file(p,ROOT/'builds'/p.stem)
-    for driver in ('sampling_driver','forest_driver','public_forest_driver'):
+    for driver in ('sampling_driver','forest_driver','public_forest_driver','public_edge_driver'):
         compile_file(ROOT/'tests'/(driver+'.mojo'),ROOT/'builds'/driver)
     compile_file(ROOT/'examples/estimator.mojo',ROOT/'builds/example')
     compile_file(ROOT/'examples/plumbing.mojo',ROOT/'builds/plumbing_example')
@@ -140,7 +140,7 @@ def main():
             assert Path(provenance['source']).resolve()==ROOT/'builds/reference'
             oracle=ROOT/'builds/oracle-env/bin/python'
             if not oracle.exists(): raise SystemExit('missing builds/oracle-env: run `pixi run ensemble-prepare-oracle` first')
-            for script in ('sampling_parity.py','forest_parity.py','public_forest_parity.py'): execute(oracle,ROOT/'tests'/script)
+            for script in ('sampling_parity.py','forest_parity.py','public_forest_parity.py','public_edge_parity.py'): execute(oracle,ROOT/'tests'/script)
         elif sys.argv[1]=='start': execute(ROOT/'builds/example')
         elif sys.argv[1]!='build': raise ValueError(sys.argv[1])
     except subprocess.CalledProcessError as exc:

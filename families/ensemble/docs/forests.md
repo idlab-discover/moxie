@@ -64,6 +64,8 @@ borrows of the fitted members and member template. `estimators_samples_()`
 regenerates sampled row indices. These methods replace Python attributes or
 properties where returning a mutable borrow or computing an array is explicit.
 `model[index]` supports negative indices; `len(model)` is the fitted member count.
+The forest itself is not iterable (sklearn's `for tree in forest`); iterate
+`model.estimators_()` instead.
 
 `score` uses accuracy or uniform-average R2, with optional weights. Accuracy
 rejects multiclass-multioutput targets, matching scikit-learn; prediction still
@@ -88,3 +90,10 @@ warm starts. Predictions, probabilities, leaves and sampled rows must match
 exactly. Importances and scores use relative tolerance 1e-12; log probabilities
 allow absolute tolerance 1e-14 for libm differences. The existing engine oracle
 checks additional sampling, tree parameters and shared-stream cases.
+The edge oracle (`tests/public_edge_parity.py`) checks NaN routing at prediction,
+`max_samples` above the row count, `log_loss`/`friedman_mse`, a single sample,
+constant features and negative labels exactly, and requires invalid criteria,
+`max_features`, class weights, NaN/infinite inputs, zero or negative weights and
+unfitted inference to fail with the same error class as scikit-learn.
+`tests/test_composition.mojo` checks clone, `make_pipeline`, `cross_val_score` and
+`GridSearchCV` against manual fits.

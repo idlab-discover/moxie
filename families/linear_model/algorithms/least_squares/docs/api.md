@@ -18,7 +18,7 @@ var r2 = model.score(X_new, y_true)          # optional sample_weight
 | `fit_intercept` | `True` | Weighted centering by the family plumbing |
 | `copy_X` | `True` | Accepted; inputs are never modified for either value |
 | `tol` | `1e-6` | lstsq cutoff: singular values `<= tol * s_max` are dropped (scipy `cond`) |
-| `n_jobs` | `None` | Accepted and validated (0 rejected); targets are solved sequentially |
+| `n_jobs` | `None` | Accepted; targets are solved sequentially. As in sklearn, 0 raises only with `positive=True` and a matrix target (joblib `Parallel`) |
 | `positive` | `False` | Nonnegative coefficients via Lawson-Hanson NNLS per target |
 
 | Learned | Shape / type |

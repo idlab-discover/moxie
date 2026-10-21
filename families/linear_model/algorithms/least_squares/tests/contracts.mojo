@@ -161,9 +161,17 @@ def lifecycle() raises:
     var bad = LinearRegression[DType.float64](tol=-1.0)
     with assert_raises(contains="tol"):
         bad.fit(matrix[DType.float64](2, 1, [1.0, 2.0]), vector[DType.float64]([2.0, 4.0]))
+    # sklearn ignores n_jobs=0 except for positive=True with a matrix target,
+    # where joblib.Parallel(n_jobs=0) raises.
     var zero_jobs = LinearRegression[DType.float64](n_jobs=Optional(0))
+    zero_jobs.fit(matrix[DType.float64](2, 1, [1.0, 2.0]), vector[DType.float64]([2.0, 4.0]))
+    assert_almost_equal(Float64(zero_jobs.coef_.unsafe_get(0)), 2.0, atol=1e-12)
+    zero_jobs.positive = True
+    zero_jobs.fit(matrix[DType.float64](2, 1, [1.0, 2.0]), vector[DType.float64]([2.0, 4.0]))
+    assert_almost_equal(Float64(zero_jobs.coef_.unsafe_get(0)), 2.0, atol=1e-12)
     with assert_raises(contains="n_jobs"):
-        zero_jobs.fit(matrix[DType.float64](2, 1, [1.0, 2.0]), vector[DType.float64]([2.0, 4.0]))
+        zero_jobs.fit(matrix[DType.float64](2, 1, [1.0, 2.0]), matrix[DType.float64](2, 1, [2.0, 4.0]))
+    assert_equal(zero_jobs.coef_.ndim, 1)  # the failed fit kept the previous state
     var fresh = LinearRegression[DType.float64]()
     with assert_raises():
         fresh.fit(matrix[DType.float64](2, 1, [1.0, Float64("inf")]), vector[DType.float64]([2.0, 4.0]))

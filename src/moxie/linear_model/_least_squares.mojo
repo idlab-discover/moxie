@@ -157,9 +157,6 @@ struct LinearRegression[dtype: DType = DType.float64](Copyable, LinearRegressor,
     def _validate_params(self) raises:
         if not isfinite(self.tol) or self.tol < 0:
             raise Error(String("ValueError: LinearRegression: tol must be a finite float >= 0, got ", self.tol))
-        if self.n_jobs:
-            if self.n_jobs.value() == 0:
-                raise Error("ValueError: LinearRegression: n_jobs == 0 has no meaning")
 
     def fit[
         origin: MutOrigin,
@@ -212,6 +209,10 @@ struct LinearRegression[dtype: DType = DType.float64](Copyable, LinearRegressor,
         var rank = Optional[Int](None)
         var singular = Optional[NDArray[Self.dtype]](None)
         if self.positive:
+            # sklearn only dispatches matrix targets through joblib.Parallel,
+            # which rejects n_jobs=0; every other dense branch ignores n_jobs.
+            if not data.vector_target and self.n_jobs and self.n_jobs.value() == 0:
+                raise Error("ValueError: LinearRegression: n_jobs == 0 in Parallel has no meaning")
             coef = zeros[Self.dtype](Shape(n_outputs, n_features))
             var column = zeros[Self.dtype](Shape(data.y.shape[0]))
             for t in range(n_outputs):

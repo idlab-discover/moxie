@@ -37,7 +37,11 @@ fold construction, independent fold clones and out-of-fold coverage.
 - Incremental sample weights, arbitrary fit metadata, Python reflection,
   metadata routing and feature-name propagation are not implemented.
 - Component inputs, targets and predictions must match the wrapper's declared
-  array types. Component probabilities and decisions use the feature dtype.
+  array types. Component probabilities and decisions must be Float32 or Float64
+  NDArrays and are converted to the feature dtype (Float64 forest probabilities
+  become Float32 for Float32 forest features; sklearn keeps them Float64).
+  Wrapper sample weights are Float64 and are narrowed for Float32-weight
+  components. Other component response or weight types fail at compile time.
   Class ordering follows sorted observed labels, or the complete class vectors
   passed to first `partial_fit`.
   Components retaining additional classes or a different probability-column

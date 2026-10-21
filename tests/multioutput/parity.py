@@ -67,7 +67,48 @@ def oracle():
     expected['ClassifierChainRandom'] = random_chain.predict(query).ravel().tolist()
     weighted = module.MultiOutputRegressor(DummyRegressor()).fit(X, y, sample_weight=np.arange(1, 5))
     expected['MultiOutputRegressorWeightedFit'] = weighted.predict(query).ravel().tolist()
+    expected.update(components(module, np))
     print(json.dumps(expected))
+
+
+def components(module, np):
+    """Production-component scenario mirrored by test_components.mojo."""
+    from sklearn.linear_model import Ridge, RidgeClassifier
+    i = np.arange(12)
+    X = np.array([[((r * (j + 3) + 2 * j) % 7) - 3.0 + 0.1 * r for j in range(3)] for r in i])
+    Y = np.column_stack([0.5 * (i % 3) + X @ np.array([k + 1 - j for j in range(3)], dtype=float) for k in range(3)])
+    binary = np.column_stack([(X[:, 0] + X[:, 1] > 0), i % 2, X[:, 2] > X[:, 0]]).astype(np.int64)
+    multiclass = np.column_stack([binary[:, 0], i % 2, i % 3]).astype(np.int64)
+    w = (i % 4 + 1).astype(float)
+    out = {}
+    regressor = module.MultiOutputRegressor(Ridge(alpha=0.5)).fit(X, Y)
+    out['ComponentsRidge'] = regressor.predict(X).ravel().tolist()
+    out['ComponentsRidgeScore'] = [regressor.score(X, Y)]
+    regressor.fit(X, Y, sample_weight=w)
+    out['ComponentsRidgeWeighted'] = regressor.predict(X).ravel().tolist()
+    out['ComponentsRidgeWeightedScore'] = [regressor.score(X, Y, sample_weight=w)]
+    out['ComponentsRidgeAlpha10'] = module.MultiOutputRegressor(Ridge(alpha=10.0)).fit(X, Y).predict(X).ravel().tolist()
+    X32, Y32 = X.astype(np.float32), Y.astype(np.float32)
+    narrow = module.MultiOutputRegressor(Ridge(alpha=0.5)).fit(X32, Y32, sample_weight=w)
+    out['ComponentsRidge32Weighted'] = narrow.predict(X32).ravel().tolist()
+    chain32 = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1]).fit(X32, Y32, sample_weight=w)
+    out['ComponentsRegressorChain32Weighted'] = chain32.predict(X32).ravel().tolist()
+    chain = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1]).fit(X, Y)
+    out['ComponentsRegressorChain'] = chain.predict(X).ravel().tolist()
+    out['ComponentsRegressorChainScore'] = [chain.score(X, Y)]
+    decision = module.ClassifierChain(RidgeClassifier(), order=[1, 0, 2], chain_method='decision_function').fit(X, binary)
+    out['ComponentsDecisionChainLabels'] = decision.predict(X).ravel().tolist()
+    out['ComponentsDecisionChain'] = decision.decision_function(X).ravel().tolist()
+    out['ComponentsDecisionChainScore'] = [decision.score(X, binary, sample_weight=w)]
+    labels = module.ClassifierChain(RidgeClassifier(), order=[2, 0, 1]).fit(X, multiclass)
+    out['ComponentsLabelChainLabels'] = labels.predict(X).ravel().tolist()
+    independent = module.MultiOutputClassifier(RidgeClassifier()).fit(X, multiclass)
+    out['ComponentsIndependentLabels'] = independent.predict(X).ravel().tolist()
+    out['ComponentsIndependentScore'] = [independent.score(X, multiclass)]
+    random = module.ClassifierChain(RidgeClassifier(), order='random', random_state=3).fit(X, multiclass)
+    out['ComponentsRandomOrder'] = random.order_.tolist()
+    out['ComponentsRandomLabels'] = random.predict(X).ravel().tolist()
+    return out
 
 if __name__ == '__main__':
     if '--oracle' in sys.argv:
@@ -77,7 +118,8 @@ if __name__ == '__main__':
         python = os.environ.get('MOXIE_REFERENCE_PYTHON', sys.executable)
         env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1')
         reference = json.loads(subprocess.check_output([python, __file__, '--oracle'], env=env, text=True))
-        output = subprocess.check_output([str(ROOT/'builds/tests/multioutput/test_estimators')], env=env, text=True)
+        output = ''.join(subprocess.check_output([str(ROOT/'builds/tests/multioutput'/name)], env=env, text=True)
+                         for name in ('test_estimators', 'test_components'))
         actual = {}
         for line in output.splitlines():
             if line.startswith('PARITY '):
@@ -88,7 +130,17 @@ if __name__ == '__main__':
             assert len(actual[name]) == len(reference[name]), name
             # Scores perform floating-point reductions; discrete predictions,
             # one-neighbor probabilities and seeded permutations must be exact.
-            if name.endswith('Score'):
+            if name.startswith('Components') and name.endswith('32Weighted'):
+                # Float32 Ridge solves: both sides round to float32 (eps 1.2e-7);
+                # values reach ~15, so allow 2e-5 absolute and relative error.
+                matches = all(math.isclose(a, b, rel_tol=2e-5, abs_tol=2e-5)
+                              for a, b in zip(actual[name], reference[name]))
+            elif name.startswith('Components') and not name.endswith(('Labels', 'Order')):
+                # Float64 Ridge solves differ from LAPACK in operation order
+                # (observed <= 6e-15); labels and orders stay exact.
+                matches = all(math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-12)
+                              for a, b in zip(actual[name], reference[name]))
+            elif name.endswith('Score'):
                 matches = all(math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-12)
                               for a, b in zip(actual[name], reference[name]))
             else:

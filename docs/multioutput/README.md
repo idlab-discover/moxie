@@ -14,10 +14,11 @@ Tests live in `tests/multioutput/`. Run Moxie's root build, test and parity task
 or `pixi run python tools/multioutput_checks.py test` followed by
 `pixi run python tools/multioutput_checks.py parity-only` for focused validation.
 The parity oracle uses scikit-learn revision
-`4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Its 19 paired-component comparisons
-establish wrapper behavior, not parity for arbitrary production estimators.
-Exact comparisons cover predictions, probabilities and order; Float64 score
-reductions retain relative and absolute tolerances of 1e-12.
+`4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Its 36 comparisons pair an exact
+test component and production `Ridge`/`RidgeClassifier` components with the
+same sklearn estimators; they establish wrapper behavior, not parity for every
+production estimator. Labels, one-neighbor probabilities and orders are exact;
+Float64 scores and Ridge outputs use 1e-12 and Float32 Ridge outputs 2e-5.
 
 Toolchain compatibility remains Mojo 1.0.0 and MAX 26.5.0 through Moxie's Pixi
 lock. Shared numerical and random sources are assembled live.

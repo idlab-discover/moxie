@@ -174,9 +174,9 @@ Inputs and class domains are not retained as mutable caller aliases. Copying a
 fitted estimator copies its domain and numerical state; cloning is unfitted.
 
 Feature codes for CategoricalNB are already encoded nonnegative indices, not
-raw string columns or Moxie `CategoricalColumn` objects. Fractional feature
-values are rejected rather than silently truncated, preserving the existing
-explicit native validation difference. Missing categories are not accepted.
+raw string columns or Moxie `CategoricalColumn` objects. Fractional floating
+feature values truncate toward zero, as sklearn's `dtype="int"` validation does
+(see the behavior table below). Missing categories are not accepted.
 
 ## Fitting and prediction
 
@@ -262,11 +262,31 @@ require explicit ownership in Mojo, e.g. `priors=prior.copy()` or
 `classes=classes^`. Fits, incremental updates and parameter updates return a mutable reference
 to the same estimator, following the [shared native contract](../interfaces.md).
 
+## Composition with other Moxie families
+
+- `clone`, fitted `copy()` and `get_params`/`set_params` follow the shared
+  contract above.
+- Typed pipelines: each estimator's trait `Input` is `List[List[Float64]]`; the
+  `NDArray` methods are extra overloads, not the trait type. A
+  `moxie.pipeline` step that outputs `NDArray` (for example `StandardScaler`)
+  therefore cannot precede a Naive Bayes classifier:
+  `make_pipeline(StandardScaler(), GaussianNB())` fails at compile time (the
+  pipeline's `rebind` of the scaler output to `GaussianNB.Input` fails).
+  Transform first and pass the array to the classifier's `NDArray` overloads.
+- `moxie.model_selection.learning_curve` (like the other CV helpers built on
+  the same trait) takes an explicit `CVAdapter` / `TypedScorer`; `GaussianNB` with
+  `exploit_incremental_learning=True` drives `partial_fit` through an
+  `IncrementalCVAdapter`. See `notebooks/naive_bayes/plot_learning_curve.ipynb`.
+- `moxie.calibration.CalibratedClassifierCV` takes a `CalibrationEstimator`
+  adapter; no adapter ships for these classifiers yet. A forwarding adapter
+  is about 40 lines (see `notebooks/naive_bayes/plot_calibration_curve.ipynb`).
+
 ## Supported scope and numerical behavior
 
 This is a dense implementation of all five algorithms, not completion of the
 whole-family compatibility mission. Unsupported native inputs are sparse
-matrices, multioutput targets and per-feature alpha vectors for CategoricalNB.
+matrices and multioutput targets. CategoricalNB accepts only scalar `alpha`,
+as in the reference (its `_parameter_constraints` reject array-like alpha).
 All five classifiers support numeric NDArray and string target domains, and
 boolean, integer and Float32/Float64 dense feature arrays.
 Feature names, Python adapters and dynamic metadata routing remain outside the
@@ -361,6 +381,8 @@ A retained deviation is not strict reference parity.
 | Categorical fractional features | Reference-compatible truncation toward zero in fit, partial_fit and prediction, including values between -1 and 0 | Differential fractional List/Float32/Float64 cases and `test_categorical_arrays.mojo` |
 | Singleton `min_categories_values` | Reference-compatible broadcasting | Differential weighted/category-growth cases and native categorical contracts |
 | Bernoulli vector alpha | Retained native deviation: smooth each feature with its own alpha; do not reproduce the pinned denominator broadcasting bug | Differential square/rectangular bug probes and independent scalar-sklearn fits, checked after each update |
+| Negative discrete `class_prior` entries | Retained native deviation: raise; the pinned reference passes them to `np.log` and stores NaN log priors | `tests/naive_bayes/test_reference_edges.mojo` |
+| Unknown labels in a later `partial_fit` (discrete models) | Retained native deviation: raise and keep state; the pinned `label_binarize` silently drops such rows from the counts (GaussianNB raises in both) | `tests/naive_bayes/test_reference_edges.mojo` |
 | Gaussian Float32 input with default estimator | Retained native deviation: a fixed compile-time state/output dtype defaults to Float64 across calls; choose `GaussianNB[dtype=DType.float32]` for Float32 reference behavior | `tests/naive_bayes/gaussian/contracts.mojo` distinguishes the two variances on large-offset input; typed differential fixtures check both arithmetic dtypes; default-estimator Float32 fixtures use a Float64 sklearn oracle after preserving input rounding |
 
 Run `pixi run build`, `pixi run test`, then

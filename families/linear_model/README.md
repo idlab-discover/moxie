@@ -28,6 +28,16 @@ and predictive uncertainty; ARDRegression is unimplemented. See the
 [coverage table](docs/coverage.md), [scope](docs/scope.md), and
 [public API](docs/api-surface.md) for the supported contract.
 
+The implemented estimators compose like their scikit-learn counterparts:
+- inside `moxie.pipeline` pipelines, for example after `StandardScaler`,
+  `PolynomialFeatures` or `SplineTransformer`;
+- through `clone`, nested typed `set_params` and `TransformedTargetRegressor`;
+- in `moxie.model_selection` `cross_val_score` and `GridSearchCV`, through
+  that family's typed adapters.
+
+See `tests/test_composition.mojo` and the side-by-side notebooks in
+`notebooks/linear_model/`.
+
 The standalone checkout is not a dependency. Its source revision and module
 relocations are recorded in [PROVENANCE.json](PROVENANCE.json). Historical
 scaffold declarations remain in that repository's Git history and are not

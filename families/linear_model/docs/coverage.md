@@ -4,8 +4,9 @@ The target is every dense public API in the local scikit-learn
 `sklearn/linear_model/__init__.py` at revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 
-Run `pixi run build` followed by `pixi run python tools/coverage.py` to compare
-that reference with the actual generated public imports. Export availability
+From the Moxie root, run `pixi run linear-model-build` and then
+`pixi run python families/linear_model/tools/coverage.py`. This compares the
+reference with the public imports that were actually generated. Export availability
 is not evidence of complete behavior. Historical `_api.mojo` declarations remain in Git history and are excluded
 from the assembled package.
 
@@ -13,7 +14,7 @@ from the assembled package.
 | --- | --- |
 | LinearRegression | Dense least squares and nonnegative least squares; see least_squares scope and parity suite |
 | Ridge, RidgeClassifier, ridge_regression | Dense direct, iterative and positive solvers; SAG/SAGA missing |
-| ElasticNet, Lasso | Cyclic residual solver; random selection and Gram input missing |
+| ElasticNet, Lasso | Cyclic residual solver; random selection, Gram input and the `path` static method (enet_path) missing; `sparse_coef_` is a sparse deferral |
 | enet_path, lasso_path | Missing |
 | MultiTaskElasticNet, MultiTaskLasso | Missing block coordinate solver and estimators |
 | RidgeCV, RidgeClassifierCV | Missing estimators and validation integration |
@@ -28,6 +29,13 @@ from the assembled package.
 | HuberRegressor, QuantileRegressor, RANSACRegressor, TheilSenRegressor | Missing |
 | SGDClassifier, SGDRegressor, SGDOneClassSVM | Missing |
 | Perceptron, PassiveAggressiveClassifier, PassiveAggressiveRegressor | Missing |
+
+`LogisticRegression` is the most visible gap. Many scikit-learn examples and
+other Moxie families (feature_selection, calibration, frozen, compose,
+naive_bayes notebooks) substitute other models for it. No linear model
+implements `ModelSchema` persistence (see `docs/serialization.md`). The
+`algorithms/ridge_cv` directory is an unbuilt placeholder: its check exits
+with `UNIMPLEMENTED`, and its `EXPORTS.json` is not assembled.
 
 Sparse matrices and sparse coefficient conversion remain outside the dense
 scope. The missing dense entries above are unfinished work, not exclusions.

@@ -78,10 +78,22 @@ See [scope](scope.md) for unsupported inputs and configuration options.
 `moxie._multioutput`.
 
 The weighted `fit` overload is available only for components implementing
-`WeightedSupervisedEstimator`. Moxie's `DummyRegressor` is directly compatible
-with independent and chained regression. DummyClassifier and current Naive Bayes
-classifiers use List target contracts, so they are not direct NDArray component
-substitutes. No conversion adapter is supplied by these wrappers.
+`WeightedSupervisedEstimator`. Tested production components are `DummyRegressor`,
+`Ridge` and `RandomForestRegressor` (regression, independent and chained) and
+`RidgeClassifier` and `RandomForestClassifier` (classification; forests use
+`[Forest, DType.float32, DType.float64]`). DummyClassifier uses List targets and
+the Naive Bayes classifiers use List feature inputs, so they are not direct
+NDArray component substitutes; neither is the tree classifier for
+`predict_proba` (List probabilities). No conversion adapter is supplied by these
+wrappers.
+
+The independent wrappers share their field layout with the chains: they also
+carry `order`, `random_state`, `random_order`, `verbose`, `chain_method`,
+`chain_method_` and `order_`, and `MultiOutputRegressor` carries an empty
+`classes_`. These are not scikit-learn attributes or parameters; they are not
+in `get_params`, and setting a chain option makes `fit` raise. A classifier's
+`partial_fit` with `classes` also records `classes_`, which scikit-learn sets
+only in `fit`.
 
 Wrappers are `Copyable` when their component is `Copyable`. A fitted copy owns
 separate component state under that component's copy contract; cloning remains

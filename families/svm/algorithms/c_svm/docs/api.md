@@ -5,7 +5,8 @@ The five estimators call the native family LIBSVM engine. Constructors retain
 scikit-learn's parameter names and defaults, including `gamma="scale"`,
 `max_iter=-1`, and the pinned reference's `probability="deprecated"` default.
 `probability=True` enables fitted classifier calibration and probability methods.
-Disabled probability methods raise `AttributeError`-prefixed Mojo errors.
+Disabled probability methods raise `AttributeError`-prefixed Mojo errors; enabling
+`probability` after a fit without it raises a `NotFittedError`-prefixed error, as in sklearn.
 
 Matrices use `numojo.NDArray[float64]` or Float32 inputs converted to Float64.
 Regressor targets are Float64 vectors. Classification accepts `List[Label]`,
@@ -24,8 +25,9 @@ mutating them cannot change the internal prediction buffers.
 Kernel names are `linear`, `poly`, `rbf`, `sigmoid`, `precomputed`, and `callable`.
 `Gamma` accepts numeric values and `scale`/`auto` strings. Precomputed training
 matrices must be square, with prediction columns equal to the training count.
-`coef_()` returns the linear-kernel coefficient matrix and raises for other
-kernels. The method call is the native adaptation of sklearn's conditional
+`coef_()` returns the linear-kernel coefficient matrix. Like sklearn's property, it
+raises an `AttributeError`-prefixed error whenever the current `kernel` parameter is not
+`linear` (fitted or not). The method call is the native adaptation of sklearn's conditional
 property. `support_`, `n_support_`, and classifier `n_iter_` use checked Int32 metadata.
 Classifiers expose array `n_iter_`; regressors and OneClassSVM expose an integer.
 `shape_fit_` is a native `Shape`. Binary classifier decisions are rank one and

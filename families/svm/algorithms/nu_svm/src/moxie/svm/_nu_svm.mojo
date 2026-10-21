@@ -238,6 +238,9 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         return engine.decision_values(X, self._model.value(), self._kernel)
 
     def coef_(self) raises -> Dense:
+        # sklearn's property checks the current kernel parameter before fitted state.
+        if self.kernel != "linear":
+            raise Error("AttributeError: coef_ is only available when using a linear kernel")
         if not self._model:
             raise Error("NotFittedError: estimator is not fitted")
         return linear_coefficients(self._model.value(), self._kernel, len(self.classes_))
@@ -268,6 +271,8 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         if not self.probability.enabled():
             raise Error("AttributeError: predict_proba requires probability=True")
         var raw = self._raw_decisions(X)
+        if self.probA_.size == 0:
+            raise Error("NotFittedError: predict_proba is not available when fitted with probability=False")
         var engine = LibSVM()
         return engine.class_probabilities(raw, self._model.value())
 
@@ -378,6 +383,8 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         if not self.probability.enabled():
             raise Error("AttributeError: predict_proba requires probability=True")
         var raw = self._raw_with_kernel(X, provider)
+        if self.probA_.size == 0:
+            raise Error("NotFittedError: predict_proba is not available when fitted with probability=False")
         var engine = LibSVM()
         return engine.class_probabilities(raw, self._model.value())
 
@@ -617,6 +624,9 @@ struct NuSVR(SupportVectorRegressor):
         return engine.decision_values(X, self._model.value(), self._kernel)
 
     def coef_(self) raises -> Dense:
+        # sklearn's property checks the current kernel parameter before fitted state.
+        if self.kernel != "linear":
+            raise Error("AttributeError: coef_ is only available when using a linear kernel")
         if not self._model:
             raise Error("NotFittedError: estimator is not fitted")
         return linear_coefficients(self._model.value(), self._kernel, 0)

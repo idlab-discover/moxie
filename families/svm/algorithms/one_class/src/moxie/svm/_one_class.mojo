@@ -183,6 +183,9 @@ struct OneClassSVM(OneClassSupportVector):
         return engine.decision_values(X, self._model.value(), self._kernel)
 
     def coef_(self) raises -> Dense:
+        # sklearn's property checks the current kernel parameter before fitted state.
+        if self.kernel != "linear":
+            raise Error("AttributeError: coef_ is only available when using a linear kernel")
         if not self._model:
             raise Error("NotFittedError: estimator is not fitted")
         return linear_coefficients(self._model.value(), self._kernel, 0)

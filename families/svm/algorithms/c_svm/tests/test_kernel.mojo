@@ -1,7 +1,7 @@
 import numojo as nm
 from std.math import abs
 from std.testing import assert_equal, assert_true, assert_raises
-from moxie.svm import SVC, SVR, NuSVC, NuSVR, OneClassSVM
+from moxie.svm import SVC, SVR, NuSVC, NuSVR, OneClassSVM, Probability
 from moxie.svm._contracts import Dense, KernelProvider
 
 
@@ -86,6 +86,67 @@ def classifier_labels_probability() raises:
     _ = prob.fit(X, y)
     assert_equal(prob.predict_proba(X).shape[1], 2)
     _ = prob.predict_log_proba(X)
+
+
+def raises_with(prefix: String, message: String) -> Bool:
+    return message.startswith(prefix)
+
+
+@no_inline
+def probability_and_coef_gating() raises:
+    """Pinned BaseSVC.predict_proba and BaseLibSVM.coef_ error behavior."""
+    var X = features()
+    var y = labels()
+    # Fitted with the deprecated/False default, then enabled: sklearn raises
+    # NotFittedError("... fitted with probability=False") instead of predicting.
+    for nu in range(2):
+        var message = String("")
+        if nu == 0:
+            var svc = SVC(kernel="linear")
+            _ = svc.fit(X, y)
+            _ = svc.set_params(probability=Probability(True))
+            try:
+                _ = svc.predict_proba(X)
+            except e:
+                message = String(e)
+        else:
+            var nusvc = NuSVC(kernel="linear")
+            _ = nusvc.fit(X, y)
+            _ = nusvc.set_params(probability=Probability(True))
+            try:
+                _ = nusvc.predict_log_proba(X)
+            except e:
+                message = String(e)
+        assert_true(raises_with("NotFittedError: predict_proba is not available when fitted with probability=False", message))
+    # The coef_ property checks the current kernel parameter first, also unfitted.
+    var linear = SVC(kernel="linear")
+    _ = linear.fit(X, y)
+    assert_equal(linear.coef_().shape[1], 2)
+    _ = linear.set_params(kernel="rbf")
+    var message = String("")
+    try:
+        _ = linear.coef_()
+    except e:
+        message = String(e)
+    assert_true(raises_with("AttributeError: coef_ is only available when using a linear kernel", message))
+    message = ""
+    try:
+        _ = SVR().coef_()
+    except e:
+        message = String(e)
+    assert_true(raises_with("AttributeError", message))
+    message = ""
+    try:
+        _ = OneClassSVM(kernel="poly").coef_()
+    except e:
+        message = String(e)
+    assert_true(raises_with("AttributeError", message))
+    message = ""
+    try:
+        _ = SVR(kernel="linear").coef_()
+    except e:
+        message = String(e)
+    assert_true(raises_with("NotFittedError", message))
 
 
 @no_inline
@@ -179,6 +240,7 @@ def callable_one_class() raises:
 def main() raises:
     classifier_lifecycle()
     classifier_labels_probability()
+    probability_and_coef_gating()
     regression_lifecycle()
     one_class_lifecycle()
     callable_classifiers()

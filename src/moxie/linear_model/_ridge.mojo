@@ -783,6 +783,40 @@ struct RidgeClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.
         self.random_state = params.random_state
         return self
 
+    def set_params[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        alpha: Optional[ScalarOrVector] = None,
+        fit_intercept: Optional[Bool] = None,
+        copy_X: Optional[Bool] = None,
+        max_iter: Optional[Int] = None,
+        tol: Optional[Float64] = None,
+        class_weight: Optional[ClassWeight] = None,
+        solver: Optional[String] = None,
+        positive: Optional[Bool] = None,
+        random_state: Optional[Int] = None,
+    ) raises -> ref[self] Self:
+        """Update only the supplied parameters (use the Params record to reset Optionals to None)."""
+        if alpha:
+            self.alpha = alpha.value().copy()
+        if fit_intercept:
+            self.fit_intercept = fit_intercept.value()
+        if copy_X:
+            self.copy_X = copy_X.value()
+        if max_iter:
+            self.max_iter = max_iter
+        if tol:
+            self.tol = tol.value()
+        if class_weight:
+            self.class_weight = class_weight.copy()
+        if solver:
+            self.solver = solver.value().copy()
+        if positive:
+            self.positive = positive.value()
+        if random_state:
+            self.random_state = random_state
+        return self
+
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.alpha.copy(), fit_intercept=self.fit_intercept, copy_X=self.copy_X, max_iter=self.max_iter, tol=self.tol, class_weight=self.class_weight.copy(), solver=self.solver.copy(), positive=self.positive, random_state=self.random_state)
 

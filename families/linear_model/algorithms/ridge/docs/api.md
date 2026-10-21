@@ -24,6 +24,13 @@ singular Cholesky fallback), `n_features_in_`; RidgeClassifier also `classes_`
 and `decision_function`. `ridge_regression` returns `RidgeRegressionResult`
 (`coef`, `n_iter` when `return_n_iter`, `intercept` unused).
 
+`get_params()` returns the typed `RidgeParams`/`RidgeClassifierParams` record
+and `set_params(record)` replaces the configuration. Keyword `set_params`
+updates only the fields you supply: Ridge accepts alpha, fit_intercept,
+max_iter, tol, solver and positive; RidgeClassifier accepts every constructor
+parameter. A supplied value cannot reset an Optional to None, so use the
+record for that. `clone` copies the configuration into an unfitted estimator.
+
 ## Solvers
 
 | solver | Implementation |

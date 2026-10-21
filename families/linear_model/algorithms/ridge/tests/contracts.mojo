@@ -207,6 +207,19 @@ def classifier() raises:
     with assert_raises(contains="NotFittedError"):
         _ = RidgeClassifier().predict(X3)
     assert_false(clone(multi).__sklearn_is_fitted__())
+    # Keyword set_params updates only the supplied fields; refit replaces state.
+    var keyword = RidgeClassifier(0.1)
+    keyword.fit(X3, y3)
+    var before = keyword.decision_function(X3)
+    keyword.set_params(alpha=Optional(ScalarOrVector(25.0)), solver=Optional(String("svd")), class_weight=Optional(ClassWeight.balanced_weights()))
+    assert_equal(keyword.alpha[Float64], 25.0)
+    assert_equal(keyword.solver, "svd")
+    assert_true(Bool(keyword.class_weight))
+    assert_true(keyword.fit_intercept)
+    assert_equal(keyword.tol, 1e-4)
+    keyword.fit(X3, y3)
+    assert_equal(keyword.solver_, "svd")
+    assert_true(abs(keyword.decision_function(X3).unsafe_get(0) - before.unsafe_get(0)) > 1e-3)
 
 
 def main() raises:

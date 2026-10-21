@@ -3,7 +3,9 @@
 API/mathematical reference: scikit-learn, BSD-3-Clause; see LICENSES/sklearn.txt.
 """
 import numojo as nm
-from std.math import log, cos, isfinite
+from std.math import cos, isfinite
+# Numax fdlibm log (within one ulp): Mojo 1.0 std.math log is ~1e-10 relative in Float64.
+from numax.core.libm import log
 
 @fieldwise_init
 struct NodeData(ImplicitlyCopyable, Movable):

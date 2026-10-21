@@ -38,10 +38,10 @@ for dtype,kernel,weighted,rule,algorithm,metric in itertools.product(['f32','f64
  got=np.array([float(s[1]) for s in lines if s[0]=='S'])
  finite=np.isfinite(got)&np.isfinite(expected)
  if finite.any():maximum=max(maximum,float(np.max(np.abs(got[finite]-expected[finite]))))
- # Native standard exp/pow compositions: independently measured Float64 error.
- np.testing.assert_allclose(got,expected,rtol=2e-9,atol=2e-9)
- np.testing.assert_allclose([float(s[1]) for s in lines if s[0]=='T'],[expected.sum()],rtol=2e-9,atol=2e-9)
- np.testing.assert_allclose([float(s[1]) for s in lines if s[0]=='B'],[h],rtol=2e-9,atol=2e-9)
+ # Numax fdlibm exp/log (within one ulp) and summation order: a few ulps on log densities.
+ np.testing.assert_allclose(got,expected,rtol=1e-12,atol=1e-12)
+ np.testing.assert_allclose([float(s[1]) for s in lines if s[0]=='T'],[expected.sum()],rtol=1e-12,atol=1e-12)
+ np.testing.assert_allclose([float(s[1]) for s in lines if s[0]=='B'],[h],rtol=1e-14,atol=0)
  if kernel=='gaussian':
   fixture=SimpleNamespace(kernel=kernel,bandwidth_=h,tree_=SimpleNamespace(data=x,sample_weight=w if weighted else None))
   samples=ns['sample'](fixture,n_samples=3,random_state=42)

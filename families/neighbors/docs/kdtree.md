@@ -100,8 +100,8 @@ self exclusion, counters, ownership, invalid inputs and inspection. The parity
 bridge sends fixtures to a compiled Mojo executable and compares queries,
 radius memberships, correlations, geometry and six weighted kernels with SciPy.
 The validated run covers 336 independent configurations and 205 original sklearn
-test invocations, including its Float32/Float64 consistency tests. It uses rtol 3e-5 for Float32 and 2e-11 for Float64 query fixtures; kernel tests allow 2e-9 for native
-transcendental approximations, matching the existing KDE tolerance. Log tails
+test invocations, including its Float32/Float64 consistency tests. It uses rtol 3e-5 for Float32 and 2e-11 for Float64 query fixtures; kernel tests allow 2e-9, a conservative bound since the
+kernel sums moved to Numax fdlibm exp/log. Log tails
 use corresponding absolute tolerance. Membership/count comparisons are exact.
 
 For the original sklearn test bodies, compile the recorded local checkout into

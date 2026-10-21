@@ -209,10 +209,13 @@ formulas and executes the pinned Python sampling method. Native tests cover
 validation, cloning, refitting, snapshots, scores, strides and empty neighborhoods.
 
 Query/prediction tolerances are rtol=atol=2e-12 for Float64 and 3e-6 for Float32,
-reflecting native accumulation/output rounding. KDE permits 2e-9 in Float64 for
-the locked standard exp/pow compositions, including bandwidth rules; this is an
-explicit numerical limitation, not a claim of correctly rounded transcendental
-functions. No performance or exhaustive extreme-value parity claim is made.
+reflecting native accumulation/output rounding. KDE, the spatial-tree kernel sums
+and NearestCentroid probabilities use Numax `core.libm` exp/log (fdlibm, within one
+ulp of glibc) instead of Mojo 1.0 `std.math` exp/log/pow, whose Float64 results were
+measured ~1e-10 relative off (KDE log densities then differed from sklearn by up to
+3e-9). Scott/Silverman bandwidths are `exp(log(n) * -1/(d+4))` in that libm. KDE
+log-density parity uses rtol=atol=1e-12 in Float64. Not correctly rounded; no
+performance or exhaustive extreme-value parity claim is made.
 
 Tophat sampling contracts and validation: [KDE sampling](kde-sampling.md).
 

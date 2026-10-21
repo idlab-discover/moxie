@@ -1,6 +1,8 @@
 """Shared median spatial tree traversal with box or ball geometry."""
 import numojo as nm
-from std.math import abs, max, min, isfinite, isnan, exp, log
+from std.math import abs, max, min, isfinite, isnan
+# Numax fdlibm exp/log (within one ulp): Mojo 1.0 std.math exp/log are ~1e-10 relative in Float64.
+from numax.core.libm import exp, log
 from moxie.neighbors._distance import Metric, at, metric_power
 from moxie.neighbors._query_engine import before
 from moxie.neighbors._contracts import DenseMetric, TopKResult, RadiusResult, fit_snapshot, validate_matrix, validate_k

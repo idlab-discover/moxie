@@ -3,7 +3,9 @@
 See LICENSES/sklearn.txt and docs/estimators.md for native adaptations.
 """
 import numojo as nm
-from std.math import abs, sqrt, log, exp, isfinite
+from std.math import abs, sqrt, isfinite
+# Numax fdlibm exp/log (within one ulp): Mojo 1.0 std.math exp/log are ~1e-10 relative in Float64.
+from numax.core.libm import exp, log
 from moxie.base import ClassifierMixin
 from moxie._dense import sum_axis2d
 from moxie.neighbors._classification_targets import ClassificationTargets, LabelOps

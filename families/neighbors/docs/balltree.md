@@ -96,6 +96,6 @@ sklearn test invocations. Tests cover both dtypes, all advertised metric familie
 traversal modes, node geometry, inclusive boundaries, duplicates, ownership,
 invalid options, refits/cloning, KDE and two independently assembled consumers.
 Query tolerances are 3e-5 (Float32) and 2e-11 (Float64); kernel/log-density
-comparisons allow 2e-9 for native transcendental arithmetic. Membership and pair
+comparisons allow 2e-9 (conservative since the kernel sums moved to Numax fdlibm exp/log). Membership and pair
 counts are exact. Original pinned sklearn test bodies run through a typed native
 adapter; this does not establish full sklearn API or estimator-check parity.

@@ -1,7 +1,9 @@
 """Exact dense kernel density with the family spatial trees."""
 import numojo as nm
 from std.utils import Variant
-from std.math import log, isfinite, pow
+from std.math import isfinite
+# Numax fdlibm exp/log (within one ulp): Mojo 1.0 std.math exp/log/pow are ~1e-10 relative in Float64.
+from numax.core.libm import exp, log
 from moxie.base import BaseEstimator
 from moxie.neighbors._base import NeighborDensity
 from moxie._random import RandomState, check_random_state
@@ -81,8 +83,8 @@ struct KernelDensity[dtype: DType = DType.float64](NeighborDensity):
         if p.kernel != "gaussian" and p.kernel != "tophat" and p.kernel != "epanechnikov" and p.kernel != "exponential" and p.kernel != "linear" and p.kernel != "cosine": raise Error("ValueError: unknown kernel")
         var snapshot = fit_snapshot(X)
         var bandwidth = p.bandwidth
-        if p.bandwidth_rule == "scott": bandwidth = pow(Float64(X.shape[0]),-Float64(1)/Float64(X.shape[1]+4))
-        elif p.bandwidth_rule == "silverman": bandwidth = pow(Float64(X.shape[0])*Float64(X.shape[1]+2)/4,-Float64(1)/Float64(X.shape[1]+4))
+        if p.bandwidth_rule == "scott": bandwidth = exp(log(Float64(X.shape[0]))*(-Float64(1)/Float64(X.shape[1]+4)))
+        elif p.bandwidth_rule == "silverman": bandwidth = exp(log(Float64(X.shape[0])*Float64(X.shape[1]+2)/4)*(-Float64(1)/Float64(X.shape[1]+4)))
         elif p.bandwidth_rule != "": raise Error("ValueError: bandwidth_rule must be scott or silverman")
         if not isfinite(bandwidth) or bandwidth <= 0: raise Error("ValueError: bandwidth must be positive and finite")
         var weights = nm.ones[DType.float64](nm.Shape(X.shape[0]))

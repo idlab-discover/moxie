@@ -48,8 +48,8 @@ and the pinned NuMojo median on compact Float64 vectors. Queries are made
 contiguous before dtype conversion to preserve arbitrary strides. Centroid parity
 tolerances are rtol=atol=3e-5 for Float32 and 2e-11
 for Float64 learned state on the tested data. Float64 decisions, probabilities
-and log-probability outputs allow 2e-9 for the locked stdlib exp/log composition,
-as in KDE. The 432-case parity matrix executes the pinned
+and log-probability outputs allow 2e-9; they use Numax `core.libm` exp/log
+(fdlibm, within one ulp), so this bound is conservative. The 432-case parity matrix executes the pinned
 sklearn fit/prediction and discriminant mixin bodies with NumPy/SciPy plumbing;
 it checks learned arrays, labels, probabilities, shrinkage and degenerate cases.
 It is not the full sklearn estimator-check suite or a performance claim.

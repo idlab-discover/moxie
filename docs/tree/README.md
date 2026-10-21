@@ -30,7 +30,9 @@ Balsa native codec at `../../../nvidiads/balsa`, with its license retained under
 Probabilities and learned class domains remain per-output lists, even for one
 output. Int64 class labels retain exact identity above 2**53. Regression uses
 Float64. Failed fitting preserves the previously fitted tree. Absolute error
-rejects missing or categorical features and undefined nonpositive-weight medians.
+rejects categorical features (as sklearn does), missing features (a deferral:
+sklearn routes them) and undefined nonpositive-weight medians. NaNs with monotonic
+constraints are likewise deferred.
 Sparse input and CSR `decision_path`, arbitrary Python object labels, Python
 reflection/dataframes and Matplotlib objects remain unsupported. `plot_tree`
 returns native SVG. No new persistence format or forest algorithm is included.

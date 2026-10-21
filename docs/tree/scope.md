@@ -19,7 +19,8 @@ Supported modes:
 - Sample and class weights, fit/refit/clone/parameter lifecycle, prediction,
   classifier probabilities/log-probabilities, accuracy/R2, apply, depth/leaf
   inspection, feature importances, cost-complexity pruning and pruning paths.
-- Single-output regression/binary-classification monotonic bounds without NaNs.
+- Single-output regression/binary-classification monotonic bounds without NaNs
+  (the pinned reference also accepts NaNs with monotonic constraints; deferred).
 - Owned feature names and ordered-name validation on TreeTable; categorical
   selectors by indices, boolean masks, names or native dtype metadata.
 
@@ -31,7 +32,9 @@ regression targets and predictions remain Float64. Default numeric dense fitting
 Remaining dense limits:
 
 - Absolute-error regression supports finite numeric features and signed weights;
-  missing features and categorical splits are rejected.
+  categorical splits are rejected as in the reference. Missing features are also
+  rejected, although the pinned reference routes them (deferred).
+- `decision_path` (CSR output in sklearn) is absent; see the sparse exclusions below.
 - Python dataframe/reflection/visualization bindings, arbitrary object labels,
   and numeric label dtypes beyond Int64/Float32/Float64.
 - Absolute-error regression rejects nonpositive total weights: the pinned

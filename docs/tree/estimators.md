@@ -52,8 +52,10 @@ NaN for a single sample and uses sklearn's finite constant-target convention.
 
 `criterion="absolute_error"` is supported by both regressors for finite numeric
 features, including multiple outputs and signed weights. Predictions are weighted
-medians. Missing features and categorical splits remain unsupported, as in the
-reference. Nonpositive-weight split candidates are ignored.
+medians. Categorical splits are rejected, as in the reference. Missing (NaN)
+features are also rejected: this is a Moxie deferral, since the pinned reference
+routes NaNs for absolute error like the other criteria. Nonpositive-weight split
+candidates are ignored.
 
 ## Configuration
 
@@ -100,7 +102,9 @@ an explicit mutable shared context to preserve stream consumption across trees.
 Each tree draws exactly one seed before using its tree-local xorshift stream.
 
 `monotonic_cst` is `Optional[List[Int]]`, with signs -1, 0, or 1. Only single-output
-regression and binary classification are supported, with no missing inputs.
+regression and binary classification are supported, as in the reference. Moxie
+rejects missing (NaN) inputs with nonzero constraints; the pinned reference accepts
+them, so this is a deferral.
 Best and random splitters propagate bounds and clip values in both depth-first
 and best-first construction. Categorical columns must have zero monotonic signs.
 

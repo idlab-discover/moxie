@@ -11,6 +11,7 @@ The retired sibling is not a source or build dependency.
 - [OutputCodeClassifier](output_code.md)
 - [Component contracts](family.md) and [public API](api-surface.md)
 - [Shared estimator interfaces](../interfaces.md)
+- Verification notebook: [`plot_multiclass_overview`](../../notebooks/multiclass/plot_multiclass_overview.ipynb) (`pixi run -e notebooks notebooks notebooks/multiclass`)
 
 Run from the Moxie root:
 

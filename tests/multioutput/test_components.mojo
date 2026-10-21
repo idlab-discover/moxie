@@ -166,6 +166,9 @@ def main() raises:
     var forest_chain = ClassifierChain[RandomForestClassifier[], DType.float32, DType.float64](RandomForestClassifier(n_estimators=5, random_state=0), chain_method="predict_proba")
     var forest_binary = labels[DType.float64](False)
     var chained = forest_chain.fit(X32, forest_binary).predict_proba(X32)
+    # Probabilities stay Float64 (sklearn's dtype) although features are Float32.
+    parity("ComponentsForestProba2", probabilities[2])
+    parity("ComponentsForestChainProba", chained)
     for i in range(ROWS * 3):
         assert_true(chained.unsafe_get(i) >= 0 and chained.unsafe_get(i) <= 1)
     print("PASS: production Ridge, RidgeClassifier and RandomForest components")

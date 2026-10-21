@@ -38,9 +38,10 @@ Use `numojo.NDArray[DType.float32/float64]`, `Shape`, `Item` directly for numeri
 features/responses. Numeric label layout helpers also preserve Int64 exactly.
 Associated types retain nonnumeric labels in the independent owner; never cast
 string labels or large integers through floats. Ragged per-output classes use
-`List[Classes]`; independent probabilities use `List[NDArray[dtype]]` with element
-j of shape `(n, len(classes_[j]))`, including a single output. Chain probabilities,
-log probabilities and decisions are matrices `(n,q)`, not that ragged list.
+`List[Classes]`; independent probabilities use `List[NDArray[DType.float64]]` with
+element j of shape `(n, len(classes_[j]))`, including a single output. Chain
+probabilities, log probabilities and decisions are Float64 matrices `(n,q)`, not
+that ragged list.
 
 `.view()` aliases and retains lifetime; `.copy()` owns an independent snapshot.
 Slicing/transpose/reshape/conversion can allocate under the shared numerical policy; a

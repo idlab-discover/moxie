@@ -40,8 +40,14 @@ fold construction, independent fold clones and out-of-fold coverage.
   metadata routing and feature-name propagation are not implemented.
 - Component inputs, targets and predictions must match the wrapper's declared
   array types. Component probabilities and decisions must be Float32 or Float64
-  NDArrays and are converted to the feature dtype (Float64 forest probabilities
-  become Float32 for Float32 forest features; sklearn keeps them Float64).
+  NDArrays. Wrapper probabilities, log probabilities and decisions are Float64:
+  sklearn's chains return Float64 matrices, and `MultiOutputClassifier` keeps
+  each component's values exactly (a Float32 component's probabilities are
+  widened, where sklearn would return Float32 arrays). Chain feature responses
+  use the feature dtype; sklearn's `hstack` promotes Float32 features and
+  float64 responses to a Float64 augmented matrix, so a chain over a Float32
+  component that does not cast its input itself fits in Float32 here and in
+  Float64 in sklearn.
   Wrapper sample weights are Float64 and are narrowed for Float32-weight
   components. Other component response or weight types fail at compile time.
   Class ordering follows sorted observed labels, or the complete class vectors

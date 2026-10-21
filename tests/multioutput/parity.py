@@ -118,6 +118,12 @@ def components(module, np):
     random = module.ClassifierChain(RidgeClassifier(), order='random', random_state=3).fit(X, multiclass)
     out['ComponentsRandomOrder'] = random.order_.tolist()
     out['ComponentsRandomLabels'] = random.predict(X).ravel().tolist()
+    from sklearn.ensemble import RandomForestClassifier
+    X32 = X.astype(np.float32)
+    forest = module.MultiOutputClassifier(RandomForestClassifier(n_estimators=5, random_state=0))
+    out['ComponentsForestProba2'] = forest.fit(X32, multiclass.astype(float)).predict_proba(X32)[2].ravel().tolist()
+    forest_chain = module.ClassifierChain(RandomForestClassifier(n_estimators=5, random_state=0), chain_method='predict_proba')
+    out['ComponentsForestChainProba'] = forest_chain.fit(X32, binary.astype(float)).predict_proba(X32).ravel().tolist()
     return out
 
 if __name__ == '__main__':
@@ -149,9 +155,10 @@ if __name__ == '__main__':
                 # values reach ~15, so allow 2e-5 absolute and relative error.
                 matches = all(math.isclose(a, b, rel_tol=2e-5, abs_tol=2e-5)
                               for a, b in zip(actual[name], reference[name]))
-            elif name.startswith('Components') and not name.endswith(('Labels', 'Order')):
+            elif name.startswith('Components') and not name.endswith(('Labels', 'Order')) and 'Forest' not in name:
                 # Float64 Ridge solves differ from LAPACK in operation order
-                # (observed <= 6e-15); labels and orders stay exact.
+                # (observed <= 6e-15); labels, orders and seeded forest
+                # probabilities stay exact.
                 matches = all(math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-12)
                               for a, b in zip(actual[name], reference[name]))
             elif name.endswith('Score'):

@@ -113,27 +113,28 @@ def _dense[T: Movable, dtype: DType](var values: T) raises -> NDArray[dtype]:
         comptime assert False, "component probabilities and decisions must be Float32 or Float64 NDArrays"
 
 
-def _response[E: Predictor, dtype: DType, label: DType](estimator: E, X: NDArray[dtype], method: String) raises -> NDArray[dtype]:
+def _response[E: Predictor, dtype: DType, label: DType, out: DType = dtype](estimator: E, X: NDArray[dtype], method: String) raises -> NDArray[out]:
+    """One chain link's response vector in dtype `out` (positive-class column for probabilities)."""
     if method == "predict":
         var raw = rebind_var[NDArray[label]](estimator.predict(rebind[E.Input](X)))
-        var result = nm.zeros[dtype](Shape(X.shape[0]))
+        var result = nm.zeros[out](Shape(X.shape[0]))
         if raw.ndim != 1 or raw.shape[0] != X.shape[0]:
             raise Error("ValueError: component prediction must match samples")
         for i in range(X.shape[0]):
-            result.unsafe_set(i, raw.unsafe_get(i * Int(raw.strides[0])).cast[dtype]())
+            result.unsafe_set(i, raw.unsafe_get(i * Int(raw.strides[0])).cast[out]())
         return result^
     if method == "decision_function":
         comptime if conforms_to(E, DecisionFunction):
-            return _dense[E.Decision, dtype](estimator.decision_function(rebind[E.Input](X)))
+            return _dense[E.Decision, out](estimator.decision_function(rebind[E.Input](X)))
     if method == "predict_proba":
         comptime if conforms_to(E, ProbabilityPredictor):
-            var probability = _dense[E.Probabilities, dtype](estimator.predict_proba(rebind[E.Input](X)))
+            var probability = _dense[E.Probabilities, out](estimator.predict_proba(rebind[E.Input](X)))
             if probability.ndim != 2 or probability.shape[1] != 2:
                 raise Error("ValueError: chain response requires two probability columns")
             return target_column(probability, 1)
     if method == "predict_log_proba":
         comptime if conforms_to(E, LogProbabilityPredictor):
-            var probability = _dense[E.Probabilities, dtype](estimator.predict_log_proba(rebind[E.Input](X)))
+            var probability = _dense[E.Probabilities, out](estimator.predict_log_proba(rebind[E.Input](X)))
             if probability.ndim != 2 or probability.shape[1] != 2:
                 raise Error("ValueError: chain response requires two log probability columns")
             return target_column(probability, 1)
@@ -366,7 +367,7 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label]
     comptime Prediction = Self.Target
-    comptime Probabilities = List[NDArray[Self.dtype]]
+    comptime Probabilities = List[NDArray[DType.float64]]
     comptime SampleWeight = NDArray[DType.float64]
     comptime Params = IndependentParams[Self.E.Params]
     var estimator: Self.E
@@ -490,12 +491,13 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         var prediction = self.predict(X)
         return _score[Self.label, True](y, prediction, sample_weight)
 
-    def predict_proba(self, X: Self.Input) raises -> List[NDArray[Self.dtype]] where conforms_to(Self.E, ProbabilityPredictor):
+    def predict_proba(self, X: Self.Input) raises -> List[NDArray[DType.float64]] where conforms_to(Self.E, ProbabilityPredictor):
+        """Float64 per-output probabilities: component values are kept exactly."""
         self._check(X)
-        var result = List[NDArray[Self.dtype]]()
+        var result = List[NDArray[DType.float64]]()
         for j in range(len(self.estimators_)):
             var probability = self.estimators_[j].predict_proba(rebind[Self.E.Input](X))
-            var dense = _dense[Self.E.Probabilities, Self.dtype](probability^)
+            var dense = _dense[Self.E.Probabilities, DType.float64](probability^)
             if dense.ndim != 2 or dense.shape[0] != X.shape[0] or dense.shape[1] != self.classes_[j].shape[0]:
                 raise Error("ValueError: probability shape must match samples and classes")
             result.append(dense^)
@@ -728,7 +730,7 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label]
     comptime Prediction = Self.Target
-    comptime Probabilities = NDArray[Self.dtype]
+    comptime Probabilities = NDArray[DType.float64]
     comptime SampleWeight = NDArray[DType.float64]
     comptime Params = ChainParams[Self.E.Params]
     var estimator: Self.E
@@ -864,39 +866,30 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
         var prediction = self.predict(X)
         return _score[Self.label, True](y, prediction, sample_weight)
 
-    def predict_proba(self, X: Self.Input) raises -> NDArray[Self.dtype] where conforms_to(Self.E, ProbabilityPredictor):
+    def _outputs(self, X: Self.Input, method: String) raises -> NDArray[DType.float64]:
+        """sklearn `_get_predictions`: Float64 outputs in original target order."""
         self._check(X)
         var responses = nm.zeros[Self.dtype](Shape(X.shape[0], len(self.estimators_)))
-        var output = nm.zeros[Self.dtype](Shape(X.shape[0], len(self.estimators_)))
+        var result = nm.zeros[DType.float64](Shape(X.shape[0], len(self.estimators_)))
         for j in range(len(self.estimators_)):
             var input = augment_features(X, responses, j)
             var feature = _response[Self.E, Self.dtype, Self.label](self.estimators_[j], input, self.chain_method_)
-            _put_column(responses, j, feature)
-            var probability = self.estimators_[j].predict_proba(rebind[Self.E.Input](input))
-            var dense = _dense[Self.E.Probabilities, Self.dtype](probability^)
-            if dense.ndim != 2 or dense.shape[1] != 2:
-                raise Error("ValueError: chain probabilities require binary components")
-            var positive = target_column(dense, 1)
-            _put_column(output, self.order_[j], positive)
-        return output^
-
-    def predict_log_proba(self, X: Self.Input) raises -> NDArray[Self.dtype] where conforms_to(Self.E, ProbabilityPredictor):
-        var result = self.predict_proba(X)
-        for i in range(result.shape[0] * result.shape[1]):
-            result.unsafe_set(i, log(Float64(result.unsafe_get(i))).cast[Self.dtype]())
-        return result^
-
-    def decision_function(self, X: Self.Input) raises -> NDArray[Self.dtype] where conforms_to(Self.E, DecisionFunction):
-        self._check(X)
-        var responses = nm.zeros[Self.dtype](Shape(X.shape[0], len(self.estimators_)))
-        var result = nm.zeros[Self.dtype](Shape(X.shape[0], len(self.estimators_)))
-        for j in range(len(self.estimators_)):
-            var input = augment_features(X, responses, j)
-            var feature = _response[Self.E, Self.dtype, Self.label](self.estimators_[j], input, self.chain_method_)
-            var output = _response[Self.E, Self.dtype, Self.label](self.estimators_[j], input, "decision_function")
+            var output = _response[Self.E, Self.dtype, Self.label, DType.float64](self.estimators_[j], input, method)
             _put_column(responses, j, feature)
             _put_column(result, self.order_[j], output)
         return result^
+
+    def predict_proba(self, X: Self.Input) raises -> NDArray[DType.float64] where conforms_to(Self.E, ProbabilityPredictor):
+        return self._outputs(X, "predict_proba")
+
+    def predict_log_proba(self, X: Self.Input) raises -> NDArray[DType.float64] where conforms_to(Self.E, ProbabilityPredictor):
+        var result = self.predict_proba(X)
+        for i in range(result.shape[0] * result.shape[1]):
+            result.unsafe_set(i, log(result.unsafe_get(i)))
+        return result^
+
+    def decision_function(self, X: Self.Input) raises -> NDArray[DType.float64] where conforms_to(Self.E, DecisionFunction):
+        return self._outputs(X, "decision_function")
 
     def fit[CV: ChainResponses, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, cv: CV) raises -> ref[self] Self:
         """Use an explicit native out-of-fold provider in place of sklearn's CV object."""

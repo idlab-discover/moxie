@@ -18,10 +18,16 @@ var unfitted = clone(model)
 _ = model.set_params(warm_start=True, n_estimators=150).fit(X, y)
 ```
 
-Inputs are NuMojo Float32 feature matrices and Float64 targets. Regression
-supports single and multiple outputs. Classification supports integral numeric
-labels in Float64 arrays, with sorted `classes_`. String and Int64 label arrays
-are not yet accepted by these public estimators. No sparse conversion occurs.
+Inputs are NuMojo Float32 feature matrices. Regression targets are Float64,
+with single or multiple outputs. Classification labels are Float64 by default;
+select Int64 or Float32 labels with `label_dtype`, or strings with
+`string_labels=True` (a `moxie._labels.StringTarget`), as for the trees:
+`RandomForestClassifier[label_dtype=DType.int64](...)` or
+`ExtraTreesClassifier[string_labels=True](...)`. Numeric labels must be
+integral, `classes_` is sorted in the label type, and `predict` returns that
+type. Members always train on Float64 class codes, as scikit-learn's forest
+members do. Float64 feature matrices are not accepted (scikit-learn casts them
+to float32); see the tree family's composition notes. No sparse conversion occurs.
 
 Single-output predictions have shape `(samples,)`; probabilities and log
 probabilities have shape `(samples, classes)`. Multiple regression outputs have
@@ -47,8 +53,10 @@ implementation exposes `class_weight` on regressors but rejects any non-None
 value.
 
 `class_weight` accepts None, `"balanced"`, `"balanced_subsample"`, a
-`Dict[Float64, Float64]`, or a list of dictionaries for multiple outputs.
-Dictionary keys are original labels, not internal codes. `sample_weight` is an
+dictionary from labels to weights (`Dict[Float64, Float64]` by default, or keyed by
+the selected label type), or a list of dictionaries for multiple outputs; the type is
+`TypedClassWeight[Label]` from `moxie.tree._classes`. Dictionary keys are original
+labels, not internal codes. `sample_weight` is an
 optional Float64 vector passed to `fit` or `score`. Member classifiers retain
 encoded class labels, as scikit-learn's forest members do.
 

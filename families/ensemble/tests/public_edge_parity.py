@@ -1,6 +1,7 @@
 """Public forest edge cases and invalid inputs against the source-built reference.
 
-Value lines must match exactly (same trees, same NaN routing, same sampling).
+Value lines must match exactly (same trees, same NaN routing, same sampling);
+string and Int64 label lines compare classes_ and predictions as text.
 Error lines must fail on both sides with the same error class; Moxie raises
 Mojo `Error`s whose text starts with the Python class name (docs/interfaces.md),
 and sklearn's InvalidParameterError is a ValueError. Messages are not compared.
@@ -65,6 +66,12 @@ def expected():
     m = RFC(4, random_state=2).fit(X, -y * 2)
     out['classes17'] = ('OK', m.classes_)
     out['pred17'] = ('OK', m.predict(X))
+    words = np.array(['pear', 'apple', 'fig'])[y.astype(int)]
+    m = RFC(4, random_state=2).fit(X, words)
+    out['strings18'] = ('TEXT', [*m.classes_, *m.predict(X)])
+    ints = np.array([20, -5, 7], dtype=np.int64)[y.astype(int)]
+    m = ETC(4, random_state=2).fit(X, ints)
+    out['ints19'] = ('TEXT', [str(v) for v in [*m.classes_, *m.predict(X)]])
     return out
 
 
@@ -86,6 +93,8 @@ def main():
         kind, value = want[tag]
         if kind == 'ERR':
             assert payload.startswith('ERR ' + value + ':'), (tag, payload, value)
+        elif kind == 'TEXT':
+            assert payload.split() == list(value), (tag, payload, value)
         elif value is None:
             assert payload == 'OK', (tag, payload)
         else:

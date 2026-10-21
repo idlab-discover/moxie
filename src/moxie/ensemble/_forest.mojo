@@ -4,8 +4,8 @@ import numojo as nm
 from moxie.tree._criterion import log
 from moxie.base import BaseEstimator, Predictor, SupervisedEstimator, SupervisedScorer, WeightedSupervisedEstimator, LogProbabilityPredictor
 from moxie._random import check_random_state
-from moxie._labels import encode_column
-from moxie.tree._classes import BaseDecisionTree, SampleCount, FeatureCount, ClassWeight, ClassWeightMap
+from moxie._labels import StringTarget
+from moxie.tree._classes import BaseDecisionTree, SampleCount, FeatureCount, ClassWeight, ClassWeightMap, TypedClassWeight
 from moxie.ensemble._base import ProbabilisticEnsemble, EnsembleRegressor
 from moxie.ensemble._engine_api import DenseForestInspection
 from moxie.ensemble._records import Features, Values, Indices
@@ -38,7 +38,8 @@ struct _NullableForestParam[T: Copyable & Deinitable](Copyable, Movable):
 
 
 @fieldwise_init
-struct ForestParams(Copyable, Movable):
+struct ForestParams[label_dtype: DType = DType.float64, string_labels: Bool = False](Copyable, Movable):
+    comptime Label = String if Self.string_labels else Scalar[Self.label_dtype]
     var n_estimators: Int
     var criterion: String
     var max_depth: Optional[Int]
@@ -54,21 +55,30 @@ struct ForestParams(Copyable, Movable):
     var random_state: Optional[Int]
     var verbose: Int
     var warm_start: Bool
-    var class_weight: ClassWeight
+    var class_weight: TypedClassWeight[Self.Label]
     var ccp_alpha: Float64
     var max_samples: MaxSamples
     var monotonic_cst: Optional[List[Int]]
 
-struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False](BaseEstimator, Predictor, SupervisedEstimator, SupervisedScorer, WeightedSupervisedEstimator, DenseForestInspection, ProbabilisticEnsemble where classifier, LogProbabilityPredictor where classifier, EnsembleRegressor where not classifier, Sized):
-    """Float32 features and Float64 targets; multi_output selects classifier result types."""
-    comptime Params = ForestParams
+struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False](BaseEstimator, Predictor, SupervisedEstimator, SupervisedScorer, WeightedSupervisedEstimator, DenseForestInspection, ProbabilisticEnsemble where classifier, LogProbabilityPredictor where classifier, EnsembleRegressor where not classifier, Sized):
+    """Float32 features; Float64 regression targets or typed class labels.
+
+    multi_output selects classifier result types. Classifier labels are Float64
+    (default), Float32, Int64 or strings (`string_labels=True`), as for trees;
+    members always train on Float64 class codes, as in scikit-learn.
+    """
+    comptime Labels = BaseDecisionTree[Self.classifier, Self.extra, Self.label_dtype, Self.string_labels]
+    comptime Label = Self.Labels.Label
+    comptime ClassLabels = Self.Labels.ClassLabels
+    comptime Weights = TypedClassWeight[Self.Label]
+    comptime Params = ForestParams[Self.label_dtype, Self.string_labels]
     comptime Input = Features
-    comptime Target = Values
-    comptime Prediction = Values
+    comptime Target = Self.Labels.Target
+    comptime Prediction = Self.Labels.Prediction
     comptime Leaves = Indices
     comptime SampleWeight = Values
     comptime Tree = BaseDecisionTree[Self.classifier, Self.extra]
-    comptime Classes = List[Values] if Self.multi_output else Values
+    comptime Classes = List[Self.ClassLabels] if Self.multi_output else Self.ClassLabels
     comptime ClassCounts = List[Int] if Self.multi_output else Int
     comptime Probabilities = List[Values] if Self.multi_output else Values
     var n_estimators: Int
@@ -86,7 +96,7 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
     var random_state: Optional[Int]
     var verbose: Int
     var warm_start: Bool
-    var class_weight: ClassWeight
+    var class_weight: Self.Weights
     var ccp_alpha: Float64
     var max_samples: MaxSamples
     var monotonic_cst: Optional[List[Int]]
@@ -115,10 +125,12 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
             random_state: Optional[Int] = None,
             verbose: Int = 0,
             warm_start: Bool = False,
-            class_weight: ClassWeight = NoneType(),
+            class_weight: Self.Weights = NoneType(),
             ccp_alpha: Float64 = 0,
             max_samples: MaxSamples = NoneType(),
             monotonic_cst: Optional[List[Int]] = None) raises:
+        comptime assert Self.classifier or (Self.label_dtype == DType.float64 and not Self.string_labels), "regression targets use Float64"
+        comptime assert Self.string_labels or Self.label_dtype in (DType.int64, DType.float32, DType.float64), "labels require Int64, Float32, Float64 or strings"
         self.n_estimators = n_estimators.copy()
         self.criterion = criterion.copy()
         self.max_depth = max_depth.copy()
@@ -145,11 +157,11 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
         self.oob_prediction_ = nm.zeros[DType.float64](nm.Shape(0))
         self.oob_score_ = Float64("nan")
         comptime if Self.multi_output:
-            self.classes_ = rebind[Self.Classes](List[Values]()).copy()
+            self.classes_ = rebind[Self.Classes](List[Self.ClassLabels]()).copy()
             self.n_classes_ = rebind[Self.ClassCounts](List[Int]()).copy()
             self.oob_decision_function_ = rebind[Self.Probabilities](List[Values]()).copy()
         else:
-            self.classes_ = rebind[Self.Classes](nm.zeros[DType.float64](nm.Shape(0))).copy()
+            self.classes_ = rebind[Self.Classes](Self._no_labels()).copy()
             self.n_classes_ = rebind[Self.ClassCounts](Int(0)).copy()
             self.oob_decision_function_ = rebind[Self.Probabilities](nm.zeros[DType.float64](nm.Shape(0, 0))).copy()
 
@@ -195,7 +207,7 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
         random_state: _NullableForestParam[Int] = _NullableForestParam[Int](),
         verbose: Optional[Int] = None,
         warm_start: Optional[Bool] = None,
-        class_weight: Optional[ClassWeight] = None,
+        class_weight: Optional[Self.Weights] = None,
         ccp_alpha: Optional[Float64] = None,
         max_samples: Optional[MaxSamples] = None,
         monotonic_cst: _NullableForestParam[List[Int]] = _NullableForestParam[List[Int]](),
@@ -241,6 +253,27 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
             self.monotonic_cst = monotonic_cst.value.copy()
         return self
 
+    @staticmethod
+    def _no_labels() raises -> Self.ClassLabels:
+        comptime if Self.string_labels:
+            return rebind[Self.ClassLabels](List[String]()).copy()
+        else:
+            return rebind[Self.ClassLabels](nm.zeros[Self.label_dtype](nm.Shape(0))).copy()
+
+    def _domain(self, output: Int) raises -> Self.ClassLabels:
+        """The sorted labels of one output (`classes_` or `classes_[output]`)."""
+        comptime if Self.multi_output:
+            return rebind[List[Self.ClassLabels]](self.classes_)[output].copy()
+        else:
+            return rebind[Self.ClassLabels](self.classes_).copy()
+
+    @staticmethod
+    def _factors(classes: Self.ClassLabels, weights: Dict[Self.Label, Float64]) raises -> Values:
+        comptime if Self.string_labels:
+            return class_weight_factors(rebind[List[String]](classes), rebind[Dict[String, Float64]](weights))
+        else:
+            return class_weight_factors(rebind[nm.NDArray[Self.label_dtype]](classes), rebind[Dict[Scalar[Self.label_dtype], Float64]](weights))
+
     def __sklearn_clone__(self) raises -> Self:
         var result = Self()
         _ = result.set_params(self.get_params())
@@ -277,9 +310,9 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
         # serially here, with the same seeds and therefore the same results.
         if self.n_jobs and self.n_jobs.value() == 0:
             raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
-        if y.ndim != 1 and y.ndim != 2:
-            raise Error("ValueError: y must have rank one or two")
-        var outputs = 1 if y.ndim == 1 else y.shape[1]
+        var labels = Self.Labels()
+        var rows = labels._target_rows(y)
+        var outputs = labels._target_columns(y)
         if outputs == 0:
             raise Error("ValueError: y must have at least one output")
         comptime if Self.classifier and not Self.multi_output:
@@ -292,29 +325,33 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
             min_weight_fraction_leaf=self.min_weight_fraction_leaf, max_features=self.max_features,
             max_leaf_nodes=self.max_leaf_nodes, min_impurity_decrease=self.min_impurity_decrease,
             ccp_alpha=self.ccp_alpha, monotonic_cst=self.monotonic_cst)
-        var target = y.copy()
-        var domains = List[Values]()
+        var target: Values
+        var domains = List[Self.ClassLabels]()
         comptime if Self.classifier:
-            target = nm.zeros[DType.float64](nm.Shape(y.shape[0], outputs))
+            # Members train on class codes 0..K-1 per output, as sklearn's forests do.
+            target = nm.zeros[DType.float64](nm.Shape(rows, outputs))
             for k in range(outputs):
-                var encoded = encode_column(y, k)
-                domains.append(encoded.classes.copy())
-                for i in range(y.shape[0]):
-                    target.unsafe_set(i * outputs + k, Float64(encoded.index.inverse.unsafe_get(i)))
+                var encoded = labels._encode_target(y, k)
+                domains.append(encoded[0].copy())
+                for i in range(rows):
+                    target.unsafe_set(i * outputs + k, Float64(encoded[1].inverse.unsafe_get(i)))
+        else:
+            target = rebind[Values](y).copy()
+        comptime WeightMap = Dict[Self.Label, Float64]
         var weights = ForestClassWeight(NoneType())
         if self.class_weight.isa[String]():
             weights = ForestClassWeight(self.class_weight[String])
-        elif self.class_weight.isa[ClassWeightMap]() or self.class_weight.isa[List[ClassWeightMap]]():
-            if self.class_weight.isa[ClassWeightMap]() and outputs != 1:
+        elif self.class_weight.isa[WeightMap]() or self.class_weight.isa[List[WeightMap]]():
+            if self.class_weight.isa[WeightMap]() and outputs != 1:
                 raise Error("ValueError: multiple outputs require a list of class weight dictionaries")
-            if self.class_weight.isa[List[ClassWeightMap]]() and len(self.class_weight[List[ClassWeightMap]]) != outputs:
+            if self.class_weight.isa[List[WeightMap]]() and len(self.class_weight[List[WeightMap]]) != outputs:
                 raise Error("ValueError: class weight count must match outputs")
             var factors = List[Values]()
             for k in range(len(domains)):
-                if self.class_weight.isa[ClassWeightMap]():
-                    factors.append(class_weight_factors(domains[k], self.class_weight[ClassWeightMap]))
+                if self.class_weight.isa[WeightMap]():
+                    factors.append(Self._factors(domains[k], self.class_weight[WeightMap]))
                 else:
-                    factors.append(class_weight_factors(domains[k], self.class_weight[List[ClassWeightMap]][k]))
+                    factors.append(Self._factors(domains[k], self.class_weight[List[WeightMap]][k]))
             weights = ForestClassWeight(factors^)
         comptime if not Self.classifier:
             if not self.class_weight.isa[NoneType]():
@@ -346,7 +383,7 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
                 else:
                     self.oob_decision_function_ = rebind[Self.Probabilities](self._engine.oob_decision_function_[0].copy()).copy()
             else:
-                self.oob_prediction_ = self._engine.oob_prediction_.reshape(nm.Shape(y.shape[0])) if outputs == 1 else self._engine.oob_prediction_.copy()
+                self.oob_prediction_ = self._engine.oob_prediction_.reshape(nm.Shape(rows)) if outputs == 1 else self._engine.oob_prediction_.copy()
         return self
 
     def apply(self, X: Features) raises -> Indices:
@@ -372,34 +409,46 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False]
                 matrix.unsafe_set(i, log(matrix.unsafe_get(i)))
         return result^
 
-    def predict(self, X: Features) raises -> Values:
+    def predict(self, X: Features) raises -> Self.Prediction:
         comptime if not Self.classifier:
             var result = self._engine.predict(X)
-            return result.reshape(nm.Shape(X.shape[0])) if self.n_outputs_ == 1 else result^
+            return rebind[Self.Prediction](result.reshape(nm.Shape(X.shape[0])) if self.n_outputs_ == 1 else result^).copy()
         else:
             var probabilities = self._engine.predict_proba(X)
-            var result = nm.zeros[DType.float64](nm.Shape(X.shape[0]) if self.n_outputs_ == 1 else nm.Shape(X.shape[0], self.n_outputs_))
-            for k in range(self.n_outputs_):
+            var n = probabilities[0].shape[0]
+            var outputs = self.n_outputs_
+            var result: Self.Prediction
+            comptime if Self.string_labels:
+                var empty = List[String]()
+                for _ in range(n * outputs):
+                    empty.append("")
+                var target = StringTarget(empty) if outputs == 1 else StringTarget(empty, n, outputs)
+                result = rebind[Self.Prediction](target).copy()
+            else:
+                result = rebind[Self.Prediction](nm.zeros[Self.label_dtype](nm.Shape(n) if outputs == 1 else nm.Shape(n, outputs))).copy()
+            for k in range(outputs):
                 ref probability = probabilities[k]
-                for i in range(X.shape[0]):
+                var domain = self._domain(k)
+                for i in range(n):
+                    # First maximum, like numpy.argmax over predict_proba.
                     var chosen = 0
                     for c in range(1, probability.shape[1]):
                         if probability.unsafe_get(i * probability.shape[1] + c) > probability.unsafe_get(i * probability.shape[1] + chosen):
                             chosen = c
-                    comptime if Self.multi_output:
-                        result.unsafe_set(i * self.n_outputs_ + k, rebind[List[Values]](self.classes_)[k].unsafe_get(chosen))
+                    comptime if Self.string_labels:
+                        rebind[StringTarget](result).set(i, rebind[List[String]](domain)[chosen], k)
                     else:
-                        result.unsafe_set(i, rebind[Values](self.classes_).unsafe_get(chosen))
+                        rebind[nm.NDArray[Self.label_dtype]](result).unsafe_set(i * outputs + k, rebind[nm.NDArray[Self.label_dtype]](domain).unsafe_get(chosen))
             return result^
 
     def score(self, X: Features, y: Self.Target, sample_weight: Optional[Values] = None) raises -> Float64:
         var prediction = self.predict(X)
         # The tree's scorer implements the same sklearn accuracy/R2 contract.
-        var scorer = Self.Tree()
+        var scorer = Self.Labels()
         scorer.n_outputs_ = self.n_outputs_
         return scorer._score(prediction, y, sample_weight)
 
-comptime RandomForestClassifier[multi_output: Bool = False] = Forest[True, False, multi_output]
+comptime RandomForestClassifier[multi_output: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False] = Forest[True, False, multi_output, label_dtype, string_labels]
 comptime RandomForestRegressor = Forest[False]
-comptime ExtraTreesClassifier[multi_output: Bool = False] = Forest[True, True, multi_output]
+comptime ExtraTreesClassifier[multi_output: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False] = Forest[True, True, multi_output, label_dtype, string_labels]
 comptime ExtraTreesRegressor = Forest[False, True]

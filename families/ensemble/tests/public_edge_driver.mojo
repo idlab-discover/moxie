@@ -3,6 +3,7 @@ import numojo as nm
 from moxie.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier, ExtraTreesRegressor
 from moxie.tree._classes import FeatureCount, ClassWeight, ClassWeightMap
 from moxie.ensemble._sampling import MaxSamples
+from moxie._labels import StringTarget
 
 comptime F = nm.NDArray[DType.float32]
 comptime V = nm.NDArray[DType.float64]
@@ -163,3 +164,29 @@ def main() raises:
     _ = m17.fit(X, yneg)
     print(line("classes17", m17.classes_))
     print(line("pred17", m17.predict(X)))
+    # 18 typed labels: strings and Int64 keep their own sorted domains.
+    var names: List[String] = ["pear", "apple", "fig"]
+    var codes: List[Int64] = [20, -5, 7]
+    var words = List[String]()
+    var ints = nm.zeros[DType.int64](nm.Shape(30))
+    for i in range(30):
+        words.append(names[Int(y.unsafe_get(i))])
+        ints.unsafe_set(i, codes[Int(y.unsafe_get(i))])
+    var m18 = RandomForestClassifier[string_labels=True](4, random_state=2)
+    _ = m18.fit(X, StringTarget(words))
+    var text = String("strings18")
+    for c in m18.classes_:
+        text += " " + c
+    var predicted = m18.predict(X)
+    for i in range(predicted.rows()):
+        text += " " + predicted.get(i)
+    print(text)
+    var m19 = ExtraTreesClassifier[label_dtype=DType.int64](4, random_state=2)
+    _ = m19.fit(X, ints)
+    var labels = String("ints19")
+    for i in range(m19.classes_.size):
+        labels += " " + String(m19.classes_.unsafe_get(i))
+    var p19 = m19.predict(X)
+    for i in range(p19.size):
+        labels += " " + String(p19.unsafe_get(i))
+    print(labels)

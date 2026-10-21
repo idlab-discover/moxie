@@ -87,10 +87,17 @@ constructor configuration and returns an unfitted model.
 - `code_size` must be finite and positive and produce at least one estimator.
   Zero-width codebooks raise a clear `ValueError`; the reference currently
   reaches an `IndexError` for that case. Overflowing sizes also raise.
-- Decoding sums squared coordinate differences in Float64 without allocating
-  a sample-by-class distance matrix. It rejects distance overflow. Scikit-learn's
-  BLAS-backed distance calculation can round differently near numerical ties;
-  bitwise distance parity for arbitrary component outputs is not promised.
+- Decoding follows sklearn's `euclidean_distances(Y, code_book_, squared=True)`
+  expansion in Float64: `-2 y.c`, plus `||y||^2`, plus `||c||^2`, clipped at 0,
+  first minimum wins. It needs no sample-by-class distance matrix and rejects
+  distance overflow. The dot products are summed sequentially; sklearn's BLAS
+  `gemm` may sum (and fuse) them in another order, so a mathematically exact
+  tie between two codewords can still resolve differently. Tree components,
+  whose probabilities are often 0, 0.5 or 1, produce such ties: in a seeded
+  simulation of 60,000 tie-heavy rows the expanded form chose sklearn's class
+  in 99.89% of rows (the direct sum of squared differences: 98.88%).
+  `tests/multiclass/production_parity.py` accepts a different class only when
+  the two codewords are tied in exact rational arithmetic.
 - `fit` and parameter updates mutate in place; errors are Mojo `Error` values
   with descriptive prefixes. Python warnings, reflection, dynamic dictionaries
   and serialization follow the [shared interface limitations](../interfaces.md).

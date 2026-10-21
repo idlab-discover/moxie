@@ -194,17 +194,36 @@ struct OutputCodeClassifier[
                 if not isfinite(column[Item(i)]):
                     raise Error("ValueError: component predictions contain NaN or infinity")
             scores.append(column^)
+        # sklearn decodes with euclidean_distances(Y, code_book_, squared=True):
+        # -2 Y.C^T, then += ||Y||^2, += ||C||^2, clipped at 0, first argmin.
+        # The expanded form decides exact codeword ties the way the reference
+        # usually rounds them (tree probabilities of 0, 0.5 and 1 tie often).
+        var n_classes = Self.kind.count(rebind[Self.kind.Classes](self.classes_))
+        var code_norms = List[Float64](capacity=n_classes)
+        for c in range(n_classes):
+            var norm: Float64 = 0.0
+            for k in range(len(scores)):
+                var bit = self.code_book_[Item(c, k)]
+                norm += bit * bit
+            code_norms.append(norm)
         var predicted = nm.zeros[DType.int64](Shape(n_samples))
         for i in range(n_samples):
+            var score_norm: Float64 = 0.0
+            for k in range(len(scores)):
+                var value = scores[k][Item(i)]
+                score_norm += value * value
             var best = inf[DType.float64]()
             var winner = 0
-            for c in range(Self.kind.count(rebind[Self.kind.Classes](self.classes_))):
-                var distance: Float64 = 0.0
+            for c in range(n_classes):
+                var dot: Float64 = 0.0
                 for k in range(len(scores)):
-                    var delta = scores[k][Item(i)] - self.code_book_[Item(c, k)]
-                    distance += delta * delta
+                    dot += scores[k][Item(i)] * self.code_book_[Item(c, k)]
+                var distance = -2.0 * dot
+                distance += score_norm
+                distance += code_norms[c]
                 if not isfinite(distance):
                     raise Error("ValueError: output-code distance overflow")
+                distance = max(distance, 0.0)
                 if distance < best:
                     best = distance
                     winner = c

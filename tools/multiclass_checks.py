@@ -86,7 +86,7 @@ def test(run, executable):
 
 def parity(run):
     ownership()
-    for name in ('ovr', 'ovr_partial_fit', 'ovo', 'ovo_partial_fit', 'output_code', 'string_labels', 'pairwise'):
+    for name in ('ovr', 'ovr_partial_fit', 'ovo', 'ovo_partial_fit', 'output_code', 'string_labels', 'pairwise', 'production'):
         run(ROOT / 'builds/reference-env/bin/python', TESTS / f'{name}_parity.py')
 
 

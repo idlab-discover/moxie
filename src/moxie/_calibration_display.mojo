@@ -310,7 +310,9 @@ struct CalibrationDisplay(Copyable, Movable):
             marker.copy(),
             linestyle.copy(),
         )
-        var suffix = String("")
+        # The reference always inserts a space before the (possibly empty)
+        # positive-class note, so a display without pos_label ends in a space.
+        var suffix = String(" ")
         if self.pos_label:
             suffix = " (Positive class: " + self._pos_label_text + ")"
         var next = ax.copy()

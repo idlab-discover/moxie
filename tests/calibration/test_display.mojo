@@ -33,6 +33,11 @@ def test_plot() raises:
         display.ax_.value().xlabel,
         "Mean predicted probability (Positive class: 1)",
     )
+    # Constructed without pos_label, the reference labels end in a space.
+    var bare = CalibrationDisplay(display.prob_true, display.prob_pred, input[1])
+    bare.plot()
+    assert_equal(bare.ax_.value().xlabel, "Mean predicted probability ")
+    assert_equal(bare.ax_.value().ylabel, "Fraction of positives ")
     var axes = CalibrationAxes()
     display.plot(ax=axes, name="Before <fit>")
     display.plot(

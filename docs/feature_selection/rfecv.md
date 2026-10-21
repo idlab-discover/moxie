@@ -110,7 +110,7 @@ previous valid state. `get_params()` returns an independent typed RFECVParams
 record; `set_params(record)` updates configuration without discarding fitted
 state. `__sklearn_clone__()` recursively clones into an unfitted selector.
 Ordinary copies preserve independent fitted state. Fitting mutates in place
-without returning self. Empty feature-name lists mean unnamed input.
+and returns a mutable borrow of the selector. Empty feature-name lists mean unnamed input.
 
 ## Validation and limits
 

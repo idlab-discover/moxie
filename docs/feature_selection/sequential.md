@@ -48,7 +48,8 @@ The native constructor specializes on a `SequentialAdapter` type. Its optional
 second positional argument supplies an adapter instance; otherwise its default
 constructor is used. `SequentialCount`, `SequentialCV`, typed scorer records and
 parameter records replace Python unions, callable reflection and dictionaries.
-Methods mutate in place and do not return self.
+Fitting and `set_params` mutate in place and return a mutable borrow of the selector,
+as described in [the native interfaces](../interfaces.md).
 
 Without tol, auto performs `p // 2` greedy steps. This retains `p // 2` columns
 in forward mode and `p - p // 2` columns in backward mode, including the pinned

@@ -15,7 +15,10 @@ for supported inputs, callbacks, numerical tolerances and native adaptations.
 Its constructor and operations raise `NotImplementedError` through Mojo
 `Error`. Its name and parameter defaults mirror the pinned scikit-learn
 source, but it provides no numerical behavior. Opaque declaration fields use
-`APIValue`; these are not fitted model implementations.
+`APIValue`; these are not fitted model implementations. scikit-learn's
+`from sklearn.experimental import enable_iterative_imputer` opt-in has no
+Moxie counterpart: there is no `moxie.experimental` module, and the
+declaration is importable from `moxie.impute` without it.
 
 `EXPORTS.json` defines the public exports. The family and algorithm dependency
 manifests declare the same concrete modules, with live family-owned source and

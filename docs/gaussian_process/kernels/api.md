@@ -76,6 +76,9 @@ See `examples/gaussian_process_kernels.mojo` (run by `pixi run test`).
   sklearn's setter raises `AttributeError` (it references `self.k1`). Its
   `hyperparameters()` is empty, as in sklearn. CompoundKernel cannot be nested in
   operators (sklearn would fail on broadcasting).
+- `Exponentiation.exponent` is a Float64, so the repr always prints a float
+  exponent (`RBF(length_scale=1) ** 2.0`). sklearn prints the Python value
+  it was given, so `** 2` for an int exponent and `** 2.0` for a float one.
 - Kernels are not validated at construction (as in sklearn); invalid bounds text
   raises when bounds are used. Errors are Mojo `Error`s prefixed with the Python
   exception name.

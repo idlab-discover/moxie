@@ -13,6 +13,17 @@ Sources live in `src/moxie/gaussian_process/`, validation in
 `tests/gaussian_process/`, and runnable examples in `examples/gaussian_process.mojo`
 and `examples/gaussian_process_kernels.mojo`.
 
+Side-by-side notebooks against the official gallery live in
+`notebooks/gaussian_process/`. `plot_gpr_prior_posterior` covers prior and
+posterior moments and `sample_y` for five kernels. `plot_gpr_noisy` covers two
+local optima, an 80 x 80 likelihood grid, seeded restarts, `make_pipeline`,
+`cross_val_score`, `GridSearchCV` and `clone`. Rerun them with
+`pixi run -e notebooks notebooks notebooks/gaussian_process`. Ill-posed fits
+(RationalQuadratic with `alpha` bounds up to 1e15, DotProduct**2 with a rank-3
+covariance) end at different L-BFGS-B points in Moxie and sklearn because
+float64 rounding drives the optimizer. The notebooks show that the posteriors
+agree at a common theta and that Moxie is at least as accurate there.
+
 From Moxie, run `pixi run build`, `pixi run test`, and `pixi run parity`.
 For focused validation, run `pixi run python tools/gaussian_process_checks.py test`
 and `pixi run python tools/gaussian_process_checks.py parity`.

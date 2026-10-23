@@ -20,7 +20,8 @@ Defaults follow sklearn: `n_components=None`, `algorithm="parallel"`
 (or `"deflation"`), `whiten="unit-variance"` (`WhitenOption`, a
 `Variant[String, Bool]`: `"unit-variance"`, `"arbitrary-variance"` or `False`),
 `fun="logcosh"` (`"exp"`, `"cube"`), `fun_args=None`
-(`Dict[String, Float64]`, key `"alpha"` in [1, 2]), `max_iter=200`, `tol=1e-4`,
+(`Dict[String, Float64]`; key `"alpha"` must lie in [1, 2] and, as in sklearn,
+other keys are ignored), `max_iter=200`, `tol=1e-4`,
 `w_init=None` (Float64 `(k, k)`), `whiten_solver="svd"` (or `"eigh"`),
 `random_state=None`.
 Learned: `components_ (k, p)`, `mixing_ (p, k)`, `mean_`, `whitening_ (k, p)`
@@ -33,7 +34,9 @@ inputs are never mutated), `get_feature_names_out` (`fastica0`, ...), typed
 `fastica(X, ...)` returns a `FastICAResult` record with `K`, `W`, `S`,
 `X_mean` and `n_iter` (the reference's positional list); `return_X_mean` and
 `return_n_iter` are accepted for signature parity and the record always holds
-both. `compute_sources=False` leaves `S` empty.
+both. `compute_sources=False` leaves `S` empty except under
+`whiten="unit-variance"`, where the reference computes the sources for the
+variance scaling and returns them.
 
 Behavior matches the reference, including: `n_components` clipped to
 `min(n_samples, n_features)` and ignored for `whiten=False`; whitening by

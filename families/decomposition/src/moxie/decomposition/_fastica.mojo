@@ -40,7 +40,8 @@ struct FastICAParams(Copyable, Movable):
 struct FastICAResult[dtype: DType](Movable):
     """Return record of `fastica`: sklearn's [K, W, S, X_mean, n_iter] list.
 
-    K and X_mean are None when whiten=False; S is None when compute_sources=False.
+    K and X_mean are None when whiten=False; S is None when compute_sources=False,
+    except under whiten="unit-variance", where sklearn returns the scaled sources.
     """
     var K: Optional[NDArray[Self.dtype]]
     var W: NDArray[Self.dtype]
@@ -302,10 +303,9 @@ struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, Unsupervis
         var alpha: Float64 = 1.0
         if self.fun_args:
             var arguments = self.fun_args.value().copy()
-            for entry in arguments.items():
-                if entry.key != "alpha":
-                    raise Error("ValueError: FastICA fun_args supports only 'alpha' for built-in functions, got '" + entry.key + "'")
-                alpha = entry.value
+            # sklearn reads only "alpha" (fun_args.get("alpha", 1.0)) and ignores other keys.
+            if "alpha" in arguments:
+                alpha = arguments["alpha"]
         if not (alpha >= 1 and alpha <= 2):
             raise Error("ValueError: alpha must be in [1,2]")
         return alpha
@@ -429,7 +429,9 @@ struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, Unsupervis
         self.mixing_ = pseudo_inverse(self.components_.value())
         self._unmixing = w^
         self.n_features_in_ = p
-        if not compute_sources:
+        # sklearn computes S for unit-variance scaling even when compute_sources=False
+        # and returns it, so fastica(..., compute_sources=False) still carries S there.
+        if not compute_sources and mode != "unit-variance":
             return None
         return sources^
 

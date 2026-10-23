@@ -82,8 +82,17 @@ def check[dtype: DType]() raises:
     var result = fastica(x, 2, random_state=0)
     assert_equal(result.W.shape[0], 2)
     assert_equal(result.K.value().shape[1], 3)
-    var no_sources = fastica(x, 2, random_state=0, compute_sources=False)
+    # sklearn still returns S for unit-variance whitening (it needs it for the scaling).
+    var unit_sources = fastica(x, 2, random_state=0, compute_sources=False)
+    assert_true(Bool(unit_sources.S))
+    assert_equal(unit_sources.S.value().shape[1], 2)
+    var no_sources = fastica(x, 2, random_state=0, compute_sources=False, whiten=WhitenOption(String("arbitrary-variance")))
     assert_false(Bool(no_sources.S))
+    var extra = Dict[String, Float64]()
+    extra["alpha"] = 1.5
+    extra["beta"] = 2.0
+    var ignored = FastICA[dtype](2, fun_args=extra^, random_state=0)
+    _ = ignored.fit(x)
 
 
 def main() raises:

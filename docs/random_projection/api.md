@@ -146,8 +146,8 @@ uses the documented number of output features.
   estimator and meta-estimator uses. The projections therefore cannot be
   composed yet: `make_pipeline(SparseRandomProjection(...), RidgeClassifier())`
   fails to compile with `pipeline intermediate types must match`, and
-  `FeatureUnion`, `ColumnTransformer` and model-selection helpers require
-  `NDArray` steps. Convert explicitly between the two storages until a shared
+  `FeatureUnion` and `ColumnTransformer` require `NDArray` steps. Scored
+  cross-validation or search over a projection needs such a pipeline. Convert explicitly between the two storages until a shared
   decision lands (see `notebooks/random_projection/`).
 - Sparse projection supports at most `2**32-1` input features. Matrix sizes and
   JL bounds that exceed native integer limits raise clear errors.

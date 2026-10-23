@@ -7,9 +7,28 @@ array type; factorizations live in `_svd_engine` and mojo-linalg.
 """
 from numojo import NDArray, Shape, zeros
 from std.math import sqrt
+from std.sys import llvm_intrinsic
 from std.utils.numerics import inf
 from mojo_linalg import symmetric_indefinite, symmetric_slogdet
 from moxie._random import RandomState, entropy_state
+
+
+@always_inline
+def libm_log(x: Float64) -> Float64:
+    """Natural logarithm through the platform libm, as NumPy rounds it.
+
+    On the pinned Mojo toolchain `std.math.log`/`exp` are polynomial
+    approximations with Float64 relative errors up to about 1e-10 (for example
+    std `log(2 pi)` = 1.8378770666628248 against libm 1.8378770664093453),
+    which shifts log-likelihoods well beyond the reference rounding.
+    """
+    return llvm_intrinsic["llvm.log", Float64, has_side_effect=False](x)
+
+
+@always_inline
+def libm_exp(x: Float64) -> Float64:
+    """Exponential through the platform libm (see `libm_log`)."""
+    return llvm_intrinsic["llvm.exp", Float64, has_side_effect=False](x)
 
 
 @always_inline

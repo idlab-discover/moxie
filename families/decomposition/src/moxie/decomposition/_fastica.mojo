@@ -6,13 +6,14 @@ symmetric eigen factor ("eigh"); symmetric decorrelation uses mojo-linalg
 symmetric_eigh and the mixing matrix a mojo-linalg SVD pseudoinverse.
 """
 from numojo import NDArray, Shape, zeros
-from std.math import sqrt, exp, tanh, abs, isfinite
+from std.math import sqrt, tanh, abs, isfinite
 from std.utils import Variant
 from mojo_linalg import symmetric_eigh, svd
 from moxie.base import UnsupervisedEstimator
 from moxie._random import RandomState
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
+from ._matrix import libm_exp as exp
 from ._matrix import get2, set2, get1, set1, contiguous, identity, seeded_state, feature_names, machine_epsilon
 from ._svd_engine import dense_svd
 

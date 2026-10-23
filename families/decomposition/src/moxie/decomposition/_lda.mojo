@@ -7,12 +7,13 @@ the reference's own speed-oriented approximation (Bernardo 1976, AS 103), so
 the variational updates match sklearn; it is not a general-purpose digamma.
 """
 from numojo import NDArray, Shape, zeros
-from std.math import exp, log, lgamma, abs, isfinite
+from std.math import lgamma, abs, isfinite
 from std.utils.numerics import nan
 from moxie.base import UnsupervisedEstimator
 from moxie._random import RandomState
 from ._base import DecompositionTransformer
 from ._contracts import validate_matrix
+from ._matrix import libm_exp as exp, libm_log as log
 from ._matrix import get2, set2, get1, set1, contiguous, seeded_state, feature_names, machine_epsilon
 
 

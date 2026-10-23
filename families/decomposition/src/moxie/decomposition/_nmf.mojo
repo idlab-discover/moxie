@@ -7,12 +7,13 @@ any beta-divergence (Fevotte & Idier 2011), including the online variant of
 MiniBatchNMF (Lefevre et al. 2011). Only dense inputs are supported.
 """
 from numojo import NDArray, Shape, zeros
-from std.math import sqrt, log, abs, isfinite
+from std.math import sqrt, abs, isfinite
 from std.utils import Variant
 from moxie.base import UnsupervisedEstimator
 from moxie._random import RandomState
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
+from ._matrix import libm_log as log
 from ._matrix import get2, set2, get1, set1, contiguous, seeded_state, feature_names
 from ._svd_engine import randomized_svd
 

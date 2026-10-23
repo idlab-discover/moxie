@@ -6,11 +6,12 @@ Like the reference, fitting and learned state are Float64 whatever the input
 dtype. Factorizations: shared SVD engine; inverses/log-determinants: mojo-linalg.
 """
 from numojo import NDArray, Shape, zeros
-from std.math import sqrt, log, isfinite
+from std.math import sqrt, isfinite
 from moxie.base import UnsupervisedEstimator
 from moxie._random import RandomState
 from ._base import DecompositionTransformer
 from ._contracts import validate_matrix
+from ._matrix import libm_log as log
 from ._matrix import (get2, set2, get1, set1, as_float64, identity, column_means, column_variances,
     subtract_row, frobenius_squared, seeded_state, feature_names, symmetric_inverse, symmetric_logdet)
 from ._svd_engine import randomized_svd, dense_svd

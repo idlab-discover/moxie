@@ -2,11 +2,13 @@
 
 Public arrays use NuMojo. A numerical backend supplies factorization and matrix
 products (mojo-linalg by default; an opt-in static Numax backend is described
-in docs/pca.md). Scalar math uses the Mojo standard library.
+in docs/pca.md). Scalar math uses the Mojo standard library, except `log`, which
+goes through the platform libm as NumPy does.
 """
 from std.utils import Variant
 from std.memory import bitcast
-from std.math import abs, isfinite, isnan, sqrt, log, lgamma
+from std.math import abs, isfinite, isnan, sqrt, lgamma
+from std.sys import llvm_intrinsic
 from numojo import NDArray, Shape, zeros, mean
 from ._pca_backend import PCABackend, RuntimePCABackend
 from moxie.base import UnsupervisedEstimator
@@ -37,7 +39,8 @@ def _sqrt(x: Float64) -> Float64:
 
 
 def _log(x: Float64) -> Float64:
-    return log(x)
+    """Platform libm log; std.math.log is off by up to ~1e-10 (see _matrix.libm_log)."""
+    return llvm_intrinsic["llvm.log", Float64, has_side_effect=False](x)
 
 
 def _get[dtype: DType](a: NDArray[dtype], i: Int, j: Int) raises -> Float64:

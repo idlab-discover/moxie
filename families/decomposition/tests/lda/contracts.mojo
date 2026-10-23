@@ -66,8 +66,11 @@ def check[dtype: DType]() raises:
     var params = sequential.get_params()
     params.n_components = 4
     sequential.set_params(params)
+    # Output names follow the fitted components_, not a later n_components change.
+    assert_equal(len(sequential.get_feature_names_out()), 2)
     sequential.fit(counts[dtype](5, 3))
     assert_equal(sequential.components_.value().shape[0], 4)
+    assert_equal(len(sequential.get_feature_names_out()), 4)
     assert_equal(sequential.n_features_in_, 3)
     rejects(LatentDirichletAllocation[dtype](0), x)
     rejects(LatentDirichletAllocation[dtype](2, learning_method="gibbs"), x)

@@ -464,7 +464,7 @@ struct LatentDirichletAllocation[dtype: DType = DType.float64](DecompositionTran
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         if not self.components_:
             raise Error("NotFittedError: This LatentDirichletAllocation instance is not fitted yet. Call 'fit' first.")
-        return feature_names("latentdirichletallocation", self.n_components, input_features, self.n_features_in_)
+        return feature_names("latentdirichletallocation", self.components_.value().shape[0], input_features, self.n_features_in_)
 
     def set_output(mut self, *, transform: Optional[String] = None) raises:
         if transform and transform.value() != "default":

@@ -23,7 +23,9 @@ of the estimator. Clone copies configuration into an unfitted estimator;
 ordinary copies own independent learned arrays. Refit replaces learned state.
 The estimators satisfy current Moxie supervised and transformer contracts;
 the three PLS variants also satisfy regression contracts. Tests exercise real
-`FrozenEstimator` composition. PLSSVD has no predict, score, or inverse transform.
+`FrozenEstimator` composition and, in `tests/cross_decomposition/composition.mojo`,
+`make_pipeline(StandardScaler(), PLSRegression|PLSCanonical|CCA)`, cloned
+pipelines with typed nested `set_params`, and `cross_val_score`. PLSSVD has no predict, score, or inverse transform.
 
 `fit` borrows inputs and always works on copies. Use `fit_inplace` to honor
 `copy=False`: Float64 inputs receive the centered/scaled workspaces, plus

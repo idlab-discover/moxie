@@ -36,7 +36,8 @@ n_features_in_`, training scores `x_scores_, y_scores_`.
 | Python warnings | `diagnostics_: List[String]` ("ConvergenceWarning: Maximum number of iterations reached", "UserWarning: y residual is constant at iteration k") |
 | `_x_scores` private on PLSCanonical/CCA | exposed as `x_scores_`/`y_scores_` on all three |
 | float64 outputs for float32 input | same: inputs `NDArray[dtype]`, outputs Float64; inference centers/scales in input dtype like NumPy's in-place ops |
-| `get_feature_names_out()` | returns `List[String]` (`plsregression0`, ...) |
+| `get_feature_names_out(input_features=None)` | returns `List[String]` (`plsregression0`, ...); supplied names are length-checked only (no `feature_names_in_`). `FeatureNamesOut` and `InputFeatureCount` (`get_n_features_in()`) are declared, so pipelines report names and input width |
+| `make_pipeline` step name `plsregression` | `_pls`: the step name is reflected from the `_PLS` struct behind the alias; pass `estimator_name=` to `Pipeline` for sklearn's name |
 
 Numerical failures that make SciPy raise (NaN reaching an SVD after a zero
 deflation denominator) raise `LinAlgError: ...` here; NaN in inputs is

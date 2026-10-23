@@ -14,6 +14,7 @@ from std.math import sqrt, isfinite, isnan
 import numojo as nm
 from numojo import NDArray, Shape
 from mojo_linalg import svd, SVDFactor
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie.cross_decomposition._base import (
     CrossDecompositionTransformer,
     PLSPredictor,
@@ -792,6 +793,32 @@ def r2_score(
     return total / Float64(q)
 
 
+def prefixed_feature_names(
+    class_name: String,
+    n_features_out: Int,
+    n_features_in: Int,
+    input_features: Optional[List[String]],
+) raises -> List[String]:
+    """ClassNamePrefixFeaturesOutMixin: '<class name lowercased><k>' names.
+
+    Supplied `input_features` are only length-checked, as scikit-learn does for
+    estimators fitted without `feature_names_in_`.
+    """
+    if input_features and len(input_features.value()) != n_features_in:
+        raise Error(
+            "ValueError: input_features should have length equal to number of"
+            " features ("
+            + String(n_features_in)
+            + "), got "
+            + String(len(input_features.value()))
+        )
+    var prefix = class_name.lower()
+    var names = List[String](capacity=n_features_out)
+    for k in range(n_features_out):
+        names.append(prefix + String(k))
+    return names^
+
+
 # ---------------------------------------------------------------------------
 # Estimators
 # ---------------------------------------------------------------------------
@@ -941,7 +968,12 @@ def fit_two_block(
 
 
 struct _PLS[flavor: Int, dtype: DType = DType.float64](
-    Copyable, CrossDecompositionTransformer, Movable, PLSPredictor
+    Copyable,
+    CrossDecompositionTransformer,
+    FeatureNamesOut,
+    InputFeatureCount,
+    Movable,
+    PLSPredictor,
 ):
     """Shared implementation of scikit-learn's private `_PLS` base class.
 
@@ -1381,15 +1413,21 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         var pred2 = as_target_matrix(pred)
         return r2_score(y_true, pred2, sample_weight)
 
-    def get_feature_names_out(self) raises -> List[String]:
+    def get_n_features_in(self) raises -> Int:
+        """scikit-learn's `n_features_in_` (InputFeatureCount); raises before fit."""
+        if not self._fitted:
+            raise not_fitted_error(Self.name())
+        return self.n_features_in_
+
+    def get_feature_names_out(
+        self, input_features: Optional[List[String]] = None
+    ) raises -> List[String]:
         """['<lowercase class name>0', ...] for each output component."""
         if not self._fitted:
             raise not_fitted_error(Self.name())
-        var prefix = Self.name().lower()
-        var names = List[String]()
-        for k in range(self.x_rotations_.shape[1]):
-            names.append(prefix + String(k))
-        return names^
+        return prefixed_feature_names(
+            Self.name(), self.x_rotations_.shape[1], self.n_features_in_, input_features
+        )
 
 
 comptime PLSRegression[dtype: DType = DType.float64] = _PLS[_REGRESSION, dtype]

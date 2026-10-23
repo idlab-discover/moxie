@@ -18,7 +18,9 @@ Mojo adaptations: `PLSSVD[dtype=float64]` over NuMojo arrays; `copy` stored as
 `copy_input`; `fit` never mutates inputs and `fit_inplace(mut X, mut y)`
 reproduces copy=False (Float64 inputs end centered/scaled); `PLSSVDParams`
 record plus keyword `set_params`; paired results are a `PairedScores` record;
-`get_feature_names_out()` returns `List[String]` (`plssvd0`, ...). No
+`get_feature_names_out(input_features=None)` returns `List[String]`
+(`plssvd0`, ...) and `get_n_features_in()` returns `n_features_in_`
+(shared `FeatureNamesOut`/`InputFeatureCount` traits). No
 predict/score/inverse_transform, matching scikit-learn. Singular vectors for
 exactly zero singular values (k above the rank of X.T @ y) are an arbitrary
 orthonormal completion, as with LAPACK, but may differ from it.

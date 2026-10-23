@@ -10,6 +10,7 @@ rotations or prediction.
 import numojo as nm
 from numojo import NDArray, Shape
 from std.math import isnan
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie.cross_decomposition._base import CrossDecompositionTransformer
 from moxie.cross_decomposition._contracts import Matrix, PairedScores
 from moxie.cross_decomposition._pls import (
@@ -23,6 +24,7 @@ from moxie.cross_decomposition._pls import (
     check_target,
     compact_float64,
     not_fitted_error,
+    prefixed_feature_names,
     write_back_float64,
 )
 
@@ -51,7 +53,7 @@ def _standardize(x: Matrix, mean: Matrix, std: Matrix) raises -> Matrix:
 
 
 struct PLSSVD[dtype: DType = DType.float64](
-    Copyable, CrossDecompositionTransformer, Movable
+    Copyable, CrossDecompositionTransformer, FeatureNamesOut, InputFeatureCount, Movable
 ):
     """Partial Least Square SVD over NuMojo arrays of `dtype`.
 
@@ -219,11 +221,18 @@ struct PLSSVD[dtype: DType = DType.float64](
         _ = self.fit(X, y)
         return self.transform(X, y)
 
-    def get_feature_names_out(self) raises -> List[String]:
+    def get_n_features_in(self) raises -> Int:
+        """scikit-learn's `n_features_in_` (InputFeatureCount); raises before fit."""
+        if not self._fitted:
+            raise not_fitted_error(Self.name())
+        return self.n_features_in_
+
+    def get_feature_names_out(
+        self, input_features: Optional[List[String]] = None
+    ) raises -> List[String]:
         """['plssvd0', 'plssvd1', ...]."""
         if not self._fitted:
             raise not_fitted_error(Self.name())
-        var names = List[String]()
-        for k in range(self.x_weights_.shape[1]):
-            names.append("plssvd" + String(k))
-        return names^
+        return prefixed_feature_names(
+            Self.name(), self.x_weights_.shape[1], self.n_features_in_, input_features
+        )

@@ -20,6 +20,7 @@ numerical tolerances.
 | Feature names | Explicit `feature_names` keyword on fit/predict/score; exact ordered validation |
 | Metadata requests | `get_metadata_routing`, `set_fit_request`, `set_score_request`; native sample-weight selection/rejection and aliases |
 | Parameters | `get_params`/mapping updates plus optional typed records; direct optional resets |
+| Composition | `clone`, final step of `moxie.pipeline` pipelines, `cross_val_score`/`learning_curve`/`GridSearchCV` through typed model_selection adapters (`tests/test_composition.mojo`, `notebooks/kernel_ridge/`) |
 | Python integration | Dataframe adapters, Python callbacks, unrestricted kwargs and global sklearn routing remain outside the native API |
 
 ## Deferred: sparse feature inputs

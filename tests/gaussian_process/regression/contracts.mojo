@@ -1,6 +1,6 @@
 """Native GaussianProcessRegressor contracts (shapes, errors, lifecycle)."""
 from numojo import NDArray, Shape, zeros
-from std.math import abs, sqrt
+from std.math import abs, isfinite, sin, sqrt
 from std.testing import (
     assert_almost_equal,
     assert_equal,
@@ -19,7 +19,7 @@ from moxie.gaussian_process import (
 )
 from moxie.gaussian_process._gpr import LogMarginalLikelihood
 from moxie.gaussian_process._plumbing import Dense64, OptimizationResult
-from moxie.gaussian_process.kernels import Bounds, ConstantKernel, DotProduct, Kernel, RBF, WhiteKernel
+from moxie.gaussian_process.kernels import Bounds, ConstantKernel, DotProduct, Kernel, RBF, RationalQuadratic, WhiteKernel
 from moxie._random import RandomState, check_random_state, seed_global_random_state
 
 
@@ -351,3 +351,37 @@ def test_likelihood_clone_kernel_controls_mutation() raises:
     assert_equal(copied.value, changed.value)
     assert_equal(copied.gradient.value().item(0), changed.gradient.value().item(0))
     assert_equal(model.log_marginal_likelihood().value, model.log_marginal_likelihood_value_)
+
+
+def test_sample_y_warns_on_indefinite_posterior() raises:
+    # plot_gpr_prior_posterior's fitted RationalQuadratic posterior on 100 grid
+    # points has eigenvalues down to -1.8e-8 (sklearn computes the same), so
+    # NumPy's default check_valid="warn" warns and still draws; sample_y must too.
+    var train = [4.835149195068383, 2.7361612458786118, 4.863421799824422, 3.5740799683718234,
+                 3.4886441229863543, 1.080447477901882, 4.881372273881209, 0.031151276022949315,
+                 1.2649118119172198, 2.1739576620222287]
+    var X_train = zeros[DType.float64](Shape(10, 1))
+    var y_train = zeros[DType.float64](Shape(10))
+    for i in range(10):
+        X_train.unsafe_set(i, train[i])
+        var shifted = train[i] - 2.5
+        y_train.unsafe_set(i, sin(shifted * shifted))
+    var X = zeros[DType.float64](Shape(100, 1))
+    for i in range(100):
+        X.unsafe_set(i, 5.0 * Float64(i) / 99.0)
+    var kernel = ConstantKernel(0.3527724212081871) * RationalQuadratic(
+        length_scale=0.2785622248175069, alpha=5387636.441757492
+    )
+    var gpr = GaussianProcessRegressor(kernel, optimizer=None)
+    _ = gpr.fit(X_train, y_train)
+    var prediction = gpr.predict(X, return_std=False, return_cov=True)
+    var strict = RandomState(0)
+    with assert_raises(contains="not_positive_semidefinite"):
+        _ = strict.multivariate_normal(prediction.mean, prediction.covariance.value(), 5)
+    var draws = gpr.sample_y(X, 5)
+    assert_equal(draws.shape[0], 100)
+    assert_equal(draws.shape[1], 5)
+    var again = gpr.sample_y(X, 5)
+    for i in range(draws.size):
+        assert_true(isfinite(draws.unsafe_get(i)))
+        assert_equal(draws.unsafe_get(i), again.unsafe_get(i))

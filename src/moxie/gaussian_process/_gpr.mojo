@@ -798,7 +798,12 @@ struct GenericGaussianProcessRegressor[
             return self.sample_y(X, n_samples, rng[])
 
     def sample_y(self, X: Self.Input, n_samples: Int, mut random_state: RandomState) raises -> Dense64:
-        """Draws from the posterior (or prior) using a borrowed RandomState."""
+        """Draws from the posterior (or prior) using a borrowed RandomState.
+
+        Like NumPy's default `check_valid="warn"`, a covariance that fails the
+        SVD reconstruction check (slightly indefinite posteriors) warns and
+        still draws.
+        """
         if n_samples < 0:
             raise Error("ValueError: n_samples must be nonnegative")
         var prediction = self.predict(X, return_std=False, return_cov=True)
@@ -806,7 +811,7 @@ struct GenericGaussianProcessRegressor[
         ref cov = prediction.covariance.value()
         var m = mean.shape[0]
         if mean.ndim == 1:
-            var draws = random_state.multivariate_normal(mean, cov, n_samples)  # (s, m)
+            var draws = random_state.multivariate_normal(mean, cov, n_samples, check_valid="warn")  # (s, m)
             var out = zeros[DType.float64](Shape(m, n_samples))
             for s in range(n_samples):
                 for i in range(m):
@@ -821,7 +826,7 @@ struct GenericGaussianProcessRegressor[
                 mk.unsafe_set(i, mean.unsafe_get(i * t + k))
             for e in range(m * m):
                 ck.unsafe_set(e, cov.unsafe_get(e * t + k))
-            var draws = random_state.multivariate_normal(mk, ck, n_samples)
+            var draws = random_state.multivariate_normal(mk, ck, n_samples, check_valid="warn")
             for s in range(n_samples):
                 for i in range(m):
                     out.unsafe_set((i * t + k) * n_samples + s, draws.unsafe_get(s * m + i))

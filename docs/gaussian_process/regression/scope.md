@@ -7,7 +7,7 @@ LML with gradients, R² score, clone/params. Sparse input is deferred
 (`../session-plan/SPARSITY-SCOPE.md`); non-vector (structured) inputs are not
 supported.
 
-Validation: `pixi run test` (14 native contract tests + example), `pixi run
+Validation: `pixi run test` (15 native contract tests + example), `pixi run
 parity` (15 cases incl. Float32, multi-target, restarts, general-nu Matern,
 no-optimizer, tiny data, against the pinned `_gpr.py`; 255 checks; tolerances:
 optimized theta 1e-4 rel (Float32 2e-3, general-nu Matern 1e-3), derived

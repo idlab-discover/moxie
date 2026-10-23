@@ -38,7 +38,7 @@ Differences in behavior are listed in api.md ("Mojo adaptations").
 
 ```sh
 pixi run build    # verified assembly + compile of all modules, tests, example
-pixi run test     # contracts (13), numerics (11), lifecycle (7), example,
+pixi run test     # contracts (13), numerics (11), lifecycle (7), composition, example,
                   # 4 compile-time negative capability checks
 pixi run parity   # 604 differential cases vs pinned sklearn (60 expected-error cases)
 ```

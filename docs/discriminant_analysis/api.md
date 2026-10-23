@@ -53,12 +53,17 @@ store_covariance=False, tol=1e-4, covariance_estimator=None)`
 | `score(X, y, sample_weight=None)` | yes | yes | accuracy (`Float64`) |
 | `transform(X)`, `fit_transform(X, y)` | yes (not `lsqr`) | no | `(n, min(rank, n_components))` |
 | `get_feature_names_out(input_features=None)` | yes | no | `lineardiscriminantanalysis0`, ... |
+| `get_n_features_in()` | yes | yes | `n_features_in_`; `NotFittedError` before fit |
 | `get_params` | yes | yes | typed params record |
 | `set_params` | yes | yes | mutable borrow of self |
 | `__sklearn_clone__`, `__sklearn_is_fitted__` | yes | yes | unfitted copy, fitted-state Boolean |
 
 LDA conforms to the family trait `LinearDiscriminantTransformer`; QDA to
-`DiscriminantClassifier` (both re-exported from this module). QDA has no
+`DiscriminantClassifier` (both re-exported from this module). Both also declare the
+shared `InputFeatureCount` contract and LDA the shared `FeatureNamesOut` contract, so
+`Pipeline.n_features_in_()` and `Pipeline.get_feature_names_out()` work with them
+(tests/discriminant_analysis/composition.mojo covers pipelines, clone with typed nested
+`set_params`, and `cross_val_score`). QDA has no
 `transform`; calling it is a compile error.
 
 Weighted scoring rejects NaN, infinity, all-zero weights and weights whose sum

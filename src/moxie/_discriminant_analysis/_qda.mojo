@@ -4,6 +4,7 @@
 from std.math import log, sqrt
 from numojo import NDArray, Shape, zeros
 from moxie.utils.validation import FittedState
+from moxie._feature_metadata import InputFeatureCount
 from moxie._discriminant_analysis_contracts import DiscriminantClassifier
 from ._labels import ClassLabel, sorted_unique, encode_labels, class_counts
 from ._work import (
@@ -114,7 +115,7 @@ struct QuadraticDiscriminantAnalysis[
     dtype: DType = DType.float64,
     L: ClassLabel = Int,
     C: CovarianceEstimator = NoCovarianceEstimator,
-](DiscriminantClassifier):
+](DiscriminantClassifier, InputFeatureCount):
     """Quadratic Discriminant Analysis (sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis).
 
     Fits one Gaussian per class and classifies with Bayes' rule (quadratic boundary).
@@ -254,6 +255,15 @@ struct QuadraticDiscriminantAnalysis[
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.is_fitted()
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` through the shared InputFeatureCount contract; raises before fit."""
+        if not self._state.is_fitted():
+            raise Error(
+                "NotFittedError: This QuadraticDiscriminantAnalysis instance is not fitted yet."
+                " Call 'fit' with appropriate arguments before using this estimator."
+            )
+        return self.n_features_in_
 
     def _validate_params(self) raises:
         if self.solver != "svd" and self.solver != "eigen":

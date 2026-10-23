@@ -46,7 +46,7 @@ def main():
     mode = mode.removesuffix('-only')
     if mode == 'test':
         run(sys.executable, ROOT / 'tests/test_build.py')
-        for name in ('contracts', 'capabilities', 'family', 'kernel_ridge', 'numerics', 'dtypes', 'serialization', 'api', 'fluent'):
+        for name in ('contracts', 'capabilities', 'family', 'kernel_ridge', 'numerics', 'dtypes', 'serialization', 'api', 'fluent', 'composition'):
             executable = ROOT / 'builds' / ('test_' + name)
             compile(ROOT / 'tests' / ('test_' + name + '.mojo'), executable)
             run(executable)

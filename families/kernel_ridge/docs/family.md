@@ -144,7 +144,13 @@ configuration copies, cloning, fitting, prediction, and persistence. The default
 implementation accepts None/empty mappings and rejects nonempty mappings.
 [Mojo supports typed `**kwargs`](https://mojolang.org/docs/manual/functions/#variadic-keyword-arguments);
 this callback API passes an explicit typed map.
-Python function objects and arbitrary Python objects are not supported. Rows
+Python function objects and arbitrary Python objects are not supported.
+scikit-learn also accepts Gaussian-process kernel objects (for example
+`KernelRidge(kernel=ExpSineSquared())`, evaluated as whole matrices). Moxie's
+`moxie.gaussian_process.kernels` types do not implement `RowKernel`, so they
+cannot be passed as KernelRidge kernels yet; write the formula as a `RowKernel`
+struct instead, as `notebooks/kernel_ridge/plot_compare_gpr_krr.ipynb` does.
+Bridging the two kernel families is deferred cross-family work. Rows
 are borrowed and must be indexed using array strides. Same-data fit evaluates the upper triangle
 and mirrors it, matching sklearn even for asymmetric callables. Prediction
 evaluates every test/training pair. Tests show parameter cloning and dispatch.

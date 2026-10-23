@@ -56,6 +56,12 @@ trajectories are reported separately from strict comparison passes.
 `tests/mixture/known_float32_exceptions.json` restricts exceptions to the cases
 observed before relocation; new exceptional cases fail the parity command.
 
+Side-by-side notebooks replay `plot_gmm_init`, `plot_concentration_prior` and
+`plot_gmm_selection` (GridSearchCV with a -BIC scorer) against the pinned
+reference: `pixi run -e notebooks notebooks notebooks/mixture`. A
+`Pipeline` cannot end in a mixture yet: the shared Pipeline requires a
+supervised final step (recorded as a GAP in `plot_gmm_selection`).
+
 Benchmark tooling remains at `tests/mixture/{gaussian,bayesian}/benchmark.py`;
 run with `pixi run python` after building. It writes under `benchmarks/mixture/`.
 No performance claim follows from the migration checks.
@@ -90,6 +96,10 @@ their existing owners.
 
 Python reflection, metadata routing, pandas output, feature names, pickling,
 array-API dispatch, sparse inputs and other exclusions in the estimator guides
-remain unsupported. Sample points are Float64 for both estimator dtypes.
+remain unsupported. Sample points are Float64 for both estimator dtypes, as in sklearn (NumPy
+promotes the float32 means with its float64 normal draws).
+`verbose` prints the reference messages at the reference iterations, but
+`verbose >= 2` lines show Mojo's shortest round-trip Float64 text for the time
+lapse, change and lower bound, not sklearn's `%.5f`, and Mojo `print` spacing.
 Full/tied sample coordinates can differ from NumPy because the SVD orientation
 can differ; parity checks labels, draw consumption and Mahalanobis norms.

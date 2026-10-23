@@ -52,3 +52,7 @@ FactorAnalysis 186, FastICA 180, NMF/MiniBatchNMF 156, LDA 60, KernelPCA 55,
 and threshold sparse coding 144. `pixi run parity` runs these same checks after
 building. Tolerances and coverage limits are in the individual guides. This is
 partial dense coverage; dictionary learning and SparsePCA remain unfinished.
+
+Persistence is not implemented: no decomposition estimator defines a
+`ModelSchema` for the shared `save_model`/`load_model` (see
+`docs/serialization.md`), so fitted models cannot be saved and reloaded yet.

@@ -116,6 +116,13 @@ QDA: `means_` `(K, p)`, `priors_`, `rotations_` (List of `(p, n_k)`), `scalings_
   so the configured object is never mutated (sklearn mutates the object you pass). Using a type
   without `fit`/`covariance` (sklearn: `ValueError` at fit) fails at compile time
   (tests/compile_fail/covariance_without_trait.mojo).
+  `moxie.covariance` estimators (`OAS`, `LedoitWolf`, `ShrunkCovariance`, ...) implement
+  `moxie.covariance.CovarianceEstimator` (fluent `fit`, `covariance_()`), not this trait, so
+  sklearn's `covariance_estimator=OAS()` needs a small user adapter (see the `OASCovariance`
+  struct in the plot_lda notebook patch); they cannot be passed directly yet.
+- `transform` rejects `solver='lsqr'` from the current parameter, like sklearn, but subtracts
+  `xbar_` according to the solver used at fit time. sklearn reads the current `solver`, so after
+  `set_params(solver='eigen')` on an svd fit without refitting it skips the centering.
 - Python warnings do not exist: LDA priors that do not sum to 1 are renormalized silently
   (sklearn also emits `UserWarning`).
 - `priors` whose length differs from the number of classes raise `ValueError` (sklearn fails

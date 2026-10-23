@@ -42,8 +42,10 @@ accepted but does not print progress. Python callbacks, metadata routing,
 non-native output containers and sparse counts are unsupported.
 
 The E-step uses the reference's AS 103 digamma approximation, not a general
-special-function replacement; scalar exponentials/log-gamma use Mojo's standard
-library. No Python executes during learning or inference. Parity checks use
+special-function replacement; scalar `exp`/`log` go through the platform libm
+(as NumPy does; `std.math` versions are off by up to ~1e-10) and log-gamma uses
+Mojo's standard library. `random_state_` (the seeded stream used for the
+initial `components_`) is stored as in the reference. No Python executes during learning or inference. Parity checks use
 pinned `_lda.py` and compile its pinned `_online_lda_fast.pyx` for the oracle.
 Float64 tolerance is 1e-7; Float32 is 2e-3, allowing rounding differences through
 iterative variational updates and tolerance-dependent stopping. Array comparisons

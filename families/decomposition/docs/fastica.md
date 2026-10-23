@@ -23,7 +23,9 @@ Defaults follow sklearn: `n_components=None`, `algorithm="parallel"`
 (`Dict[String, Float64]`; key `"alpha"` must lie in [1, 2] and, as in sklearn,
 other keys are ignored), `max_iter=200`, `tol=1e-4`,
 `w_init=None` (Float64 `(k, k)`), `whiten_solver="svd"` (or `"eigh"`),
-`random_state=None`.
+`random_state=None` (an integer or None; NumPy `RandomState` objects are not
+accepted). With Float32 input and an explicit `w_init`, sklearn's learned
+arrays come out Float64; Moxie keeps the input dtype.
 Learned: `components_ (k, p)`, `mixing_ (p, k)`, `mean_`, `whitening_ (k, p)`
 (absent when `whiten=False`), `n_iter_`, `n_features_in_`.
 Methods: `fit`, `fit_transform` (sources), `transform`, `inverse_transform`

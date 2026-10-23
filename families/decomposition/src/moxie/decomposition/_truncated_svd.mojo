@@ -32,7 +32,7 @@ struct TruncatedSVD[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
     sklearn-compatible seeded draws. `algorithm="arpack"` is the dense
     equivalent of scipy's ARPACK `svds`: it returns the exact leading singular
     triplets (Jacobi SVD), which satisfies every requested `tol`.
-    Fit mutates the estimator and returns nothing.
+    Fit mutates the estimator and returns a borrow of it (fluent chaining).
     """
     comptime Params = TruncatedSVDParams
     comptime Input = NDArray[Self.dtype]

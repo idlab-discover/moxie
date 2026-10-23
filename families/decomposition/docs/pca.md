@@ -148,6 +148,15 @@ Python metadata routing, pandas/polars output, implicit integer promotion and
 Python RNG objects are not supported. `random_state=None` creates an entropy
 stream for each randomized fit; it does not share Python's global RNG state.
 `set_output(transform="default")` is supported; other containers raise.
+
+Edge cases that deliberately differ from the pinned reference: a fractional
+`n_components` within rounding of 1 (for example `nextafter(1, 0)`) selects
+all available components, where sklearn's `searchsorted` runs one past the end
+and reports `n_components_ = min + 1` with fewer rows in `components_`;
+`get_precision` inverts `get_covariance` directly instead of sklearn's
+inversion lemma, so in degenerate fits (`noise_variance_` ~ 1e-33, e.g.
+`n_components="mle"` on square random data) `score` is `-inf` where sklearn
+returns a huge finite value; and `tol=inf` is rejected.
 Feature-name inference needs a labeled input type; `feature_names_in_` remains
 absent for native arrays.
 

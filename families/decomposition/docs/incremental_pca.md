@@ -39,7 +39,10 @@ Constructor defaults follow sklearn: `n_components=None`, `whiten=False`,
 `copy=True`, `batch_size=None`. `None` infers the rank from the first batch;
 `fit` defaults to batches of `5*n_features`. `partial_fit` processes its entire
 input as one batch, independent of `batch_size`. Its first batch must contain
-at least `n_components` rows; later batches may contain just one row. Feature
+at least `n_components` rows; later batches may contain just one row. `fit` on
+fewer samples than `n_components` raises; the pinned sklearn instead finishes
+with inconsistent state (`components_` with fewer rows than `n_components_`
+and a NaN `noise_variance_`). Feature
 and component counts must remain fixed across partial updates. `fit` resets
 state, while `clone` copies only constructor settings. Failed updates preserve
 the previously fitted model.

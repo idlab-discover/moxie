@@ -19,7 +19,8 @@ See [the example](../examples/factor_analysis.mojo).
 Defaults follow sklearn: `n_components=None` (all features), `tol=1e-2`,
 `copy=True`, `max_iter=1000`, `noise_variance_init=None` (`List[Float64]`),
 `svd_method="randomized"`, `iterated_power=3`, `rotation=None`
-(`"varimax"`/`"quartimax"`), `random_state=0`.
+(`"varimax"`/`"quartimax"`), `random_state=0` (an integer or None; NumPy
+`RandomState` objects are not accepted).
 Learned: `components_ (k, p)`, `noise_variance_ (p)`, `mean_ (p)` as
 `Optional[NDArray[float64]]`, `loglike_: List[Float64]`, `n_iter_`, `n_features_in_`.
 Methods: `fit`, `fit_transform`, `transform` (posterior latent mean),

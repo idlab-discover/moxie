@@ -95,7 +95,7 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
 
     full, covariance_eigh, arpack and randomized are supported, including auto
     selection. Dense "arpack" computes the exact leading factors (see docs/pca.md).
-    Fit mutates self and returns nothing.
+    Fit mutates self and returns a borrow of it (fluent chaining).
     """
     comptime Params = PCAParams
     comptime Input = NDArray[Self.dtype]

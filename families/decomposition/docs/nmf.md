@@ -28,7 +28,15 @@ Learned: `components_`, `n_components_`, `reconstruction_err_`, `n_iter_`,
 Methods: `fit`, `fit_transform(X)` and `fit_transform(X, W, H)` (custom init),
 `transform` (solve W with H fixed), `inverse_transform`, MiniBatchNMF
 `partial_fit(X)`/`partial_fit(X, W, H)`, `get_feature_names_out`, typed
-`get_params`/`set_params` (`NMFParams`, `MiniBatchNMFParams`), clone.
+`get_params`/`set_params` (`NMFParams`, `MiniBatchNMFParams`), clone. The typed
+records cover every setting; the named keyword `set_params` overloads cover a
+subset (NMF omits `verbose`; MiniBatchNMF covers `n_components`, `init`,
+`batch_size`, `beta_loss`, `tol`, `max_iter`, `forget_factor`,
+`fresh_restarts` and `random_state`), so use the record for the rest.
+`random_state` is an integer or None; NumPy `RandomState` objects are not
+accepted. sklearn's `fit(X, W=..., H=...)` keyword form is
+`fit_transform(X, W, H)` here. As in sklearn, the first `partial_fit` does not
+reject zeros under `beta_loss <= 0`; `fit` does.
 `non_negative_factorization` returns an `NMFResult` record `(W, H, n_iter)`
 and supports `update_H=False`.
 

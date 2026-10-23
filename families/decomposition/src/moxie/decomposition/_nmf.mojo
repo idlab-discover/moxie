@@ -1062,7 +1062,9 @@ struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
         var x = contiguous(X)
         var h: NDArray[Self.dtype]
         if not self.components_:
-            _validate_input(x, _beta_value(self.beta_loss), "MiniBatchNMF (input X)")
+            # sklearn's partial_fit rejects negative data (through the initialization)
+            # but, unlike fit, not zeros under beta_loss <= 0: pass a positive beta.
+            _validate_input(x, 1.0, "MiniBatchNMF (input X)")
             _ = self._check_params(x)
             var k = self._k
             var factors = _check_w_h(self._config(), x, W, H, True, k, "mu")

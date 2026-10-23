@@ -73,6 +73,20 @@ def check[dtype: DType]() raises:
     assert_equal(online.n_steps_, 2)
     with assert_raises(): online.partial_fit(zeros[dtype](Shape(3, 4)))
     assert_equal(online.transform(x).shape[1], 2)
+    # sklearn's partial_fit, unlike fit, accepts zeros under beta_loss <= 0.
+    var with_zero = x.copy()
+    with_zero.unsafe_set(0, 0)
+    var itakura = MiniBatchNMF[dtype](2, beta_loss=BetaLoss(String("itakura-saito")), batch_size=5, random_state=0)
+    itakura.partial_fit(with_zero)
+    assert_equal(itakura.n_steps_, 1)
+    var itakura_fit = MiniBatchNMF[dtype](2, beta_loss=BetaLoss(String("itakura-saito")), random_state=0)
+    with assert_raises(contains="beta_loss <= 0"):
+        itakura_fit.fit(with_zero)
+    var negative_batch = x.copy()
+    negative_batch.unsafe_set(0, -1)
+    var online_negative = MiniBatchNMF[dtype](2, random_state=0)
+    with assert_raises(contains="Negative values"):
+        online_negative.partial_fit(negative_batch)
     var bad = MiniBatchNMF[dtype](2, batch_size=0)
     with assert_raises(): bad.fit(x)
 

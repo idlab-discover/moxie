@@ -16,6 +16,11 @@ def check[dtype: DType]() raises:
     with assert_raises(): _ = m.inverse_transform(x)
     var z = m.fit_transform(x)
     assert_equal(z.shape[1], 2)
+    var forward_only = KernelPCA[dtype](2, kernel="rbf")
+    _ = forward_only.fit_transform(x)
+    # sklearn raises NotFittedError when the inverse map was never requested.
+    with assert_raises(contains="NotFittedError: The fit_inverse_transform parameter was not set"):
+        _ = forward_only.inverse_transform(z)
     assert_equal(m.get_feature_names_out()[1], "kernelpca1")
     assert_true(m.eigenvalues_.value().unsafe_get(0) >= m.eigenvalues_.value().unsafe_get(1))
     var first = m.X_fit_.value().unsafe_get(0)

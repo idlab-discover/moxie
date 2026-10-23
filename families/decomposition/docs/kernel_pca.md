@@ -49,7 +49,8 @@ Mojo restrictions: `copy_X=False` raises because fitted snapshots must be owned;
 callable kernels, Python metadata routing and non-native output containers are
 unavailable. Named kernels ignore kernel_params as sklearn does. n_jobs is
 accepted (zero is invalid); kernels execute through their native owner's backend.
-Fit/set_params mutate in place and do not support Python method chaining.
+`fit` mutates in place and returns a borrow of the estimator, so
+`model.fit(X).transform(X)` chains as in sklearn (docs/interfaces.md, fluent fit).
 
 Kernel operations are consumed from the current Moxie KernelRidge numerical owner;
 no kernel implementation is copied here. Runtime eigen and Cholesky operations

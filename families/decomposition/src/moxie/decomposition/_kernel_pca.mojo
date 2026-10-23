@@ -339,7 +339,7 @@ struct KernelPCA[dtype: DType = DType.float64](InvertibleDecomposition, Unsuperv
         return result^
 
     def inverse_transform(self, X: Self.Transformed) raises -> Self.Input:
-        if not self.fit_inverse_transform: raise Error("NotImplementedError: enable fit_inverse_transform before fitting")
+        if not self.fit_inverse_transform: raise Error("NotFittedError: The fit_inverse_transform parameter was not set to True when instantiating and hence the inverse transform is not available.")
         if not self.dual_coef_: raise Error("NotFittedError: inverse map is not fitted")
         validate_matrix(X)
         if X.shape[1] != self.X_transformed_fit_.value().shape[1]: raise Error("ValueError: wrong component count")

@@ -49,8 +49,10 @@ Learned fields include `components_`, `singular_values_`, `mean_`, `var_`,
 `n_components_`, `n_features_in_`, `n_samples_seen_`, and `batch_size_` (set by
 `fit`). Array fields are optional before fitting. Means and population variances
 use Float64 accumulation and storage; spectral and transformed arrays retain the
-input dtype. This differs from sklearn's possible Float32-to-Float64 promotion
-on subsequent updates. Zero-variance ratios and one-sample explained variances
+input dtype. This differs from sklearn, where Float32 input yields Float64
+`mean_`, `var_`, `explained_variance_` and `explained_variance_ratio_` after
+the first batch, and Float64 `components_`, `singular_values_` and `transform`
+output once a second batch is merged. Zero-variance ratios and one-sample explained variances
 can be NaN, as in the reference.
 
 Projection, inverse projection, whitening and covariance reuse PCA's helpers.

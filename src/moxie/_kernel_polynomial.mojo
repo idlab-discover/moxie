@@ -15,6 +15,7 @@ from mojo_linalg.fft import FFTPlan, fft_plan
 from moxie._random import RandomState
 from moxie._kernel_features import FeatureMapState, validate_matrix, component_width
 from moxie._kernel_approximation_contracts import KernelFeatureMap
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 
 
 struct PolynomialCountSketchParams(Copyable, Movable):
@@ -48,7 +49,7 @@ struct PolynomialCountSketchParams(Copyable, Movable):
             raise Error("ValueError: PolynomialCountSketch: n_components must be >= 1, got " + String(self.n_components))
 
 
-struct PolynomialCountSketch[dtype: DType = DType.float64](KernelFeatureMap):
+struct PolynomialCountSketch[dtype: DType = DType.float64](KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
     """Polynomial kernel approximation via Tensor Sketch (dense input).
 
     Learned `indexHash_` and `bitHash_` are Int64 `(degree, p + (coef0 != 0))`
@@ -108,6 +109,12 @@ struct PolynomialCountSketch[dtype: DType = DType.float64](KernelFeatureMap):
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.input_state.is_fitted()
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: PolynomialCountSketch has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
         """Draw hashes with a fresh `RandomState(random_state)`; None needs `fit_with_rng`."""

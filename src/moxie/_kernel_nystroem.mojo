@@ -17,6 +17,7 @@ from mojo_linalg import svd, NumericalError
 from moxie._random import RandomState
 from moxie._kernel_features import FeatureMapState, validate_matrix, component_width, basis_width
 from moxie._kernel_approximation_contracts import KernelFeatureMap
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._kernel_ridge import pairwise, pairwise_callable, RowKernel
 
 
@@ -193,7 +194,7 @@ def _normalization[dtype: DType](basis_kernel: NDArray[dtype]) raises NumericalE
     return u @ factor.vt()
 
 
-struct Nystroem[dtype: DType = DType.float64, Kernel: RowKernel & Copyable & Deinitable = NoCallableKernel, output_dtype: DType = dtype](KernelFeatureMap):
+struct Nystroem[dtype: DType = DType.float64, Kernel: RowKernel & Copyable & Deinitable = NoCallableKernel, output_dtype: DType = dtype](KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
     """Approximate a kernel map using a random subset of the training rows (dense input).
 
     Learned: `components_` `(k, p)` (copies of the basis rows),
@@ -272,6 +273,12 @@ struct Nystroem[dtype: DType = DType.float64, Kernel: RowKernel & Copyable & Dei
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.input_state.is_fitted()
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: Nystroem has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
         """Fit with a fresh `RandomState(random_state)`; None needs `fit_with_rng`."""

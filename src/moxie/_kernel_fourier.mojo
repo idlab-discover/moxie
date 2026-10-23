@@ -6,6 +6,7 @@ from std.sys import simd_width_of, llvm_intrinsic
 from moxie._random import RandomState
 from moxie._kernel_features import FeatureMapState, validate_matrix, component_width
 from moxie._kernel_approximation_contracts import KernelFeatureMap
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 
 comptime PI = 3.14159265358979323846
 
@@ -65,7 +66,7 @@ struct RBFSamplerParams(Copyable, Movable):
         self.gamma_mode = "numeric"
 
 
-struct RBFSampler[dtype: DType = DType.float64](KernelFeatureMap):
+struct RBFSampler[dtype: DType = DType.float64](KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
     comptime Params = RBFSamplerParams
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
@@ -118,6 +119,12 @@ struct RBFSampler[dtype: DType = DType.float64](KernelFeatureMap):
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.input_state.is_fitted()
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: RBFSampler has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
         if not self.params.random_state:
@@ -192,7 +199,7 @@ struct SkewedChi2SamplerParams(Copyable, Movable):
         self.random_state = random_state
 
 
-struct SkewedChi2Sampler[dtype: DType = DType.float64](KernelFeatureMap):
+struct SkewedChi2Sampler[dtype: DType = DType.float64](KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
     comptime Params = SkewedChi2SamplerParams
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
@@ -233,6 +240,12 @@ struct SkewedChi2Sampler[dtype: DType = DType.float64](KernelFeatureMap):
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.input_state.is_fitted()
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: SkewedChi2Sampler has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
         if not self.params.random_state:

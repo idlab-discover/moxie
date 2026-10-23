@@ -14,6 +14,24 @@ with `builds/examples/kernel_approximation`.
 
 See [internal contracts](internals.md) when extending the family.
 
+## Composition
+
+All five estimators implement the shared `FeatureNamesOut` and
+`InputFeatureCount` traits from `moxie._feature_metadata`, so they work as
+`moxie.pipeline` `Pipeline` prefixes and `FeatureUnion`/`make_union` branches,
+including `get_feature_names_out()` (sklearn's `<step>__<name>` prefixes) and
+`n_features_in_()` delegation. `get_n_features_in()` mirrors sklearn's
+`n_features_in_` attribute: it raises an `AttributeError`-prefixed error until
+`fit` (AdditiveChi2Sampler's stateless `transform` does not set it). The
+estimators' `n_features_in_` fields stay public. A kernel map followed by a
+classifier with a different target type (for example `RidgeClassifier` or
+`LinearSVC`) is fitted with `y=None`, which sklearn's maps ignore anyway.
+`PolynomialCountSketch` outputs Float64, so in a Float32 union or pipeline its
+successor must accept Float64. `tests/kernel_approximation/test_composition.mojo`
+covers pipelines with `RidgeClassifier`, unions, clone, nested `set_params`
+and names. `moxie.model_selection` search/validation needs a typed adapter per
+estimator; none is provided by this family.
+
 ## Native scope
 
 Inputs are nonempty dense Float32 or Float64 NuMojo matrices, including valid

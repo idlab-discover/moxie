@@ -13,6 +13,7 @@ from std.math import sqrt, cos, sin, isfinite
 from std.sys import llvm_intrinsic
 from moxie._kernel_features import FeatureMapState, validate_matrix, additive_width
 from moxie._kernel_approximation_contracts import KernelFeatureMap
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 
 comptime PI = 3.14159265358979323846
 
@@ -70,7 +71,7 @@ struct AdditiveChi2SamplerParams(Copyable, Movable):
         return default_sample_interval(self.sample_steps)
 
 
-struct AdditiveChi2Sampler[dtype: DType = DType.float64](KernelFeatureMap):
+struct AdditiveChi2Sampler[dtype: DType = DType.float64](KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
     """Approximate feature map for the additive chi-squared kernel (dense input).
 
     Stateless like sklearn: `transform` works without `fit`. `fit` validates
@@ -116,6 +117,12 @@ struct AdditiveChi2Sampler[dtype: DType = DType.float64](KernelFeatureMap):
     def __sklearn_is_fitted__(self) -> Bool:
         """True after `fit`; transform itself never requires it (sklearn requires_fit=False)."""
         return self._state.input_state.is_fitted()
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: AdditiveChi2Sampler has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
         validate_matrix(X, nonnegative=True)

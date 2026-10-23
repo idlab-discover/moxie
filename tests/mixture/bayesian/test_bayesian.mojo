@@ -101,6 +101,23 @@ def lifecycle() raises:
     params.covariance_type = "diag"
     _ = model.set_params(params)
     assert_equal(model.covariance_type, "diag")
+    # Keyword set_params: partial, fluent, keeps learned state until the refit.
+    var fitted_bound = model.lower_bound_
+    _ = model.set_params(weight_concentration_prior_type="dirichlet_distribution", weight_concentration_prior=2.0,
+                         mean_precision_prior=0.8, warm_start=False)
+    assert_equal(model.weight_concentration_prior_type, "dirichlet_distribution")
+    assert_equal(model.weight_concentration_prior.value(), 2.0)
+    assert_equal(model.mean_precision_prior.value(), 0.8)
+    assert_equal(model.covariance_type, "diag")
+    assert_equal(model.lower_bound_, fitted_bound, "keyword set_params keeps learned state")
+    _ = model.set_params(n_components=2).fit(X)
+    var configured = BayesianGaussianMixture[DType.float64](
+        n_components=2, covariance_type="diag", random_state=2, weight_concentration_prior_type="dirichlet_distribution",
+        weight_concentration_prior=2.0, mean_precision_prior=0.8)
+    _ = configured.fit(X)
+    assert_equal(model.lower_bound_, configured.lower_bound_, "keyword refit equals constructor configuration")
+    with assert_raises(contains="weight_concentration_prior_type"):
+        _ = model.set_params(weight_concentration_prior_type="bogus").fit(X)
     # max_iter = 0, nonconvergence, warm start.
     var init_only = BayesianGaussianMixture[DType.float64](n_components=3, max_iter=0, random_state=0)
     _ = init_only.fit(X)

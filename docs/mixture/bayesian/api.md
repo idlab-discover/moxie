@@ -19,7 +19,8 @@ degrees_of_freedom_prior=None, covariance_prior=None, random_state=None,
 warm_start=False, verbose=0, verbose_interval=10`. Both weight prior types and
 all four covariance types are implemented. Methods: `fit`, `fit_predict`,
 `predict`, `predict_proba`, `score_samples`, `score`, `sample`, typed
-`get_params`/`set_params`, clone, plus `fit_with_rng`, `fit_predict_with_rng`,
+`get_params`/`set_params` (plus a keyword `set_params(...)` partial update, as
+for GaussianMixture), clone, plus `fit_with_rng`, `fit_predict_with_rng`,
 `sample_with_rng`. No `bic`/`aic` (Gaussian-only, as in sklearn).
 
 Learned attributes: `weights_`, `means_`, `covariances_`, `precisions_`,

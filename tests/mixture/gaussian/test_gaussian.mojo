@@ -175,6 +175,30 @@ def lifecycle() raises:
     assert_true(model.__sklearn_is_fitted__(), "set_params keeps learned state")
     _ = model.fit(X)
     assert_equal(model.weights_.size, 2)
+    # Keyword set_params (sklearn `set_params(**params)`): partial, fluent, keeps
+    # learned state; falsy values (False, 0.0) are applied, omitted names kept.
+    var keyword = GaussianMixture[DType.float64](3, random_state=4, warm_start=True, tol=1e-2)
+    _ = keyword.fit(X)
+    var keyword_bound = keyword.lower_bound_
+    _ = keyword.set_params(covariance_type="diag", init_params="random", warm_start=False, tol=0.0, max_iter=5)
+    assert_equal(keyword.covariance_type, "diag")
+    assert_equal(keyword.init_params, "random")
+    assert_false(keyword.warm_start)
+    assert_equal(keyword.tol, 0.0)
+    assert_equal(keyword.max_iter, 5)
+    assert_equal(keyword.n_components, 3)
+    assert_equal(keyword.random_state.value(), 4)
+    assert_equal(keyword.lower_bound_, keyword_bound, "keyword set_params keeps learned state")
+    _ = keyword.set_params(covariance_type="diag", init_params="random", random_state=4, max_iter=100, tol=1e-3).fit(X)
+    var configured = GaussianMixture[DType.float64](3, covariance_type="diag", init_params="random", random_state=4)
+    _ = configured.fit(X)
+    assert_equal(keyword.lower_bound_, configured.lower_bound_, "keyword refit equals constructor configuration")
+    var given_means = model.means_.copy()
+    _ = keyword.set_params(n_components=2, means_init=given_means^)
+    assert_true(Bool(keyword.means_init))
+    assert_equal(keyword.means_init.value().shape[0], 2)
+    with assert_raises(contains="ValueError: invalid GaussianMixture parameters"):
+        _ = keyword.set_params(n_init=0).fit(X)
     # Borrowed RandomState advances across fits (instance semantics).
     var rng = RandomState(9)
     var borrowed = GaussianMixture[DType.float64](3, init_params="random")

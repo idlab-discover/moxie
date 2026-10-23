@@ -528,6 +528,69 @@ struct BayesianGaussianMixture[dtype: DType = DType.float64](MixtureDensity, Cop
         self.verbose_interval = params.verbose_interval
         return self
 
+    def set_params[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        n_components: Optional[Int] = None,
+        covariance_type: Optional[String] = None,
+        tol: Optional[Float64] = None,
+        reg_covar: Optional[Float64] = None,
+        max_iter: Optional[Int] = None,
+        n_init: Optional[Int] = None,
+        init_params: Optional[String] = None,
+        weight_concentration_prior_type: Optional[String] = None,
+        weight_concentration_prior: Optional[Float64] = None,
+        mean_precision_prior: Optional[Float64] = None,
+        var mean_prior: Optional[NDArray[Self.dtype]] = None,
+        degrees_of_freedom_prior: Optional[Float64] = None,
+        var covariance_prior: Optional[NDArray[Self.dtype]] = None,
+        random_state: Optional[Int] = None,
+        warm_start: Optional[Bool] = None,
+        verbose: Optional[Int] = None,
+        verbose_interval: Optional[Int] = None,
+    ) raises -> ref[self] Self:
+        """Named partial update (sklearn `set_params(**params)`); learned state is kept.
+
+        Omitted names keep their value; pass a full Params record to reset an
+        optional prior or `random_state` to None. Values are validated at the
+        next fit, as in sklearn.
+        """
+        if n_components:
+            self.n_components = n_components.value()
+        if covariance_type:
+            self.covariance_type = covariance_type.value()
+        if tol:
+            self.tol = tol.value()
+        if reg_covar:
+            self.reg_covar = reg_covar.value()
+        if max_iter:
+            self.max_iter = max_iter.value()
+        if n_init:
+            self.n_init = n_init.value()
+        if init_params:
+            self.init_params = init_params.value()
+        if weight_concentration_prior_type:
+            self.weight_concentration_prior_type = weight_concentration_prior_type.value()
+        if weight_concentration_prior:
+            self.weight_concentration_prior = weight_concentration_prior
+        if mean_precision_prior:
+            self.mean_precision_prior = mean_precision_prior
+        if mean_prior:
+            self.mean_prior = mean_prior^
+        if degrees_of_freedom_prior:
+            self.degrees_of_freedom_prior = degrees_of_freedom_prior
+        if covariance_prior:
+            self.covariance_prior = covariance_prior^
+        if random_state:
+            self.random_state = random_state
+        if warm_start:
+            self.warm_start = warm_start.value()
+        if verbose:
+            self.verbose = verbose.value()
+        if verbose_interval:
+            self.verbose_interval = verbose_interval.value()
+        return self
+
     def __sklearn_clone__(self) raises -> Self:
         var clone = Self()
         _ = clone.set_params(self.get_params())

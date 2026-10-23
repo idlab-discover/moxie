@@ -45,7 +45,9 @@ Learned attributes: `weights_`, `means_`, `covariances_`, `precisions_`,
   (empty when converged or `max_iter=0`).
 - Before fit, learned arrays are empty (sklearn raises AttributeError).
 - `get_params` returns the typed `GaussianMixtureParams` record; `set_params`
-  takes it. Metadata routing, `feature_names_in_`, pickling and array API
+  takes it. A keyword overload, `set_params(n_components=2, covariance_type="diag")`,
+  updates only the named parameters (sklearn `set_params(**params)`); a full
+  record is needed to reset an optional parameter to None. Metadata routing, `feature_names_in_`, pickling and array API
   dispatch are Python binding work and not provided.
 - Parameter validation uses the family `EMControl`, which additionally rejects
   non-finite `tol`/`reg_covar` (sklearn accepts `inf`).

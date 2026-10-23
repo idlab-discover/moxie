@@ -320,6 +320,60 @@ struct GaussianMixture[dtype: DType = DType.float64](MixtureDensity, Information
         self.verbose_interval = params.verbose_interval
         return self
 
+    def set_params[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        n_components: Optional[Int] = None,
+        covariance_type: Optional[String] = None,
+        tol: Optional[Float64] = None,
+        reg_covar: Optional[Float64] = None,
+        max_iter: Optional[Int] = None,
+        n_init: Optional[Int] = None,
+        init_params: Optional[String] = None,
+        var weights_init: Optional[NDArray[Self.dtype]] = None,
+        var means_init: Optional[NDArray[Self.dtype]] = None,
+        var precisions_init: Optional[NDArray[Self.dtype]] = None,
+        random_state: Optional[Int] = None,
+        warm_start: Optional[Bool] = None,
+        verbose: Optional[Int] = None,
+        verbose_interval: Optional[Int] = None,
+    ) raises -> ref[self] Self:
+        """Named partial update (sklearn `set_params(**params)`); learned state is kept.
+
+        Omitted names keep their value; pass a full Params record to reset an
+        optional parameter (`*_init`, `random_state`) to None. Values are
+        validated at the next fit, as in sklearn.
+        """
+        if n_components:
+            self.n_components = n_components.value()
+        if covariance_type:
+            self.covariance_type = covariance_type.value()
+        if tol:
+            self.tol = tol.value()
+        if reg_covar:
+            self.reg_covar = reg_covar.value()
+        if max_iter:
+            self.max_iter = max_iter.value()
+        if n_init:
+            self.n_init = n_init.value()
+        if init_params:
+            self.init_params = init_params.value()
+        if weights_init:
+            self.weights_init = weights_init^
+        if means_init:
+            self.means_init = means_init^
+        if precisions_init:
+            self.precisions_init = precisions_init^
+        if random_state:
+            self.random_state = random_state
+        if warm_start:
+            self.warm_start = warm_start.value()
+        if verbose:
+            self.verbose = verbose.value()
+        if verbose_interval:
+            self.verbose_interval = verbose_interval.value()
+        return self
+
     def __sklearn_clone__(self) raises -> Self:
         var params = self.get_params()
         return Self(

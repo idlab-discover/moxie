@@ -96,7 +96,12 @@ pass the resulting kernel to `set_params`.
 - `sample_y` draws via `RandomState.multivariate_normal` (native SVD factor): the
   standard-normal stream matches NumPy but singular-vector signs may differ, so
   individual draws can differ from NumPy by an orthogonal transform while having
-  the same distribution (parity compares whitened norms).
+  the same distribution (parity compares whitened norms). As with NumPy's
+  default `check_valid="warn"`, a predictive covariance that fails the SVD
+  reconstruction check (slightly indefinite posteriors, e.g. eigenvalues near
+  -1e-8 on dense query grids) prints
+  `RuntimeWarning: covariance is not symmetric positive-semidefinite.` and
+  still draws.
 - Python reflection, pickling and metadata routing are not provided.
 
 Kernels used: moxie.gaussian_process.kernels (Float64 kernels), mojo-linalg

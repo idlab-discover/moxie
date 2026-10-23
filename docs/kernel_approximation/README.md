@@ -64,7 +64,10 @@ and `pixi run python tools/kernel_approximation_checks.py parity`.
 
 Tests live under `tests/kernel_approximation/`. They cover family contracts,
 all five public estimators in both dtypes, cloning, ownership, strides, RNG,
-invalid inputs and unsupported capabilities. Isolated consumers assemble only
+invalid inputs and unsupported capabilities. `test_edges.mojo` checks the shared
+numerical edges against sklearn's behavior: NaN/inf rejection in fit and transform,
+one-sample fits (Nystroem clips and warns), constant data with `gamma="scale"`,
+seeded determinism and refits on a different width. Isolated consumers assemble only
 Moxie's current manifest and run outside the repository. Ownership checks compare
 the compiled sources with Moxie's files and assert Moxie is their sole owner.
 Failed missing-source, module-conflict and export-conflict assemblies must leave
@@ -77,3 +80,10 @@ scikit-learn wheel provide test infrastructure only. Exact RNG/index assertions,
 conditioned numerical bounds and kernel approximation thresholds are retained;
 each API page explains its tolerances. Reports go to ignored `docs/private/`.
 These suites do not establish full scikit-learn API parity.
+
+Side-by-side notebooks replay two gallery examples against the pinned
+reference: `notebooks/kernel_approximation/plot_kernel_approximation.ipynb`
+(RBFSampler and Nystroem pipelines with LinearSVC on digits) and
+`plot_scalable_poly_kernels.ipynb` (PolynomialCountSketch on a synthetic
+Covtype stand-in, plus every other map before LinearSVC). Rerun them with
+`pixi run -e notebooks notebooks notebooks/kernel_approximation`.

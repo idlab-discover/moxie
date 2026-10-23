@@ -27,6 +27,6 @@ checkout and the root Python environment; neither is a library runtime.
 
 External numerical ownership remains in `../.worktrees/mojo-linalg-covariance`,
 including incomplete gamma functions and its tested logarithm implementation.
-GraphicalLassoCV consumes the declared model-selection subset from
-`../moxie-model_selection`. These dependencies are explicit in Moxie's manifest;
-they are not copied into covariance.
+GraphicalLassoCV consumes `KFold`, row selection and `cross_val_score` from
+Moxie's own `families/model_selection`. These dependencies are explicit in
+Moxie's manifest; they are not copied into covariance.

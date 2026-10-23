@@ -40,6 +40,18 @@ return a mutable borrow of the estimator; learned attributes are accessed throug
 `**kwargs`, nested string parameter routing, metadata routing, Python reflection
 and bindings are outside the native API. Estimator dtypes are static parameters.
 
+## Composition
+
+`clone` and keyword `set_params` work on every estimator. `moxie.model_selection`
+searches and cross-validation take a hand-written typed `SearchAdapter` whose
+scorer calls the estimator's own `score`, as sklearn does with `scoring=None`;
+`notebooks/covariance/plot_covariance_estimation.ipynb` runs
+`GridSearchCV(ShrunkCovariance(), {"shrinkage": ...})` and matches sklearn.
+A covariance estimator or `EllipticEnvelope` cannot be the final step of a
+`moxie.pipeline.Pipeline`: that step must be a `SupervisedEstimator & Predictor`,
+so `make_pipeline(StandardScaler(), EllipticEnvelope())` fails to compile
+(`notebooks/covariance/plot_mahalanobis_distances.ipynb`).
+
 See [feature parity](parity.md) for algorithm-specific limitations and validation
 commands. Graphical solvers and cross-validation support `mode="cd"` and
 `mode="lars"`. Export coverage does not

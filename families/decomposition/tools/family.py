@@ -125,6 +125,7 @@ def build():
     run("mojo", "build", *FLAGS, ROOT / "tests/test_plumbing.mojo", "-o", ROOT / "builds/plumbing")
     run("mojo", "build", *FLAGS, ROOT / "examples/plumbing.mojo", "-o", ROOT / "builds/plumbing_example")
     run("mojo", "build", *FLAGS, ROOT / "tests/fluent.mojo", "-o", ROOT / "builds/fluent")
+    run("mojo", "build", *FLAGS, ROOT / "tests/test_composition.mojo", "-o", ROOT / "builds/composition")
     if not os.environ.get("MOXIE_ESTIMATORS"):
         run("mojo", "build", *FLAGS, ROOT / "tests/support/benchmark_family.mojo", "-o", ROOT / "builds/benchmark_family")
 
@@ -159,6 +160,7 @@ def test():
         for name in ESTIMATORS[estimator][1]:
             run(ROOT / "builds" / (estimator + "_" + name))
     run(ROOT / "builds/fluent")
+    run(ROOT / "builds/composition")
     run(ROOT / "builds/plumbing")
     run(ROOT / "builds/plumbing_example")
     consumers()

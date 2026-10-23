@@ -8,6 +8,7 @@ dtype. Factorizations: shared SVD engine; inverses/log-determinants: mojo-linalg
 from numojo import NDArray, Shape, zeros
 from std.math import sqrt, isfinite
 from moxie.base import UnsupervisedEstimator
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import RandomState
 from ._base import DecompositionTransformer
 from ._contracts import validate_matrix
@@ -67,7 +68,7 @@ def ortho_rotation(components: NDArray[DType.float64], method: String, *, tol: F
     return (components @ rotation).T()
 
 
-struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, UnsupervisedEstimator):
+struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
     """Factor analysis on dense Float32/Float64 input; learned state is Float64.
 
     `svd_method="lapack"` uses the exact economy SVD; `"randomized"` (default)
@@ -384,6 +385,12 @@ struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, Un
         var total: Float64 = 0
         for i in range(values.shape[0]): total += get1(values, i)
         return total / Float64(values.shape[0])
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: FactorAnalysis has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         self._check()

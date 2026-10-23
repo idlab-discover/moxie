@@ -1,6 +1,7 @@
 """Dense incremental PCA using the sklearn/Ross augmented-SVD update."""
 from numojo import NDArray, Shape, zeros, mean, sum
 from ._base import InvertibleDecomposition, IncrementalDecomposition
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from ._contracts import validate_matrix
 from ._pca_backend import PCABackend, RuntimePCABackend
 from ._pca import _get, _set, _sqrt, _pca_transform, _pca_inverse_transform, _pca_get_covariance
@@ -15,7 +16,7 @@ struct IncrementalPCAParams(Copyable, Movable):
     var batch_size: Optional[Int]
 
 
-struct IncrementalPCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend](InvertibleDecomposition, IncrementalDecomposition):
+struct IncrementalPCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend](InvertibleDecomposition, IncrementalDecomposition, FeatureNamesOut, InputFeatureCount):
     comptime Params = IncrementalPCAParams
     comptime Input = NDArray[Self.dtype]
     comptime Target = Self.Input
@@ -251,6 +252,12 @@ struct IncrementalPCA[dtype: DType = DType.float64, Backend: PCABackend = Runtim
     def get_precision(self) raises -> Self.Input:
         self._check()
         return Self.Backend.inverse(self.get_covariance())
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: IncrementalPCA has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         self._check()

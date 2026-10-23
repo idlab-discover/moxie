@@ -10,6 +10,7 @@ from numojo import NDArray, Shape, zeros
 from std.math import lgamma, abs, isfinite
 from std.utils.numerics import nan
 from moxie.base import UnsupervisedEstimator
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import RandomState
 from ._base import DecompositionTransformer
 from ._contracts import validate_matrix
@@ -137,7 +138,7 @@ struct LatentDirichletAllocationParams(Copyable, Movable):
     var random_state: Optional[Int]
 
 
-struct LatentDirichletAllocation[dtype: DType = DType.float64](DecompositionTransformer, UnsupervisedEstimator):
+struct LatentDirichletAllocation[dtype: DType = DType.float64](DecompositionTransformer, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
     """Topic model on dense non-negative document-term counts (n_samples, n_features).
 
     `components_` holds topic-word variational parameters (not normalized
@@ -460,6 +461,12 @@ struct LatentDirichletAllocation[dtype: DType = DType.float64](DecompositionTran
         """exp(-bound / word_count) of X."""
         var x = self._check_fitted_input(X, "LatentDirichletAllocation.perplexity")
         return self._perplexity(x, self._e_step_fixed(x), sub_sampling)
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: LatentDirichletAllocation has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         if not self.components_:

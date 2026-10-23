@@ -31,6 +31,21 @@ learned array fields are generally Optional owned arrays. See each guide for
 exact dtypes, defaults, validation, clone and unsupported settings. Python
 reflection, metadata routing and pandas output are not implemented.
 
+Every implemented estimator declares the shared `FeatureNamesOut` and
+`InputFeatureCount` traits (`moxie._feature_metadata`), so it works as a
+`moxie.pipeline` `Pipeline` transformer and as a `FeatureUnion`/`make_union`
+branch, with sklearn's `<step>__<name>` output names and `n_features_in_()`
+delegation; `get_n_features_in()` raises an `AttributeError`-prefixed error
+before fit, like sklearn's absent attribute. `moxie.model_selection`
+cross-validation and search take a typed adapter per estimator;
+`tests/test_composition.mojo` covers PCA regression/classification
+pipelines, a PCA + TruncatedSVD union, clone with nested `set_params`, and the
+PCA/FactorAnalysis log-likelihood `cross_val_score` and
+`GridSearchCV(PCA(), {"n_components": ...})` of
+`plot_pca_vs_fa_model_selection.py`. A pipeline that ends in a decomposition
+estimator (`make_pipeline(StandardScaler(), PCA())`) is not available because
+`moxie.pipeline.Pipeline` requires a supervised final predictor.
+
 The remaining `_api.mojo` declarations retain recorded reference signatures and
 raise descriptive NotImplementedError messages. Historical scaffold locks and
 the historical `provenance/algorithms/lda` diagnostic child are preserved as provenance;

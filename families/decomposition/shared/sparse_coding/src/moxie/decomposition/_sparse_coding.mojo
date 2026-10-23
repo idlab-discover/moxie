@@ -5,6 +5,7 @@ Regression-based coding belongs to the external linear-model solver owners.
 from numojo import NDArray, Shape, zeros
 from std.math import abs, isfinite
 from moxie.base import UnsupervisedEstimator
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
 from ._matrix import get2, set2, contiguous, feature_names
@@ -64,7 +65,7 @@ struct SparseCoderParams[dtype: DType](Copyable, Movable):
     var transform_max_iter: Int
 
 
-struct SparseCoder[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator):
+struct SparseCoder[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
     """Stateless coding with an owned fixed dictionary; threshold mode supported."""
     comptime Params = SparseCoderParams[Self.dtype]
     comptime Input = NDArray[Self.dtype]
@@ -194,6 +195,12 @@ struct SparseCoder[dtype: DType = DType.float64](InvertibleDecomposition, Unsupe
         for i in range(X.shape[0]):
             for j in range(k): set2(code, i, j, get2(X, i, j) - get2(X, i, j + k))
         return code @ self.dictionary
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: SparseCoder has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         if self.n_components_ == 0: raise Error("NotFittedError: fit before requesting output names")

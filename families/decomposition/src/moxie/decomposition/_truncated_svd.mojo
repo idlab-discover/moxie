@@ -6,6 +6,7 @@ LICENSES/scikit-learn.txt). Factorizations come from the shared SVD engine.
 from numojo import NDArray, Shape, zeros
 from std.math import isfinite
 from moxie.base import UnsupervisedEstimator
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
 from ._matrix import get2, set2, get1, set1, column_variances, seeded_state, feature_names
@@ -24,7 +25,7 @@ struct TruncatedSVDParams(Copyable, Movable):
     var tol: Float64
 
 
-struct TruncatedSVD[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator):
+struct TruncatedSVD[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
     """Dimensionality reduction by truncated SVD of the uncentered data.
 
     `algorithm="randomized"` (default) uses the shared Halko range finder with
@@ -206,6 +207,12 @@ struct TruncatedSVD[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
             raise Error("ValueError: inverse_transform expects " + String(self.components_.value().shape[0])
                 + " columns, got " + String(X.shape[1]))
         return X @ self.components_.value()
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: TruncatedSVD has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         self._check()

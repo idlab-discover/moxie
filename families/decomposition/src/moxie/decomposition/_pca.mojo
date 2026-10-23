@@ -12,6 +12,7 @@ from std.sys import llvm_intrinsic
 from numojo import NDArray, Shape, zeros, mean
 from ._pca_backend import PCABackend, RuntimePCABackend
 from moxie.base import UnsupervisedEstimator
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import entropy_state, RandomState
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
@@ -89,7 +90,7 @@ def _infer_dimension[dtype: DType](spectrum: NDArray[dtype], n_samples: Int) rai
     return best
 
 
-struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend](InvertibleDecomposition, UnsupervisedEstimator):
+struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
     """PCA on dense Float32/Float64 matrices; Backend may fix training dimensions.
 
     full, covariance_eigh, arpack and randomized are supported, including auto
@@ -435,6 +436,12 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
         var total: Float64 = 0
         for i in range(values.size): total += Float64(values.unsafe_get(i))
         return total / Float64(values.size)
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: PCA has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         self._check()

@@ -10,6 +10,7 @@ from std.math import sqrt, tanh, abs, isfinite
 from std.utils import Variant
 from mojo_linalg import symmetric_eigh, svd
 from moxie.base import UnsupervisedEstimator
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import RandomState
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
@@ -196,7 +197,7 @@ def pseudo_inverse[dtype: DType](a: NDArray[dtype]) raises -> NDArray[dtype]:
         raise Error("LinAlgError: pseudoinverse failed: " + String(error))
 
 
-struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator):
+struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
     """FastICA on dense Float32/Float64 input; learned arrays keep the input dtype.
 
     algorithm "parallel"/"deflation"; fun "logcosh"/"exp"/"cube" with optional
@@ -479,6 +480,12 @@ struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, Unsupervis
 
     def inverse_transform(self, X: Self.Transformed, copy: Bool) raises -> Self.Input:
         return self.inverse_transform(X)
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: FastICA has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         self._check()

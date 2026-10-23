@@ -10,6 +10,7 @@ from numojo import NDArray, Shape, zeros
 from std.math import sqrt, abs, isfinite
 from std.utils import Variant
 from moxie.base import UnsupervisedEstimator
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import RandomState
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
@@ -533,7 +534,7 @@ struct NMFParams(Copyable, Movable):
     var shuffle: Bool
 
 
-struct NMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator):
+struct NMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
     """Non-negative matrix factorization X ~ W H on dense non-negative input.
 
     solver "cd" (Frobenius only) or "mu" (any beta_loss). Learned arrays keep
@@ -702,6 +703,12 @@ struct NMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEs
             raise Error("ValueError: inverse_transform expects " + String(self.components_.value().shape[0]) + " columns")
         return contiguous(X) @ self.components_.value()
 
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: NMF has no n_features_in_ before fit")
+        return self.n_features_in_
+
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         self._check()
         return feature_names("nmf", self.n_components_, input_features, self.n_features_in_)
@@ -766,7 +773,7 @@ def _rows[dtype: DType](x: NDArray[dtype], start: Int, stop: Int) raises -> NDAr
     return result^
 
 
-struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator):
+struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
     """Online NMF with multiplicative updates on cycling mini-batches (dense input)."""
     comptime Params = MiniBatchNMFParams
     comptime Input = NDArray[Self.dtype]
@@ -1109,6 +1116,12 @@ struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
         if X.shape[1] != self.components_.value().shape[0]:
             raise Error("ValueError: inverse_transform expects " + String(self.components_.value().shape[0]) + " columns")
         return contiguous(X) @ self.components_.value()
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: MiniBatchNMF has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         self._check()

@@ -7,6 +7,7 @@ from numojo import NDArray, Shape, zeros
 from std.math import sqrt, isfinite
 from std.utils import Variant
 from moxie.base import UnsupervisedEstimator
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._kernel_ridge._kernels import pairwise, validate_kernel
 from mojo_linalg import symmetric_eigh, cholesky
 from ._base import InvertibleDecomposition
@@ -35,7 +36,7 @@ struct KernelPCAParams(Copyable, Movable):
     var copy_X: Bool
     var n_jobs: Optional[Int]
 
-struct KernelPCA[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator):
+struct KernelPCA[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
     """Centered kernel eigenspace; optional learned kernel pre-image map."""
     comptime Params = KernelPCAParams
     comptime Input = NDArray[Self.dtype]
@@ -345,6 +346,12 @@ struct KernelPCA[dtype: DType = DType.float64](InvertibleDecomposition, Unsuperv
         if X.shape[1] != self.X_transformed_fit_.value().shape[1]: raise Error("ValueError: wrong component count")
         var kernel = pairwise(X, self.X_transformed_fit_.value(), self.kernel, self.gamma_, self.degree, self.coef0)
         return kernel @ self.dual_coef_.value()
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: KernelPCA has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         if not self.eigenvalues_: raise Error("NotFittedError: KernelPCA is not fitted")

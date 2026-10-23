@@ -53,7 +53,7 @@ Native global ownership and synchronization are described below.
 | `randint(high)` / `randint(low, high)` | Native signed Int (64 bits on supported platform), high excluded; width 1 consumes no words |
 | `standard_normal()` / `normal(loc=0, scale=1)` | Float64 polar normal with cached second result; scale 0 still consumes the normal stream |
 | `standard_gamma(shape)` / `gamma(shape, scale=1)` | Scalar Float64 legacy gamma; shape 0 consumes no draws, scale 0 still consumes the gamma stream |
-| `multivariate_normal(mean, cov, size=1, tol=1e-8)` | Float64 `(size, features)` result from Float32/Float64 inputs; native SVD covariance factor |
+| `multivariate_normal(mean, cov, size=1, tol=1e-8, check_valid="raise")` | Float64 `(size, features)` result from Float32/Float64 inputs; native SVD covariance factor |
 | `poisson(lam=1)` | Scalar native Int; zero mean consumes no draws; NumPy int64 safety limit |
 | `binomial(n, p)` | Legacy inversion and BTPE, including endpoint draw consumption |
 | `categorical(p)` | Integer class index, NumPy `choice(p=p)` cumulative-distribution protocol |
@@ -201,9 +201,16 @@ relative tolerance `tol` (default 1e-8).
 
 The native API always returns `(size, features)`, including size 1; arbitrary
 size tuples are not accepted. Size zero and zero features produce empty results.
-Invalid covariance raises before consuming RNG state. This deliberately differs
-from NumPy's default `check_valid="warn"` and its failure-time state advancement;
-warning/ignore policies are not exposed.
+With the default `check_valid="raise"`, invalid covariance raises before
+consuming RNG state. This deliberately differs from NumPy's default
+`check_valid="warn"` and its failure-time state advancement. Callers that must
+follow NumPy's default (such as `GaussianProcessRegressor.sample_y`) pass
+`check_valid="warn"`: a failed reconstruction check prints
+`RuntimeWarning: covariance is not symmetric positive-semidefinite.` to stderr
+and draws with the same SVD factor (singular values are the absolute
+eigenvalues), as NumPy does. `check_valid="ignore"` skips the check. Other
+values raise `ValueError`. Shape, finiteness and `tol` validation are not
+affected by the policy.
 
 A seeded call is reproducible with the same backend and toolchain, and consumes exactly the
 same normal stream as NumPy for supported valid inputs. **Individual samples are

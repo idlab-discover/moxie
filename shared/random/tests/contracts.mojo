@@ -150,6 +150,7 @@ def main() raises:
     test_choice_shuffle()
     test_poisson()
     test_multivariate()
+    test_multivariate_check_valid()
     print("PASS native random contracts")
 
 
@@ -331,3 +332,38 @@ def test_multivariate() raises:
     for i in range(3):
         assert_equal(mean.item(i),Float64(i))
         assert_equal(cov.item(i,i),Float64(i+1))
+
+
+def test_multivariate_check_valid() raises:
+    # NumPy check_valid: "raise" rejects a covariance failing the SVD
+    # reconstruction check; "warn" (NumPy's default) and "ignore" draw with the
+    # same SVD factor, i.e. singular values |eigenvalues|.
+    var mean = nm.zeros[DType.float64](Shape(2))
+    mean[Item(1)] = 3.0
+    var indefinite = nm.zeros[DType.float64](Shape(2,2))
+    indefinite[Item(0,0)] = 1.0
+    indefinite[Item(1,1)] = -1e-6
+    var definite = indefinite.copy()
+    definite[Item(1,1)] = 1e-6
+    var rng = RandomState(7)
+    var snapshot = rng.copy()
+    with assert_raises(contains="not_positive_semidefinite"):
+        _ = rng.multivariate_normal(mean,indefinite,4)
+    with assert_raises(contains="not_positive_semidefinite"):
+        _ = rng.multivariate_normal(mean,indefinite,4,1e-8,"raise")
+    with assert_raises(contains="check_valid must equal"):
+        _ = rng.multivariate_normal(mean,definite,4,1e-8,"strict")
+    assert_equal(rng.next_uint32(),snapshot.next_uint32())
+    var reference = snapshot.copy()
+    var expected = reference.multivariate_normal(mean,definite,4)
+    for policy in ["warn", "ignore"]:
+        var state = snapshot.copy()
+        var draws = state.multivariate_normal(mean,indefinite,4,1e-8,policy)
+        assert_equal(draws.shape[0],4)
+        assert_equal(draws.shape[1],2)
+        for i in range(4):
+            for j in range(2):
+                # Same normal stream; singular-vector signs are unspecified.
+                assert_equal(abs(draws.item(i,j)-mean.item(j)),abs(expected.item(i,j)-mean.item(j)))
+        var after = reference.copy()
+        assert_equal(state.next_uint32(),after.next_uint32())

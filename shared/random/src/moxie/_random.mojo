@@ -3,7 +3,7 @@
 MT19937, legacy distribution and sklearn sampling adaptations: see LICENSES.
 """
 from std.math import sqrt, floor, abs, copysign, isfinite
-from std.sys import llvm_intrinsic
+from std.sys import llvm_intrinsic, stderr
 from std.random import Random as Philox
 from std.time import perf_counter_ns
 from std.collections import Set
@@ -221,9 +221,15 @@ struct RandomState(Copyable, Movable):
 
     def multivariate_normal[mean_dtype: DType, cov_dtype: DType](
         mut self, mean: NDArray[mean_dtype], cov: NDArray[cov_dtype],
-        size: Int = 1, tol: Float64 = 1e-8,
+        size: Int = 1, tol: Float64 = 1e-8, check_valid: String = "raise",
     ) raises -> NDArray[DType.float64]:
-        """Dense (size, features) draws via native SVD; see backend parity limits."""
+        """Dense (size, features) draws via native SVD; see backend parity limits.
+
+        `check_valid` follows NumPy: "raise" (this module's default) rejects a
+        covariance that fails the SVD reconstruction check, "warn" (NumPy's
+        default) prints a RuntimeWarning and draws with the SVD factor, and
+        "ignore" skips the check.
+        """
         comptime assert mean_dtype == DType.float32 or mean_dtype == DType.float64
         comptime assert cov_dtype == DType.float32 or cov_dtype == DType.float64
         if mean.ndim != 1 or cov.ndim != 2:
@@ -233,6 +239,8 @@ struct RandomState(Copyable, Movable):
             raise Error("ValueError: incompatible covariance shape or negative size")
         if not (0.0 <= tol <= 1.7976931348623157e308):
             raise Error("ValueError: tol must be finite and nonnegative")
+        if check_valid != "warn" and check_valid != "raise" and check_valid != "ignore":
+            raise Error("ValueError: check_valid must equal 'warn', 'raise', or 'ignore'")
         for i in range(n):
             if not isfinite(_vector_value(mean, i)):
                 raise Error("ValueError: mean must be finite")
@@ -245,7 +253,7 @@ struct RandomState(Copyable, Movable):
                 covariance[Item(i,j)] = value
         # Validate and factor before consuming state. This deliberately raises
         # for invalid covariance rather than NumPy's warning-and-continuing default.
-        var transform = _covariance_transform(covariance, tol)
+        var transform = _covariance_transform(covariance, tol, check_valid)
         var z = nm.zeros[DType.float64](Shape(size, n))
         if n == 0 or size == 0:
             return z^
@@ -665,14 +673,14 @@ def _poisson_loggam(x: Float64) -> Float64:
     return result
 
 
-def _covariance_transform(cov: NDArray[DType.float64], tol: Float64) raises -> NDArray[DType.float64]:
+def _covariance_transform(cov: NDArray[DType.float64], tol: Float64, check_valid: String = "raise") raises -> NDArray[DType.float64]:
     try:
-        return _covariance_transform_impl(cov, tol)
+        return _covariance_transform_impl(cov, tol, check_valid)
     except error:
         raise Error("ValueError: multivariate_normal covariance: " + String(error))
 
 
-def _covariance_transform_impl(cov: NDArray[DType.float64], tol: Float64) raises NumericalError -> NDArray[DType.float64]:
+def _covariance_transform_impl(cov: NDArray[DType.float64], tol: Float64, check_valid: String) raises NumericalError -> NDArray[DType.float64]:
     var n = cov.shape[0]
     if n == 0:
         return nm.zeros[DType.float64](Shape(0, 0))
@@ -683,14 +691,21 @@ def _covariance_transform_impl(cov: NDArray[DType.float64], tol: Float64) raises
     for i in range(n):
         for j in range(n):
             weighted[Item(i,j)] = singular.item(i) * vectors.item(i,j)
-    var transpose = vectors.T()
-    var reconstructed = transpose @ weighted
-    for i in range(n):
-        for j in range(n):
-            var actual = reconstructed.item(i,j)
-            var expected = cov.item(i,j)
-            if not isfinite(actual) or abs(actual - expected) > tol + tol * abs(expected):
-                raise NumericalError("not_positive_semidefinite", "multivariate_normal", i)
+    if check_valid != "ignore":
+        var transpose = vectors.T()
+        var reconstructed = transpose @ weighted
+        var invalid = -1
+        for i in range(n):
+            for j in range(n):
+                var actual = reconstructed.item(i,j)
+                var expected = cov.item(i,j)
+                if invalid < 0 and (not isfinite(actual) or abs(actual - expected) > tol + tol * abs(expected)):
+                    invalid = i
+        if invalid >= 0:
+            if check_valid == "raise":
+                raise NumericalError("not_positive_semidefinite", "multivariate_normal", invalid)
+            # NumPy warns and continues with the same SVD factor.
+            print("RuntimeWarning: covariance is not symmetric positive-semidefinite.", file=stderr)
     for i in range(n):
         for j in range(n):
             weighted[Item(i,j)] = sqrt(singular.item(i)) * vectors.item(i,j)

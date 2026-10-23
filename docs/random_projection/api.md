@@ -142,6 +142,13 @@ uses the documented number of output features.
 - Inputs use the owned dense/CSR Float32 or Float64 type. CSC/COO adapters,
   integer-array conversion, dataframe feature metadata, Python bindings,
   arbitrary NumPy broadcasting, and dynamic metadata routing are not included.
+- `ProjectionMatrix` is not NuMojo `NDArray`, the storage every other Moxie
+  estimator and meta-estimator uses. The projections therefore cannot be
+  composed yet: `make_pipeline(SparseRandomProjection(...), RidgeClassifier())`
+  fails to compile with `pipeline intermediate types must match`, and
+  `FeatureUnion`, `ColumnTransformer` and model-selection helpers require
+  `NDArray` steps. Convert explicitly between the two storages until a shared
+  decision lands (see `notebooks/random_projection/`).
 - Sparse projection supports at most `2**32-1` input features. Matrix sizes and
   JL bounds that exceed native integer limits raise clear errors.
 - Python's dimensionality warning for explicit expansion is not emitted;

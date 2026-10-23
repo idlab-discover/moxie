@@ -12,6 +12,7 @@ from moxie.base import (
     UnsupervisedEstimator,
 )
 from moxie.utils.validation import check_is_fitted
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from ._projection.matrix import ProjectionMatrix, project
 from moxie._random import RandomState, check_random_state
 from ._projection.linalg import pseudoinverse
@@ -19,7 +20,12 @@ from ._projection.math import log64
 
 
 trait RandomProjector(
-    FitTransformer, InverseTransformer, TransformerMixin, UnsupervisedEstimator
+    FeatureNamesOut,
+    FitTransformer,
+    InputFeatureCount,
+    InverseTransformer,
+    TransformerMixin,
+    UnsupervisedEstimator,
 ):
     pass
 
@@ -365,6 +371,14 @@ struct GaussianRandomProjection[dtype: DType = DType.float64](
         var inverse = pseudoinverse(self.components_)
         return project(X, inverse)
 
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self._fitted:
+            raise Error(
+                "AttributeError: GaussianRandomProjection has no n_features_in_ before fit"
+            )
+        return self.n_features_in_
+
     def get_feature_names_out(
         self, input_features: Optional[List[String]] = None
     ) raises -> List[String]:
@@ -551,6 +565,14 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
             return project(X, self.inverse_components_.value())
         var inverse = pseudoinverse(self.components_)
         return project(X, inverse)
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self._fitted:
+            raise Error(
+                "AttributeError: SparseRandomProjection has no n_features_in_ before fit"
+            )
+        return self.n_features_in_
 
     def get_feature_names_out(
         self, input_features: Optional[List[String]] = None

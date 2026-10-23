@@ -38,7 +38,10 @@ fit. Repeated transforms use the fitted matrix without drawing random numbers.
 
 Public learned fields are `n_components_`, `n_features_in_`, `components_`, and
 `inverse_components_`; sparse projections also expose `density_`. Before fit,
-counts are zero and components are empty. `inverse_components_` is an
+counts are zero and components are empty. `get_n_features_in()` mirrors
+sklearn's `n_features_in_` attribute: it raises an `AttributeError`-prefixed
+error before fit, as the attribute is absent there. Both estimators declare the
+shared `FeatureNamesOut` and `InputFeatureCount` traits. `inverse_components_` is an
 `Optional[ProjectionMatrix[dtype]]`, populated only when inverse computation was
 requested during the last successful fit. Inference and feature-name queries
 raise `NotFittedError` before fit.
@@ -94,7 +97,9 @@ supports scalar Float64 inputs and one-dimensional lists, with scalar and
 length-one broadcasting. Counts must be finite and at least one, and
 `0 < eps < 1`. The helper returns zero for one sample; auto-fit rejects that
 zero dimension. Auto-fit also rejects a bound exceeding the original feature
-count. Explicit component counts may exceed it.
+count. Explicit component counts may exceed it. Array inputs follow the scalar domain: the
+reference validates the `n_samples >= 1` interval only for scalars and returns
+negative bounds for array entries in `(0, 1)`; the native helper rejects them.
 
 Gaussian coefficients have variance `1 / n_components`. Sparse coefficients
 are zero with probability `1-density`, and each sign has probability

@@ -7,7 +7,7 @@ from std.math import abs
 from numojo import NDArray, Shape, zeros
 from numojo.core.layout.ndstrides import NDArrayStrides
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
-from moxie._discriminant_analysis._work import Work, matmul, transpose
+from moxie._discriminant_analysis._work import Work, matmul, transpose, log, exp
 from moxie._discriminant_analysis._covariance import (
     ledoit_wolf,
     standardized_ledoit_wolf,
@@ -144,6 +144,19 @@ def test_float32_log_probability_underflow() raises:
         # Pinned sklearn: log(float32.smallest_normal) for exact zero probabilities.
         var expected = matrix[DType.float64](3, 2, [0.0, -87.33654475, -0.69314718, -0.69314718, -87.33654475, 0])
         assert_close(model.predict_log_proba(T), expected, 1e-6, solver + " float32 log underflow")
+
+
+def test_log_exp_have_libm_accuracy() raises:
+    # Python math.log/math.exp (libm) values. std.math.log was off by ~1e-9 here, which
+    # moved QDA predict_proba by ~8e-10 against sklearn (notebooks/discriminant_analysis).
+    var xs: List[Float64] = [0.707088106940819, 0.5, 10.1, 3.744536002348496]
+    var logs: List[Float64] = [-0.34660000000028257, -0.6931471805599453, 2.312535423847214, 1.32029771138893]
+    for i in range(len(xs)):
+        assert_true(abs(log(xs[i]) - logs[i]) <= 2.3e-16 * abs(logs[i]), String("log ", xs[i]))
+    var ys: List[Float64] = [-0.8817413, -2.0, 0.5]
+    var exps: List[Float64] = [0.4140612786695923, 0.1353352832366127, 1.6487212707001282]
+    for i in range(len(ys)):
+        assert_true(abs(exp(ys[i]) - exps[i]) <= 2.3e-16 * exps[i], String("exp ", ys[i]))
 
 
 def main() raises:

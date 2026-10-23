@@ -95,6 +95,9 @@ QDA: `means_` `(K, p)`, `priors_`, `rotations_` (List of `(p, n_k)`), `scalings_
 - All statistics and factorizations run in Float64 and are rounded to `dtype` at the end.
   sklearn computes some Float32 paths in single precision, so Float32 results agree to about
   1e-5 relative and are usually closer to the exact value.
+- `log`/`exp` (intercepts, QDA log-determinants, log posteriors, probabilities) use the LLVM
+  intrinsics, which lower to libm like NumPy; Mojo 1.0's `std.math.log` Float64 approximation
+  was off by up to ~1e-9 and moved QDA `predict_proba` by ~8e-10.
 - Eigenvector/singular-vector signs (`scalings_`, `rotations_`, `transform` columns) are not
   specified, as in LAPACK.
 

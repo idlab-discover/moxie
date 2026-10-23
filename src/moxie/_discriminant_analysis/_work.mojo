@@ -7,6 +7,7 @@ row-major `NDArray[DType.float64]` buffers created here (offset 0, strides
 """
 from numojo import NDArray, Shape, zeros
 from std.math import isfinite, sqrt, abs
+from std.sys.intrinsics import llvm_intrinsic
 from mojo_linalg import (
     NumericalError,
     SVDFactor,
@@ -22,6 +23,24 @@ from mojo_linalg import (
 
 comptime Work = NDArray[DType.float64]
 """Compact row-major Float64 working matrix or vector."""
+
+
+@always_inline
+def log(x: Float64) -> Float64:
+    """Natural logarithm with platform libm accuracy; log(0) = -inf, log(<0) = NaN.
+
+    Mojo 1.0's `std.math.log` Float64 is a polynomial approximation measured at up
+    to ~1e-9 absolute error (log(0.707) off by 1.2e-9), which shows up directly in
+    intercepts, log-determinants and normalized log posteriors. The LLVM intrinsic
+    lowers to libm like NumPy, as in moxie.mixture._scalar_math and moxie.tree.
+    """
+    return llvm_intrinsic["llvm.log", Float64, has_side_effect=False](x)
+
+
+@always_inline
+def exp(x: Float64) -> Float64:
+    """Exponential with platform libm accuracy (`std.math.exp` measured ~3e-13 relative)."""
+    return llvm_intrinsic["llvm.exp", Float64, has_side_effect=False](x)
 
 
 @always_inline

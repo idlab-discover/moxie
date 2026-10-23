@@ -6,9 +6,9 @@ Implements `sklearn.utils.extmath.softmax`, `scipy.special.expit` usage in
 LinearDiscriminantAnalysis.predict_proba, the log-sum-exp normalization of
 DiscriminantAnalysisPredictionMixin and ClassifierMixin.score (accuracy).
 """
-from std.math import exp, log, isfinite, isnan
+from std.math import isfinite, isnan
 from numojo import NDArray, Shape, zeros
-from ._work import Work, get, put, matrix, vector
+from ._work import Work, get, put, matrix, vector, exp, log
 from ._labels import ClassLabel
 
 

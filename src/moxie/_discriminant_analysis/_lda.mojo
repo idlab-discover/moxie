@@ -1,7 +1,7 @@
 # Adapted from scikit-learn; authors: scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
 """LinearDiscriminantAnalysis: 'svd', 'lsqr' and 'eigen' solvers (sklearn.discriminant_analysis)."""
-from std.math import sqrt, log, abs
+from std.math import sqrt, abs
 from numojo import NDArray, Shape, zeros
 from moxie.utils.validation import FittedState
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
@@ -9,6 +9,7 @@ from moxie._discriminant_analysis_contracts import LinearDiscriminantTransformer
 from ._labels import ClassLabel, sorted_unique, encode_labels, class_counts
 from ._work import (
     Work,
+    log,
     get,
     put,
     matrix,

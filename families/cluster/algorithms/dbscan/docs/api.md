@@ -22,7 +22,9 @@ var result = dbscan(x, 1, min_samples=2)
 `DBSCAN(eps=0.5, *, min_samples=5, metric="euclidean", metric_params=None,
 algorithm="auto", leaf_size=30, p=None, n_jobs=None)` preserves the estimator's
 constructor defaults. The helper defaults to `metric="minkowski", p=2`, like
-sklearn. `p=None` resolves to 2 for the native query backend.
+sklearn. `p=None` resolves to 2 for the native query backend. The helper types `p` as
+Float64, so pass `p=2` where sklearn code passes `dbscan(..., p=None)`; both mean
+the Euclidean Minkowski power.
 
 `fit(X, y=None, sample_weight=...)` mutates and returns a borrow of the same estimator; `y` is ignored.
 Both `set_params` overloads likewise support fluent chaining.

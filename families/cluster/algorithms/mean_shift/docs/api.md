@@ -18,6 +18,7 @@ Int64 label vector. Learned fields are `cluster_centers_` `(n_clusters,d)`,
 are empty and counts are zero; `predict` raises `NotFittedError`. Successful
 refits replace learned state, including feature count. Failed refits leave the
 last successful learned state intact. Prediction rejects feature mismatches.
+Dense arrays carry no column names, so `feature_names_in_` is not recorded.
 Inputs, seeds, learned centers and returned label vectors do not share storage.
 Positive/negative strided inputs are supported through NuMojo indexing.
 

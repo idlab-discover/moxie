@@ -182,7 +182,8 @@ def cluster_optics_xi(*, reachability: Distances, predecessor: Labels, ordering:
     var n = ordering.shape[0]
     var minimum = min_samples.resolve(n)
     var cluster_size = minimum
-    if min_cluster_size: cluster_size = min_cluster_size.value().resolve(n, False)
+    # Unlike the estimator, the helper accepts the closed fraction range [0, 1].
+    if min_cluster_size: cluster_size = min_cluster_size.value().resolve(n)
     if not isfinite(xi) or xi < 0 or xi >= 1: raise Error("ValueError: Xi extraction requires 0 <= xi < 1; xi=1 is undefined")
     if predecessor.ndim != 1 or predecessor.shape[0] != n:
         raise Error("ValueError: predecessor must match reachability")
@@ -379,7 +380,8 @@ struct OPTICS[dtype: DType = DType.float64](Clusterer, Copyable, Movable):
         if config.memory: raise Error("NotImplementedError: OPTICS memory caching is not supported")
         if config.cluster_method != "xi" and config.cluster_method != "dbscan":
             raise Error("ValueError: cluster_method must be xi or dbscan")
-        if isnan(config.p) or config.p < 1: raise Error("ValueError: OPTICS p must be at least 1")
+        # sklearn constrains the estimator to Interval(Real, 1, None, closed="left"), excluding inf.
+        if not isfinite(config.p) or config.p < 1: raise Error("ValueError: OPTICS p must lie in [1, inf)")
         if not isfinite(config.xi) or config.xi < 0 or config.xi > 1:
             raise Error("ValueError: xi must lie in [0, 1]")
         if config.eps and (isnan(config.eps.value()) or config.eps.value() < 0):

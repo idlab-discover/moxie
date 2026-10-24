@@ -89,6 +89,17 @@ def test_helpers() raises:
     with assert_raises():
         _ = cluster_optics_xi(reachability=graph.reachability, predecessor=graph.predecessor,
             ordering=graph.ordering, min_samples=OPTICSSize(2), xi=1)
+    # sklearn's helper accepts min_cluster_size=0.0 and resolves it to two samples.
+    var zero = cluster_optics_xi(reachability=graph.reachability, predecessor=graph.predecessor,
+        ordering=graph.ordering, min_samples=OPTICSSize(2), min_cluster_size=OPTICSSize(Float64(0)))
+    var two = cluster_optics_xi(reachability=graph.reachability, predecessor=graph.predecessor,
+        ordering=graph.ordering, min_samples=OPTICSSize(2), min_cluster_size=OPTICSSize(2))
+    for i in range(6): assert_equal(zero.labels.item(i), two.labels.item(i))
+    # The estimator rejects p=inf (sklearn Interval [1, inf)); the graph helper allows it.
+    var infinite_p = OPTICS(min_samples=OPTICSSize(2), p=inf[DType.float64]())
+    with assert_raises(): _ = infinite_p.fit(x)
+    _ = compute_optics_graph(x, min_samples=OPTICSSize(2), max_eps=Float64(2),
+        metric="minkowski", p=inf[DType.float64](), metric_params=None, algorithm="brute", leaf_size=30, n_jobs=None)
     var model = OPTICS(min_samples=3)
     _ = model.fit(x)
     var before = model.labels_.copy()

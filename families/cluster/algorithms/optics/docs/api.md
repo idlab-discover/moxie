@@ -41,7 +41,10 @@ Counts must be at least two and, when used, at most the sample count.
 `min_cluster_size` is unused in DBSCAN extraction. Fractions multiply
 the sample count, truncate, and round up to a minimum of two. Integer 1 is
 invalid; fraction 1.0 means all samples. `min_samples` permits fraction zero;
-`min_cluster_size` excludes it. A missing cluster size follows min_samples.
+the estimator's `min_cluster_size` excludes it, while `cluster_optics_xi` accepts
+it (resolving to two), as in sklearn. A missing cluster size follows min_samples.
+The estimator requires a finite `p >= 1`; `compute_optics_graph` accepts any
+positive `p`, including infinity, matching sklearn's two parameter constraints.
 
 `fit(X, y=None)` and both typed and keyword `set_params` return a mutable borrow.
 `get_params` returns `OPTICSParams`; clone preserves parameters and clears all

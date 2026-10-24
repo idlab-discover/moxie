@@ -2,9 +2,12 @@
 from std.sys import llvm_intrinsic
 from numojo import NDArray, Shape, zeros
 from std.math import exp, log1p, abs, isfinite
+from std.memory import bitcast
+from std.time import perf_counter_ns
 from moxie.neural_network._base import RBMTransformer
 from moxie.neural_network._contracts import RBMSampling
 from moxie._random import RandomState
+from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._dense import sum_axis2d
 from moxie.neural_network._plumbing import validate_matrix
 
@@ -46,6 +49,68 @@ def _sample[dtype: DType](probabilities: NDArray[dtype], mut rng: RandomState) r
     return result^
 
 
+def _fixed(value: Float64, decimals: Int) -> String:
+    """`'%.{decimals}f' % value`: exact binary64 to fixed decimal, ties to even.
+
+    String.format lacks precision support on Mojo 1.0; same digit-expansion
+    method as moxie.tree._export._fixed, kept local to avoid a cross-family import.
+    """
+    var bits = bitcast[DType.uint64](value)
+    var negative = (bits >> 63) != 0
+    var exponent = Int((bits >> 52) & 2047)
+    var mantissa = Int(bits & 0x000fffffffffffff)
+    if exponent == 2047:
+        if mantissa != 0:
+            return "nan"
+        return "-inf" if negative else "inf"
+    if exponent != 0:
+        mantissa += 4503599627370496
+    var power = (exponent - 1023 - 52) if exponent != 0 else -1074
+    var digits = List[Int]()
+    while mantissa != 0:
+        digits.append(mantissa % 10)
+        mantissa //= 10
+    if len(digits) == 0:
+        digits.append(0)
+    var scale = max(0, -power)
+    for _ in range(abs(power)):
+        var carry = 0
+        for i in range(len(digits)):
+            var product = digits[i] * (2 if power >= 0 else 5) + carry
+            digits[i] = product % 10
+            carry = product // 10
+        if carry != 0:
+            digits.append(carry)
+    while len(digits) <= scale:
+        digits.append(0)
+    if decimals < scale:
+        var cut = scale - decimals
+        var sticky = False
+        for i in range(cut - 1):
+            sticky = sticky or digits[i] != 0
+        var up = digits[cut - 1] > 5 or (digits[cut - 1] == 5 and (sticky or digits[cut] % 2 != 0))
+        var rounded = List[Int]()
+        var carry = Int(up)
+        for i in range(cut, len(digits)):
+            var digit = digits[i] + carry
+            rounded.append(digit % 10)
+            carry = digit // 10
+        if carry:
+            rounded.append(carry)
+        digits = rounded^
+        scale = decimals
+    var result = String("-" if negative else "")
+    for i in range(len(digits) - 1, scale - 1, -1):
+        result += String(digits[i])
+    if decimals > 0:
+        result += "."
+        for i in range(scale - 1, -1, -1):
+            result += String(digits[i])
+        for _ in range(decimals - scale):
+            result += "0"
+    return result
+
+
 @fieldwise_init
 struct RBMParams(Copyable, Movable):
     var n_components: Int
@@ -56,7 +121,7 @@ struct RBMParams(Copyable, Movable):
     var random_state: Optional[Int]
 
 
-struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, Movable):
+struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, FeatureNamesOut, InputFeatureCount, Movable):
     """Dense RBM. Integer seeds or explicitly borrowed mutable RNG contexts."""
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
@@ -249,6 +314,7 @@ struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, M
         self._validate_params()
         validate_matrix(X)
         self.initialize(self.n_components, X.shape[1], self.batch_size, rng)
+        var begin_ns = perf_counter_ns()
         for epoch in range(self.n_iter):
             for begin in range(0, X.shape[0], self.batch_size):
                 var size = min(self.batch_size, X.shape[0] - begin)
@@ -258,6 +324,8 @@ struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, M
                         batch.unsafe_set(i * X.shape[1] + j, X.unsafe_get((begin + i) * Int(X.strides[0]) + j * Int(X.strides[1])))
                 self.update(batch, self.learning_rate, rng)
             if self.verbose:
+                # As the reference, the elapsed time is taken before scoring.
+                var end_ns = perf_counter_ns()
                 var scores: Self.Scores
                 if self.random_state:
                     scores = self.score_samples(X)
@@ -266,7 +334,10 @@ struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, M
                 var total = Float64(0)
                 for i in range(scores.size):
                     total += Float64(scores.unsafe_get(i))
-                print("[BernoulliRBM] Iteration", epoch + 1, "pseudo-likelihood =", total / Float64(scores.size))
+                var seconds = Float64(end_ns - begin_ns) / 1e9
+                print("[BernoulliRBM] Iteration ", epoch + 1, ", pseudo-likelihood = ",
+                      _fixed(total / Float64(scores.size), 2), ", time = ", _fixed(seconds, 2), "s", sep="")
+                begin_ns = end_ns
         return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
@@ -322,6 +393,12 @@ struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, M
                 self.initialize(self.n_components, X.shape[1], self.batch_size, rng)
             self._check(X)
             self.update(X, self.learning_rate, rng)
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's n_features_in_ attribute; absent (raises) before fit."""
+        if not self._fitted:
+            raise Error("NotFittedError: BernoulliRBM has not been fitted")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         if not self._fitted:

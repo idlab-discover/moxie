@@ -14,13 +14,16 @@ trainable MLP wrappers remain unfinished. See the [engine scope](../shared/mlp_e
 Dense finite rank-2 inputs, both dtypes and arbitrary valid strides use NuMojo
 storage and Moxie RNG. Sparse inputs, implicit densification, Python reflection,
 pandas, metadata routing and serialization are unsupported. RBM named partial
-set_params and reference verbose timing/formatting remain unfinished. Its typed
+set_params remains unfinished. Its typed
 set_params and fit return mutable self; the family-specific RBMSampling
 partial_fit contract retains its existing None return.
 
 `pixi run neural-network-check` validates native lifecycle/error/ownership
 contracts, six private RBM kernel cases with full RNG state, six public RBM
-fit/refit/transform/score/Gibbs cases, three Float64 incremental cases, and 32
+fit/refit/transform/score/Gibbs cases, three Float64 incremental cases, RBM
+lifecycle sequences in both dtypes (partial_fit/Gibbs after fit, a shared
+explicit RNG context, verbose output text, n_iter=0, set_params refit, strided
+input), RBM pipeline/union/clone composition, and 32
 MLP initialization/packing cases. It also checks core ownership, licenses and an
 isolated public consumer. Tolerances are Float32 3e-5 and Float64 2e-12 for RBM;
 MLP parameters use relative 1e-14 and absolute 1e-15. These account for scalar

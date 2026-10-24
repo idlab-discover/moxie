@@ -45,7 +45,7 @@ def build():
     assemble()
     run('mojo', 'precompile', DEPS / 'moxie', '-I', DEPS, '-o', FAMILY / 'builds/core.mojoc')
     sources = list((RBM / 'tests').glob('test_*.mojo'))
-    sources += [RBM / 'tests/kernel_dump.mojo', RBM / 'tests/estimator_dump.mojo',
+    sources += [RBM / 'tests/kernel_dump.mojo', RBM / 'tests/estimator_dump.mojo', RBM / 'tests/lifecycle_dump.mojo',
                 RBM / 'examples/rbm.mojo', ENGINE / 'tests/parameters.mojo',
                 ENGINE / 'tests/parameter_dump.mojo', ENGINE / 'examples/parameters.mojo']
     for source in sources:
@@ -56,7 +56,7 @@ def build():
 
 
 def test():
-    for owner, names in [(RBM, ['test_kernels', 'test_estimator', 'example']),
+    for owner, names in [(RBM, ['test_kernels', 'test_estimator', 'test_composition', 'example']),
                          (ENGINE, ['parameters', 'example'])]:
         for name in names:
             run(owner / 'builds' / name)
@@ -64,7 +64,7 @@ def test():
 
 
 def parity():
-    for path in [RBM / 'tests/kernel_parity.py', RBM / 'tests/estimator_parity.py',
+    for path in [RBM / 'tests/kernel_parity.py', RBM / 'tests/estimator_parity.py', RBM / 'tests/lifecycle_parity.py',
                  ENGINE / 'tests/parameter_parity.py']:
         run(sys.executable, path)
     print('PASS supported subset parity; MLP training and Float32 partial_fit remain deferred', flush=True)

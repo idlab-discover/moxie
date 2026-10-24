@@ -32,6 +32,15 @@ Generated numerical cases compile in batches of at most 28 functions under
 Moxie's shared compiler resource limits; all cases still execute.
 Parity assembles fresh inputs. Run build or test before start.
 
+Side-by-side notebooks against the official gallery live in
+`notebooks/feature_extraction/`: `plot_hashing_vs_dict_vectorizer` (dense
+DictVectorizer on token-frequency dicts, inverse/restrict, pipeline),
+`plot_image_denoising` (patch extraction, sampling, PatchExtractor and
+reconstruction) and `plot_segmentation_toy` (dense `img_to_graph` and
+`grid_to_graph`). They also prove that FeatureHasher, the text vectorizers and
+the sparse defaults fail clearly. Run them with
+`pixi run -e notebooks notebooks notebooks/feature_extraction`.
+
 The root `DEPENDENCIES.json` assembles the public namespace from live Moxie
 owners. Local consumer manifests exercise narrower contracts independently.
 [Provenance](PROVENANCE.json) records the original Git revision; its history and

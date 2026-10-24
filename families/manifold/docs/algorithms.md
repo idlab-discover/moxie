@@ -15,11 +15,12 @@ var fresh = clone(model)
 ```
 
 `X` is a finite, nonempty rank-two NuMojo float32 or float64 array. The estimator
-supports `euclidean`, `sqeuclidean`, `manhattan`, `cityblock`, `cosine`,
-`minkowski`, and `precomputed`. `metric_params` is an optional
-`Dict[String, Float64]`; only Minkowski `p` is supported. Other metrics,
-callables and parameter entries are unsupported. The default metric is
-`euclidean`, with two components.
+supports `euclidean`, `l2`, `sqeuclidean`, `manhattan`, `cityblock`, `l1`,
+`chebyshev`, `cosine`, `minkowski`, and `precomputed`. `metric_params` is an
+optional `Dict[String, Float64]`; only Minkowski `p` is supported. It defaults
+to 2, must be positive, and may be infinite (Chebyshev), as in SciPy. Other
+metrics, callables and parameter entries raise `ValueError`. The default
+metric is `euclidean`, with two components.
 
 The estimator squares the dissimilarities, double-centers them, and calls the
 live decomposition `symmetric_eigh` engine. Eigenvalues descend and each
@@ -75,10 +76,16 @@ Python is validation tooling only.
 Trustworthiness compares untied ranks across both dtypes, five metrics and
 multiple neighborhood sizes, with absolute score tolerance `1e-14` for scalar
 rounding. ClassicalMDS compares eigenvalues and sign-fixed coordinates at
-`2e-11` for float64, `2e-8` for float64 fractional Minkowski powers, and
-`5e-6` for float32. The locked Mojo power operation differs from SciPy: the
-`p=1.5` fixtures have distance errors below `2.7e-9`. The parity suite checks
-these intermediate distances as well as eigenvalues and coordinates.
+`2e-11` for float64, `2e-8` for float64 Minkowski powers other than 1, 2
+and infinity, and `5e-6` for float32. The locked Mojo power operation differs
+from SciPy by about `1e-10` relative, even for square roots: the `p=1.5`
+fixtures have distance errors below `2.7e-9`. Minkowski `p=1`, `p=2` and
+`p=inf` therefore use exact absolute sums, `sqrt` and maxima. The parity suite
+checks every supported metric, these intermediate distances, eigenvalues and
+coordinates, plus edge fixtures: more components than samples (shape, leading
+spectrum and coordinates; null-space columns are roundoff), zero rows under
+cosine, duplicate rows, constant data, a single sample, asymmetric precomputed
+input and an unsupported metric.
 Float32 tolerance accommodates
 rounding in dissimilarities before the float64 eigensolve. Native tests cover
 invalid inputs, clone, repeat fit, returned-array ownership and negative strides.

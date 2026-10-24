@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Classical scaling through the decomposition owner's dense eigensolver."""
 from numojo import NDArray, zeros, Shape
-from std.math import sqrt, abs, pow, isfinite
+from std.math import sqrt, abs, pow, isfinite, isinf, isnan
 from moxie.manifold._base import EmbeddingEstimator
 from moxie.manifold._plumbing import validate_matrix, validate_pairwise
 from moxie.manifold._t_sne import _distance
@@ -69,7 +69,7 @@ struct ClassicalMDS[dtype: DType = DType.float64](EmbeddingEstimator):
         validate_matrix(X)
         if self.n_components < 1:
             raise Error("ValueError: n_components must be positive")
-        if self.metric != "precomputed" and self.metric != "euclidean" and self.metric != "sqeuclidean" and self.metric != "manhattan" and self.metric != "cityblock" and self.metric != "cosine" and self.metric != "minkowski":
+        if self.metric != "precomputed" and self.metric != "euclidean" and self.metric != "l2" and self.metric != "sqeuclidean" and self.metric != "manhattan" and self.metric != "cityblock" and self.metric != "l1" and self.metric != "cosine" and self.metric != "chebyshev" and self.metric != "minkowski":
             raise Error("ValueError: unsupported ClassicalMDS metric")
         var power: Float64 = 2
         if self.metric_params:
@@ -77,8 +77,9 @@ struct ClassicalMDS[dtype: DType = DType.float64](EmbeddingEstimator):
                 if self.metric != "minkowski" or entry.key != "p":
                     raise Error("ValueError: unsupported metric_params entry")
                 power = entry.value
-        if not isfinite(power) or power <= 0:
-            raise Error("ValueError: Minkowski p must be finite and positive")
+        # SciPy accepts p=inf as the Chebyshev distance.
+        if isnan(power) or power <= 0:
+            raise Error("ValueError: Minkowski p must be positive")
         var n = X.shape[0]
         var distances = zeros[Self.dtype](Shape(n, n))
         if self.metric == "precomputed":
@@ -93,16 +94,30 @@ struct ClassicalMDS[dtype: DType = DType.float64](EmbeddingEstimator):
         else:
             for i in range(n):
                 for j in range(i + 1, n):
-                    var d = _distance(X, i, j, self.metric)
-                    if self.metric == "minkowski":
-                        d = 0
+                    var d: Float64 = 0
+                    if self.metric == "chebyshev" or (self.metric == "minkowski" and isinf(power)):
+                        for c in range(X.shape[1]):
+                            var a = Float64(X.unsafe_get(i * Int(X.strides[0]) + c * Int(X.strides[1])))
+                            var b = Float64(X.unsafe_get(j * Int(X.strides[0]) + c * Int(X.strides[1])))
+                            d = max(d, abs(a - b))
+                    elif self.metric == "minkowski" and power != 1 and power != 2:
                         for c in range(X.shape[1]):
                             var a = Float64(X.unsafe_get(i * Int(X.strides[0]) + c * Int(X.strides[1])))
                             var b = Float64(X.unsafe_get(j * Int(X.strides[0]) + c * Int(X.strides[1])))
                             d += pow(abs(a - b), power)
                         d = pow(d, 1 / power)
-                    if self.metric == "euclidean":
-                        d = sqrt(d)
+                    elif self.metric == "minkowski":
+                        # Exact p=1 and p=2 sums; the locked std pow root is
+                        # about 1e-10 relative from sqrt and SciPy.
+                        d = _distance(X, i, j, "manhattan" if power == 1 else "sqeuclidean")
+                        if power == 2:
+                            d = sqrt(d)
+                    else:
+                        d = _distance(X, i, j, self.metric)
+                        if self.metric == "euclidean" or self.metric == "l2":
+                            d = sqrt(d)
+                    if not isfinite(d):
+                        raise Error("ValueError: pairwise distance overflow")
                     distances.unsafe_set(i * n + j, d.cast[Self.dtype]())
                     distances.unsafe_set(j * n + i, d.cast[Self.dtype]())
         var gram = zeros[DType.float64](Shape(n, n))

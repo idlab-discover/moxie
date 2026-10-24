@@ -12,7 +12,7 @@ def run[dtype: DType]() raises:
         var options = Dict[String, Float64]()
         options["p"] = Float64(String(args[5]))
         params.metric_params = options^
-        model.set_params(params)
+        _ = model.set_params(params)
     var y = model.fit_transform(x)
     for i in range(model.dissimilarity_matrix_.value().size):
         print("distance", Float64(model.dissimilarity_matrix_.value().unsafe_get(i)))

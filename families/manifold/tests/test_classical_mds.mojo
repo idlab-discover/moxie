@@ -5,6 +5,12 @@ from moxie.base import clone
 from moxie.manifold import ClassicalMDS
 
 
+def _p(value: Float64) -> Optional[Dict[String, Float64]]:
+    var options = Dict[String, Float64]()
+    options["p"] = value
+    return options^
+
+
 def check[dtype: DType]() raises:
     var x = zeros[dtype](Shape(5, 2))
     for i in range(5):
@@ -53,6 +59,40 @@ def check[dtype: DType]() raises:
     invalid.unsafe_set(0, Float64("nan").cast[dtype]())
     with assert_raises():
         _ = model.fit(invalid)
+    # Aliases and p=inf follow sklearn pairwise_distances and SciPy minkowski.
+    var reference = ClassicalMDS[dtype](metric="chebyshev")
+    _ = reference.fit(x)
+    var infinite = ClassicalMDS[dtype](metric="minkowski", metric_params=_p(Float64("inf")))
+    _ = infinite.fit(x)
+    for i in range(25):
+        assert_equal(infinite.dissimilarity_matrix_.value().unsafe_get(i), reference.dissimilarity_matrix_.value().unsafe_get(i))
+    for names in [("l1", "manhattan"), ("l2", "euclidean")]:
+        var a = ClassicalMDS[dtype](metric=names[0])
+        var b = ClassicalMDS[dtype](metric=names[1])
+        _ = a.fit(x)
+        _ = b.fit(x)
+        for i in range(10):
+            assert_equal(a.embedding_.value().unsafe_get(i), b.embedding_.value().unsafe_get(i))
+    var invalid_p = ClassicalMDS[dtype](metric="minkowski", metric_params=_p(Float64("nan")))
+    with assert_raises(contains="Minkowski p"):
+        _ = invalid_p.fit(x)
+    var negative_p = ClassicalMDS[dtype](metric="minkowski", metric_params=_p(-1))
+    with assert_raises(contains="Minkowski p"):
+        _ = negative_p.fit(x)
+    var wrong_entry = ClassicalMDS[dtype](metric="euclidean", metric_params=_p(2))
+    with assert_raises(contains="metric_params"):
+        _ = wrong_entry.fit(x)
+    # A refit with fewer columns replaces every learned attribute.
+    var wide = ClassicalMDS[dtype](1)
+    _ = wide.fit(x)
+    var narrow = zeros[dtype](Shape(4, 1))
+    for i in range(4):
+        narrow.unsafe_set(i, SIMD[dtype, 1](i))
+    _ = wide.fit(narrow)
+    assert_equal(wide.n_features_in_, 1)
+    assert_equal(wide.embedding_.value().shape[0], 4)
+    assert_equal(wide.dissimilarity_matrix_.value().shape[0], 4)
+    assert_equal(wide.eigenvalues_.value().size, 1)
     var zero = zeros[dtype](Shape(3, 2))
     _ = model.fit(zero)
     assert_equal(model.embedding_.value().unsafe_get(0), Float64(0))

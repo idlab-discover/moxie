@@ -72,5 +72,13 @@ The [public API scaffold](docs/api-surface.md) adds scikit-learn declarations wi
 [BisectingKMeans](algorithms/bisecting/docs/api.md) supports dense weighted
 binary splits, both leaf-selection strategies, and tree-based prediction.
 
+Side-by-side notebooks in `notebooks/cluster/` replay the official
+`plot_kmeans_digits`, `plot_dbscan`, `plot_mean_shift`, `plot_optics` and
+`plot_agglomerative_dendrogram` examples against scikit-learn; rerun them with
+`pixi run -e notebooks notebooks notebooks/cluster`. Cluster transformers
+(`KMeans`, `MiniBatchKMeans`, `Birch`, `FeatureAgglomeration`) work as
+intermediate `moxie.pipeline` steps and inside `make_union`. A clusterer cannot
+be the final step of a Moxie `Pipeline`, which requires a supervised predictor.
+
 See [rollup validation](ROLLUP_VALIDATION.json) for the commands, outcomes and
 standalone-checkout independence check.

@@ -21,6 +21,12 @@ compares the supported numerical subset against local sklearn, and executes an
 isolated public consumer. It does not establish full sklearn parity. Historical
 child `parity` tasks still fail deliberately on unfinished full acceptance gates.
 
+Side-by-side notebooks against the official gallery live in
+`notebooks/neural_network/`: `plot_rbm_logistic_classification` (Float64
+numerical parity of the RBM pipeline, Float32 distribution checks) and
+`plot_mlp_alpha` (documents the raising MLP declarations). Run them with
+`pixi run -e notebooks notebooks notebooks/neural_network`.
+
 See [scope](docs/scope.md), [RBM API](algorithms/rbm/docs/api.md),
 [MLP helpers](shared/mlp_engine/docs/api.md), and [provenance](provenance/rollup.json).
 Tests, examples, internal engines and license notices live here. Core

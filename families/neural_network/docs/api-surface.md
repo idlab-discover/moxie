@@ -13,3 +13,14 @@ traits remain exported. Private initialization/packing helpers are documented
 Core `DEPENDENCIES.json` selects the actual RBM implementation and all family
 modules in one namespace. `pixi run neural-network-build` compiles that namespace;
 `pixi run neural-network-check` validates the supported [scope](scope.md).
+
+## Composition
+
+BernoulliRBM is a `Pipeline`/`make_pipeline` transformer (fit through
+`fit_transform`, predict through `transform`, as in sklearn), a `FeatureUnion`
+branch (`bernoullirbm__bernoullirbm0` names) and supports `clone` with typed
+nested `set_params`; see `algorithms/rbm/tests/test_composition.mojo`.
+Cross-validation and search over such pipelines need a typed
+model_selection adapter that does not ship yet (model_selection tracking
+PR #3 part 1). The MLP declarations implement no estimator trait and cannot be
+composed.

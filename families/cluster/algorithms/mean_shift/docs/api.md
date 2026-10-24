@@ -62,7 +62,12 @@ optional Float64 parameter automatically.
   are consumed. Queries are batched in groups of 500. Quantile is in [0,1].
 - `get_bin_seeds(X, bin_size, min_bin_freq=1)` rounds grid coordinates halfway
   to even and retains qualifying bins in first-encounter order. Coordinates
-  pass through Float32 before scaling, as in sklearn. The returned array uses
+  pass through Float32 before scaling, as in sklearn. The Float32 grid is multiplied by
+  `bin_size` in Float32, which matches sklearn for a Python-float `bin_size`. When
+  sklearn receives a NumPy float64 instead (the return of `estimate_bandwidth`,
+  including `MeanShift`'s automatic bandwidth), NumPy promotes that product to
+  Float64, so Moxie's seeds differ by Float32 rounding (<= 6e-8 relative); the
+  converged centers and labels matched in the parity cases and notebook. The returned array uses
   the input's compile-time dtype (sklearn normally returns Float32 bins even
   for Float64 input). Empty results have shape `(0,d)` instead of sklearn's
   rank-one empty array. Zero bin size and ineffective binning return a deep

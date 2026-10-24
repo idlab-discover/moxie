@@ -111,6 +111,19 @@ supports prediction, probabilities, log probabilities, and scoring. `GraphClassi
 modify that record and pass it to `set_params`. Dynamic `estimator__parameter`
 routing is not implemented.
 
+## Composition
+
+Graph estimators conform to `SemiSupervisedClassifier`. They can end a
+`moxie.pipeline` pipeline (for example `make_pipeline(StandardScaler(),
+LabelSpreading())`), be cloned with `moxie.base.clone`, and be evaluated by
+`moxie.model_selection.cross_val_score` through a typed `CVAdapter` and scorer.
+`SelfTrainingClassifier` conforms only to `BaseEstimator`, because `predict` and
+`score` exist only for adapters that provide them. It therefore cannot be a
+pipeline step or a generic `SupervisedEstimator`. The only shipped self-training
+adapters are `GaussianNBAdapter` and `GraphClassifierAdapter`. Other Moxie
+classifiers, including `CalibratedClassifierCV` over `SVC` as used by the gallery
+examples, need a hand-written `ProbabilisticEstimatorAdapter`.
+
 ## Exclusions
 
 Sparse data, KNN graphs, Python callbacks, metadata routing, feature names,

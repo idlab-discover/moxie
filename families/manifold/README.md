@@ -26,6 +26,11 @@ eigensolver. Compatible Pixi locks and the sklearn reference revision are preser
 [PROVENANCE.json](PROVENANCE.json) and `SCAFFOLD_BASE` record the original source;
 the retired sibling retains its Git history and ignored artifacts.
 
+The side-by-side notebook `notebooks/manifold/plot_lle_digits.ipynb` replays the
+official `plot_lle_digits` example: its Classical MDS panel and `trustworthiness`
+are compared numerically with scikit-learn, and the other manifold estimators
+are shown to raise. Rerun it with `pixi run -e notebooks notebooks notebooks/manifold`.
+
 - [Family contracts](docs/family.md)
 - [Public declarations and deferrals](docs/api-surface.md)
 - [Dense exchange contracts](docs/plumbing.md)

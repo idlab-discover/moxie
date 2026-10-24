@@ -39,7 +39,10 @@ arrays are independent of caller-owned data. A successful fit replaces learned
 state; clone copies only configuration. `fit` and `set_params` mutate in place.
 `get_params` returns `ClassicalMDSParams`. Named partial updates support
 `n_components` and `metric`; use the typed record to update `metric_params`.
-There is no out-of-sample `transform`.
+There is no out-of-sample `transform`. NDArray inputs carry no column names, so
+`feature_names_in_` is absent; metadata routing (`get_metadata_routing`) is
+outside the native interface. `ClassicalMDS` cannot end a `moxie.pipeline`
+pipeline yet: the pipeline's final step must be a supervised predictor.
 
 ## Trustworthiness
 

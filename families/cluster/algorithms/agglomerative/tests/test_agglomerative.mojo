@@ -142,6 +142,11 @@ def check[dtype: DType]() raises:
     with assert_raises(): _ = linkage_tree(x, affinity="precomputed")
     with assert_raises(): _ = linkage_tree(x, affinity="cosine")
     with assert_raises(): _ = ward_tree(x, connectivity=x.copy())
+    with assert_raises(): _ = ward_tree(x, n_clusters=0)
+    with assert_raises(): _ = ward_tree(x, n_clusters=-1)
+    assert_equal(ward_tree(x, n_clusters=1).children.shape[0], x.shape[0] - 1)
+    # linkage_tree has no parameter validation in sklearn; n_clusters=0 is ignored there.
+    assert_equal(linkage_tree(x, n_clusters=0).children.shape[0], x.shape[0] - 1)
     with assert_raises(): _ = linkage_tree(x, connectivity=x.copy())
     _ = model.set_params(metric="manhattan")
     with assert_raises(): _ = model.fit(x)

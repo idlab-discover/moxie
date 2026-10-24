@@ -198,6 +198,9 @@ def linkage_tree[dtype: DType](X: nm.NDArray[dtype], connectivity: Optional[nm.N
 
 def ward_tree[dtype: DType](X: nm.NDArray[dtype], *, connectivity: Optional[nm.NDArray[dtype]] = None,
         n_clusters: Optional[Int] = None, return_distance: Bool = False) raises -> MergeTree:
+    # sklearn validates n_clusters as Interval(Integral, 1, None) even though the
+    # unstructured tree ignores it.
+    if n_clusters and n_clusters.value() < 1: raise Error("ValueError: ward_tree n_clusters must be at least 1")
     if connectivity: raise Error("NotImplementedError: connectivity-constrained linkage is deferred")
     return _tree(X, "ward", "euclidean", return_distance)
 

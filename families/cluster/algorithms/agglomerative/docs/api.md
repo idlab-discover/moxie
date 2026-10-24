@@ -95,7 +95,9 @@ affinity="euclidean", return_distance=False)` return the shared `MergeTree`:
 - Optional Float64 `distances`, present only when requested.
 
 Call `.validate()` for structural checks. `linkage_tree` accepts single, average,
-or complete linkage; Ward uses its separate helper. Helper `n_clusters` is
+or complete linkage; Ward uses its separate helper. `ward_tree` rejects
+`n_clusters < 1` as sklearn's parameter validation does; `linkage_tree` has no
+such check in sklearn and ignores the value. Helper `n_clusters` is
 accepted but never truncates an unstructured tree. Unlike Python, no warning is
 emitted for that ignored early-stop request. The record replaces Python's
 variable-length return tuple.

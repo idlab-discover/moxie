@@ -102,6 +102,7 @@ Children consume current local sources; see [development policy](docs/family-dev
 - [Categorical feature columns](docs/categorical.md)
 - [Model serialization](docs/serialization.md)
 - [Estimator interfaces and differences from Python](docs/interfaces.md)
+- [Cross-cutting API: base, metrics, utils, datasets, inspection, exceptions](docs/shared-surface.md)
 - [Family repositories](docs/families.md) and [contribution rules](AGENTS.md)
 
 `test` builds and runs shared contracts, container/codec checks and the migrated

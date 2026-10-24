@@ -54,6 +54,8 @@ The table covers estimator-bearing families, including unsupervised learning,
 feature preparation and estimator composition. `metrics`, `datasets`,
 `inspection`, `utils`, `exceptions`, `callback`, configuration, and experimental
 enablement are shared/supporting work, not duplicate algorithm-family repos.
+Their current status, including the absent `moxie.metrics` and `moxie.datasets`
+modules, is recorded in [shared surface](shared-surface.md).
 Third-party `externals` and build internals are reference infrastructure rather
 than Mojo algorithms to translate literally. Current shared owners are indexed in
 [README](../README.md); check their contracts before requesting new helpers.

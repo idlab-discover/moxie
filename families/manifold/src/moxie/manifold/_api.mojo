@@ -1,6 +1,9 @@
 # Adapted from scikit-learn; authors: scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
-"""Public scikit-learn API declarations; all new operations are deferred."""
+"""Deferred public scikit-learn API declarations.
+
+ClassicalMDS and trustworthiness are implemented in their own modules.
+"""
 from moxie.manifold._api_types import APIValue
 
 struct MDS(Movable):
@@ -146,50 +149,6 @@ struct TSNE(Movable):
     def fit(mut self, X: Some[Movable], y: Some[Movable] = None) raises:
         "Scikit-learn signature: fit(self, X, y=None)."
         raise Error("NotImplementedError: TSNE.fit is an API scaffold")
-
-struct ClassicalMDS(Movable):
-
-    "API scaffold for sklearn.manifold._classical_mds.ClassicalMDS. Operations are deferred."
-
-    var n_components: APIValue
-
-    var metric: APIValue
-
-    var metric_params: APIValue
-
-    var embedding_: APIValue
-
-    var dissimilarity_matrix_: APIValue
-
-    var eigenvalues_: APIValue
-
-    var n_features_in_: APIValue
-
-    var feature_names_in_: APIValue
-
-    def get_metadata_routing(mut self) raises -> APIValue:
-        "Scikit-learn signature: get_metadata_routing(self)."
-        raise Error("NotImplementedError: ClassicalMDS.get_metadata_routing is an API scaffold")
-
-    def get_params(mut self, deep: Some[Movable] = True) raises -> APIValue:
-        "Scikit-learn signature: get_params(self, deep=True)."
-        raise Error("NotImplementedError: ClassicalMDS.get_params is an API scaffold")
-
-    def set_params(mut self, params: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_params(self, **params)."
-        raise Error("NotImplementedError: ClassicalMDS.set_params is an API scaffold")
-
-    def __init__(out self, n_components: Some[Movable] = 2, *, metric: Some[Movable] = "euclidean", metric_params: Some[Movable] = None) raises:
-        "Scikit-learn signature: __init__(self, n_components=2, *, metric='euclidean', metric_params=None)."
-        raise Error("NotImplementedError: ClassicalMDS.__init__ is an API scaffold")
-
-    def fit(mut self, X: Some[Movable], y: Some[Movable] = None) raises:
-        "Scikit-learn signature: fit(self, X, y=None)."
-        raise Error("NotImplementedError: ClassicalMDS.fit is an API scaffold")
-
-    def fit_transform(mut self, X: Some[Movable], y: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: fit_transform(self, X, y=None)."
-        raise Error("NotImplementedError: ClassicalMDS.fit_transform is an API scaffold")
 
 struct Isomap(Movable):
 
@@ -410,7 +369,3 @@ def smacof(dissimilarities: Some[Movable], *, metric: Some[Movable] = True, n_co
 def spectral_embedding(adjacency: Some[Movable], *, n_components: Some[Movable] = 8, eigen_solver: Some[Movable] = None, random_state: Some[Movable] = None, eigen_tol: Some[Movable] = "auto", norm_laplacian: Some[Movable] = True, drop_first: Some[Movable] = True) raises -> APIValue:
     "Scikit-learn signature: spectral_embedding(adjacency, *, n_components=8, eigen_solver=None, random_state=None, eigen_tol='auto', norm_laplacian=True, drop_first=True)."
     raise Error("NotImplementedError: spectral_embedding is an API scaffold")
-
-def trustworthiness(X: Some[Movable], X_embedded: Some[Movable], *, n_neighbors: Some[Movable] = 5, metric: Some[Movable] = "euclidean") raises -> APIValue:
-    "Scikit-learn signature: trustworthiness(X, X_embedded, *, n_neighbors=5, metric='euclidean')."
-    raise Error("NotImplementedError: trustworthiness is an API scaffold")

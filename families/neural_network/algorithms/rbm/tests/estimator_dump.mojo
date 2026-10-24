@@ -27,9 +27,9 @@ def check[dtype: DType](n: Int, d: Int, h: Int, batch: Int) raises:
 
 
 def main() raises:
-    with assert_raises():
+    with assert_raises(contains="NotImplementedError: MLPClassifier is not implemented"):
         var classifier = MLPClassifier()
-    with assert_raises():
+    with assert_raises(contains="NotImplementedError: MLPRegressor is not implemented"):
         var regressor = MLPRegressor()
     check[DType.float64](1, 1, 1, 1)
     check[DType.float64](7, 3, 2, 4)

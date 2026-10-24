@@ -52,7 +52,8 @@ or a present `Optional[Optional[Int]]` containing None.
 ## Scope and numerical limits
 
 Sparse inputs, callable initialization, scalar weights, runtime dtype conversion,
-Python metadata routing, feature-name APIs, and pandas output are unavailable.
+Python metadata routing, `feature_names_in_`, and pandas output are unavailable
+(`get_feature_names_out` is supported; see below).
 Invalid initialization strings raise. Random initialization requires two positive
 sampling weights in each selected leaf. Negative/all-zero sampling weights raise.
 Inputs are borrowed immutably: `copy_x=False` still uses an owned centered

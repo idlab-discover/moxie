@@ -24,7 +24,8 @@ the family source imports and the live build manifests route both names to
 have been removed. See the [native API](../algorithms/affinity/docs/api.md).
 
 Other algorithm names remain source declarations and are excluded from the
-assembled runtime exports. The normal family build compiles the declaration
+assembled runtime exports: `HDBSCAN`, `SpectralClustering`, `spectral_clustering`,
+`SpectralBiclustering`, and `SpectralCoclustering` are deferred. The normal family build compiles the declaration
 modules as well as the implemented runtime. `pixi run test` includes the existing
 affinity/KMeans contracts and two isolated consumers that exchange fitted estimators;
 `pixi run parity` checks both family-built drivers against local sklearn.
@@ -33,6 +34,9 @@ affinity/KMeans contracts and two isolated consumers that exchange fitted estima
 in source exports and assembled manifests. Their placeholder declarations are
 removed. See the [KMeans API](../algorithms/kmeans/docs/api.md) for supported
 dense behavior, typed parameter/result records, and numerical limits.
+
+`MiniBatchKMeans` routes to `moxie.cluster._mini_batch_kmeans`; its deferred
+declaration is removed. See the [MiniBatchKMeans API](../algorithms/minibatch/docs/api.md).
 
 `BisectingKMeans` routes to `moxie.cluster._bisect_k_means` in source exports
 and assembled manifests. Its deferred declaration is removed. See the

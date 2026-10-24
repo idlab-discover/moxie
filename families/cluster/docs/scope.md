@@ -19,7 +19,9 @@ Float64 promotion. Dense `AgglomerativeClustering`, `FeatureAgglomeration`, `lin
 `ward_tree` are integrated; see the [API](../algorithms/agglomerative/docs/api.md).
 Dense `Birch` provides CF-tree fitting, streaming updates, prediction, and
 subcluster-distance transforms; see its [API](../algorithms/birch/docs/api.md).
-Other public estimators remain deferred; the centroid engine is in `shared/centroid_engine`.
+Other public estimators remain deferred: `HDBSCAN`, `SpectralClustering`,
+`spectral_clustering`, `SpectralBiclustering` and `SpectralCoclustering` are not
+exported. The centroid engine is in `shared/centroid_engine`.
 All child exports and their owners are listed in [plumbing.md](plumbing.md).
 
 Sparse inputs/outputs, CSR/CSC/COO storage and conversions, sparse precomputed

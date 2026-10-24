@@ -12,7 +12,6 @@ from ._affinity_propagation import AffinityPropagation, affinity_propagation
 # Deferred public scikit-learn API declarations.
 from ._api import (
     HDBSCAN,
-    MiniBatchKMeans,
     SpectralBiclustering,
     SpectralClustering,
     SpectralCoclustering,
@@ -20,6 +19,7 @@ from ._api import (
 )
 
 from ._kmeans import KMeans, k_means, kmeans_plusplus
+from ._mini_batch_kmeans import MiniBatchKMeans
 from ._bisect_k_means import BisectingKMeans
 
 from ._dbscan import DBSCAN, dbscan

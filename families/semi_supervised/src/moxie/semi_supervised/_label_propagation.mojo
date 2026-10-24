@@ -123,7 +123,7 @@ struct GraphClassifier[spreading: Bool, dtype: DType = DType.float64, K: DenseAf
                     targets.append(None)
                     continue
             targets.append(Optional(label.copy()))
-        self.fit(X, targets)
+        _ = self.fit(X, targets)
         return self
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: List[Optional[Self.L]]) raises -> ref[self] Self:

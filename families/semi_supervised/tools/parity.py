@@ -181,6 +181,9 @@ struct FixtureAffinity(DenseAffinity, Copyable, Movable):
                 lines.append(f'    assert_equal(model.transduction_[{i}].value(), {label})' if label != -1 else f'    assert_true(not model.transduction_[{i}])')
             lines += ['    var probabilities = model.predict_proba(X)'] + check_array('probabilities', estimator.predict_proba(X), '5e-5' if dtype == 'float32' else '2e-9')
             lines += [f'    assert_equal(model.predict(X), {ints(estimator.predict(X))})']
+            # score delegates to estimator_.score (GaussianNB accuracy); exact count ratio.
+            truth = np.where(np.arange(len(y)) < 12, 0, 1)
+            lines.append(f'    assert_equal(model.score(X, {ints(truth)}), {literal(estimator.score(X, truth))})')
             source.append('\n'.join(lines));cases.append(identifier)
     source.append('def main() raises:\n' + '\n'.join(f'    {case}()\n    print("PASS {case}")' for case in cases))
     path = OUT/'oracle_cases.mojo';path.write_text('\n\n'.join(source)+'\n')

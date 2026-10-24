@@ -30,6 +30,16 @@ uses its Python 3.12 environment and packages under `builds/neighbors/`; `SKLEAR
 select another compiled instance of that same reference. Python is never used
 by library learning or inference.
 
+The parity task includes `tests/parity_end_to_end.py`, which runs 872 seeded
+configurations through the native public estimators and compiled reference.
+It covers Float32/Float64 queries, KNN/radius classification and regression,
+LOF outlier/novelty detection, KDE and NearestCentroid. It checks the loaded
+reference estimator sources against the pinned revision. Radius comparisons
+preserve index/distance pairing while allowing documented tie-order differences;
+the classifier fixture uses an explicit resolved outlier label to avoid the
+pinned reference's `most_frequent` fast-path inconsistency. This suite supplements
+the existing lifecycle, invalid-input, label and dtype contracts.
+
 [Provenance](PROVENANCE.json) records the original repository and revision.
 `SCAFFOLD_BASE`, toolchain locks and license notices retain their provenance.
 The historical `_api` and `_trees_api` declarations are excluded from assembly.

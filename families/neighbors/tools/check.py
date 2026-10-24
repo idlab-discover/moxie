@@ -54,7 +54,7 @@ def build():
     assert len(meta)==1 and json.loads(meta[0].read_text())['version']=='26.5.0'
     assemble(ROOT)
     run('mojo','precompile',ROOT/'builds/deps/moxie','-I',ROOT/'builds/deps','-o',ROOT/'builds/package.mojoc')
-    for name in ['test_contracts','test_capabilities','test_family','test_plumbing','test_estimators','test_callable_metrics','test_general_labels','test_integration','test_lof','test_kde','test_kde_sampling','test_centroid','test_nca','test_nca_solver','test_kdtree','test_balltree','evaluate_kdtree','evaluate_balltree','evaluate_estimators','evaluate_callable_metrics','evaluate_nca','evaluate_nca_solver']:
+    for name in ['test_contracts','test_capabilities','test_family','test_plumbing','test_estimators','test_callable_metrics','test_general_labels','test_integration','test_lof','test_kde','test_kde_sampling','test_centroid','test_nca','test_nca_solver','test_kdtree','test_balltree','evaluate_kdtree','evaluate_balltree','evaluate_estimators','evaluate_end_to_end','evaluate_callable_metrics','evaluate_nca','evaluate_nca_solver']:
         compile_file(ROOT,ROOT/'tests'/f'{name}.mojo',name)
     compile_file(ROOT,ROOT/'examples/estimator.mojo','example')
     compile_file(ROOT,ROOT/'examples/query_buffers.mojo','query_buffers')
@@ -108,7 +108,7 @@ if __name__=='__main__':
     sys.argv[1] = sys.argv[1].removesuffix('-only')
     if sys.argv[1]=='test': test()
     elif sys.argv[1]=='parity':
-        for script in ['parity_callable_metrics.py','parity_general_labels.py','parity_estimators.py','parity_lof.py','parity_kde.py','parity_kde_sampling.py','parity_centroid.py','parity_nca_solver.py','parity_nca.py','parity_kdtree.py','parity_balltree.py']:
+        for script in ['parity_callable_metrics.py','parity_general_labels.py','parity_estimators.py','parity_end_to_end.py','parity_lof.py','parity_kde.py','parity_kde_sampling.py','parity_centroid.py','parity_nca_solver.py','parity_nca.py','parity_kdtree.py','parity_balltree.py']:
             run(os.environ.get('SKLEARN_ORACLE_PYTHON', ROOT.parents[1]/'builds/neighbors/oracle-env/bin/python'), ROOT/'tests'/script, oracle=True)
     elif sys.argv[1]=='example': run(ROOT/'builds/neighbors_example')
     elif sys.argv[1]!='build': raise ValueError(sys.argv[1])

@@ -8,11 +8,12 @@ during parameter inference (a plain Ridge estimator compiles).
 from numojo import NDArray, Shape, Item, zeros
 from std.testing import assert_equal, assert_true, assert_false
 from moxie.base import clone
+from moxie._feature_metadata import InputFeatureCount
 from moxie.compose import ColumnTransformer, ColumnEntry
 from moxie.linear_model import Ridge
 from moxie.pipeline import Pipeline
 from moxie.preprocessing import (
-    StandardScaler, MinMaxScaler, RobustScaler, PolynomialFeatures, FunctionTransformer,
+    StandardScaler, MinMaxScaler, MaxAbsScaler, RobustScaler, PolynomialFeatures, FunctionTransformer,
     QuantileTransformer, PowerTransformer, SplineTransformer, KBinsDiscretizer,
 )
 
@@ -67,6 +68,57 @@ def test_pipeline() raises:
     var refit = Ridge(alpha=0.5)
     _ = refit.fit(plain.fit_transform(X), y)
     assert_same(pipe.predict(X_new), refit.predict(plain.transform(X_new)), "set_params then refit")
+
+
+def raises_before_fit[T: InputFeatureCount](model: T) raises:
+    var raised = False
+    try:
+        _ = model.get_n_features_in()
+    except e:
+        raised = String(e).startswith("AttributeError:")
+    assert_true(raised, "n_features_in_ must be absent before fit")
+
+
+def test_n_features_in() raises:
+    # sklearn: Pipeline.n_features_in_ is the first step's attribute, which every
+    # scaler sets in fit and lacks before fit (AttributeError).
+    var X = data(12, 4)
+    var y = target(X)
+    raises_before_fit(StandardScaler())
+    raises_before_fit(MinMaxScaler())
+    raises_before_fit(MaxAbsScaler())
+    raises_before_fit(RobustScaler())
+    var standard = StandardScaler()
+    var minmax = MinMaxScaler()
+    var maxabs = MaxAbsScaler()
+    var robust = RobustScaler()
+    _ = standard.fit(X)
+    _ = minmax.fit(X)
+    _ = maxabs.fit(X)
+    _ = robust.fit(X)
+    assert_equal(standard.get_n_features_in(), 4)
+    assert_equal(minmax.get_n_features_in(), 4)
+    assert_equal(maxabs.get_n_features_in(), 4)
+    assert_equal(robust.get_n_features_in(), 4)
+    var pipe = Pipeline(StandardScaler(), Ridge(), transformer_name="scale", estimator_name="ridge")
+    var unfitted = False
+    try:
+        _ = pipe.n_features_in_()
+    except e:
+        unfitted = String(e).startswith("AttributeError:")
+    assert_true(unfitted, "Pipeline.n_features_in_ before fit")
+    _ = pipe.fit(X, y)
+    assert_equal(pipe.n_features_in_(), 4)
+    # Refit on a different width replaces the learned count.
+    var wider = data(12, 6)
+    _ = pipe.fit(wider, y)
+    assert_equal(pipe.n_features_in_(), 6)
+    var nested = Pipeline(
+        RobustScaler(), Pipeline(MinMaxScaler(), Ridge(), transformer_name="minmax", estimator_name="ridge"),
+        transformer_name="robust", estimator_name="inner",
+    )
+    _ = nested.fit(X, y)
+    assert_equal(nested.n_features_in_(), 4)
 
 
 def test_nested_pipelines() raises:
@@ -185,6 +237,7 @@ def _columns(X: Dense, columns: List[Int]) raises -> Dense:
 
 def main() raises:
     test_pipeline()
+    test_n_features_in()
     test_nested_pipelines()
     test_column_transformer()
     print("PASS preprocessing composition: pipelines, nested pipelines, ColumnTransformer, clone")

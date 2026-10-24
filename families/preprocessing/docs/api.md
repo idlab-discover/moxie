@@ -65,6 +65,10 @@ clear `ValueError` at fit).
   Before fit, arrays are empty and counts zero; methods that need learned state
   raise `NotFittedError`. Stateless transformers (Normalizer, Binarizer,
   FunctionTransformer) transform without fitting, as in sklearn.
+* The four scalers (Standard, MinMax, MaxAbs, Robust) also implement the shared
+  `InputFeatureCount.get_n_features_in()`, so `Pipeline.n_features_in_()` works
+  when a scaler is the first step. Before fit it raises `AttributeError:`, like
+  sklearn's absent attribute (`tests/test_composition.mojo`).
 * Errors are Mojo `Error` values whose text starts with the sklearn exception
   class (`ValueError:`, `NotFittedError:`, `TypeError:`) and, where practical,
   sklearn's message.

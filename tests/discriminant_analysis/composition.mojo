@@ -77,8 +77,8 @@ def scaled_lda[dtype: DType]() raises:
     same(pipe.predict_log_proba(x), lda.predict_log_proba(zt))
     same(pipe.decision_function(x), lda.decision_function(zt))
     assert_equal(pipe.score(x, y), lda.score(zt, y))
-    # sklearn: names come from the last step. (Pipeline.n_features_in_ needs the first
-    # step's count; StandardScaler does not expose InputFeatureCount yet, a preprocessing gap.)
+    # sklearn: n_features_in_ comes from the first step, names from the last step.
+    assert_equal(pipe.n_features_in_(), 4)
     var names = pipe.get_feature_names_out()
     assert_equal(len(names), 2)
     assert_equal(names[0], "lineardiscriminantanalysis0")

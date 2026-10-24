@@ -6,7 +6,7 @@ Statistics come from the family's bounded-memory engines (`_moments`): fitting
 keeps O(features) state and never materializes masks, casts or residual
 tables. Affine application uses `_dense_transforms`. See docs/api/scalers.md.
 """
-from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
+from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut, InputFeatureCount
 from std.math import sqrt, log, isnan, abs, inf, nan
 from numojo import NDArray, Shape, NDArrayStrides
 from moxie.preprocessing._base import InvertiblePreprocessor, OnlinePreprocessor
@@ -179,7 +179,7 @@ struct StandardScalerParams(Copyable, Movable):
     var with_std: Bool
 
 
-struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut, Copyable):
+struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut, Copyable, InputFeatureCount):
     """Standardize features by removing the mean and scaling to unit variance.
 
     `fit`, `partial_fit` and weighted variants keep O(features) Float64 moments
@@ -503,6 +503,12 @@ struct StandardScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Onli
         check_writable(X)
         engine.transform_inplace(X, self._shift, self._divisor, operation=1)
 
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: StandardScaler has no n_features_in_ before fit")
+        return self.n_features_in_
+
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         check_fitted(self.__sklearn_is_fitted__(), "StandardScaler")
         return feature_names_in(self.n_features_in_, self.feature_names_in_, input_features)
@@ -519,7 +525,7 @@ struct MinMaxScalerParams(Copyable, Movable):
     var clip: Bool
 
 
-struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut, Copyable):
+struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut, Copyable, InputFeatureCount):
     """Scale each feature to `feature_range`; learned values keep X's dtype."""
     comptime Params = MinMaxScalerParams
     comptime Input = NDArray[Self.dtype]
@@ -695,6 +701,12 @@ struct MinMaxScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
         check_writable(X)
         engine.transform_inplace(X, self.min_, self.scale_, operation=3)
 
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: MinMaxScaler has no n_features_in_ before fit")
+        return self.n_features_in_
+
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         check_fitted(self.__sklearn_is_fitted__(), "MinMaxScaler")
         return feature_names_in(self.n_features_in_, self.feature_names_in_, input_features)
@@ -710,7 +722,7 @@ struct MaxAbsScalerParams(Copyable, Movable):
     var clip: Bool
 
 
-struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut, Copyable):
+struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, OnlinePreprocessor, NativeFeatureNamesOut, Copyable, InputFeatureCount):
     """Scale each feature by its maximum absolute value; learned values keep X's dtype."""
     comptime Params = MaxAbsScalerParams
     comptime Input = NDArray[Self.dtype]
@@ -864,6 +876,12 @@ struct MaxAbsScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Online
         check_writable(X)
         engine.transform_inplace(X, self._zero, self.scale_, operation=1)
 
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: MaxAbsScaler has no n_features_in_ before fit")
+        return self.n_features_in_
+
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         check_fitted(self.__sklearn_is_fitted__(), "MaxAbsScaler")
         return feature_names_in(self.n_features_in_, self.feature_names_in_, input_features)
@@ -882,7 +900,7 @@ struct RobustScalerParams(Copyable, Movable):
     var unit_variance: Bool
 
 
-struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut, Copyable):
+struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut, Copyable, InputFeatureCount):
     """Center on the median and scale by a quantile range (exact quantiles).
 
     `center_` keeps X's dtype; `scale_` is Float64, matching sklearn.
@@ -1043,6 +1061,12 @@ struct RobustScaler[dtype: DType = DType.float64](InvertiblePreprocessor, Native
         self._check(X)
         check_writable(X)
         engine.transform_inplace(X, self._shift, self._divisor, operation=1)
+
+    def get_n_features_in(self) raises -> Int:
+        """sklearn's `n_features_in_` attribute, which exists only after fit."""
+        if not self.__sklearn_is_fitted__():
+            raise Error("AttributeError: RobustScaler has no n_features_in_ before fit")
+        return self.n_features_in_
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         check_fitted(self._fitted, "RobustScaler")

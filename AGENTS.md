@@ -2,17 +2,18 @@
 
 ## Ownership and current sources
 
-- Read [family development](docs/family-development.md) for family/child work.
-  Each family owns its whole sibling repository: APIs, algorithms, helpers,
-  tests and builds. Global framework components belong in Moxie.
-- Children consume current Moxie HEAD, including live working edits, even when
-  unstable. No source repinning or stable-release gate. Preserve compatible
-  toolchain locks, scikit-learn oracle revisions and historical baseline tags.
-- This policy supersedes inherited child-only containment, immutable helpers,
-  separate-session requirements and blanket no-commit rules.
-- Preserve unrelated work. Coordinate overlapping edits. Shared additions can
-  be requested through `COMMON-FAMILY-REQUIREMENTS.md`. That request log is not
-  an availability catalog; current owner contracts define implemented support.
+- Before family or child work, read [family development](docs/family-development.md).
+  Families own their APIs, algorithms, helpers, tests and builds. Integrated
+  families use this repository's Git history; global infrastructure belongs in
+  Moxie's shared owners. Follow current `DEPENDENCIES.json` paths and owner
+  contracts rather than retired sibling checkouts or historical request entries.
+- Build against current local sources, including working edits. Preserve
+  compatible toolchain locks, scikit-learn oracle revisions and baseline provenance.
+  The family policy supersedes inherited containment, immutable-helper,
+  separate-session, source-repinning and no-commit restrictions.
+- Preserve unrelated work and coordinate overlapping edits. Record unresolved
+  global needs in [common family requirements](COMMON-FAMILY-REQUIREMENTS.md)
+  after checking the current owner contract. Update or remove resolved requests.
 
 ## Reference and API
 
@@ -34,14 +35,14 @@ state. Warm starts and partial fits follow each estimator's contract. Require
 optional capabilities only where supported. Family contracts refine shared
 contracts; algorithm details stay local. Shared contract changes belong in Moxie
 with review/tests. Preserve scaffold provenance; historical tags are not build
-pins. Cross-family integration is separate work.
+pins.
 
 ## Native implementation and evidence
 
 Learning/prediction: pure Mojo. Python, sklearn, NumPy, SciPy and subprocesses:
 validation/tooling only, including NuMojo Python conversion/I/O helpers.
 
-Before numerical work, read `../session-plan/NUMERICS.md` and
+Before numerical work, read the
 [shared numerical policy](shared/numerics/docs/numerics.md). Inspect libraries
 actually consumed by the build. Prefer Numax CPU kernels; use Mojo stdlib,
 NuMojo and MAX primitives. Use mojo-linalg when Numax cannot meet the contract.

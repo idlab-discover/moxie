@@ -1,9 +1,12 @@
-# Independent family development
+# Family development
 
-The family repository is the unit of development and ownership. A family may
-change its root API, algorithms, internal shared engines, contracts, tests,
-examples and build configuration together. Internal project directories express
-reuse and organization; they do not require separate authorization or sessions.
+The family is the unit of implementation ownership. Integrated families live
+in this repository, under `src/moxie` and/or `families`, and use its Git history.
+Follow current dependency manifests and owner contracts for source locations;
+retired sibling checkouts are not development inputs. A family may change its
+API, algorithms, internal shared engines, contracts, tests, examples and build
+configuration together. Internal project directories express reuse and
+organization; they do not require separate authorization or sessions.
 Integrate and validate changes within the family when needed. Preserve unrelated
 work and coordinate overlapping edits with any session already in that family.
 
@@ -12,7 +15,7 @@ as the implementation runtime. Keep the recorded reference revision, API parity,
 pure-Mojo implementation, numerical evidence and existing scope requirements.
 Family independence does not relax correctness or permit placeholder algorithms.
 
-Family repositories and algorithm child folders consume the current Moxie HEAD
+Families and algorithm child folders consume the current Moxie HEAD
 for genuinely global framework contracts and shared infrastructure, even while
 it is unstable. Use the live local checkout on every build, including working
 source edits; no stable release, source pin, or separate adoption approval is
@@ -41,12 +44,13 @@ checkouts or files raise an error. Generated receipts record the bytes consumed.
 
 Retain compatible Pixi toolchain locks, correctness-reference revisions and
 published baseline tags. Baseline proofs still protect deduplication of inherited
-contracts. New cross-family integration is separate work; keep genuinely global
-components in Moxie. Existing consumers that bootstrap an old assembler must
-switch to the current shared tool to adopt this workflow.
+contracts. Validate affected consumers when changing shared contracts or
+cross-family integration; keep genuinely global components in Moxie. Existing
+consumers that bootstrap an old assembler must switch to the current shared tool
+to adopt this workflow.
 
 Use atomic commits with explicit paths for completed, validated changes within
-the family repository. Nested project folders use that repository's Git history;
+the owning repository. Nested project folders use that repository's Git history;
 creating nested Git repositories is unnecessary. Preserve published baseline
 tags. Run relevant build and contract checks before committing code, and parity
 checks for changed numerical/estimator behavior. Leave unrelated work untouched.

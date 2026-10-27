@@ -11,6 +11,7 @@ environments:
     channels:
     - url: https://conda.modular.com/max/
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://prefix.dev/modular-community/
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -84,10 +85,12 @@ environments:
       - conda: https://conda.modular.com/max/linux-64/mojo-compiler-1.0.0-release.conda
       - conda: https://conda.modular.com/max/noarch/mblack-26.5.0-release.conda
       - conda: https://conda.modular.com/max/noarch/mojo-python-1.0.0-release.conda
+      - conda: https://prefix.dev/modular-community/linux-64/mojo-snappy-0.2.0-hb0f4dca_0.conda
   notebooks:
     channels:
     - url: https://conda.modular.com/max/
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://prefix.dev/modular-community/
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -308,6 +311,7 @@ environments:
       - conda: https://conda.modular.com/max/linux-64/mojo-compiler-1.0.0-release.conda
       - conda: https://conda.modular.com/max/noarch/mblack-26.5.0-release.conda
       - conda: https://conda.modular.com/max/noarch/mojo-python-1.0.0-release.conda
+      - conda: https://prefix.dev/modular-community/linux-64/mojo-snappy-0.2.0-hb0f4dca_0.conda
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -3281,3 +3285,12 @@ packages:
   run_exports: {}
   size: 24040
   timestamp: 1785891558838
+- conda: https://prefix.dev/modular-community/linux-64/mojo-snappy-0.2.0-hb0f4dca_0.conda
+  sha256: 5d6616a9ee5490acea75e91100b6de3cd5d7f83b0ca6da5f811a9f5d51eb492d
+  md5: 61575173649d8c1ef1d2d9fbf52527c0
+  depends:
+  - mojo-compiler ==1.0.0
+  license: Apache-2.0 AND BSD-3-Clause
+  run_exports: {}
+  size: 266844
+  timestamp: 1790745710990

@@ -56,12 +56,18 @@ loader also accepts raw payloads. A raw-only loader explicitly rejects compresse
 payloads. Compression is per array, opt-in, and used only when it reduces bytes.
 The manifest stays uncompressed. No speed or universal size benefit is promised.
 
-The optional codec uses the current local `../../mojo-snappy/src` checkout.
-Moxie's build assembles it with the package through `DEPENDENCIES.json`;
-compile consumers with `-I builds/deps` after `pixi run build`. License assets
-are retained in `builds/deps/licenses`. There is no source hash lock or cached
-snapshot. The tested toolchain remains Mojo 1.0.0. Raw serialization does not
-use the codec at runtime; package builds include it so both APIs are available.
+The codec uses the published `mojo-snappy` 0.2.0 build `hb0f4dca_0` from
+`https://prefix.dev/modular-community`, compiled for Mojo 1.0.0. `pixi.toml`
+pins the version, build and channel; `pixi.lock` records the artifact and checksum.
+Run `pixi install` at the Moxie root before running standalone family builds.
+Assembly copies `.pixi/envs/default/lib/mojo/mojo_snappy.mojoc` into each
+consumer's `builds/deps`, alongside the Moxie modules. Compile consumers with
+`-I builds/deps` after `pixi run build`. The live `../../mojo-snappy` checkout
+is not consumed. Other source dependencies continue to use their live checkouts.
+
+The release's Apache-2.0 license and BSD-3-Clause notices are retained under
+`third_party/mojo-snappy` and copied into `builds/deps/licenses`. Raw and Snappy
+serialization remain available in the normal Mojo 1.0.0 build and test suite.
 
 ## Wire format, version 1
 

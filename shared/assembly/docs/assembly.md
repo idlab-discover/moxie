@@ -12,6 +12,11 @@ and explicit overrides. Each project declares `id`, `path`, `modules`, `assets`
 and `exports`. Paths resolve relative to the manifest. A module maps its full
 `moxie.*` name to a source `file`; assets map output paths to source paths.
 All transitive runtime imports and license assets must be declared.
+Moxie's Snappy dependency is a published binary exception: the explicit asset
+`mojo_snappy.mojoc` comes from the root Pixi environment, with its exact build
+and compiler compatibility pinned in `pixi.toml` and `pixi.lock`. Run root
+`pixi install` first. The assembler copies its bytes and records them in the
+receipt like other assets; it does not download packages or select versions.
 
 ```sh
 python /path/to/moxie/shared/assembly/tools/assemble.py \

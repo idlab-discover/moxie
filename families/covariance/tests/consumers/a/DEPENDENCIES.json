@@ -399,13 +399,12 @@
     },
     {
       "id": "mojo-snappy",
-      "path": "../../../../../../../mojo-snappy",
+      "path": "../../../../..",
       "modules": {},
       "assets": {
-        "mojo_snappy/__init__.mojo": "src/mojo_snappy/__init__.mojo",
-        "mojo_snappy/codec.mojo": "src/mojo_snappy/codec.mojo",
-        "licenses/mojo-snappy-LICENSE": "LICENSE",
-        "licenses/mojo-snappy-THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+        "mojo_snappy.mojoc": ".pixi/envs/default/lib/mojo/mojo_snappy.mojoc",
+        "licenses/mojo-snappy-LICENSE": "third_party/mojo-snappy/LICENSE",
+        "licenses/mojo-snappy-THIRD_PARTY_NOTICES.md": "third_party/mojo-snappy/THIRD_PARTY_NOTICES.md"
       },
       "exports": {
         "schema": 1,

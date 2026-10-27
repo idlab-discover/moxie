@@ -127,6 +127,16 @@ class FamilyAssemblyTests(unittest.TestCase):
         self.assertEqual((output / 'mojo_snappy/__init__.mojo').read_bytes(),
                          (self.external / 'module.mojo').read_bytes())
 
+    def test_snappy_release_asset(self):
+        binary = b"\x00compiled-snappy\xff"
+        (self.external / 'release.mojoc').write_bytes(binary)
+        self.lock['projects'][1]['assets'] = {'mojo_snappy.mojoc': 'release.mojoc'}
+        output = self.run_assembly()
+        self.assertEqual((output / 'mojo_snappy.mojoc').read_bytes(), binary)
+        self.lock['projects'][1]['assets'] = {'unexpected.mojoc': 'release.mojoc'}
+        with self.assertRaisesRegex(ValueError, 'unsupported asset namespace'):
+            self.run_assembly()
+
     def test_balsa_asset_namespace(self):
         self.lock['projects'][1]['assets'] = {'balsa/__init__.mojo': 'module.mojo'}
         output = self.run_assembly()

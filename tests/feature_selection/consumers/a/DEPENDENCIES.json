@@ -183,6 +183,9 @@
         },
         "moxie.feature_selection._variance_threshold": {
           "file": "src/moxie/feature_selection/_variance_threshold.mojo"
+        },
+        "moxie._feature_metadata": {
+          "file": "src/moxie/_feature_metadata.mojo"
         }
       },
       "path": "../../../.."

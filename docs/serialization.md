@@ -69,6 +69,23 @@ The release's Apache-2.0 license and BSD-3-Clause notices are retained under
 `third_party/mojo-snappy` and copied into `builds/deps/licenses`. Raw and Snappy
 serialization remain available in the normal Mojo 1.0.0 build and test suite.
 
+Run the focused contracts separately with:
+
+```sh
+pixi run serialization-test --codec raw
+pixi run serialization-test --codec snappy
+```
+
+Both commands assemble the current root manifest and compile the selected test;
+their dependencies, binaries and wire fixtures stay under `tests/builds` to avoid
+replacing the full build's assembly. The raw command also runs the independent
+wire-format oracle. They use the same
+locked environment and dependency assets as the full build. The Snappy test
+checks compressed round trips, raw-loader rejection and malformed payloads.
+The runner rejects unsupported compilers before assembly or compilation. Do not
+load the Mojo 1.0 compiled codec with Mojo 1.2; the compiler can crash instead of
+reporting an incompatible package. No Mojo 1.2 support is claimed.
+
 ## Wire format, version 1
 
 All integers and numerical values use little-endian order. No native pointers,

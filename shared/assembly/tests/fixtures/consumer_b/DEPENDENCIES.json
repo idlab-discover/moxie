@@ -14,7 +14,7 @@
         "dummy-family"
       ],
       "to": "moxie",
-      "reason": "Consume current fluent estimator contracts; preserve the inherited family baseline as provenance."
+      "reason": "Exercise explicit ownership overrides using current integrated sources."
     }
   ],
   "projects": [
@@ -180,7 +180,6 @@
       "id": "dummy-family",
       "modules": {
         "moxie.base": {
-          "baseline": "ec75e4cf4a4b1d244fffa6f8b3b55016635e5914",
           "file": "src/moxie/base.mojo"
         },
         "moxie.dummy": {
@@ -191,7 +190,7 @@
           "file": "src/moxie/utils/validation.mojo"
         }
       },
-      "path": "../../../../../../moxie-dummy"
+      "path": "../../../../.."
     },
     {
       "assets": {},

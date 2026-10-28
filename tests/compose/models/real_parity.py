@@ -3,7 +3,7 @@
 `ColumnTransformer` and `make_column_transformer` come from the pinned
 `_column_transformer.py`; SimpleImputer, StandardScaler and MinMaxScaler come
 from the pinned impute/preprocessing sources. The scenario mirrors
-`real_components.mojo` and `real_positional.mojo`, which also assert the feature names checked here.
+`real_components*.mojo` and `real_positional.mojo`, which also assert the feature names checked here.
 
 Tolerances: imputation and selection are exact. StandardScaler/MinMaxScaler
 use Float64-accumulated moments in Moxie and NumPy reductions in sklearn, so
@@ -53,7 +53,7 @@ def expect_names(actual, expected, label):
 
 
 output = ''.join(run(ROOT, BUILD / name, capture=True).stdout
-                 for name in ['real_components', 'real_positional'])
+                 for name in ['real_components', 'real_components_float32', 'real_positional'])
 actual = io.parse_results(output)
 assert set(actual) == {'0-named', '1-named', '0-positional', '1-positional'}, actual
 POSITIONAL = {'positional', 'positional_transform', 'auto'}

@@ -48,7 +48,9 @@ state preservation. Negative compilation checks reject missing prediction and
 block-assembly capabilities. Consumer tests compose real estimators through
 ColumnTransformer, TransformedTargetRegressor, Pipeline and DummyRegressor,
 and run SimpleImputer, StandardScaler and MinMaxScaler (including as the
-remainder) on NaN-containing named and positional columns.
+remainder) on NaN-containing named and positional columns. The named real-component
+contracts compile Float32 and Float64 in separate binaries under the existing
+compiler memory cap; both execute the same assertions and parity checks.
 
 Parity scripts under `tests/compose` execute estimator code from the local
 scikit-learn revision recorded in [interfaces](../interfaces.md). They cover

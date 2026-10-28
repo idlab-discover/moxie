@@ -18,7 +18,9 @@ pixi run neural-network-independence
 
 The combined check compiles the assembled public namespace, runs native contracts,
 compares the supported numerical subset against local sklearn, and executes an
-isolated public consumer. It does not establish full sklearn parity. Historical
+isolated public consumer. Its assembly lives in `families/neural_network/builds/deps`
+and consumes the current root manifest without replacing the root build's inputs.
+It does not establish full sklearn parity. Historical
 child `parity` tasks still fail deliberately on unfinished full acceptance gates.
 
 Side-by-side notebooks against the official gallery live in

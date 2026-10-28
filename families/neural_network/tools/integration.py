@@ -11,7 +11,7 @@ FAMILY = Path(__file__).resolve().parents[1]
 CORE = FAMILY.parents[1]
 sys.path.insert(0, str(CORE / 'tools'))
 from compiler_limits import compiler_command
-DEPS = CORE / 'builds/deps'
+DEPS = FAMILY / 'builds/deps'
 RBM = FAMILY / 'algorithms/rbm'
 ENGINE = FAMILY / 'shared/mlp_engine'
 FLAGS = ['-O3', '--fp-mode=contract=off', '-I', str(DEPS)]
@@ -23,7 +23,7 @@ def run(*args, cwd=CORE):
 
 def assemble():
     run(sys.executable, CORE / 'shared/assembly/tools/assemble_family.py',
-        '--consumer', CORE, '--lock', CORE / 'DEPENDENCIES.json', '--output', DEPS)
+        '--consumer', FAMILY, '--lock', CORE / 'DEPENDENCIES.json', '--output', DEPS)
     manifest = json.loads((CORE / 'DEPENDENCIES.json').read_text())
     receipt = json.loads((DEPS / 'ASSEMBLY.json').read_text())
     for project in manifest['projects']:

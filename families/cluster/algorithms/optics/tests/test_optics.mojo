@@ -153,6 +153,6 @@ def test_layout_and_metric() raises:
     with assert_raises(): _ = comparison.set_params(metric=String("euclidean"), min_cluster_size=Optional[OPTICSSize](OPTICSSize(Float64(0)))).fit(dense)
 
 
-def generic_fit[E: Clusterer & Deinitable](mut model: E, x: E.Input, y: Optional[E.Target]) raises -> Bool where conforms_to(E.Params, Deinitable):
+def generic_fit[E: Clusterer & Deinitable](mut model: E, x: E.Input, y: Optional[E.Target]) raises -> Bool:
     _ = model.set_params(model.get_params()).fit(x, y)
     return model.__sklearn_is_fitted__()

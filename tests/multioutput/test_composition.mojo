@@ -51,8 +51,8 @@ def assert_same(a: Dense, b: Dense) raises:
             assert_equal(a.item(i, j), b.item(i, j))
 
 
-# Adapters stay generic over the estimator: Mojo 1.0 crashes when a CV adapter
-# names a concrete wrapper type (see tests/multiclass/test_composition.mojo).
+# Adapters generic over the estimator serve both wrappers; concrete adapter
+# types are covered by test_concrete_adapters.mojo.
 struct R2[E: RegressorMixin & Predictor & Deinitable](TypedScorer):
     comptime Estimator = Self.E
     comptime Input = Dense

@@ -64,7 +64,7 @@ struct Pipeline[
   LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
   DecisionFunction where conforms_to(E, DecisionFunction),
   SampleScorer where conforms_to(E, SampleScorer),
-) where conforms_to(P.Params, Deinitable) and conforms_to(E.Params, Deinitable):
+):
     """A named transformer followed by a supervised predictor.
 
     Components are move-owned and used directly (memory=None semantics).

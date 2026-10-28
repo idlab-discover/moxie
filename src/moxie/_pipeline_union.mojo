@@ -86,7 +86,7 @@ struct UnionStepParams[P: Copyable & Deinitable](Copyable, Movable):
     var estimator: Self.P
 
 
-struct UnionStep[dtype_: DType, E: TransformerMixin & Deinitable](UnionBranches) where conforms_to(E.Params, Deinitable):
+struct UnionStep[dtype_: DType, E: TransformerMixin & Deinitable](UnionBranches):
     comptime dtype = Self.dtype_
     comptime Params = UnionStepParams[Self.E.Params]
     var name: String
@@ -153,7 +153,7 @@ struct UnionStep[dtype_: DType, E: TransformerMixin & Deinitable](UnionBranches)
 
 def union_step[E: TransformerMixin & Deinitable, //, dtype: DType = DType.float64](
     name: String, var estimator: E,
-) -> UnionStep[dtype, E] where conforms_to(E.Params, Deinitable):
+) -> UnionStep[dtype, E]:
     return UnionStep[dtype, E](name, estimator^)
 
 

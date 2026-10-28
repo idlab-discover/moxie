@@ -8,7 +8,7 @@ from moxie.decomposition import (
 )
 
 
-def chained[E: UnsupervisedEstimator & TransformerMixin](mut model: E, X: E.Input) raises where conforms_to(E.Target, Deinitable) and conforms_to(E.Params, Deinitable) and conforms_to(E.Transformed, Deinitable):
+def chained[E: UnsupervisedEstimator & TransformerMixin](mut model: E, X: E.Input) raises where conforms_to(E.Target, Deinitable) and conforms_to(E.Transformed, Deinitable):
     var params = model.get_params()
     _ = model.set_params(params).fit(X).transform(X)
     assert_true(model.__sklearn_is_fitted__())

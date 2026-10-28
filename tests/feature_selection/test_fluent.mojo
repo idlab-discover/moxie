@@ -10,7 +10,7 @@ from moxie.feature_selection import (
 
 def generic_chain[E: UnsupervisedEstimator & TransformerMixin](
     mut estimator: E, X: E.Input, y: Optional[E.Target]
-) raises -> E.Transformed where conforms_to(E.Params, Deinitable):
+) raises -> E.Transformed:
     var params = estimator.get_params()
     return estimator.set_params(params).fit(X, y).transform(X)
 

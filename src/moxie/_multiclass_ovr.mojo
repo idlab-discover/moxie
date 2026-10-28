@@ -107,7 +107,7 @@ struct OneVsRestClassifier[
     IncrementalClassifier where conforms_to(E, IncrementalClassifier),
     MulticlassDecision where conforms_to(E, DecisionFunction),
     MulticlassProbability where conforms_to(E, ProbabilityPredictor),
-) where conforms_to(E.Params, Deinitable):
+):
     """One-vs-the-rest (OvR) multiclass strategy: one binary classifier per class.
 
     `E` is a binary classifier or regressor taking `NDArray[dtype]` features and `NDArray[int64]`

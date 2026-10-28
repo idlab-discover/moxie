@@ -10,7 +10,7 @@ trait BaseEstimator(Movable):
     Mojo 1.0 conversion thunks for register-passable associated types.
     """
 
-    comptime Params: Copyable
+    comptime Params: Copyable & Deinitable
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         ...

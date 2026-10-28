@@ -216,7 +216,7 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
     Copyable where conforms_to(E, Copyable),
     WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
     IncrementalRegressor where conforms_to(E, IncrementalRegressor),
-) where conforms_to(E.Params, Deinitable):
+):
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label]
     comptime Prediction = Self.Target
@@ -362,7 +362,7 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
     WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
     IncrementalClassifier where conforms_to(E, IncrementalClassifier),
     MultiOutputProbability where conforms_to(E, ProbabilityPredictor),
-) where conforms_to(E.Params, Deinitable):
+):
     comptime Classes = List[NDArray[Self.label]]
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label]
@@ -536,7 +536,7 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
     MultiOutputRegressorAPI,
     Copyable where conforms_to(E, Copyable),
     WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
-) where conforms_to(E.Params, Deinitable):
+):
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label]
     comptime Prediction = Self.Target
@@ -726,7 +726,7 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
     Copyable where conforms_to(E, Copyable),
     WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
     MultiOutputProbability where conforms_to(E, ProbabilityPredictor),
-) where conforms_to(E.Params, Deinitable):
+):
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label]
     comptime Prediction = Self.Target

@@ -5,7 +5,7 @@ from moxie.cluster import AgglomerativeClustering, FeatureAgglomeration, ward_tr
 from moxie.cluster._agglomerative import FullTree
 
 
-def dispatch[T: UnsupervisedEstimator](mut model: T, x: T.Input, y: Optional[T.Target]) raises where conforms_to(T.Params, Deinitable):
+def dispatch[T: UnsupervisedEstimator](mut model: T, x: T.Input, y: Optional[T.Target]) raises:
     var params = model.get_params()
     _ = model.set_params(params).fit(x, y)
 

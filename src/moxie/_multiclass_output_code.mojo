@@ -32,7 +32,7 @@ struct OutputCodeClassifier[
     kind: MulticlassLabels = NumericLabels[label],
     ClassValues: Copyable & Deinitable = kind.Classes,
     Domain: Copyable & Deinitable = kind.Encoding,
-](MulticlassClassifier) where conforms_to(E.Params, Deinitable):
+](MulticlassClassifier):
     """Fit binary classifiers on random code bits; predict the closest codeword.
 
     Components receive -1/+1 targets when they expose DecisionFunction, else

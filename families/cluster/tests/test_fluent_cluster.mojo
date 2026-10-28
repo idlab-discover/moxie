@@ -7,13 +7,13 @@ from moxie.cluster import (
     AffinityPropagation, KMeans, MiniBatchKMeans, BisectingKMeans, DBSCAN, MeanShift,
 )
 
-def fit_chain[E: Clusterer & Deinitable](mut model: E, x: E.Input, y: Optional[E.Target]) raises where conforms_to(E.Params, Deinitable):
+def fit_chain[E: Clusterer & Deinitable](mut model: E, x: E.Input, y: Optional[E.Target]) raises:
     _ = model.set_params(model.get_params()).fit(x, y).fit(x, y)
     assert_true(model.__sklearn_is_fitted__())
     var fresh = clone(model)
     assert_false(fresh.__sklearn_is_fitted__())
 
-def predict_chain[E: PredictiveClusterer](mut model: E, x: E.Input, y: Optional[E.Target]) raises -> E.Prediction where conforms_to(E.Params, Deinitable):
+def predict_chain[E: PredictiveClusterer](mut model: E, x: E.Input, y: Optional[E.Target]) raises -> E.Prediction:
     return model.set_params(model.get_params()).fit(x, y).predict(x)
 
 def update_chain[E: IncrementalClusterer](mut model: E, x: E.Input, y: Optional[E.Target]) raises:

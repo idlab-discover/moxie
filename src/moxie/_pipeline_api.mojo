@@ -38,7 +38,7 @@ def _type_name[T: AnyType]() -> String:
 
 def make_pipeline[P: TransformerMixin & Deinitable, E: SupervisedEstimator & Predictor & Deinitable](
     var transformer: P, var estimator: E,
-) raises -> Pipeline[P, E] where conforms_to(P.Params, Deinitable) and conforms_to(E.Params, Deinitable):
+) raises -> Pipeline[P, E]:
     """Scikit-learn: make_pipeline(*steps, memory=None, transform_input=('X_val',), verbose=False).
 
     Names are the lowercased type names, numbered on collision, as in sklearn.
@@ -52,7 +52,7 @@ def make_pipeline[P: TransformerMixin & Deinitable, E: SupervisedEstimator & Pre
 def make_union[A: TransformerMixin & Deinitable, B: TransformerMixin & Deinitable, //, dtype: DType = DType.float64](
     var first: A, var second: B, *, n_jobs: Optional[Int] = None, verbose: Bool = False,
     verbose_feature_names_out: Bool = True,
-) raises -> FeatureUnion[UnionPair[UnionStep[dtype, A], UnionStep[dtype, B]]] where conforms_to(A.Params, Deinitable) and conforms_to(B.Params, Deinitable):
+) raises -> FeatureUnion[UnionPair[UnionStep[dtype, A], UnionStep[dtype, B]]]:
     """Scikit-learn: make_union(*transformers, n_jobs=None, verbose=False, verbose_feature_names_out=True)."""
     var names = _name_estimators([_type_name[A](), _type_name[B]()])
     return FeatureUnion(UnionPair(union_step[dtype](names[0], first^), union_step[dtype](names[1], second^)),
@@ -65,7 +65,7 @@ def make_union[
 ](
     var first: A, var second: B, var third: C, *, n_jobs: Optional[Int] = None, verbose: Bool = False,
     verbose_feature_names_out: Bool = True,
-) raises -> FeatureUnion[UnionPair[UnionStep[dtype, A], UnionPair[UnionStep[dtype, B], UnionStep[dtype, C]]]] where conforms_to(A.Params, Deinitable) and conforms_to(B.Params, Deinitable) and conforms_to(C.Params, Deinitable):
+) raises -> FeatureUnion[UnionPair[UnionStep[dtype, A], UnionPair[UnionStep[dtype, B], UnionStep[dtype, C]]]]:
     """Three-transformer make_union; the nested pairs form one flat branch list."""
     var names = _name_estimators([_type_name[A](), _type_name[B](), _type_name[C]()])
     var tail = UnionPair(union_step[dtype](names[1], second^), union_step[dtype](names[2], third^))

@@ -62,11 +62,9 @@ and KernelRidge declares floating targets. Adapter or component-contract work
 remains separate.
 Composition: the wrappers work as `Pipeline` final steps and under `clone`,
 `cross_val_score` and `GridSearchCV` (nested `estimator__alpha` through the
-typed deep `Params` record). Their struct-level
-`where conforms_to(E.Params, Deinitable)` clause triggers a Mojo 1.0 compiler
-crash (`CallParamInf::inferForCall`) when a `CVAdapter`/`SearchAdapter` names a
-concrete wrapper type; write adapters generic over the estimator type, as in
-`tests/multiclass/test_composition.mojo`. `GridSearchCV` is not a
+typed deep `Params` record). Adapters and scorers may name a concrete wrapper
+type (`tests/multiclass/test_concrete_adapters.mojo`) or stay generic over the
+estimator (`tests/multiclass/test_composition.mojo`). `GridSearchCV` is not a
 `SupervisedEstimator`, so a search cannot be a multiclass component.
 
 Sparse inputs, metadata routing, mutable Python RNG objects, bindings and

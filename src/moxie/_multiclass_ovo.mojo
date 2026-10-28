@@ -84,7 +84,7 @@ struct OneVsOneClassifier[
 ](
     MulticlassClassifier, MulticlassDecision, PairwiseInput,
     IncrementalClassifier where conforms_to(E, IncrementalClassifier),
-) where conforms_to(E.Params, Deinitable):
+):
     """One-vs-one (OvO) multiclass strategy: one binary classifier per class pair.
 
     For classes `i < j` (in `classes_` order) a clone of `E` is fitted on the

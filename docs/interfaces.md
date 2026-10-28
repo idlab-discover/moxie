@@ -76,7 +76,10 @@ through their own `__sklearn_clone__` implementation.
   Dynamic heterogeneous dictionaries, arbitrary `**kwargs`, and nested
   `component__parameter` string routing are not implemented. A meta-estimator
   must define how its typed configuration represents nested updates and honor
-  deep traversal; the base trait alone does not supply it.
+  deep traversal; the base trait alone does not supply it. `Params` is
+  `Copyable & Deinitable`, so meta-estimators need no struct-level `where`
+  clause on their components' records; Mojo 1.0 cannot name a struct that
+  carries one outside its generic context (e.g. as a scorer's `Estimator`).
 - Errors currently use Mojo `Error` with descriptive `NotFittedError` or
   `ValueError` prefixes, not Python exception classes.
 - Optional capabilities are compile-time traits. A concrete algorithm must

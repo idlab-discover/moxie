@@ -70,7 +70,7 @@ struct Accuracy[E: ClassifierMixin & Predictor & Deinitable](SearchScorer):
 
 
 struct Folds[E: ClassifierMixin & Predictor & Deinitable](SearchAdapter):
-    """Tunes OvO(RidgeClassifier) `estimator__alpha`; generic only to avoid the crash below."""
+    """Tunes OvO(RidgeClassifier) `estimator__alpha`."""
     comptime Scorer = Accuracy[Self.E]
     comptime Value = Float64
 
@@ -111,8 +111,8 @@ struct Folds[E: ClassifierMixin & Predictor & Deinitable](SearchAdapter):
         return stratified(y)
 
 
-# Mojo 1.0 crashes (CallParamInf::inferForCall) when a CV adapter names a
-# concrete multiclass wrapper type; adapters generic over the estimator work.
+# Adapters generic over the estimator serve every wrapper; concrete adapter
+# types are covered by test_concrete_adapters.mojo.
 struct Acc[E: ClassifierMixin & Predictor & Deinitable](TypedScorer):
     comptime Estimator = Self.E
     comptime Input = Dense

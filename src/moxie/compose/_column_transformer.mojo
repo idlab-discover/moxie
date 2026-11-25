@@ -1405,6 +1405,10 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._fitted_transformers)
 
+    def as_table_transformer(var self) -> TableColumnTransformer[Self.L, Self.R]:
+        """Move this transformer into the ColumnTable-associated estimator interface."""
+        return TableColumnTransformer(self^)
+
     # -- validation -----------------------------------------------------------
 
     def _validate_params(self) raises:
@@ -1767,6 +1771,62 @@ def _check_unique(names: List[String]) raises:
         text = _py_list(overlap)
     raise Error(String("ValueError: Output feature names: ", text, " are not unique. Please set ",
                        "verbose_feature_names_out=True to add prefixes to feature names"))
+
+
+@fieldwise_init
+struct TableColumnTransformer[L: ColumnList, R: ColumnComponent](
+    TransformerMixin, FitTransformer, UnsupervisedEstimator, Copyable,
+    NativeFeatureNamesOut, InputFeatureCount, EstimatorClassName,
+):
+    """Expose a ColumnTransformer's native table input to generic composition."""
+
+    comptime Input = ColumnTable[Self.L.dtype]
+    comptime Target = NDArray[Self.L.dtype]
+    comptime Transformed = NDArray[Self.L.dtype]
+    comptime Params = ColumnTransformerParams[Self.L, Self.R]
+
+    var columns: ColumnTransformer[Self.L, Self.R]
+
+    @staticmethod
+    def name() -> String:
+        return "ColumnTransformer"
+
+    def get_params(self, deep: Bool = True) raises -> Self.Params:
+        return self.columns.get_params(deep)
+
+    def set_params[origin: MutOrigin, params_origin: ImmOrigin](
+        ref[origin] self, ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
+        _ = self.columns.set_params(params)
+        return self
+
+    def __sklearn_clone__(self) raises -> Self:
+        return Self(clone(self.columns))
+
+    def __sklearn_is_fitted__(self) -> Bool:
+        return self.columns.__sklearn_is_fitted__()
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
+        _ = self.columns.fit(X, y)
+        return self
+
+    def fit_transform(
+        mut self, X: Self.Input, y: Optional[Self.Target] = None,
+    ) raises -> Self.Transformed:
+        return self.columns.fit_transform(X, y)
+
+    def transform(self, X: Self.Input) raises -> Self.Transformed:
+        return self.columns.transform(X)
+
+    def get_n_features_in(self) raises -> Int:
+        return self.columns.get_n_features_in()
+
+    def get_feature_names_out(
+        self, input_features: Optional[List[String]] = None,
+    ) raises -> List[String]:
+        return self.columns.get_feature_names_out(input_features)
 
 
 # ---------------------------------------------------------------------------

@@ -38,6 +38,10 @@ probabilities and OOB decisions are lists, one element per output. This explicit
 compile-time choice replaces Python's runtime-changing return types. The default
 classifier rejects a target matrix with more than one column.
 
+Single-output regressors and binary classifiers accept NaN features with
+`monotonic_cst`. Each member uses its learned missing routes for prediction
+and leaf inspection.
+
 Constructor parameters retain the reference names and defaults. Get the complete
 owned `ForestParams` record with `get_params()`, edit its fields and pass it to
 `set_params(params)`. Named partial updates support every constructor parameter.

@@ -110,7 +110,7 @@ def main() raises:
     assert_equal(Int(encoded_input.n_categories.unsafe_get(2)), 4)
     var query = X.copy()
     query.unsafe_set(2, 999)
-    var encoded_query = encoded_input.encoder.encode(query, False)
+    var encoded_query = encoded_input.encoder.encode(query)
     assert_true(encoded_query.unsafe_get(2) != encoded_query.unsafe_get(2))
     for seed in range(3):
         var tree = categorical.__sklearn_clone__()
@@ -141,8 +141,8 @@ def main() raises:
     var table_direct = table_model.__sklearn_clone__()
     _ = table_direct.fit(table, binary)
     assert_same_tree(table_direct.tree_, table_member.tree_)
-    var from_input = table_input.encoder.encode(table, False)
-    var from_member = table_member.input_encoder().encode(table, False)
+    var from_input = table_input.encoder.encode(table)
+    var from_member = table_member.input_encoder().encode(table)
     assert_equal(from_input.size, from_member.size)
     for i in range(from_input.size):
         var a = from_input.unsafe_get(i)
@@ -153,7 +153,7 @@ def main() raises:
     assert_same_values(proba[0], direct_proba[0])
     assert_equal(table_member.feature_names_in_.value()[1], "s")
     with assert_raises(contains="TreeTable"):
-        _ = table_member.predict_encoded(table_input.encoder.encode(X, False))
+        _ = table_member.predict_encoded(table_input.encoder.encode(X))
 
     # Misuse is rejected without disturbing fitted state.
     var mismatched = DecisionTreeClassifier(random_state=3, max_features="sqrt", criterion="entropy", class_weight=String("balanced"))

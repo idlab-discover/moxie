@@ -40,9 +40,12 @@ def main() raises:
     with assert_raises():
         _ = monotonic.fit(X, y)
     var zero_monotonic = DecisionTreeClassifier(categorical_features=Optional[List[Int]]([0]), monotonic_cst=Optional[List[Int]]([0]))
+    var previous = X.unsafe_get(0)
+    X.unsafe_set(0, Float32(Float64("nan")))
     _ = zero_monotonic.fit(X, y)
-    with assert_raises():
-        _ = zero_monotonic.predict(query)
+    var constrained_leaves = zero_monotonic.apply(query)
+    assert_equal(constrained_leaves.item(0), constrained_leaves.item(1))
+    X.unsafe_set(0, previous)
     var mae = DecisionTreeRegressor(categorical_features=Optional[List[Int]]([0]), criterion="absolute_error")
     with assert_raises():
         _ = mae.fit(X, y)

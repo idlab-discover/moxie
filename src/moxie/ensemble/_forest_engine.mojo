@@ -289,8 +289,7 @@ struct ForestEngine[classifier: Bool, extra: Bool = False](Movable, Sized):
     def encode(self, X: Features) raises -> Features:
         """Validate prediction input once for every member (`_validate_X_predict`)."""
         self._ready()
-        ref params = self.base.estimator_.params
-        return self._encoder.encode(X, Bool(params.monotonic_cst))
+        return self._encoder.encode(X)
 
     def apply(self, X: Features) raises -> Indices:
         """Leaf index of every sample in every member, `(samples, n_estimators)`."""

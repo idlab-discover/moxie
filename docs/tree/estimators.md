@@ -100,12 +100,12 @@ NumPy singleton is not exposed. `fit_with_random_state(X,y,rng,weights)` accepts
 an explicit mutable shared context to preserve stream consumption across trees.
 Each tree draws exactly one seed before using its tree-local xorshift stream.
 
-`monotonic_cst` is `Optional[List[Int]]`, with signs -1, 0, or 1. Only single-output
-regression and binary classification are supported, as in the reference. Moxie
-rejects missing (NaN) inputs with nonzero constraints; the pinned reference accepts
-them, so this is a deferral.
-Best and random splitters propagate bounds and clip values in both depth-first
-and best-first construction. Categorical columns must have zero monotonic signs.
+`monotonic_cst` is `Optional[List[Int]]`, with signs -1, 0, or 1. Constraints
+require a single output and support up to two classes in classification. Best
+and random splitters check child values after assigning NaN samples to a
+candidate branch. Depth-first and best-first construction propagate the
+resulting bounds and clip node values. Prediction follows the learned missing
+direction. Categorical columns must have zero monotonic signs.
 
 `categorical_features` accepts `None`/`NoneType()`, `List[Int]` indices, `List[Bool]`
 masks, `List[String]` column names, or `"from_dtype"`. The earlier
@@ -152,8 +152,8 @@ regression and binary classification. Random search uses sklearn's hash-seed dra
 and retry protocol, accepts up to 2**24 categories, and supports multiclass and
 multioutput targets. Categories with zero sample weight remain in the fitted
 dictionary. Both searches reject nonzero monotonic signs on categorical columns.
-Absolute-error categorical fitting is unsupported. The existing native exclusion
-of missing values with `monotonic_cst` also applies to unknown categories.
+Absolute-error categorical fitting is unsupported. Missing and unknown
+categories follow the same route when a constraint applies to another feature.
 
 ## Mixed string/numeric tables
 
@@ -262,7 +262,7 @@ var params = tree.get_params()
 params.random_state = seed
 tree.set_params(params)
 tree.fit_prepared(prepared, sample_weight=counts)  # e.g. bootstrap counts
-var encoded = prepared.encoder.encode(X_test, monotonic=False)  # once per predict
+var encoded = prepared.encoder.encode(X_test)  # once per predict
 var prediction = tree.predict_encoded(encoded)
 ```
 
@@ -285,9 +285,9 @@ averages three bootstrapped members this way.
   thresholds, `ccp_alpha`). A different `criterion`, `splitter`,
   `monotonic_cst`, `categorical_features` or `class_weight` raises.
 - Every member built from one prepared input shares its encoder.
-  `TreeInputEncoder.encode(X, monotonic)` performs predict-time
-  validation and category lookup. Pass `monotonic=True` when the estimator
-  uses `monotonic_cst`. The former `reject_missing` argument has been removed.
+  `TreeInputEncoder.encode(X)` performs predict-time validation and category
+  lookup. Call it with the feature input alone, including for constrained fits
+  with NaNs.
   `apply_encoded`, `predict_encoded` and `predict_proba_encoded` then only check fitted state and
   shape, like sklearn `check_input=False`. Passing unencoded categorical input to
   them is a caller error. `input_encoder()` returns a fitted tree's encoder.

@@ -68,7 +68,7 @@ def run_case[classifier: Bool, extra: Bool](lines: List[List[String]], mut at: I
     at += 5  # The caller weight line is folded into each member's weights by the forest.
     # Prepare and encode once; every member reuses both.
     var prepared = model.prepare_fit(X, y)
-    var encoded = prepared.encoder.encode(Q, Bool(monotonic))
+    var encoded = prepared.encoder.encode(Q)
     for m in range(members):
         ref fields = lines[at]
         at += 1

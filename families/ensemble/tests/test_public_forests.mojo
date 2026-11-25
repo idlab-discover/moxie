@@ -121,7 +121,31 @@ def absolute_error_missing[extra: Bool]() raises:
         assert_equal(leaves.unsafe_get(3 * 4 + member), leaves.unsafe_get(4 * 4 + member))
 
 
+def monotonic_missing[classifier: Bool, extra: Bool]() raises:
+    var X = nm.zeros[DType.float32](nm.Shape(12, 1))
+    var y = nm.zeros[DType.float64](nm.Shape(12))
+    for i in range(12):
+        X.unsafe_set(i, Float32(i) if i < 10 else Float32(Float64("nan")))
+        y.unsafe_set(i, Float64(i >= 5))
+    var model = Forest[classifier, extra](
+        5, bootstrap=False, random_state=0, monotonic_cst=Optional[List[Int]]([1]),
+    )
+    _ = model.fit(X, y)
+    var predictions = model.predict(X)
+    assert_equal(predictions.item(10), predictions.item(11))
+    var leaves = model.apply(X)
+    for member in range(5):
+        assert_equal(leaves.unsafe_get(10 * 5 + member), leaves.unsafe_get(11 * 5 + member))
+    comptime if classifier:
+        var probabilities = model.predict_proba(X)
+        assert_true(probabilities.unsafe_get(1) < probabilities.unsafe_get(19))
+    else:
+        assert_true(predictions.item(0) < predictions.item(9))
+
+
 def main() raises:
+    monotonic_missing[True, False]()
+    monotonic_missing[False, True]()
     absolute_error_missing[False]()
     absolute_error_missing[True]()
     parameter_updates[True, False]()

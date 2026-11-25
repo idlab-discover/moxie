@@ -34,7 +34,7 @@ def main() raises:
     var query = nm.zeros[DType.float32](nm.Shape(2, 2))
     query.unsafe_set(2, 30)
     query.unsafe_set(3, 2)
-    var encoded = prepared.encoder.encode(query, False)  # once per prediction
+    var encoded = prepared.encoder.encode(query)  # once per prediction
     var mean = nm.zeros[DType.float64](nm.Shape(2))
     for m in range(len(members)):
         var prediction = members[m].predict_encoded(encoded)

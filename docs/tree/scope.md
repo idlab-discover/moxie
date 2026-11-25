@@ -21,8 +21,8 @@ Supported modes:
 - Sample and class weights, fit/refit/clone/parameter lifecycle, prediction,
   classifier probabilities/log-probabilities, accuracy/R2, apply, depth/leaf
   inspection, feature importances, cost-complexity pruning and pruning paths.
-- Single-output regression/binary-classification monotonic bounds without NaNs
-  (the pinned reference also accepts NaNs with monotonic constraints; deferred).
+- Single-output regression/binary-classification monotonic bounds with
+  finite or NaN features.
 - Owned feature names and ordered-name validation on TreeTable; categorical
   selectors by indices, boolean masks, names or native dtype metadata.
 
@@ -85,6 +85,14 @@ comparisons across 68 fits** for both regressors, including signed weights,
 multiple outputs, monotonic constraints, best-first construction and pruning.
 Weighted NaN fixtures cover both missing directions in best and random searches.
 
+Monotonic constraints with NaNs pass **5,044 comparisons across 48 fits**.
+Weighted fixtures reach both root missing directions at depth two or greater
+for binary classification, regression, best/random search and depth-first/
+best-first construction. The oracle checks exact structure and leaf IDs and
+uses a 2e-12 Float64 tolerance for impurities, values and probabilities.
+Run `tests/tree/parity.py --monotonic-missing-only` with the source-built oracle
+Python after building `tests/tree/monotonic_missing_driver.mojo`.
+
 Dense numeric categorical validation adds **50,608 comparisons across 160 fits**
 against the same source-built reference. It covers best/random search, binary and
 multiclass classification, regression, supported multioutput targets, zero and
@@ -127,15 +135,15 @@ combining categorical selectors, signed weights, pruning and leaf limits. Seeds
 and category words compare exactly, Float64 statistics within 2e-12. Run
 `tests/randomized_parity.py` with the oracle Python, or `pixi run parity`.
 
-Forest-member differential tests add **70,386 exact comparisons across 105 member
-trees** of 21 reference RandomForest and ExtraTrees classifiers and regressors
+Forest-member differential tests add **76,648 exact comparisons across 125 member
+trees** of 25 reference RandomForest and ExtraTrees classifiers and regressors
 (`tests/forest_member_parity.py`). The script recovers each member's seed and
 the exact weights sklearn passed to `tree._fit(check_input=False)`: bootstrap
 counts drawn with combined weights, balanced_subsample factors, or combined
 weights without bootstrap. The native driver builds every member of a forest
 from one prepared input and predicts through one shared encoding. Inputs cross
 as raw bits: continuous Float32 features with ties and NaNs, every criterion,
-multi-output targets, monotonic constraints, leaf and depth limits, pruning,
+multi-output targets, monotonic constraints with NaNs, leaf and depth limits, pruning,
 minimum weight/impurity thresholds and `max_samples`. Structure, thresholds,
 impurities, weighted counts, values, importances, leaf IDs and predictions are
 bit-identical, and the mean of member predictions equals the forest's

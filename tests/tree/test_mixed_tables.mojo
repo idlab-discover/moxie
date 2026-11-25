@@ -79,6 +79,14 @@ def main() raises:
     var zeros = TreeTable([TreeColumn(nm.zeros[DType.float32](nm.Shape(6))), TreeColumn(nm.zeros[DType.float32](nm.Shape(6)))])
     _ = model.fit(zeros, y)
     _ = model.predict(matrix)
+    var numeric_constraint = DecisionTreeClassifier(
+        random_state=0, categorical_features=Optional[List[Int]]([1]),
+        monotonic_cst=Optional[List[Int]]([1, 0]),
+    )
+    _ = numeric_constraint.fit(table, y)
+    assert_equal(numeric_constraint.tree_.nodes[0].feature, 1)
+    var constrained_leaves = numeric_constraint.apply(query)
+    assert_equal(constrained_leaves.item(0), constrained_leaves.item(1))
     var constrained = DecisionTreeClassifier(categorical_features=Optional[List[Int]]([1]), monotonic_cst=Optional[List[Int]]([0, 1]))
     with assert_raises():
         _ = constrained.fit(reordered, y)

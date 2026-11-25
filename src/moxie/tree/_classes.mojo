@@ -85,17 +85,14 @@ struct TreeInputEncoder(Copyable, Movable):
         if X.ndim != 2 or X.shape[0] == 0 or X.shape[1] != self.n_features:
             raise Error("ValueError: prediction requires nonempty X with fitted feature count")
 
-    def encode(self, X: Features, monotonic: Bool) raises -> Features:
-        """Validate X and map categorical columns to fitted codes (unknown -> NaN).
-
-        `monotonic` reflects the caller's current parameters.
-        """
+    def encode(self, X: Features) raises -> Features:
+        """Validate X and map categorical columns to fitted codes (unknown -> NaN)."""
         for domain in self.string_domains:
             if domain:
                 raise Error("ValueError: model fitted with string columns requires TreeTable input")
-        return self._encode_numeric(X, monotonic)
+        return self._encode_numeric(X)
 
-    def encode(self, X: TreeTable, monotonic: Bool) raises -> Features:
+    def encode(self, X: TreeTable) raises -> Features:
         self.check_feature_names(X.feature_names)
         if X.shape[1] != self.n_features or X.shape[0] == 0:
             raise Error("ValueError: prediction requires nonempty X with fitted feature count")
@@ -113,17 +110,15 @@ struct TreeInputEncoder(Copyable, Movable):
                 ref column = X._columns[j][Features]
                 for i in range(X.shape[0]):
                     matrix.unsafe_set(i * X.shape[1] + j, column.unsafe_get(i * Int(column.strides[0])))
-        return self._encode_numeric(matrix, monotonic)
+        return self._encode_numeric(matrix)
 
-    def _encode_numeric(self, X: Features, monotonic: Bool) raises -> Features:
+    def _encode_numeric(self, X: Features) raises -> Features:
         self.check_encoded(X)
         for i in range(X.shape[0]):
             for j in range(X.shape[1]):
                 var x = X.unsafe_get(i * Int(X.strides[0]) + j * Int(X.strides[1]))
                 if x == x and not isfinite(x):
                     raise Error("ValueError: infinite features")
-                if x != x and monotonic:
-                    raise Error("ValueError: NaN with monotonic constraints")
         if not self.is_categorical:
             return X.view_with_layout(X.shape, X.strides, X.offset)
         var encoded = X.copy()
@@ -132,8 +127,6 @@ struct TreeInputEncoder(Copyable, Movable):
                 for i in range(X.shape[0]):
                     var x = X.unsafe_get(i * Int(X.strides[0]) + j * Int(X.strides[1]))
                     var code = self.numeric_domains[j].find(x) if x == x else -1
-                    if code < 0 and monotonic:
-                        raise Error("ValueError: unknown categories with monotonic constraints are unsupported")
                     encoded.unsafe_set(i * Int(encoded.strides[0]) + j * Int(encoded.strides[1]), Float32(code) if code >= 0 else Float32(Float64("nan")))
         return encoded^
 
@@ -569,8 +562,6 @@ struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DTyp
                 var x = X.unsafe_get(i * Int(X.strides[0]) + j * Int(X.strides[1]))
                 if x != x:
                     missing.unsafe_set(j, 1)
-                    if self.params.monotonic_cst:
-                        raise Error("ValueError: missing values with monotonic constraints are unsupported")
                 elif not isfinite(x):
                     raise Error("ValueError: infinite features")
         var target = nm.zeros[DType.float64](nm.Shape(n, outputs))
@@ -765,11 +756,11 @@ struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DTyp
 
     def _encode_X(self, X: TreeTable) raises -> Features:
         self._ready()
-        return self._encoder.encode(X, Bool(self.params.monotonic_cst))
+        return self._encoder.encode(X)
 
     def _encode_X(self, X: Features) raises -> Features:
         self._ready()
-        return self._encoder.encode(X, Bool(self.params.monotonic_cst))
+        return self._encoder.encode(X)
 
     def input_encoder(self) raises -> TreeInputEncoder:
         """The fitted encoder; shared by every tree built from the same prepared input."""

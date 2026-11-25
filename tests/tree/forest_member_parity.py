@@ -48,6 +48,10 @@ def case_list():
         (et_c, dict(criterion='log_loss', bootstrap=True, max_leaf_nodes=6), dict(classes=[2, 2], nan=True)),
         (rf_r, dict(criterion='absolute_error', max_leaf_nodes=8), dict(nan=True, weights=True)),
         (et_r, dict(criterion='absolute_error', bootstrap=True, max_depth=5), dict(outputs=2, nan=True, weights=True)),
+        (rf_r, dict(monotonic_cst=[1, 0, -1, 0, 0], max_leaf_nodes=8), dict(nan=True)),
+        (rf_c, dict(monotonic_cst=[1, -1, 0, 0, 0], max_depth=4), dict(classes=[2], nan=True)),
+        (et_r, dict(monotonic_cst=[1, 0, -1, 0, 0], max_depth=5), dict(nan=True)),
+        (et_c, dict(monotonic_cst=[1, -1, 0, 0, 0], max_leaf_nodes=8), dict(classes=[2], nan=True)),
     ]
 
 def make_data(index, spec):

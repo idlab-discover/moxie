@@ -62,11 +62,94 @@ def structure_parity():
                                           err_msg=f'case {case}, field {field}')
     print(f'PASS: {len(fields)} exact structure arrays and tree metadata across {len(fixtures)} fits')
 
+def monotonic_missing_parity():
+    """Check missing directions and bounds without depending on the export backend."""
+    from collections import defaultdict
+
+    cases = defaultdict(lambda: defaultdict(list))
+    output = subprocess.check_output([ROOT/'builds/tree/monotonic_missing_driver'], text=True)
+    for line in output.splitlines():
+        tag, criterion, extra, case, *values = line.split()
+        cases[criterion, extra == 'True', int(case)][tag].append(list(map(float, values)))
+    assert len(cases) == 48
+
+    coverage = defaultdict(set)
+    comparisons = 0
+
+    def compare(actual, expected, *, exact=False):
+        nonlocal comparisons
+        if exact:
+            np.testing.assert_array_equal(actual, expected, err_msg=str(key))
+        else:
+            # Allow Float64 rounding in criterion reductions and node values.
+            np.testing.assert_allclose(actual, expected, rtol=2e-12, atol=2e-12,
+                                       err_msg=str(key))
+        comparisons += np.size(expected)
+
+    sample = np.arange(48)
+    group = sample // 8
+    X = np.where(group < 5, group, np.nan).astype(np.float32)[:, None]
+    weights = (1 + (sample * 3 + group) % 7) / 4
+    query = np.r_[np.arange(-1, 10, dtype=np.float32) / 2, np.float32(np.nan)][:, None]
+    for key, native in cases.items():
+        criterion, extra, case = key
+        sign = -1 if case % 2 else 1
+        best_first = case % 4 >= 2
+        target = np.where(group < 5, group + 1, 1 if case < 4 else 5)
+        classifier = criterion in ('gini', 'entropy')
+        if classifier:
+            cls = ExtraTreeClassifier if extra else DecisionTreeClassifier
+            positives = np.where(target == 1, 0, np.where(target == 5, 8, target))
+            y = np.where((sample % 8 < positives) == (sign > 0), 13, 7)
+        else:
+            cls = ExtraTreeRegressor if extra else DecisionTreeRegressor
+            y = target if sign > 0 else 6 - target
+        # Random classification seeds produce both missing routes at depth >= 2.
+        seed = (2 if case < 4 else 0) if classifier and extra else case
+        model = cls(criterion=criterion, max_depth=4, random_state=seed,
+                    max_leaf_nodes=4 if best_first else None,
+                    monotonic_cst=[sign]).fit(X, y, sample_weight=weights)
+        tree = model.tree_
+        compare(native['CASE'], [[tree.node_count, tree.max_depth, tree.n_leaves]], exact=True)
+        nodes = np.asarray(native['NODE'])
+        compare(nodes[:, :4], np.column_stack([
+            np.arange(tree.node_count), tree.children_left, tree.children_right,
+            tree.feature,
+        ]), exact=True)
+        compare(nodes[:, 4], tree.threshold, exact=True)
+        compare(nodes[:, 5], tree.impurity)
+        compare(nodes[:, 6:], np.column_stack([
+            tree.n_node_samples, tree.weighted_n_node_samples, tree.missing_go_to_left,
+        ]), exact=True)
+        compare(np.asarray(native['VALUE'])[:, 2].reshape(tree.value.shape), tree.value)
+        predictions = np.asarray(native['PRED'])
+        compare(predictions[:, 1], model.apply(query), exact=True)
+        compare(predictions[:, 2], model.predict(query), exact=classifier)
+        ordered = predictions[:-1, 2]
+        if classifier:
+            probabilities = np.asarray(native['PROBA'])[:, 1]
+            compare(probabilities, model.predict_proba(query)[:, 1])
+            ordered = probabilities[:-1]
+        assert np.all(sign * np.diff(ordered) >= -2e-12), key
+        if tree.max_depth >= 2:
+            coverage[classifier, extra, best_first].add(int(tree.missing_go_to_left[0]))
+    assert set(coverage) == {
+        (classifier, extra, best_first)
+        for classifier in (False, True)
+        for extra in (False, True)
+        for best_first in (False, True)
+    }, coverage
+    for paths in coverage.values():
+        assert paths == {0, 1}, coverage
+    print(f'PASS monotonic missing: {comparisons} comparisons across {len(cases)} fits')
+
+
 def main(*, structure_only=False):
     check_reference()
     structure_parity()
     if structure_only:
         return
+    monotonic_missing_parity()
     import treelite,treelite.gtil,treelite.sklearn
     assert treelite.__version__=='4.6.1',treelite.__version__
     exports=ROOT/'builds/tree/treelite/cases';exports.mkdir(parents=True,exist_ok=True)
@@ -161,4 +244,8 @@ def main(*, structure_only=False):
     print(json.dumps({'checks':checks,'failures':len(failures),'treelite_cases':treelite_cases,'nan_rows_routed_differently':nan_divergent,'first':failures[:8]},indent=2))
     assert not failures
 if __name__=='__main__':
-    main(structure_only=sys.argv[1:] == ['--structure-only'])
+    if sys.argv[1:] == ['--monotonic-missing-only']:
+        check_reference()
+        monotonic_missing_parity()
+    else:
+        main(structure_only=sys.argv[1:] == ['--structure-only'])

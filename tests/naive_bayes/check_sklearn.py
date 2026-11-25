@@ -29,8 +29,11 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--start", type=int, default=0, help="first case index (inclusive)")
 parser.add_argument("--stop", type=int, help="last case index (exclusive)")
 parser.add_argument("--batch-size", type=int, default=32, help="maximum cases per native compilation")
-parser.add_argument("--round-trip-bernoulli", action="store_true",
-                    help="run only Bernoulli oracle cases, restoring the model after each update")
+archives = parser.add_mutually_exclusive_group()
+for estimator in ("BernoulliNB", "CategoricalNB"):
+    archives.add_argument(f"--round-trip-{estimator[:-2].lower()}", dest="round_trip",
+                          action="store_const", const=estimator,
+                          help=f"run only {estimator} oracle cases, restoring after each update")
 cli = parser.parse_args()
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -192,7 +195,7 @@ def compare(expr, value, *, labels=False, array_dtype=None):
 
 
 def case(name, params, X, y, Q, *, weights=None, chunks=None, classes=None, dtype=None, label=None):
-    if cli.round_trip_bernoulli and name != "BernoulliNB":
+    if cli.round_trip and name != cli.round_trip:
         return
     scalar_weight = weights is not None and np.isscalar(weights)
     # Retained native deviation: Gaussian's default state/output dtype is
@@ -252,7 +255,7 @@ def case(name, params, X, y, Q, *, weights=None, chunks=None, classes=None, dtyp
     feature_models = ([nb.BernoulliNB(**dict(params, alpha=float(alpha)))
                        for alpha in params["alpha"]] if vector_bernoulli else [])
     def snapshot():
-        if cli.round_trip_bernoulli:
+        if cli.round_trip:
             lines.append("    model = round_trip(model)")
         if feature_models:
             model.feature_log_prob_ = np.column_stack([
@@ -346,15 +349,15 @@ def run_cases():
                            ("TMPDIR", ROOT / "builds/tmp")):
         directory.mkdir(parents=True, exist_ok=True)
         env[key] = str(directory)
-    if cli.round_trip_bernoulli:
-        prefix += """from moxie._naive_bayes_dense import ClassDomain
-from moxie.naive_bayes_serialization import BernoulliNBSchema
+    if cli.round_trip:
+        prefix += f"""from moxie._naive_bayes_dense import ClassDomain
+from moxie.naive_bayes_serialization import {cli.round_trip}Schema
 from moxie.serialization import dumps, loads
 
 def round_trip[D: ClassDomain, dtype: DType](
-    model: BernoulliNB[D, dtype],
-) raises -> BernoulliNB[D, dtype]:
-    comptime Schema = BernoulliNBSchema[D, dtype]
+    model: {cli.round_trip}[D, dtype],
+) raises -> {cli.round_trip}[D, dtype]:
+    comptime Schema = {cli.round_trip}Schema[D, dtype]
     var before = dumps(Schema.encode(model))
     var restored = Schema.decode(loads(before))
     assert_equal(dumps(Schema.encode(restored)), before)
@@ -370,16 +373,16 @@ def round_trip[D: ClassDomain, dtype: DType](
         for ident in case_names[first:last]:
             batch += f"    {ident}()\n"
         batch += f'    print("Passed {last - first} reference/regression cases [{first}, {last})")\n'
-        stem = "bernoulli_round_trip" if cli.round_trip_bernoulli else "reference_cases"
+        stem = f"{cli.round_trip[:-2].lower()}_round_trip" if cli.round_trip else "reference_cases"
         source = OUT / f"{stem}_{first}_{last}.mojo"
         source.write_text(batch)
         subprocess.run(["pixi", "run", "mojo", "run", "--fp-mode=contract=off", "-I",
                         str(ROOT / "builds/deps"), str(source)], cwd=ROOT, env=env, check=True)
         executed.extend(case_names[first:last])
     assert executed == case_names[cli.start:cli.stop]
-    if cli.round_trip_bernoulli:
-        print(f"Passed all {len(executed)} BernoulliNB archive cases; vector alpha uses scalar sklearn fits",
-              flush=True)
+    if cli.round_trip:
+        qualifier = "; vector alpha uses scalar sklearn fits" if cli.round_trip == "BernoulliNB" else ""
+        print(f"Passed all {len(executed)} {cli.round_trip} archive cases{qualifier}", flush=True)
     else:
         print(f"Passed all {len(executed)} reference/regression cases; Bernoulli vectors use scalar sklearn fits; "
               "default Gaussian Float32 storage uses Float64 oracle arithmetic", flush=True)
@@ -551,7 +554,7 @@ for dtype in (None, "float32", "float64"):
     case("CategoricalNB", {"min_categories": [5]}, data, np.array([9, -2, 9, -2]),
          data, chunks=[slice(0, 1), slice(1, 3), slice(3, 4)], dtype=dtype)
 
-if cli.round_trip_bernoulli:
+if cli.round_trip:
     run_cases()
     raise SystemExit(0)
 

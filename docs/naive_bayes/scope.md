@@ -10,10 +10,10 @@ the reference; multinomial, complement and Bernoulli sparse counting paths are
 not implemented. No sparse input is silently densified. Python reflection,
 pandas output, metadata routing and bindings are outside this integration.
 [GaussianNB](gaussian/api.md#persistence),
-[MultinomialNB and ComplementNB](counts/scope.md#native-model-files), and
-[BernoulliNB](bernoulli/scope.md#native-model-files) support experimental
-native persistence. Persistence for CategoricalNB remains open. CategoricalNB
-takes scalar alpha only, like the reference.
+[MultinomialNB and ComplementNB](counts/scope.md#native-model-files),
+[BernoulliNB](bernoulli/scope.md#native-model-files), and
+[CategoricalNB](family.md#categoricalnb-native-model-files) support experimental
+native persistence. CategoricalNB takes scalar alpha only, like the reference.
 
 Run the root build, test and parity commands or the focused runner described in
 [README](README.md). Compilation alone does not establish sklearn parity.

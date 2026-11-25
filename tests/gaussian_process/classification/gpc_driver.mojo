@@ -1,4 +1,4 @@
-"""Emit shape and values for binary GPC comparison with pinned sklearn."""
+"""Emit shape and values for GPC comparison with pinned sklearn."""
 from numojo import NDArray, Shape, zeros
 from std.sys import argv
 
@@ -30,7 +30,7 @@ def emit[dtype: DType](key: String, array: NDArray[dtype]) raises:
     print(line)
 
 
-def run_case[dtype: DType](path: String, config: String) raises:
+def run_case[dtype: DType](path: String, config: String, strategy: String) raises:
     var tokens = List[String]()
     var contents = open(path, "r").read()
     for token in contents.split():
@@ -44,6 +44,7 @@ def run_case[dtype: DType](path: String, config: String) raises:
     var query = read_array[dtype](tokens, pos, Shape(queries, features))
 
     var model = GaussianProcessClassifier[dtype]()
+    _ = model.set_params(multi_class=strategy)
     if config != "default":
         var length_scale = 0.01 if config.startswith("restart") else 0.8
         var kernel = ConstantKernel(1.0, Bounds(0.01, 100.0)) * RBF(
@@ -60,19 +61,29 @@ def run_case[dtype: DType](path: String, config: String) raises:
     _ = model.fit(X, y)
     emit("classes", model.classes_())
     emit("prediction", model.predict(query))
-    emit("probability", model.predict_proba(query))
-    var latent = model.latent_mean_and_variance(query)
-    emit("mean", latent.mean)
-    emit("variance", latent.variance)
+    var binary = model.n_classes_() == 2
+    if binary or strategy == "one_vs_rest":
+        emit("probability", model.predict_proba(query))
+    if binary:
+        var latent = model.latent_mean_and_variance(query)
+        emit("mean", latent.mean)
+        emit("variance", latent.variance)
     print("score||", model.score(X, y))
     print("lml||", model.log_marginal_likelihood().value)
     var theta = model.kernel_().theta()
     emit("theta", theta)
     for i in range(theta.size):
-        theta.unsafe_set(i, theta.unsafe_get(i) + 0.1)
-    var shifted = model.log_marginal_likelihood(theta.copy(), eval_gradient=True)
+        var shift = 0.1 if binary else 0.02 * Float64(i + 1)
+        theta.unsafe_set(i, theta.unsafe_get(i) + shift)
+    var shifted = model.log_marginal_likelihood(theta.view(), eval_gradient=binary)
     print("shifted||", shifted.value)
-    emit("gradient", shifted.gradient.value())
+    if binary:
+        emit("gradient", shifted.gradient.value())
+    else:
+        var base = model.base_estimator_()
+        print("components||", len(base.estimators_))
+        var shared = zeros[DType.float64](Shape(base.estimators_[0].kernel_().n_dims()))
+        print("shared_lml||", model.log_marginal_likelihood(shared^).value)
     emit("cloned_theta", model.kernel_().theta())
     print("inplace_lml||", model.log_marginal_likelihood(theta^, clone_kernel=False).value)
     emit("inplace_theta", model.kernel_().theta())
@@ -83,6 +94,6 @@ def run_case[dtype: DType](path: String, config: String) raises:
 def main() raises:
     var args = argv()
     if args[2] == "f32":
-        run_case[DType.float32](String(args[1]), String(args[3]))
+        run_case[DType.float32](String(args[1]), String(args[3]), String(args[4]))
     else:
-        run_case[DType.float64](String(args[1]), String(args[3]))
+        run_case[DType.float64](String(args[1]), String(args[3]), String(args[4]))

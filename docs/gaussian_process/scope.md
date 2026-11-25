@@ -1,15 +1,15 @@
 # Dense Gaussian-process scope
 
-The root package assembles regression, binary classification and kernels from Moxie-owned
+The root package assembles regression, classification and kernels from Moxie-owned
 sources. It also provides shared contracts, metadata, validation and dense training
 retention helpers. See [API coverage](api-surface.md),
 [regression scope](regression/scope.md), and
 [kernel scope](kernels/scope.md).
 
 Supported arrays use NuMojo Float32/Float64 storage. Regression accepts dense
-rank-two features and vector or matrix targets. Binary classification accepts
-rank-two features and vector or single-column categorical targets. Multiclass
-classification, native structured kernels and Python integration remain open. Sparse input is not implicitly
+rank-two features and vector or matrix targets. Binary and multiclass classification
+accept rank-two features and vector or single-column categorical targets.
+Native structured kernels and Python integration remain open. Sparse input is not implicitly
 densified; CSR/CSC/COO and sparse extensions remain outside the dense scope.
 
 `pixi run test` builds the public namespace, runs native regression, classification and kernel

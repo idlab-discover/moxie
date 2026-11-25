@@ -23,6 +23,9 @@ the pinned scikit-learn source. `plot_gpr_prior_posterior` covers prior and
 posterior moments and `sample_y` for five kernels. `plot_gpr_noisy` covers two
 local optima, an 80 x 80 likelihood grid, seeded restarts, `make_pipeline`,
 `cross_val_score`, `GridSearchCV` and `clone`.
+[Discrete structures](../../notebooks/gaussian_process/plot_gpr_on_structured_data.ipynb)
+uses one native sequence kernel for similarity, regression and classification
+on variable-length strings and checks each result against the pinned gallery.
 [Periodic regression](../../notebooks/gaussian_process/plot_compare_gpr_krr.ipynb)
 compares periodic and locally periodic extrapolation, posterior uncertainty,
 and fitted hyperparameters against the pinned reference.

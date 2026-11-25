@@ -2,6 +2,7 @@ from std.math import inf, nan
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from moxie.ensemble._hist_gradient_boosting.binning import _BinMapper
+from moxie.ensemble._hist_gradient_boosting.feature_sampling import _FeatureSampler
 from moxie.ensemble._hist_gradient_boosting.grower import grow_tree
 from moxie.ensemble._hist_gradient_boosting.predictor import make_raw_tree
 from moxie.ensemble._hist_gradient_boosting.splitting import _SplitOptions
@@ -81,6 +82,23 @@ def test_interaction_feature_ties_use_ascending_ids() raises:
     )
     assert_equal(grown.tree.nodes[0].split.value().feature, 1)
 
+    # Seed 3 selects the second slot of the two-feature path, which is feature 16.
+    var sampler = _FeatureSampler(3)
+    var sampled = grow_tree(
+        X,
+        3,
+        Span(gradients),
+        Span(hessians),
+        counts,
+        categorical,
+        monotonic,
+        feature_sampler=sampler,
+        feature_fraction_per_split=0.5,
+        interaction_groups=groups,
+        options=_SplitOptions(min_samples_leaf=1),
+    )
+    assert_equal(sampled.tree.nodes[0].split.value().feature, 16)
+
 
 def test_invalid_configuration_and_stump() raises:
     var X = NDArray[DType.uint8](Shape(2, 1))
@@ -91,6 +109,24 @@ def test_invalid_configuration_and_stump() raises:
     var counts: List[UInt32] = [2]
     var categorical: List[Bool] = [False]
     var monotonic: List[Int] = [0]
+    var sampler = _FeatureSampler(42)
+    var snapshot = sampler.copy()
+    var invalid: List[Float64] = [0, -0.25, 1.01, inf[DType.float64](), nan[DType.float64]()]
+    for fraction in invalid:
+        with assert_raises(contains="feature fraction"):
+            _ = grow_tree(
+                X,
+                3,
+                Span(gradients),
+                Span(hessians),
+                counts,
+                categorical,
+                monotonic,
+                feature_sampler=sampler,
+                feature_fraction_per_split=fraction,
+            )
+    assert_equal(sampler.sample_mask(31, 0.5), snapshot.sample_mask(31, 0.5))
+
     var out_of_range: List[List[Int]] = [[1]]
     with assert_raises(contains="interaction feature index"):
         _ = grow_tree(

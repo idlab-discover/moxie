@@ -7,6 +7,7 @@ from std.math import isfinite
 from numojo import NDArray, Shape
 
 from .._sampling import numpy_sum
+from .feature_sampling import _FeatureSampler
 from .histogram import _HistogramBin, _Histograms, compute_histograms
 from .splitting import (
     _Split,
@@ -173,6 +174,7 @@ struct _Growth(Movable):
     var pending: List[Optional[_PendingSplit]]
     var options: _SplitOptions
     var has_missing: List[Bool]
+    var feature_fraction: Float64
 
     def take_nodes(deinit self) -> List[_TreeNode]:
         return self.nodes^
@@ -191,7 +193,13 @@ struct _Growth(Movable):
         counts: List[UInt32],
         categorical: List[Bool],
         monotonic: List[Int],
+        mut feature_sampler: _FeatureSampler,
     ) raises:
+        var mask = List[Bool]()
+        if self.feature_fraction < 1.0:
+            mask = feature_sampler.sample_mask(
+                len(path.features), self.feature_fraction
+            )
         var split = find_node_split(
             histograms,
             total,
@@ -201,6 +209,7 @@ struct _Growth(Movable):
             categorical,
             monotonic,
             allowed_features=Span(path.features),
+            feature_mask=mask,
             bounds=bounds,
             options=self.options,
         )
@@ -255,6 +264,44 @@ def grow_tree[gradient_origin: ImmOrigin, hessian_origin: ImmOrigin, //](
     shrinkage: Float64 = 1.0,
 ) raises -> _GrownTree:
     """Grow one tree using all features available on each interaction path."""
+    var feature_sampler = _FeatureSampler(0)
+    return grow_tree(
+        X_binned,
+        n_bins,
+        gradients,
+        hessians,
+        counts,
+        categorical,
+        monotonic,
+        feature_sampler=feature_sampler,
+        interaction_groups=interaction_groups,
+        max_leaf_nodes=max_leaf_nodes,
+        max_depth=max_depth,
+        options=options,
+        shrinkage=shrinkage,
+    )
+
+
+def grow_tree[gradient_origin: ImmOrigin, hessian_origin: ImmOrigin, //](
+    X_binned: NDArray[DType.uint8],
+    n_bins: Int,
+    gradients: Span[Float32, gradient_origin],
+    hessians: Span[Float32, hessian_origin],
+    counts: List[UInt32],
+    categorical: List[Bool],
+    monotonic: List[Int],
+    *,
+    mut feature_sampler: _FeatureSampler,
+    feature_fraction_per_split: Float64 = 1.0,
+    interaction_groups: List[List[Int]] = [],
+    max_leaf_nodes: Optional[Int] = None,
+    max_depth: Optional[Int] = None,
+    options: _SplitOptions = _SplitOptions(),
+    shrinkage: Float64 = 1.0,
+) raises -> _GrownTree:
+    """Grow one tree, advancing the supplied stream for sampled split searches."""
+    if not (0.0 < feature_fraction_per_split <= 1.0):
+        raise Error("ValueError: feature fraction must be in (0, 1]")
     if X_binned.ndim != 2 or X_binned.shape[0] == 0 or X_binned.shape[1] == 0:
         raise Error("ValueError: grower requires a nonempty rank-2 binned matrix")
     var n_rows = X_binned.shape[0]
@@ -309,6 +356,7 @@ def grow_tree[gradient_origin: ImmOrigin, hessian_origin: ImmOrigin, //](
         List[Optional[_PendingSplit]](),
         options,
         has_missing^,
+        feature_fraction_per_split,
     )
     growth.add_node(_TreeNode(0, 0, n_rows, 0.0))
     if leaf_limit > 1 and n_rows // 2 >= options.min_samples_leaf and (
@@ -316,7 +364,7 @@ def grow_tree[gradient_origin: ImmOrigin, hessian_origin: ImmOrigin, //](
     ):
         growth.consider(
             0, total, _ValueBounds(), histograms^, root_path, counts, categorical,
-            monotonic,
+            monotonic, feature_sampler,
         )
 
     var n_leaves = 1
@@ -385,12 +433,12 @@ def grow_tree[gradient_origin: ImmOrigin, hessian_origin: ImmOrigin, //](
         if search_left:
             growth.consider(
                 left, left_total, left_bounds, left_hist^, path, counts, categorical,
-                monotonic,
+                monotonic, feature_sampler,
             )
         if search_right:
             growth.consider(
                 right, right_total, right_bounds, right_hist^, path, counts,
-                categorical, monotonic,
+                categorical, monotonic, feature_sampler,
             )
 
     var leaves = List[Int](capacity=n_leaves)

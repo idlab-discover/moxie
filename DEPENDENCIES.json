@@ -593,6 +593,9 @@
         "moxie.ensemble._hist_gradient_boosting.binning": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/binning.mojo"
         },
+        "moxie.ensemble._hist_gradient_boosting.feature_sampling": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/feature_sampling.mojo"
+        },
         "moxie.ensemble._hist_gradient_boosting.grower": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/grower.mojo"
         },
@@ -621,7 +624,8 @@
         "licenses/mixture-scikit-learn.txt": "LICENSES/mixture-scikit-learn.txt",
         "licenses/linear_model-scikit-learn.txt": "families/linear_model/LICENSES/scikit-learn.txt",
         "licenses/ensemble-scikit-learn.txt": "families/ensemble/LICENSES/scikit-learn.txt",
-        "licenses/ensemble-NumPy.txt": "families/ensemble/LICENSES/NumPy.txt"
+        "licenses/ensemble-NumPy.txt": "families/ensemble/LICENSES/NumPy.txt",
+        "licenses/ensemble-PCG64.txt": "families/ensemble/LICENSES/PCG64.txt"
       },
       "exports": {
         "packages": {

@@ -37,6 +37,17 @@ feature dtype. Array targets support rank one or two with Float32, Float64
 or Int64 elements. List targets support String, Int, Int64, Float32 or Float64.
 Each fold preserves target layout and dtype.
 
+Use the same adapter for out-of-fold predictions when the estimator returns
+one of those array or list types. The result keeps the estimator's prediction
+type, dtype and output shape. The optional `fit_metadata=` passes a weight
+array to fit, and `cv=` overrides the adapter's default folds. Use the
+[class prediction adapter](../../validation/docs/scope.md#out-of-fold-predictions)
+for probabilities or decision values.
+
+```mojo
+var predictions = cross_val_predict[RegressionAdapter](model, X, y, adapter)
+```
+
 The adapter calls the estimator's default score unless you supply a scorer type
 as `S`. A custom scorer must match the estimator, input, target, and optional
 weight type. The adapter constructs a defaultable scorer or accepts an instance

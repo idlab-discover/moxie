@@ -118,6 +118,20 @@ trait PredictionAdapter(CVAdapter):
         ...
 
 
+trait _NativePredictionAdapter(DefaultCVAdapter):
+    """Collect a predictor's native dense output without going through scoring."""
+    comptime Prediction: Movable
+
+    def predict(self, estimator: Self.Scorer.Estimator, X: Self.Scorer.Input) raises -> Self.Prediction:
+        ...
+
+    def scatter_prediction(
+        self, mut output: Optional[Self.Prediction], predicted: Self.Prediction,
+        rows: IndexArray, n: Int,
+    ) raises:
+        ...
+
+
 @fieldwise_init
 struct CVResult[E: BaseEstimator & Deinitable](Movable):
     var scores: ScoreTable
@@ -366,6 +380,19 @@ def _checked_prediction_splits(cv: List[IndexSplit], n: Int) raises:
             raise Error("ValueError: cross_val_predict requires test indices to partition samples")
 
 
+def _fit_prediction_fold[A: CVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, fold: IndexSplit, fit_metadata: A.Scorer.Metadata,
+) raises -> Tuple[A.Scorer.Estimator, A.Scorer.Input]:
+    var X_train = adapter.input_rows(X, fold.train, fold.train)
+    var X_test = adapter.input_rows(X, fold.test, fold.train)
+    var y_train = adapter.target_rows(y, fold.train)
+    var metadata = adapter.metadata_rows(fit_metadata, fold.train)
+    var model = clone(estimator)
+    adapter.fit(model, X_train, y_train, metadata)
+    return (model^, X_test^)
+
+
 def cross_val_predict[A: PredictionAdapter](estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target, adapter: A, cv: List[IndexSplit], fit_metadata: A.Scorer.Metadata, *, method: String = "predict") raises -> NDArray[A.PredictionDType]:
     if method != "predict":
         raise Error("ValueError: numeric prediction adapter supports method='predict' only; class responses require ClassPredictionAdapter")
@@ -373,16 +400,12 @@ def cross_val_predict[A: PredictionAdapter](estimator: A.Scorer.Estimator, X: A.
     _checked_prediction_splits(cv, n)
     adapter.validate_metadata(fit_metadata, n)
     var output: Optional[NDArray[A.PredictionDType]] = None
-    for fold in range(len(cv)):
-        var X_train = adapter.input_rows(X, cv[fold].train, cv[fold].train)
-        var X_test = adapter.input_rows(X, cv[fold].test, cv[fold].train)
-        var y_train = adapter.target_rows(y, cv[fold].train)
-        var metadata = adapter.metadata_rows(fit_metadata, cv[fold].train)
-        var model = clone(estimator)
-        adapter.fit(model, X_train, y_train, metadata)
-        var predicted = adapter.predict(model, X_test)
-        _scatter_prediction(output, predicted, cv[fold].test, n)
-    return output.value().copy()
+    for i in range(len(cv)):
+        ref fold = cv[i]
+        var fitted = _fit_prediction_fold[A](estimator, X, y, adapter, fold, fit_metadata)
+        var predicted = adapter.predict(fitted[0], fitted[1])
+        _scatter_prediction(output, predicted, fold.test, n)
+    return output.take()
 
 
 def cross_val_predict[A: PredictionAdapter & DefaultCVAdapter](
@@ -400,6 +423,45 @@ def cross_val_predict[A: PredictionAdapter & DefaultCVAdapter](
     estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
     adapter: A, *, cv: Optional[List[IndexSplit]] = None, method: String = "predict",
 ) raises -> NDArray[A.PredictionDType] where conforms_to(A.Scorer.Metadata, Defaultable):
+    return cross_val_predict[A](
+        estimator, X, y, adapter, fit_metadata=A.Scorer.Metadata(), cv=cv, method=method,
+    )
+
+
+def cross_val_predict[A: _NativePredictionAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, cv: List[IndexSplit], fit_metadata: A.Scorer.Metadata,
+    *, method: String = "predict",
+) raises -> A.Prediction where conforms_to(A.Prediction, Deinitable):
+    if method != "predict":
+        raise Error("ValueError: dense supervised prediction supports method='predict' only; class responses require ClassPredictionAdapter")
+    var n = adapter.n_samples(X, y)
+    _checked_prediction_splits(cv, n)
+    adapter.validate_metadata(fit_metadata, n)
+    var output: Optional[A.Prediction] = None
+    for i in range(len(cv)):
+        ref fold = cv[i]
+        var fitted = _fit_prediction_fold[A](estimator, X, y, adapter, fold, fit_metadata)
+        var predicted = adapter.predict(fitted[0], fitted[1])
+        adapter.scatter_prediction(output, predicted, fold.test, n)
+    return output.take()
+
+
+def cross_val_predict[A: _NativePredictionAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, fit_metadata: A.Scorer.Metadata,
+    cv: Optional[List[IndexSplit]] = None, method: String = "predict",
+) raises -> A.Prediction where conforms_to(A.Prediction, Deinitable):
+    if cv:
+        return cross_val_predict[A](estimator, X, y, adapter, cv.value(), fit_metadata, method=method)
+    var folds = adapter.default_cv(X, y)
+    return cross_val_predict[A](estimator, X, y, adapter, folds, fit_metadata, method=method)
+
+
+def cross_val_predict[A: _NativePredictionAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, cv: Optional[List[IndexSplit]] = None, method: String = "predict",
+) raises -> A.Prediction where conforms_to(A.Prediction, Deinitable) and conforms_to(A.Scorer.Metadata, Defaultable):
     return cross_val_predict[A](
         estimator, X, y, adapter, fit_metadata=A.Scorer.Metadata(), cv=cv, method=method,
     )
@@ -940,6 +1002,17 @@ def _scatter_prediction[dtype: DType](mut output: Optional[NDArray[dtype]], pred
         else:
             for col in range(predicted.shape[1]):
                 output.value()[Item(row, col)] = predicted[Item(j, col)]
+
+
+def _scatter_prediction[L: Copyable & Deinitable & Defaultable](
+    mut output: Optional[List[L]], predicted: List[L], rows: IndexArray, n: Int,
+) raises:
+    if len(predicted) != rows.size:
+        raise Error("ValueError: prediction length does not match held-out rows")
+    if not output:
+        output = List[L](length=n, fill=L())
+    for j in range(len(predicted)):
+        output.value()[Int(rows[Item(j)])] = predicted[j].copy()
 
 
 def cross_val_predict[A: StringPredictionAdapter](

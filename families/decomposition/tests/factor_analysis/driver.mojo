@@ -1,6 +1,8 @@
 """Driver: f32|f64 X.txt psi.txt held_out.txt k(-1=None) svd_method rotation(none|varimax|quartimax) max_iter tol iterated_power seed use_psi(0|1)."""
 from std.sys import argv
 from moxie.decomposition import FactorAnalysis
+from moxie.decomposition_serialization import FactorAnalysisSchema
+from moxie.serialization import dumps, loads
 from decomposition_testing import emit, emit_scalar, read_matrix
 
 
@@ -21,7 +23,9 @@ def evaluate[dtype: DType]() raises:
     var model = FactorAnalysis[dtype](k, svd_method=String(args[6]), rotation=rotation,
         max_iter=Int(args[8]), tol=Float64(String(args[9])), iterated_power=Int(args[10]),
         random_state=Int(args[11]), noise_variance_init=init)
+    comptime Schema = FactorAnalysisSchema[dtype]
     var scores = model.fit_transform(x)
+    model = Schema.decode(loads(dumps(Schema.encode(model))))
     emit("transform", scores)
     emit("held_out", model.transform(held_out))
     emit("components", model.components_.value())

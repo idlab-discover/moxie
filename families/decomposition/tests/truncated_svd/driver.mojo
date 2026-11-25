@@ -1,6 +1,8 @@
 """Native differential driver: driver f32|f64 X.txt k algorithm n_iter n_oversamples normalizer seed tol."""
 from std.sys import argv
 from moxie.decomposition import TruncatedSVD
+from moxie.decomposition_serialization import TruncatedSVDSchema
+from moxie.serialization import dumps, loads
 from decomposition_testing import emit, read_matrix
 
 
@@ -10,7 +12,9 @@ def evaluate[dtype: DType]() raises:
     var model = TruncatedSVD[dtype](Int(args[3]), algorithm=String(args[4]), n_iter=Int(args[5]),
         n_oversamples=Int(args[6]), power_iteration_normalizer=String(args[7]),
         random_state=Int(args[8]), tol=Float64(String(args[9])))
+    comptime Schema = TruncatedSVDSchema[dtype]
     var scores = model.fit_transform(x)
+    model = Schema.decode(loads(dumps(Schema.encode(model))))
     emit("fit_transform", scores)
     emit("components", model.components_.value())
     emit("variance", model.explained_variance_.value())

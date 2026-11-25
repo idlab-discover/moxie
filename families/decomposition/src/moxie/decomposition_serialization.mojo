@@ -1,9 +1,11 @@
 """Native state schemas for the runtime dense decomposition estimators."""
 
-from std.math import isfinite, isnan
+from std.math import isfinite, isinf, isnan
 from numojo import NDArray, Shape, zeros
 from .decomposition._pca import PCA, ComponentCount, IteratedPower
 from .decomposition._incremental_pca import IncrementalPCA
+from .decomposition._truncated_svd import TruncatedSVD
+from .decomposition._factor_analysis import FactorAnalysis
 from .serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 
 
@@ -100,15 +102,22 @@ struct _ProjectionState(Movable):
 
 
 def _check_value[dtype: DType](
-    name: String, value: Scalar[dtype], allow_nan: Bool, nonnegative: Bool,
+    name: String, value: Scalar[dtype], allow_nan: Bool, allow_positive_inf: Bool,
+    nonnegative: Bool, positive: Bool,
 ) raises:
-    if not (isfinite(value) or (allow_nan and isnan(value))) or (nonnegative and value < 0):
+    if (positive and value <= 0) or (nonnegative and value < 0):
+        raise Error("ModelSchemaError: invalid value in " + name)
+    if not (
+        isfinite(value) or (allow_nan and isnan(value))
+        or (allow_positive_inf and isinf(value) and value > 0)
+    ):
         raise Error("ModelSchemaError: invalid value in " + name)
 
 
 def _write_array[dtype: DType](
     mut archive: ModelArchive, name: String, array: Optional[NDArray[dtype]],
     fitted: Bool, shape: List[Int], *, allow_nan: Bool = False,
+    allow_positive_inf: Bool = False,
 ) raises:
     if not fitted:
         if array:
@@ -123,24 +132,25 @@ def _write_array[dtype: DType](
         if value.shape[axis] != shape[axis]:
             raise Error("ModelSchemaError: invalid shape for " + name)
     var nonnegative = name == "singular_values_" or name == "explained_variance_"
+    var positive = name == "noise_variance_"
     var values = List[Scalar[dtype]](capacity=value.size)
     for i in range(shape[0]):
         var offset = i * Int(value.strides[0])
         if len(shape) == 1:
             var item = value.unsafe_get(offset)
-            _check_value(name, item, allow_nan, nonnegative)
+            _check_value(name, item, allow_nan, allow_positive_inf, nonnegative, positive)
             values.append(item)
         else:
             for j in range(shape[1]):
                 var item = value.unsafe_get(offset + j * Int(value.strides[1]))
-                _check_value(name, item, allow_nan, nonnegative)
+                _check_value(name, item, allow_nan, allow_positive_inf, nonnegative, positive)
                 values.append(item)
     archive.add_array(name, shape, values)
 
 
 def _read_array[dtype: DType](
     archive: ModelArchive, name: String, fitted: Bool, shape: List[Int],
-    *, allow_nan: Bool = False,
+    *, allow_nan: Bool = False, allow_positive_inf: Bool = False,
 ) raises -> Optional[NDArray[dtype]]:
     if not fitted:
         return None
@@ -153,9 +163,10 @@ def _read_array[dtype: DType](
         dimensions = Shape(shape[0], shape[1])
     var array = zeros[dtype](dimensions)
     var nonnegative = name == "singular_values_" or name == "explained_variance_"
+    var positive = name == "noise_variance_"
     for i in range(len(values)):
         var value = values[i]
-        _check_value(name, value, allow_nan, nonnegative)
+        _check_value(name, value, allow_nan, allow_positive_inf, nonnegative, positive)
         array.unsafe_set(i, value)
     return array^
 
@@ -320,4 +331,188 @@ struct IncrementalPCASchema[dtype: DType = DType.float64](ModelSchema):
         model.n_components_ = state.rank
         model.noise_variance_ = state.noise
         model.feature_names_in_ = state.names.copy()
+        return model^
+
+
+@fieldwise_init
+struct _ComponentState(Movable):
+    var fitted: Bool
+    var features: Int
+    var rank: Int
+
+    def validate(self, *, minimum_features: Int, minimum_rank: Int) raises:
+        if self.fitted:
+            if (
+                self.features < minimum_features
+                or self.rank < minimum_rank
+                or self.rank > self.features
+            ):
+                raise Error("ModelSchemaError: invalid fitted component dimensions")
+        elif self.features or self.rank:
+            raise Error("ModelSchemaError: unfitted projection has learned dimensions")
+
+    def write(self, mut writer: BinaryWriter):
+        writer.boolean(self.fitted)
+        writer.integer(self.features)
+        writer.integer(self.rank)
+
+    @staticmethod
+    def read(mut reader: BinaryReader) raises -> Self:
+        return Self(reader.boolean(), reader.integer(), reader.integer())
+
+
+def _component_state[dtype: DType](
+    components: Optional[NDArray[dtype]], features: Int,
+) raises -> _ComponentState:
+    if not components:
+        return _ComponentState(False, features, 0)
+    ref matrix = components.value()
+    if matrix.ndim != 2:
+        raise Error("ModelSchemaError: invalid shape for components_")
+    return _ComponentState(True, features, matrix.shape[0])
+
+
+struct TruncatedSVDSchema[dtype: DType = DType.float64](ModelSchema):
+    """Version 1 of the dense TruncatedSVD configuration and learned projection."""
+
+    comptime Model = TruncatedSVD[Self.dtype]
+    comptime _type_id = "moxie.decomposition.TruncatedSVD"
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self._type_id, 1)
+        var writer = BinaryWriter()
+        writer.uint(UInt64(dtype_code[Self.dtype]()))
+        writer.integer(model.n_components)
+        writer.string(model.algorithm)
+        writer.integer(model.n_iter)
+        writer.integer(model.n_oversamples)
+        writer.string(model.power_iteration_normalizer)
+        _write_optional_int(writer, model.random_state)
+        writer.scalar(model.tol)
+        var state = _component_state(model.components_, model.n_features_in_)
+        state.validate(minimum_features=2, minimum_rank=1)
+        state.write(writer)
+        archive.manifest = writer^.finish()
+        _write_array(archive, "components_", model.components_, state.fitted, [state.rank, state.features])
+        _write_array(archive, "singular_values_", model.singular_values_, state.fitted, [state.rank])
+        _write_array(archive, "explained_variance_", model.explained_variance_, state.fitted, [state.rank])
+        _write_array(
+            archive, "explained_variance_ratio_", model.explained_variance_ratio_,
+            state.fitted, [state.rank], allow_nan=True, allow_positive_inf=True,
+        )
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self._type_id, 1)
+        archive.validate()
+        var reader = BinaryReader(archive.manifest)
+        _check_dtype[Self.dtype](reader)
+        var model = Self.Model(
+            reader.integer(), algorithm=reader.string(), n_iter=reader.integer(),
+            n_oversamples=reader.integer(), power_iteration_normalizer=reader.string(),
+            random_state=_read_optional_int(reader), tol=reader.scalar[DType.float64](),
+        )
+        var state = _ComponentState.read(reader)
+        state.validate(minimum_features=2, minimum_rank=1)
+        reader.finish()
+        _check_arrays(archive, state.fitted, 4)
+        model.components_ = _read_array[Self.dtype](archive, "components_", state.fitted, [state.rank, state.features])
+        model.singular_values_ = _read_array[Self.dtype](archive, "singular_values_", state.fitted, [state.rank])
+        model.explained_variance_ = _read_array[Self.dtype](archive, "explained_variance_", state.fitted, [state.rank])
+        model.explained_variance_ratio_ = _read_array[Self.dtype](
+            archive, "explained_variance_ratio_", state.fitted, [state.rank],
+            allow_nan=True, allow_positive_inf=True,
+        )
+        model.n_features_in_ = state.features
+        return model^
+
+
+def _write_float64_list(mut writer: BinaryWriter, values: List[Float64]):
+    writer.uint(UInt64(len(values)))
+    for value in values:
+        writer.scalar(value)
+
+
+def _read_float64_list(mut reader: BinaryReader) raises -> List[Float64]:
+    var count = reader.count(reader.remaining() // 8)
+    var values = List[Float64](capacity=count)
+    for _ in range(count):
+        values.append(reader.scalar[DType.float64]())
+    return values^
+
+
+def _check_loglike(fitted: Bool, iterations: Int, history: List[Float64]) raises:
+    if (iterations < 1 if fitted else iterations != 0) or len(history) != iterations:
+        raise Error("ModelSchemaError: invalid FactorAnalysis likelihood history length")
+    for value in history:
+        # A zero singular value contributes log(0) to the unscaled objective.
+        _check_value("loglike_", value, False, True, False, False)
+
+
+struct FactorAnalysisSchema[dtype: DType = DType.float64](ModelSchema):
+    """Version 1 of the dense FactorAnalysis state with Float64 learned arrays."""
+
+    comptime Model = FactorAnalysis[Self.dtype]
+    comptime _type_id = "moxie.decomposition.FactorAnalysis"
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self._type_id, 1)
+        var writer = BinaryWriter()
+        writer.uint(UInt64(dtype_code[Self.dtype]()))
+        _write_optional_int(writer, model.n_components)
+        writer.scalar(model.tol)
+        writer.boolean(model.copy)
+        writer.integer(model.max_iter)
+        writer.boolean(Bool(model.noise_variance_init))
+        if model.noise_variance_init:
+            _write_float64_list(writer, model.noise_variance_init.value())
+        writer.string(model.svd_method)
+        writer.integer(model.iterated_power)
+        writer.boolean(Bool(model.rotation))
+        if model.rotation:
+            writer.string(model.rotation.value())
+        _write_optional_int(writer, model.random_state)
+        var state = _component_state(model.components_, model.n_features_in_)
+        state.validate(minimum_features=1, minimum_rank=0)
+        state.write(writer)
+        _check_loglike(state.fitted, model.n_iter_, model.loglike_)
+        writer.integer(model.n_iter_)
+        _write_float64_list(writer, model.loglike_)
+        archive.manifest = writer^.finish()
+        _write_array(archive, "components_", model.components_, state.fitted, [state.rank, state.features])
+        _write_array(archive, "noise_variance_", model.noise_variance_, state.fitted, [state.features])
+        _write_array(archive, "mean_", model.mean_, state.fitted, [state.features])
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self._type_id, 1)
+        archive.validate()
+        var reader = BinaryReader(archive.manifest)
+        _check_dtype[Self.dtype](reader)
+        var model = Self.Model(_read_optional_int(reader))
+        model.tol = reader.scalar[DType.float64]()
+        model.copy = reader.boolean()
+        model.max_iter = reader.integer()
+        if reader.boolean():
+            model.noise_variance_init = _read_float64_list(reader)
+        model.svd_method = reader.string()
+        model.iterated_power = reader.integer()
+        if reader.boolean():
+            model.rotation = reader.string()
+        model.random_state = _read_optional_int(reader)
+        var state = _ComponentState.read(reader)
+        state.validate(minimum_features=1, minimum_rank=0)
+        model.n_iter_ = reader.integer()
+        model.loglike_ = _read_float64_list(reader)
+        _check_loglike(state.fitted, model.n_iter_, model.loglike_)
+        reader.finish()
+        _check_arrays(archive, state.fitted, 3)
+        model.components_ = _read_array[DType.float64](archive, "components_", state.fitted, [state.rank, state.features])
+        model.noise_variance_ = _read_array[DType.float64](archive, "noise_variance_", state.fitted, [state.features])
+        model.mean_ = _read_array[DType.float64](archive, "mean_", state.fitted, [state.features])
+        model.n_features_in_ = state.features
         return model^

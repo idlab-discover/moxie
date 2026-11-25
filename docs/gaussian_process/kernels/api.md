@@ -34,6 +34,34 @@ See `examples/gaussian_process_kernels.mojo` (run by `pixi run test`).
 `requires_vector_input()`, `name()`, `k1()`, `k2()`, `kernel()`, `exponent()`,
 `kernels()`, `==`, and `String(kernel)` (sklearn repr).
 
+## Custom vector leaves
+
+Wrap a native `KernelContract` whose `Input` is `NDArray[DType.float64]` with
+`Kernel.from_custom`. Use the result in sums, products, powers, or a
+`CompoundKernel`.
+
+```mojo
+from moxie.gaussian_process import GaussianProcessRegressor
+from moxie.gaussian_process.kernels import Kernel, RBF, WhiteKernel
+
+var leaf = Kernel.from_custom(my_kernel)
+var composite = (RBF(1.2) * leaf + WhiteKernel(0.1)) ** 2
+var gp = GaussianProcessRegressor(composite)
+```
+
+Tree copies share an immutable leaf snapshot. The custom type's `copy()` and
+`clone_with_theta()` must produce independent configuration, and evaluation must
+leave the stored kernel unchanged. Theta updates replace snapshots and leave
+the original tree intact if an update raises. Two custom leaves compare equal
+when they share the same snapshot. Repr displays the custom type name.
+
+Custom hyperparameter names take the same operator prefixes as built-ins.
+A custom leaf's constructor parameters remain typed. To change them, configure
+a fresh instance, wrap it, and replace the leaf via its parent parameter
+(e.g. `set_param("k2", replacement)`). The tree exposes custom theta, log bounds,
+and hyperparameter metadata. It supplies explicit `Y` on cross-covariance calls
+and owns contiguous copies of returned covariance, diagonal, and gradients.
+
 ## Native persistence
 
 ```mojo
@@ -47,8 +75,9 @@ var restored = load_model[KernelSchema]("kernel.moxie")
 Convert a typed leaf to `Kernel` before saving it. The experimental schema
 stores built-in leaves and operators, child order, raw bounds, the distinction
 between integer and floating-point powers, and optional pairwise keyword
-arguments. Files support trees up to 256 levels deep and restore independent
-kernel values. See [native model files](../../serialization.md) for the format.
+arguments. Saving a tree containing a custom leaf raises a schema error.
+Files support trees up to 256 levels deep and restore independent kernel values.
+See [native model files](../../serialization.md) for the format.
 
 ## Conventions (identical to sklearn)
 

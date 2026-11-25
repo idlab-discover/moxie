@@ -11,8 +11,13 @@ from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
     confusion_matrix,
+    f1_score,
+    fbeta_score,
     hamming_loss,
     make_scorer,
+    precision_recall_fscore_support,
+    precision_score,
+    recall_score,
     zero_one_loss,
 )
 from sklearn.model_selection import KFold, cross_val_score
@@ -28,6 +33,7 @@ def verify_oracle():
     paths = [
         "metrics/_classification.py",
         "utils/_array_api.py",
+        "utils/extmath.py",
         "utils/multiclass.py",
         "utils/sparsefuncs.py",
         "utils/validation.py",
@@ -43,8 +49,11 @@ def verify_oracle():
             raise RuntimeError(f"Oracle {path} differs from local sklearn {REVISION}")
 
 
-def native_output(executable):
-    lines = subprocess.check_output([executable.resolve()], text=True).splitlines()
+def native_output(executable, expected_warnings=None):
+    result = subprocess.run([executable.resolve()], text=True, capture_output=True, check=True)
+    if expected_warnings is not None:
+        np.testing.assert_equal(result.stderr.splitlines(), expected_warnings)
+    lines = result.stdout.splitlines()
     output = {}
     for line in lines:
         name, *values = line.split()
@@ -239,6 +248,158 @@ def check_reference_errors():
     return len(cases) + 3
 
 
+def precision_recall_cases():
+    truth = [0, 1, 2, 2, 0, 3]
+    predicted = [0, 2, 1, 0, 0, 2]
+    weights = [0.5, 1.0, 2.0, 4.25, 0.0, -0.25]
+    labels = [3, 0, 4, 2, 0]
+    binary = [0, 1, 1, 0, 1, 1]
+    binary_prediction = [0, 0, 1, 1, 1, 0]
+    negative = [0] * 6
+    strings = ["Ω", "cat", "Ω", "cat"]
+    string_predictions = ["cat", "cat", "Ω", "Ω"]
+    indicators = np.array([[1, 0, 1], [0, 1, 0], [0, 0, 0], [1, 0, 0]])
+    indicator_predictions = np.array([[1, 1, 1], [0, 1, 1], [0, 0, 0], [0, 0, 0]])
+    indicator_weights = [1, 0, 2, -1]
+    extremes = np.array([2**63 - 2, 2**63 - 1, 2**63 - 2], dtype=np.int64)
+
+    def scores(y, p, *, average=None, **kwargs):
+        result = precision_recall_fscore_support(y, p, average=average, **kwargs)
+        if average is None:
+            return np.concatenate(result)
+        return result[:3]
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        cases = {
+            "default": np.concatenate(precision_recall_fscore_support(truth, predicted)),
+            "selected": scores(
+                truth, predicted, labels=labels, beta=2, sample_weight=weights,
+                zero_division=np.nan,
+            ),
+            "binary": [
+                precision_score(binary, binary_prediction, sample_weight=weights),
+                recall_score(binary, binary_prediction, sample_weight=weights),
+                f1_score(binary, binary_prediction, sample_weight=weights),
+                fbeta_score(binary, binary_prediction, beta=0, sample_weight=weights),
+                fbeta_score(binary, binary_prediction, beta=np.inf, sample_weight=weights),
+            ],
+            "binary_zero": scores(
+                binary, binary_prediction, average="binary", pos_label=0, labels=[99],
+                sample_weight=weights,
+            ),
+            "absent_positive": [f1_score([0, 0], [0, 0], zero_division=1)],
+            "empty_selection": scores(truth, predicted, labels=[]),
+            "cancelled_support": [
+                f1_score([0, 1], [0, 0], average="weighted", sample_weight=[1., -1.],
+                         zero_division=1),
+            ],
+            "precision_warning": [precision_score(binary, negative)],
+            "recall_warning": [recall_score(negative, binary_prediction)],
+            "fscore_warning": [f1_score([0, 0], [0, 0])],
+            "all_undefined": [recall_score([0, 0], [0, 0], zero_division=np.nan)],
+            "string_column": scores(np.array(strings)[:, None], string_predictions),
+            "string_list": scores(strings, string_predictions, labels=["Ω", "absent", "cat"],
+                                  zero_division=1),
+            "string_binary": [
+                precision_score(strings, string_predictions, pos_label="Ω"),
+                recall_score(strings, string_predictions, pos_label="Ω"),
+                f1_score(strings, string_predictions, pos_label="Ω"),
+                fbeta_score(strings, string_predictions, pos_label="Ω", beta=2),
+            ],
+            "string_averages": [
+                precision_score(strings, string_predictions, average="macro"),
+                recall_score(strings, string_predictions, average="macro"),
+                f1_score(strings, string_predictions, average="micro"),
+                fbeta_score(strings, string_predictions, average="weighted", beta=2),
+            ],
+            "strided_numeric": scores(
+                [0., 2., -0., 1.], [1., 2., 0., 1.], labels=[-0., 2., 1.],
+                sample_weight=[4., 2., 1., 0.5],
+            ),
+            "int64_identity": scores(extremes, extremes[[1, 0, 2]]),
+            "float_column": [
+                precision_score([[0.], [1.], [1.]], [0., 1., 0.]),
+                recall_score([[0.], [1.], [1.]], [0., 1., 0.]),
+                f1_score([[0.], [1.], [1.]], [0., 1., 0.]),
+                fbeta_score([[0.], [1.], [1.]], [0., 1., 0.], beta=2),
+            ],
+            "multilabel": scores(indicators, indicator_predictions),
+            "multilabel_signed": scores(
+                indicators, indicator_predictions, labels=[2, 0],
+                sample_weight=indicator_weights, zero_division=1,
+            ),
+            "empty_multilabel_samples": scores(
+                indicators, indicator_predictions, labels=[], average="samples",
+                zero_division=1,
+            ),
+            "signed_samples": scores(
+                indicators, indicator_predictions, labels=[2, 0], average="samples",
+                sample_weight=indicator_weights, zero_division=1,
+            ),
+        }
+        for average in ("micro", "macro", "weighted"):
+            cases["selected_" + average] = scores(
+                truth, predicted, labels=labels, beta=0.5, average=average,
+                sample_weight=weights, zero_division=np.nan,
+            )
+        for average in ("micro", "macro", "weighted", "samples"):
+            cases["multilabel_" + average] = scores(
+                indicators, indicator_predictions, average=average, labels=[2, 0, 2],
+                sample_weight=indicator_weights, zero_division=np.nan,
+            )
+    return cases
+
+
+def check_precision_recall_reference_errors():
+    from sklearn.utils._param_validation import InvalidParameterError
+
+    binary = [0, 1]
+    indicators = np.zeros((4, 3), dtype=np.int64)
+    cases = [
+        (indicators, indicators, {}),
+        (indicators, indicators, {"average": "macro", "labels": [-1]}),
+        (indicators, indicators, {"average": "macro", "labels": [3]}),
+        (indicators, indicators[:, :2], {"average": "macro"}),
+        (indicators, np.zeros(4), {"average": "macro"}),
+        (binary, [2, 3], {}),
+        (binary, binary, {"pos_label": 3}),
+        (binary, binary, {"average": "samples"}),
+        (binary, binary, {"average": "unknown"}),
+        (binary, binary, {"zero_division": 2.0}),
+        (binary, binary, {"sample_weight": [0, 0]}),
+        (binary, binary, {"sample_weight": [1]}),
+        (binary, binary, {"sample_weight": [1, np.inf]}),
+        ([], [], {}),
+        (binary, [0], {}),
+        (["cat", "dog"], ["cat", "dog"], {}),
+        ([0.5, 0.75], [0.5, 0.75], {"average": "macro"}),
+    ]
+    for truth, predicted, kwargs in cases:
+        with np.testing.assert_raises(ValueError):
+            f1_score(truth, predicted, **kwargs)
+    with np.testing.assert_raises(InvalidParameterError):
+        fbeta_score(binary, binary, beta=-1.0)
+    with np.testing.assert_raises(OverflowError):
+        fbeta_score(binary, binary, beta=1e200)
+    return len(cases) + 2
+
+
+def precision_recall_warnings():
+    with warnings.catch_warnings(record=True) as log:
+        warnings.simplefilter("always")
+        precision_recall_fscore_support([0, 1, 2, 2, 0, 3], [0, 2, 1, 0, 0, 2], average=None)
+        precision_score([0, 1], [0, 0])
+        recall_score([0, 0], [0, 1])
+        f1_score([0, 0], [0, 0])
+    return [
+        f"{entry.category.__name__}: "
+        + str(entry.message).split(" and being set to 0.0")[0]
+        + " and being set to 0.0"
+        for entry in log
+    ]
+
+
 def compare(actual, expected):
     if actual.keys() != expected.keys():
         raise AssertionError(f"Native cases {actual.keys()} differ from {expected.keys()}")
@@ -253,15 +414,25 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("classification", type=Path)
     parser.add_argument("scorer", type=Path)
+    parser.add_argument("precision_recall", type=Path)
     args = parser.parse_args()
     verify_oracle()
     cases = classification_cases() | confusion_cases()
     compare(native_output(args.classification), cases)
-    errors = check_reference_errors() + check_confusion_reference_errors()
-    scores = {"cv": cv_scores(accuracy_score), "cv_balanced": cv_scores(balanced_accuracy_score)}
+    prf_cases = precision_recall_cases()
+    compare(native_output(args.precision_recall, precision_recall_warnings()), prf_cases)
+    errors = (
+        check_reference_errors() + check_confusion_reference_errors()
+        + check_precision_recall_reference_errors()
+    )
+    scores = {
+        "cv": cv_scores(accuracy_score),
+        "cv_balanced": cv_scores(balanced_accuracy_score),
+        "cv_f1": cv_scores(f1_score),
+    }
     compare(native_output(args.scorer), scores)
     print(
-        f"Matched {sum(map(len, cases.values()))} metric values, {errors} error cases "
+        f"Matched {sum(map(len, (cases | prf_cases).values()))} metric values, {errors} error cases "
         f"and {sum(map(len, scores.values()))} CV scores against sklearn {REVISION}"
     )
 

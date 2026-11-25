@@ -18,6 +18,8 @@ from moxie._random import RandomState
 struct KernelProbe(KernelContract):
     comptime Input = Dense64
     comptime Params = Int
+    @staticmethod
+    def empty_input() raises -> Dense64: return nm.zeros[DType.float64](nm.Shape(0, 0))
     def get_params(self, deep: Bool = True) raises -> Int: return 0
     def set_params(mut self, params: Int) raises: raise Error("Probe: no kernel")
     def hyperparameters(self) raises -> List[HyperparameterSpec]: raise Error("Probe: no kernel")

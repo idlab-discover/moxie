@@ -11,9 +11,10 @@ from ._gpr import (
     GPROptimizer,
     GaussianProcessRegressor,
     GenericGaussianProcessRegressor,
+    StructuredGaussianProcessRegressor,
 )
 from . import kernels
 
 from ._gpr import GaussianProcessRegressorParams, LikelihoodResult, LogMarginalLikelihood
-from ._plumbing import LatentMoments, PredictionResult, OptimizationResult
+from ._plumbing import KernelContract, KernelEvaluation, LatentMoments, PredictionResult, OptimizationResult
 from ._search import GaussianProcessSearchAdapter

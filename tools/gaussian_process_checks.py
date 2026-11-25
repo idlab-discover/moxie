@@ -106,7 +106,7 @@ def test(run, executable):
 def parity(run):
     ownership()
     for script in ('kernels/parity.py', 'kernels/pairwise_parity.py', 'regression/parity.py',
-                   'regression/search_parity.py', 'classification/parity.py'):
+                   'regression/structured_parity.py', 'regression/search_parity.py', 'classification/parity.py'):
         run(sys.executable, TESTS / script)
 
 

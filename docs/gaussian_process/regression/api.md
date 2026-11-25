@@ -34,6 +34,46 @@ Runnable from Moxie: `examples/gaussian_process.mojo`.
   `GaussianUncertainty` (`predict(X, *, return_std, return_cov=False)` returning
   the family `PredictionResult`), plus `get_params`/`set_params`/`clone`.
 
+## Structured inputs
+
+Use `StructuredGaussianProcessRegressor[MyKernel]` with an explicit native
+`KernelContract` implementation. For example, a sequence kernel can use
+`List[String]` as its `Input`. Fit and predict receive the typed batch directly.
+
+```mojo
+from moxie.gaussian_process import StructuredGaussianProcessRegressor
+
+# SequenceKernel is defined in the runnable regression contract below.
+var gpr = StructuredGaussianProcessRegressor[SequenceKernel](kernel)
+_ = gpr.fit(sequences, y)
+var posterior = gpr.predict(query_sequences, return_std=True)
+```
+
+The batch's `len(X)` gives the sample count, and its `copy()` must preserve an
+independent training snapshot. Implement `empty_input()` for the unfitted
+estimator and return false from `requires_vector_input()`. The optional second
+type parameter selects the target dtype (Float64 by default). `n_features_in_`
+has no meaning for structured inputs and stays zero.
+
+Import `KernelContract` and `KernelEvaluation` from `moxie.gaussian_process`
+and `Hyperparameter` from `moxie.gaussian_process.kernels`. Return a Float64
+covariance matrix of shape `(len(X), len(Y))` (square when `Y=None`), a
+`(len(X),)` diagonal, and, when requested, a gradient tensor of shape
+`(len(X), len(X), len(theta))`. Gradients and bounds are in log parameter
+coordinates. Fixed kernels use empty theta, `(0, 2)` bounds and a zero-width
+gradient. The default L-BFGS-B optimizer supports analytic gradients and
+seeded restarts. Set `optimizer=None` to use the configured kernel as supplied.
+
+The structured estimator takes a concrete kernel type at compile time and
+uses typed constructor parameters. Both values of `copy_X_train` keep a
+snapshot. Native persistence, the dense search adapter, and arithmetic with
+built-in `Kernel` values currently apply to the dense estimator.
+
+The [sequence kernel contract](../../../tests/gaussian_process/regression/structured.mojo)
+compares fixed and optimized fits against the pinned scikit-learn estimator
+and gallery kernel through
+[`structured_parity.py`](../../../tests/gaussian_process/regression/structured_parity.py).
+
 ## Parameter updates
 
 `set_params(params)` replaces the typed constructor configuration.

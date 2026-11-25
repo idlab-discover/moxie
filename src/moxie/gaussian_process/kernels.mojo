@@ -667,6 +667,10 @@ struct Kernel(KernelContract, Equatable, Writable):
     var _nodes: List[_Node]
     var _root: Int
 
+    @staticmethod
+    def empty_input() raises -> Dense64:
+        return zeros[DType.float64](Shape(0, 0))
+
     def __init__(out self, *, var nodes: List[_Node], root: Int):
         self._nodes = nodes^
         self._root = root

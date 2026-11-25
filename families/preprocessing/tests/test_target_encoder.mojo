@@ -3,7 +3,9 @@ from numojo import NDArray, Shape, Item, zeros
 from std.math import isnan, abs
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
-from moxie.model_selection import GroupKFold, IndexSplit, KFold, SplitLabels, StratifiedGroupKFold, StratifiedKFold
+from moxie.model_selection import (
+    GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, SplitLabels, StratifiedGroupKFold, StratifiedKFold,
+)
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import RandomState, seed_global_random_state
 from moxie.preprocessing import TargetEncoder, TargetEncoderSplits, TargetPreprocessor
@@ -382,6 +384,33 @@ def test_grouped_cv() raises:
     assert_same(fresh.fit_transform(X, y, groups=groups), expected)
 
 
+def test_leave_one_cv() raises:
+    var X = table()
+    var y = target()
+    var model = TargetEncoder(cv=LeaveOneOut())
+    var explicit = TargetEncoder(cv=TargetEncoderSplits(LeaveOneOut().split(y.size)))
+    assert_same(model.fit_transform(X, y), explicit.fit_transform(X, y))
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_true(fresh.get_params().cv.isa[LeaveOneOut]())
+    assert_same(fresh.fit_transform(X, y), model.fit_transform(X, y))
+
+    var groups = SplitLabels(["z", "a", "x", "a", "z", "x", "x", "z", "a", "z"])
+    _ = explicit.set_params(cv=TargetEncoderSplits(LeaveOneGroupOut().split(y.size, groups=groups)))
+    _ = fresh.set_params(cv=LeaveOneGroupOut())
+    var expected = explicit.fit_transform(X, y)
+    var names: List[String] = ["color", "size"]
+    assert_same(fresh.fit_transform_named(X, names, y, groups=groups), expected)
+    assert_true(fresh.get_feature_names_out() == names)
+    _ = model.set_params(fresh.get_params())
+    assert_true(model.cv.isa[LeaveOneGroupOut]())
+    assert_same(model.fit_transform(X, y, groups=groups), expected)
+
+    _ = fresh.set_params(cv=LeaveOneOut())
+    with assert_raises(contains="groups require"):
+        _ = fresh.fit_transform(X, y, groups=groups)
+
+
 def main() raises:
     test_lifecycle()
     test_params()
@@ -391,4 +420,5 @@ def main() raises:
     test_explicit_splits()
     test_cv_none()
     test_grouped_cv()
+    test_leave_one_cv()
     print("PASS target encoder lifecycle contracts")

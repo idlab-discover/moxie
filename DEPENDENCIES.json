@@ -2841,6 +2841,9 @@
         },
         "moxie.semi_supervised._self_training": {
           "file": "src/moxie/semi_supervised/_self_training.mojo"
+        },
+        "moxie.semi_supervised._svc_adapter": {
+          "file": "src/moxie/semi_supervised/_svc_adapter.mojo"
         }
       },
       "assets": {
@@ -2858,7 +2861,8 @@
             "GraphClassifierAdapter": "moxie.semi_supervised._self_training",
             "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter",
             "LogisticRegressionAdapter": "moxie.semi_supervised._logistic_adapter",
-            "CalibratedClassifierAdapter": "moxie.semi_supervised._calibrated_adapter"
+            "CalibratedClassifierAdapter": "moxie.semi_supervised._calibrated_adapter",
+            "SVCAdapter": "moxie.semi_supervised._svc_adapter"
           }
         }
       }

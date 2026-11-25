@@ -2,8 +2,8 @@
 
 The family owns `moxie.semi_supervised._contracts`, `_affinity`, `_probability`,
 `_label_propagation`, `_self_training`, `_gaussian_adapter`,
-`_logistic_adapter`, and `_calibrated_adapter`. Both graph estimators consume the
-same affinity and normalization engines. The foundation
+`_logistic_adapter`, `_calibrated_adapter`, and `_svc_adapter`. Both graph
+estimators consume the same affinity and normalization engines. The foundation
 capability traits remain unchanged. [Family development](development.md) defines
 the repository ownership boundary; [the API guide](api-surface.md) describes the
 concrete estimator interfaces.
@@ -78,6 +78,11 @@ order. The adapter delegates fit, prediction and scoring to the classifier.
 validates integer label range before converting targets to Float64. It
 delegates clone, fit, prediction, probability, and scoring and converts
 ordered classes and predictions back to owned integer lists.
+
+`SVCAdapter` delegates to the SVM owner's native dense SVC and uses its typed
+target lists directly. It copies the fitted vocabulary and delegates
+configuration-only cloning to SVC. The focused closure consumes the C-SVM
+owner, the native LIBSVM engine, and their shared trait dependencies.
 
 ## Assembly and verification
 

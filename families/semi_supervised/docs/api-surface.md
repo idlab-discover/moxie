@@ -135,7 +135,7 @@ Labels must be in the closed interval `[-(2^53 - 1), 2^53 - 1]` because
 calibration represents labels as Float64. As with other integer adapters,
 `-1` in a self-training target list means unlabeled.
 
-SVC uses calibration's explicit fitted-class reader:
+When wrapping SVC in calibration, supply the fitted-class reader:
 
 ```mojo
 from numojo import NDArray, Shape
@@ -157,6 +157,29 @@ var model = SelfTrainingClassifier[type_of(adapter)](adapter^)
 _ = model.fit(X, labels)
 ```
 
+To use SVC's built-in probabilities, wrap a native SVC directly:
+
+```mojo
+from moxie.semi_supervised import SVCAdapter, SelfTrainingClassifier
+from moxie.svm import SVC
+
+var base = SVCAdapter(SVC[Int](probability=True, random_state=42))
+var model = SelfTrainingClassifier[type_of(base)](base^)
+_ = model.fit(X, labels)
+```
+
+`SVCAdapter` delegates prediction, probability, log probability, decision
+values, and scoring to SVC. It returns classes in SVC's probability-column
+order and keeps labels in their native type. Integer targets accept the `-1`
+sentinel. String labels use `SVC[String]` and `List[Optional[String]]`, with
+`None` for unlabeled rows. For Float32 features, use
+`SVCAdapter[Int, DType.float32]` and the matching second type parameter on
+`SelfTrainingClassifier`. Native SVC widens those features to Float64.
+Use a built-in feature kernel. Precomputed Gram matrices require slicing
+both axes during pseudo-labeling, and callable kernels require the separate
+SVC provider API. SVC requires `probability=True` when self-training runs
+a pseudo-labeling iteration or when a caller requests probabilities.
+
 `get_params` recursively clones estimator configuration into a typed record;
 modify that record and pass it to `set_params`. Dynamic `estimator__parameter`
 routing is not implemented.
@@ -171,8 +194,8 @@ LabelSpreading())`), be cloned with `moxie.base.clone`, and be evaluated by
 `score` exist only for adapters that provide them. It therefore cannot be a
 pipeline step or a generic `SupervisedEstimator`. The shipped adapters are
 `GaussianNBAdapter`, `GraphClassifierAdapter`, `LogisticRegressionAdapter`,
-and `CalibratedClassifierAdapter`. Other classifiers can implement the
-`ProbabilisticEstimatorAdapter` contract.
+`CalibratedClassifierAdapter`, and `SVCAdapter`. Other classifiers can implement
+the `ProbabilisticEstimatorAdapter` contract.
 
 ## Exclusions
 
@@ -208,3 +231,9 @@ predictions, score, pseudo-label iterations, and termination match exactly on
 these fixtures. The oracle executes pinned self-training and calibration
 sources and requires the installed SVC wrapper and packaged LIBSVM sources to
 match the same revision byte for byte.
+
+Direct SVC composition uses that same oracle. Binary and multiclass fixtures
+with Float32 and Float64 features check probabilities, log probabilities, and
+decision values within 3e-5 absolute, allowing for differences in LIBSVM
+kernel arithmetic and probability fitting. They check classes, predictions,
+score, pseudo-labels, iteration counts, and termination exactly.

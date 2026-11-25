@@ -10,6 +10,7 @@ from std.math import sqrt, isfinite
 from moxie.base import UnsupervisedEstimator
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import RandomState
+from moxie.warnings import FitWarning
 from ._base import DecompositionTransformer
 from ._contracts import validate_matrix
 from ._matrix import libm_log as log
@@ -19,6 +20,7 @@ from ._svd_engine import randomized_svd, dense_svd
 
 comptime _SMALL: Float64 = 1e-12
 comptime _LOG_2PI: Float64 = 1.8378770664093453
+comptime _FA_CONVERGENCE_MESSAGE = "FactorAnalysis did not converge. You might want to increase the number of iterations."
 
 
 @fieldwise_init
@@ -93,6 +95,7 @@ struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, Un
     var noise_variance_: Optional[NDArray[DType.float64]]
     var mean_: Optional[NDArray[DType.float64]]
     var loglike_: List[Float64]
+    var fit_warnings: List[FitWarning]
     var n_iter_: Int
     var n_features_in_: Int
 
@@ -116,6 +119,7 @@ struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, Un
         self.noise_variance_ = None
         self.mean_ = None
         self.loglike_ = List[Float64]()
+        self.fit_warnings = []
         self.n_iter_ = 0
         self.n_features_in_ = 0
 
@@ -233,6 +237,7 @@ struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, Un
         var first = True
         var w = zeros[DType.float64](Shape(0, p))
         var iterations = 0
+        var converged = False
         var scaled = zeros[DType.float64](Shape(n, p))
         var sqrt_psi = zeros[DType.float64](Shape(p))
         for iteration in range(self.max_iter):
@@ -282,6 +287,7 @@ struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, Un
             ll *= -Float64(n) / 2.0
             loglike.append(ll)
             if not first and ll - old_ll < self.tol:
+                converged = True
                 break
             first = False
             old_ll = ll
@@ -290,14 +296,16 @@ struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, Un
                 for j in range(kept):
                     loading += get2(w, j, f) ** 2
                 set1(psi, f, max(get1(variance, f) - loading, _SMALL))
-        # The reference warns (ConvergenceWarning) when max_iter is exhausted;
-        # native callers inspect n_iter_ == max_iter instead.
         if self.rotation and w.shape[0] > 0:
             w = ortho_rotation(w.T(), self.rotation.value())
+        var warnings = List[FitWarning]()
+        if not converged:
+            warnings.append(FitWarning("ConvergenceWarning", _FA_CONVERGENCE_MESSAGE))
         self.components_ = w^
         self.noise_variance_ = psi^
         self.mean_ = means^
         self.loglike_ = loglike^
+        self.fit_warnings = warnings^
         self.n_iter_ = iterations
         self.n_features_in_ = p
 

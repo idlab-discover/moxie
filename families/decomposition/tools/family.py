@@ -182,6 +182,9 @@ def serialization_check():
         "factor_analysis": "driver",
         "fastica": "driver",
         "kernel_pca": "driver",
+        "nmf": "driver",
+        "lda": "driver",
+        "sparse_coding": "driver",
     }
     names = selected() if os.environ.get("MOXIE_ESTIMATORS") else drivers
     unsupported = set(names) - drivers.keys()

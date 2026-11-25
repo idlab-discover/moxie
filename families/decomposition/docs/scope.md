@@ -29,8 +29,8 @@ factorization; on 200x10 to 1000x20 inputs fits are 20-100x slower than
 sklearn with LAPACK (`benchmarks/family.json`, single thread). No speed claim
 is made; optimization is separate work.
 
-Sparse inputs and Python-only facilities (callable `fun`, warnings, metadata
-routing, pandas output) remain deferred.
+Sparse inputs and Python-only facilities (callable `fun`, process-wide warning
+filters, metadata routing, pandas output) remain deferred.
 
 Sparse inputs and outputs are unsupported; there is no implicit densification.
 Dense coefficient sparsity in dictionary learning and SparsePCA remains unfinished.
@@ -53,8 +53,8 @@ and threshold sparse coding 144. `pixi run parity` runs the current checks after
 building. See the individual guides for added cases, tolerances and coverage
 limits. Dictionary learning and SparsePCA remain unfinished.
 
-Runtime PCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA and KernelPCA
-support fitted and unfitted native model files.
+Runtime PCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, KernelPCA,
+NMF, MiniBatchNMF, LatentDirichletAllocation and SparseCoder support fitted and
+unfitted native model files.
 See [persistence](serialization.md) for the supported dtypes, schema selection,
-and IncrementalPCA resumption. The other decomposition estimators still need
-schemas.
+and resuming IncrementalPCA, MiniBatchNMF and LatentDirichletAllocation.

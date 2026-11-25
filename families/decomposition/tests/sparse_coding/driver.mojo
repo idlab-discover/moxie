@@ -1,11 +1,14 @@
 """Threshold code driver: dtype X D cov alpha positive split use_cov."""
 from std.sys import argv
 from moxie.decomposition import SparseCoder, sparse_encode
+from moxie.decomposition_serialization import SparseCoderSchema
+from moxie.serialization import dumps, loads
 from numojo import NDArray
 from decomposition_testing import read_matrix, emit
 
 
 def evaluate[dtype: DType]() raises:
+    comptime Schema = SparseCoderSchema[dtype]
     var a = argv()
     var x = read_matrix[dtype](String(a[2]))
     var d = read_matrix[dtype](String(a[3]))
@@ -17,10 +20,13 @@ def evaluate[dtype: DType]() raises:
     emit("functional", sparse_encode(x, d, cov=cov, algorithm="threshold", alpha=alpha, positive=positive))
     var m = SparseCoder[dtype](d, transform_algorithm="threshold", transform_alpha=alpha,
         positive_code=positive, split_sign=Int(a[7]) != 0)
+    m = Schema.decode(loads(dumps(Schema.encode(m))))
     var z = m.transform(x)
     emit("code", z)
     emit("inverse", m.inverse_transform(z))
     emit("fit", m.fit_transform(x))
+    m = Schema.decode(loads(dumps(Schema.encode(m))))
+    emit("restored_fit", m.transform(x))
 
 
 def main() raises:

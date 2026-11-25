@@ -85,21 +85,21 @@ TypeError), `get_feature_names_out(input_features)`, `fit`, `fit_transform`,
 - A failed fit leaves the previous fitted state untouched (sklearn may already
   have replaced `n_features_in_`/`transformers_`); config changes after a fit do
   not alter the fitted state until the next fit, as in sklearn.
-- X is a rank-2 array or a named numeric table. Named transform maps fitted
+- X is a rank-2 array or a named table. Named transform maps fitted
   columns by name, tolerates extra columns and omitted dropped columns, and
   rejects missing required columns. Pandas/polars integration is excluded;
   sparse inputs/outputs and metadata routing are unavailable. Components receive
-  numeric arrays, not schema-carrying containers. Array selection callables
-  receive the underlying matrix and may return positional or named keys.
+  numeric arrays or selected typed categorical columns. Array selection
+  callables require a numeric-only table and may return positional or named keys.
 - Output feature names need components conforming to the compose
   `FeatureNamesOut` trait or `moxie._feature_metadata.FeatureNamesOut`
   (sklearn checks `hasattr`); others raise sklearn's AttributeError text.
-  Preprocessing scalers and the dense imputers conform. Some other families'
+  Preprocessing scalers, dense imputers and `SelectPercentile` conform. Some other families'
   transformers define the method without declaring a trait, so their names
   are not yet available through ColumnTransformer.
-- `moxie.pipeline.Pipeline` ends in a predictor, so a transformer chain such
-  as `make_pipeline(SimpleImputer(), StandardScaler())` cannot yet be one
-  entry; use consecutive ColumnTransformers instead.
+- `make_pipeline(SimpleImputer(), StandardScaler())` returns a
+  `TransformerPipeline` that can be used as one entry. Its stages must agree
+  on the target type and on the intermediate array type.
 - Errors are Mojo `Error`s whose text starts with the sklearn exception type
   and message (`InvalidParameterError: The 'remainder' parameter ...`).
 

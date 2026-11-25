@@ -1,5 +1,6 @@
 import numojo as nm
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
+from moxie._feature_metadata import FeatureNamesOut
 from moxie.base import clone
 from moxie.feature_selection import ConfiguredScorer, ScoreResult
 from moxie.feature_selection import SelectKBest, SelectPercentile, SelectFpr, SelectFdr, SelectFwe, GenericUnivariateSelect, BuiltinScorer, SelectionParameter
@@ -18,6 +19,9 @@ struct Float32Regression(ConfiguredScorer):
     def score(self, x: nm.NDArray[Self.dtype], y: Optional[Self.Target]) raises -> ScoreResult[Self.score_dtype]:
         from moxie.feature_selection import f_regression
         return f_regression(x, y.value())
+
+def composed_names[T: FeatureNamesOut](selector: T, names: Optional[List[String]]) raises -> List[String]:
+    return selector.get_feature_names_out(names)
 
 def main() raises:
     var x = nm.ones[DType.float64](nm.Shape(6, 3))
@@ -48,8 +52,21 @@ def main() raises:
     assert_equal(selector.get_feature_names_out()[0], "a")
     assert_equal(selector.inverse_transform(selector.transform(x)).shape[1], 3)
     var percentile = SelectPercentile(percentile=50)
+    with assert_raises(contains="NotFittedError"):
+        _ = composed_names(percentile, None)
     _ = percentile.fit(x, y.copy())
     assert_equal(percentile.transform(x).shape[1], 1)
+    var names: List[String] = ["a", "b", "c"]
+    assert_equal(composed_names(percentile, Optional[List[String]](names^))[0], "a")
+    assert_equal(composed_names(percentile, None)[0], "x0")
+    assert_equal(percentile.get_feature_names_out(List[String]())[0], "x0")
+    with assert_raises(contains="length mismatch"):
+        _ = composed_names(percentile, Optional[List[String]](List[String]()))
+    var fitted_copy = percentile.copy()
+    _ = percentile.set_params(percentile=100)
+    assert_equal(fitted_copy.get_feature_names_out()[0], "x0")
+    assert_equal(len(fitted_copy.get_feature_names_out()), 1)
+    assert_false(clone(fitted_copy).__sklearn_is_fitted__())
     var generic = GenericUnivariateSelect(mode="k_best", param=SelectionParameter(1))
     _ = generic.fit(x, y.copy())
     assert_equal(generic.transform(x).shape[1], 1)

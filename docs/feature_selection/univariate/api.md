@@ -34,6 +34,10 @@ Native adaptations:
   prevent callers from mutating the estimator through returned buffers.
 - `fit_named(X, y, names)` records explicit String feature names. Output names and
   support return the family's native types. Empty name lists mean absent names.
+  `SelectPercentile` also implements the composition `FeatureNamesOut` trait.
+  Its optional-name overload uses `None` for learned or default names and
+  validates a supplied list against the fitted width. `SelectPercentile.copy()`
+  copies the fitted selector for use in typed transformer pipelines.
 - `get_params()` returns typed `SelectorParams`; `set_params(params)` validates
   and updates configuration. Named policy parameter updates are also available.
   `clone(selector)` is unfitted. Policy changes update support from stored scores

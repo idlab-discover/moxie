@@ -1,6 +1,7 @@
 """Typed dense univariate selectors; sklearn names and threshold semantics."""
 import numojo as nm
 from std.utils import Variant
+from moxie._feature_metadata import FeatureNamesOut
 from moxie._labels import StringTarget
 from moxie.base import FitTransformer
 from moxie.feature_selection._base import UnsupervisedSelector
@@ -78,7 +79,7 @@ struct SelectorParams[S: ConfiguredScorer & Deinitable](Copyable, Movable):
     var mode: String
     var param: SelectionParameter
 
-struct _FilterState[dt: DType](Movable):
+struct _FilterState[dt: DType](Copyable, Movable):
     var selection: SelectionState
     var result: Optional[ScoreResult[Self.dt]]
     var names: List[String]
@@ -195,7 +196,9 @@ struct SelectKBest[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float6
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.selection.is_fitted()
 
-struct SelectPercentile[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](UnsupervisedSelector, FitTransformer):
+struct SelectPercentile[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](
+    UnsupervisedSelector, FitTransformer, Copyable, FeatureNamesOut,
+):
     comptime Input = nm.NDArray[Self.S.dtype]
     comptime Target = Self.S.Target
     comptime Transformed = Self.Input
@@ -238,8 +241,16 @@ struct SelectPercentile[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.f
         _ = self.fit(X, y)
         return self.transform(X)
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
         return self._state.selected(self._policy()).get_feature_names_out(input_features)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
+        if input_features:
+            ref names = input_features.value()
+            if len(names) != self.n_features_in_():
+                raise Error("ValueError: input feature names length mismatch")
+            return self.get_feature_names_out(names)
+        return self.get_feature_names_out(List[String]())
 
     def scores_(self) raises -> nm.NDArray[Self.S.score_dtype]:
         self._state.selection.check()

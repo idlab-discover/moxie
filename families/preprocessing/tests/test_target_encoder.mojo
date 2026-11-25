@@ -3,6 +3,7 @@ from numojo import NDArray, Shape, Item, zeros
 from std.math import isnan, abs
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
+from moxie.model_selection import KFold, StratifiedKFold
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import RandomState, seed_global_random_state
 from moxie.preprocessing import TargetEncoder, TargetPreprocessor
@@ -117,11 +118,11 @@ def test_params() raises:
     var model = TargetEncoder(smooth=2.0, cv=3, shuffle=False)
     var params = model.get_params()
     assert_equal(params.smooth.value(), 2.0)
-    assert_equal(params.cv, 3)
+    assert_equal(params.cv[Int], 3)
     assert_false(params.shuffle.value())
     _ = model.set_params(smooth=Optional[Float64](None), cv=4, random_state=Optional[Int](7), shuffle=Optional[Bool](True))
     assert_false(Bool(model.smooth))
-    assert_equal(model.cv, 4)
+    assert_equal(model.cv[Int], 4)
     assert_equal(model.random_state.value(), 7)
     var record = model.get_params()
     record.target_type = "binary"
@@ -244,9 +245,38 @@ def test_folds_and_rng() raises:
     assert_same(Z, seeded.fit_transform(X, y))
 
 
+def test_cv_configuration() raises:
+    var X = table()
+    var y = target()
+    var model = TargetEncoder(cv=KFold(3, shuffle=True, random_state=42))
+    var integer = TargetEncoder(cv=3, shuffle=True, random_state=42)
+    var expected = integer.fit_transform(X, y)
+    assert_same(model.fit_transform(X, y), expected)
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    var config = fresh.get_params()
+    assert_equal(config.cv[KFold].n_splits, 3)
+    assert_equal(config.cv[KFold].random_state.value(), 42)
+    var names: List[String] = ["color", "size"]
+    assert_same(fresh.fit_transform_named(X, names, y), expected)
+    assert_true(fresh.get_feature_names_out() == names)
+    _ = model.set_params(cv=StratifiedKFold(3))
+    with assert_raises(contains="Supported target types"):
+        _ = model.fit_transform(X, y)
+    with assert_raises(contains="caller-owned RandomState requires integer cv"):
+        var state = RandomState(42)
+        _ = model.fit_transform(X, y, state)
+    _ = model.set_params(cv=KFold(11))
+    with assert_raises(contains="n_splits exceeds sample count"):
+        _ = model.fit_transform(X, y)
+    _ = model.set_params(config)
+    assert_same(model.fit_transform(X, y), expected)
+
+
 def main() raises:
     test_lifecycle()
     test_params()
     test_targets()
     test_folds_and_rng()
+    test_cv_configuration()
     print("PASS target encoder lifecycle contracts")

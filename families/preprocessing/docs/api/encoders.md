@@ -123,6 +123,7 @@ Int64; a vector or one-column matrix) or `StringLabels` (`List[String]`).
 String targets can be binary or multiclass only.
 
 ```mojo
+from moxie.model_selection import KFold
 from moxie.preprocessing import TargetEncoder
 from moxie.preprocessing._label import StringLabels
 from moxie._random import RandomState
@@ -130,6 +131,8 @@ from moxie._random import RandomState
 var te = TargetEncoder(random_state=0)       # TargetEncoder[StringKind, NumericLabels[float64]]
 var Z = te.fit_transform(X, y)               # cross-fitted training encoding, Float64
 var Z_test = te.transform(X_test)            # encodings_ learned on all of X
+var configured = TargetEncoder(cv=KFold(5, shuffle=True, random_state=0))
+var Z_cv = configured.fit_transform(X, y)   # explicitly use KFold
 var labels: List[String] = ["cat", "dog", "eel"]
 var multi = TargetEncoder[StringKind, StringLabels](cv=3, random_state=0)
 var rng = RandomState(42)
@@ -150,9 +153,13 @@ Behavior follows sklearn:
   `target_mean_`.
 - `fit_transform` cross-fits: each fold's rows are encoded from encodings
   learned on the other folds. It is therefore not `fit(X, y).transform(X)`.
-  The folds are sklearn's `KFold` for continuous targets. For a classified
-  target whose `type_of_target(y)` is binary or multiclass they are
-  `StratifiedKFold`. Shuffling defaults to on.
+  Integer `cv` uses `StratifiedKFold` when the encoder treats the target as
+  categorical and `type_of_target(y)` is binary or multiclass. It uses
+  `KFold` otherwise. Shuffling defaults to on for integer `cv`. Explicit
+  `KFold` and `StratifiedKFold` use the splitter's own shuffle and seed
+  settings. An explicit `StratifiedKFold` requires binary or multiclass
+  labels in the original target, even when `target_type="continuous"`.
+  A shuffled splitter with no seed uses Moxie's process default RNG.
 - The `FitTransformer` overload accepts the optional target used by generic
   composition and raises `ValueError` when it receives `None`.
 - Explicit `categories` may leave training values unknown. In `fit_transform`
@@ -168,10 +175,10 @@ Learned attributes:
 - `n_features_in_` and `feature_names_in_` as usual. `fit_named` and
   `fit_transform_named` record input names.
 
-The folds come from a family-local stand-in for the future
-`model_selection.splitters` dependency. `kfold_test_folds(n_samples, n_splits,
-shuffle, random_state)` and `stratified_kfold_test_folds(labels, n_splits,
-shuffle, random_state)` in `_target_encoder` return each row's test fold.
+Explicit splitter objects use the native `moxie.model_selection`
+implementations. Integer `cv` uses the family-local `kfold_test_folds` and
+`stratified_kfold_test_folds` in `_target_encoder`, which return each row's
+test fold.
 For fold f, training rows are the rows of other folds and test rows are fold
 f's rows, both ascending, exactly as sklearn's `split` yields them. The
 stratified version ranks classes by first appearance, allocates rows to folds
@@ -198,9 +205,12 @@ shuffle, and `n_splits` greater than every class count all raise.
 * `set_params(smooth=..., shuffle=..., random_state=...)` take
   `Optional[Optional[...]]`. The outer `None` leaves the value unchanged, and
   an inner `None` restores `"auto"`/`"deprecated"`.
-* `cv` is an integer of at least 2. CV splitter objects, iterables of splits,
-  `fit_transform(**params)` metadata routing and `get_metadata_routing` are not
-  provided.
+* `cv` accepts an integer of at least 2, `KFold`, or `StratifiedKFold`, in
+  both the constructor and `set_params`. The public field and `get_params()`
+  store the selected value in a Mojo variant. For an integer configuration,
+  read `model.cv[Int]`. The caller-owned `RandomState` overload takes integer
+  `cv`. Other splitter objects, iterables of splits, and metadata routing
+  are unsupported.
 * `target_mean_` is always a vector. sklearn stores a scalar for binary and
   continuous targets. A Float32 target's mean is the NumPy Float32 value, stored
   as Float64.
@@ -224,7 +234,7 @@ category accumulators are also held. There is no n x p code/mask table
 
 ### Parity
 
-`tests/parity/test_target_encoder.py`, 843 checks. All values are compared
+`tests/parity/test_target_encoder.py`, 909 checks. All values are compared
 exactly (rtol=0), because the native code reproduces each source of rounding:
 - the fold indices;
 - NumPy's pairwise `mean`/`var` in the target dtype (Float32 for Float32
@@ -246,7 +256,9 @@ Estimator cases cover:
   targets, and a single-class multiclass target;
 - forced target types;
 - `smooth` "auto", 0, 5 and 1e6;
-- `cv` 2 to 5, shuffle on and off;
+- integer `cv` 2 to 5 and explicit `KFold` and `StratifiedKFold`,
+  including seeded and global shuffling and explicit unshuffled KFold
+  overriding the deprecated encoder settings;
 - explicit categories with unknown training values;
 - the default unseeded estimator under seeded global streams;
 - a caller-owned RandomState over two calls.

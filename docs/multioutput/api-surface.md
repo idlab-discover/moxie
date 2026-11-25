@@ -39,21 +39,26 @@ class vector per output. Subsequent calls retain each fitted component.
 `fit(X, Y, sample_weight=weights)` requires a component with weighted-fit support.
 
 Chain constructors accept `order=None`, `random_state=None`,
-`random_order=False`, and `verbose=False`. `ClassifierChain` also accepts a
-`chain_method` string, defaulting to `"predict"`. Random order is requested with
-`random_order=True`; it is mutually exclusive with an explicit permutation.
+`random_order=False`, `verbose=False`, and `cv=None`. `ClassifierChain` also
+accepts a `chain_method` string, defaulting to `"predict"`. Use
+`random_order=True` to request a random permutation in the absence of an
+explicit order.
 `verbose=True` prints sklearn's `[Chain] ... (i of n) Processing order k, total=...`
-line after each link is fitted, in ordinary and CV fit. Native CV uses
-`fit(X, Y, cv=3)`, `fit(X, Y, cv=KFold(3))`, or
-`fit(X, Y, cv=StratifiedKFold(3))`. Import the splitters from
-`moxie.model_selection`. Native CV uses the model-selection target dtypes
+line after each link is fitted. Set `cv=3`, `cv=KFold(3)`, or
+`cv=StratifiedKFold(3)` on either chain constructor. Import the splitters from
+`moxie.model_selection`. The `ChainParams.cv` value is carried by `get_params`,
+`set_params`, and `clone`. Native CV uses the model-selection target dtypes
 Int64, Float32 and Float64. Integer CV uses unshuffled KFold, with stratification
 for a classifier component and binary or multiclass targets. A shuffled native
-splitter requires an integer `random_state`. CV is a fit argument, so repeat
-fits specify it again. Custom split and response policies use
-`fit(X, Y, cv=provider)` with the `ChainResponses` protocol. The provider returns
-one out-of-fold response per original sample. Every link fits on the full
-data, and only links preceding the final one request CV responses.
+splitter requires an integer `random_state`.
+
+A `cv` keyword on `fit` overrides the configured value for that call. Use
+`fit(X, Y, cv=None)` for true preceding targets or `fit(X, Y, cv=provider)`
+with a custom `ChainResponses` provider. The provider returns one out-of-fold
+response per original sample. Every link fits on the full data, and only links
+preceding the final one request CV responses. When configured CV is combined
+with `sample_weight`, the full-data links receive the weights. The out-of-fold
+fits use unweighted data, following scikit-learn's chain behavior.
 
 Regression chains always use `predict` responses. The native regression
 parameter record also contains `chain_method` for compatibility with the shared
@@ -80,9 +85,9 @@ with fewer than two samples. Native errors use descriptive Mojo `Error` values.
 See [scope](scope.md) for unsupported inputs and configuration options.
 
 `IndependentParams` and `ChainParams` are public typed records in
-`moxie.multioutput`. Capability contracts remain available there and in
-`moxie._multioutput_contracts`; `ChainResponses` remains available there and in
-`moxie._multioutput`.
+`moxie.multioutput`. `ChainCV` is the native splitter configuration type.
+Capability contracts are also available in `moxie._multioutput_contracts`.
+The `ChainResponses` protocol can also be imported from `moxie._multioutput`.
 
 The weighted `fit` overload is available only for components implementing
 `WeightedSupervisedEstimator`. Tested production components are `DummyRegressor`,

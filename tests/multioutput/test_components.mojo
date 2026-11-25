@@ -73,8 +73,8 @@ def chain_cv() raises:
     var X = features[DType.float64]()
     var Y = targets[DType.float64]()
     var order = List[Int]([2, 0, 1])
-    var regressor = RegressorChain(Ridge(0.5), order=order.copy())
-    var kfold_prediction = regressor.fit(X, Y, cv=KFold(3)).predict(X)
+    var regressor = RegressorChain(Ridge(0.5), order=order.copy(), cv=KFold(3))
+    var kfold_prediction = regressor.fit(X, Y).predict(X)
     parity("ComponentsRegressorChainKFold", kfold_prediction)
     var integer_prediction = regressor.fit(X, Y, cv=3).predict(X)
     parity("ComponentsRegressorChainIntegerCV", integer_prediction)
@@ -84,24 +84,48 @@ def chain_cv() raises:
     with assert_raises(contains="exceeds sample count"):
         _ = regressor.fit(X, Y, cv=ROWS + 1)
     assert_same(regressor.predict(X), integer_prediction)
-    assert_false(clone(regressor).__sklearn_is_fitted__())
+    var cloned_regressor = clone(regressor)
+    assert_false(cloned_regressor.__sklearn_is_fitted__())
+    assert_equal(cloned_regressor.get_params().cv[KFold].n_splits, 3)
+    assert_same(cloned_regressor.fit(X, Y).predict(X), kfold_prediction)
+    var without_cv = RegressorChain(Ridge(0.5), order=order.copy())
+    assert_same(regressor.fit(X, Y, cv=None).predict(X), without_cv.fit(X, Y).predict(X))
+    assert_same(regressor.fit(X, Y).predict(X), kfold_prediction)
+    parity("ComponentsRegressorChainCVWeighted", regressor.fit(X, Y, sample_weight=weights()).predict(X))
 
     var binary = labels[DType.int64](False)
     for i in range(ROWS):
         binary.unsafe_set(i * 3, Int64(1 if i < 4 or i == 7 else 0))
     var classifier_order = List[Int]([0, 2, 1])
-    var label_chain = ClassifierChain(RidgeClassifier(), order=classifier_order.copy())
-    parity("ComponentsClassifierChainIntegerCVLabels", label_chain.fit(X, binary, cv=3).predict(X))
-    var classifier = ClassifierChain(RidgeClassifier(), order=classifier_order^, chain_method="decision_function")
+    var label_chain = ClassifierChain(RidgeClassifier(), order=classifier_order.copy(), cv=3)
+    parity("ComponentsClassifierChainIntegerCVLabels", label_chain.fit(X, binary).predict(X))
+    var classifier = ClassifierChain(RidgeClassifier(), order=classifier_order^, chain_method="decision_function", cv=3)
     var kfold_decision = classifier.fit(X, binary, cv=KFold(3)).decision_function(X)
     parity("ComponentsDecisionChainKFold", kfold_decision)
-    var integer_decision = classifier.fit(X, binary, cv=3).decision_function(X)
+    var integer_decision = classifier.fit(X, binary).decision_function(X)
     parity("ComponentsDecisionChainIntegerCV", integer_decision)
     var splitter_effect = Float64(0)
     for i in range(integer_decision.size):
         splitter_effect = max(splitter_effect, abs(integer_decision.unsafe_get(i) - kfold_decision.unsafe_get(i)))
     assert_true(splitter_effect > 0.1)
     assert_same(integer_decision, classifier.fit(X, binary, cv=StratifiedKFold(3)).decision_function(X))
+    var classifier_params = classifier.get_params()
+    assert_equal(classifier_params.cv[Int], 3)
+    classifier_params.cv = StratifiedKFold(3, shuffle=True, random_state=7)
+    _ = classifier.set_params(classifier_params)
+    var shuffled_decision = classifier.fit(X, binary).decision_function(X)
+    parity("ComponentsDecisionChainShuffledCV", shuffled_decision)
+    var cloned_classifier = clone(classifier)
+    assert_false(cloned_classifier.__sklearn_is_fitted__())
+    var cloned_cv = cloned_classifier.get_params().cv[StratifiedKFold].copy()
+    assert_true(cloned_cv.shuffle)
+    assert_equal(cloned_cv.random_state.or_else(-1), 7)
+    assert_same(cloned_classifier.fit(X, binary).decision_function(X), shuffled_decision)
+    classifier_params.cv = 1
+    _ = classifier.set_params(classifier_params)
+    with assert_raises(contains="at least 2"):
+        _ = classifier.fit(X, binary)
+    assert_same(classifier.decision_function(X), shuffled_decision)
 
     var X32 = features[DType.float32]()
     var forest_target = labels[DType.float64](False)
@@ -110,17 +134,20 @@ def chain_cv() raises:
     for i in range(ROWS):
         forest_target.unsafe_set(i * 3, 9.0 if i == 0 else -5.0)
     var forest = ClassifierChain[RandomForestClassifier[], DType.float32, DType.float64](
-        RandomForestClassifier(n_estimators=5, random_state=0), chain_method="predict_proba",
+        RandomForestClassifier(n_estimators=5, random_state=0), chain_method="predict_proba", cv=3,
     )
     parity("ComponentsForestChainKFold", forest.fit(X32, forest_target, cv=KFold(3)).predict_proba(X32))
-    parity("ComponentsForestChainIntegerCV", forest.fit(X32, forest_target, cv=3).predict_proba(X32))
+    parity("ComponentsForestChainIntegerCV", forest.fit(X32, forest_target).predict_proba(X32))
     assert_equal(forest.classes_[0].unsafe_get(0), -5.0)
     assert_equal(forest.classes_[0].unsafe_get(1), 9.0)
 
     var one_target = nm.zeros[DType.float64](Shape(ROWS, 1))
     # The final link is always fitted on the full data and never split.
-    _ = regressor.set_params(RegressorChain(Ridge(0.5)).get_params())
-    _ = regressor.fit(X, one_target, cv=ROWS + 1)
+    var regressor_params = regressor.get_params()
+    regressor_params.order = None
+    regressor_params.cv = ROWS + 1
+    _ = regressor.set_params(regressor_params)
+    _ = regressor.fit(X, one_target)
     assert_equal(len(regressor.estimators_), 1)
 
 

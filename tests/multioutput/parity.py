@@ -87,7 +87,7 @@ def components(module, np):
     """Production-component scenario mirrored by test_components.mojo."""
     import warnings
     from sklearn.linear_model import Ridge, RidgeClassifier
-    from sklearn.model_selection import KFold
+    from sklearn.model_selection import KFold, StratifiedKFold
     i = np.arange(12)
     X = np.array([[((r * (j + 3) + 2 * j) % 7) - 3.0 + 0.1 * r for j in range(3)] for r in i])
     Y = np.column_stack([0.5 * (i % 3) + X @ np.array([k + 1 - j for j in range(3)], dtype=float) for k in range(3)])
@@ -139,6 +139,13 @@ def components(module, np):
     uneven[:, 0] = (i < 4) | (i == 7)
     label_cv = module.ClassifierChain(RidgeClassifier(), order=[0, 2, 1], cv=3)
     out['ComponentsClassifierChainIntegerCVLabels'] = label_cv.fit(X, uneven).predict(X).ravel().tolist()
+    weighted_cv = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1], cv=KFold(3))
+    out['ComponentsRegressorChainCVWeighted'] = weighted_cv.fit(X, Y, sample_weight=w).predict(X).ravel().tolist()
+    shuffled_cv = module.ClassifierChain(
+        RidgeClassifier(), order=[0, 2, 1], chain_method='decision_function',
+        cv=StratifiedKFold(3, shuffle=True, random_state=7),
+    )
+    out['ComponentsDecisionChainShuffledCV'] = shuffled_cv.fit(X, uneven).decision_function(X).ravel().tolist()
     for suffix, cv in [('KFold', KFold(3)), ('IntegerCV', 3)]:
         regression = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1], cv=cv)
         out['ComponentsRegressorChain' + suffix] = regression.fit(X, Y).predict(X).ravel().tolist()
@@ -186,8 +193,8 @@ if __name__ == '__main__':
                               for a, b in zip(actual[name], reference[name]))
             elif name.startswith('Components') and not name.endswith(('Labels', 'Order')) and 'Forest' not in name:
                 # Float64 Ridge solves differ from LAPACK in operation order
-                # (observed <= 6e-15); labels, orders and seeded forest
-                # probabilities stay exact.
+                # Weighted chains also propagate those differences between links.
+                # Labels, orders and seeded forest probabilities stay exact.
                 matches = all(math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-12)
                               for a, b in zip(actual[name], reference[name]))
             elif name.endswith('Score'):

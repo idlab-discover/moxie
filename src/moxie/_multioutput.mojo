@@ -135,7 +135,9 @@ def stack_predictions[dtype: DType](columns: List[nm.NDArray[dtype]]) raises -> 
     return result^
 
 
-def augment_features[dtype: DType](x: nm.NDArray[dtype], responses: nm.NDArray[dtype], prefix: Int) raises -> nm.NDArray[dtype]:
+def augment_features[dtype: DType, input_dtype: DType](
+    x: nm.NDArray[input_dtype], responses: nm.NDArray[dtype], prefix: Int,
+) raises -> nm.NDArray[dtype]:
     if x.ndim != 2 or responses.ndim != 2:
         raise Error("ValueError: expected feature and response matrices")
     if x.shape[0] != responses.shape[0] or prefix < 0 or prefix > responses.shape[1]:
@@ -144,7 +146,8 @@ def augment_features[dtype: DType](x: nm.NDArray[dtype], responses: nm.NDArray[d
     var result = nm.zeros[dtype](nm.Shape(x.shape[0], width))
     for i in range(x.shape[0]):
         for j in range(x.shape[1]):
-            result.unsafe_set(i * width + j, x.unsafe_get(i * Int(x.strides[0]) + j * Int(x.strides[1])))
+            var value = x.unsafe_get(i * Int(x.strides[0]) + j * Int(x.strides[1]))
+            result.unsafe_set(i * width + j, value.cast[dtype]())
         for j in range(prefix):
             result.unsafe_set(i * width + x.shape[1] + j, responses.unsafe_get(i * Int(responses.strides[0]) + j * Int(responses.strides[1])))
     return result^

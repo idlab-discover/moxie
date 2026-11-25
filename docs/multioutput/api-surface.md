@@ -25,6 +25,17 @@ Use explicit type parameters `[Component, dtype, label]` for other numeric
 feature/target dtypes. Regression targets default to the feature dtype;
 classification targets default to Int64.
 
+Both chains also accept a compile-time `feature_dtype` parameter for the
+features and response columns passed to each component. It defaults to the
+chain's input dtype. For Float32 inputs and a Float64 component, use
+`ClassifierChain[Component, DType.float32, feature_dtype=DType.float64](component)`.
+For a regression component that expects Float64 features and targets, use
+`RegressorChain[Component, DType.float32, DType.float64, feature_dtype=DType.float64](component)`.
+The third parameter still selects the target and prediction dtype. A custom
+`ChainSplitter` or `ChainResponses` provider receives the augmented matrix
+in `feature_dtype`. A `ChainResponses` provider also returns its response
+vector in that dtype.
+
 `fit`, `partial_fit` and `set_params` mutate in place and return a mutable borrow of the wrapper, supporting
 `model.fit(X, Y).predict(X)`. `get_params(deep=True)`
 returns a typed record containing the component's parameter record. Edit that

@@ -135,6 +135,17 @@ def components(module, np):
     out['ComponentsRidge32Weighted'] = narrow.predict(X32).ravel().tolist()
     chain32 = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1]).fit(X32, Y32, sample_weight=w)
     out['ComponentsRegressorChain32Weighted'] = chain32.predict(X32).ravel().tolist()
+    wide = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1], cv=3)
+    out['ComponentsWidenedRegressorChainCV'] = wide.fit(X32, Y, sample_weight=w).predict(X32).ravel().tolist()
+    wide.set_params(cv=None)
+    out['ComponentsWidenedRegressorChain'] = wide.fit(X32, Y).predict(X32).ravel().tolist()
+    wide_classifier = module.ClassifierChain(
+        RidgeClassifier(), order=[1, 0, 2], chain_method='decision_function',
+    ).fit(X32, binary)
+    out['ComponentsWidenedClassifierChainDecision'] = wide_classifier.decision_function(X32).ravel().tolist()
+    wide_classifier.set_params(cv=3).fit(X32, binary)
+    out['ComponentsWidenedClassifierChainCVDecision'] = wide_classifier.decision_function(X32).ravel().tolist()
+    out['ComponentsWidenedClassifierChainCVLabels'] = wide_classifier.predict(X32).ravel().tolist()
     import contextlib, io
     log = io.StringIO()
     with contextlib.redirect_stdout(log):

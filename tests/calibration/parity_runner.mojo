@@ -1,7 +1,7 @@
 """Execute externally generated oracle cases in a native process."""
 from std.sys import argv
 from std.utils import Variant
-from std.math import isfinite
+from std.math import isfinite, nan
 import numojo as nm
 from moxie.base import clone
 from moxie.model_selection import KFold, StratifiedKFold
@@ -181,6 +181,12 @@ def main() raises:
         var q = array(String(fields[4]))
         var expected = array(String(fields[5]))
         var context = kind + " case " + String(count)
+        if kind == "list_int64" or kind == "list_float32":
+            var backing = nm.full[DType.float64](nm.Shape(2 * y.size), nan[DType.float64]())
+            var view = backing.view_with_layout(y.shape, nm.NDArrayStrides(2), 1)
+            for i in range(y.size):
+                view[nm.Item(i)] = y.item(i)
+            y = view^
         if kind == "sigmoid":
             var model = _SigmoidCalibration()
             _ = model.fit(x, y, w)

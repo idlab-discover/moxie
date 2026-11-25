@@ -16,7 +16,7 @@ reserved declaration does not mean its algorithm is implemented.
 | NMF, MiniBatchNMF, non_negative_factorization | [Dense CD/MU and online updates](nmf.md) |
 | LatentDirichletAllocation | [Batch/online variational Bayes and scores](lda.md) |
 | KernelPCA | [Named/precomputed kernels and learned inverse maps](kernel_pca.md) |
-| SparseCoder, sparse_encode | [Threshold and Lasso CD coding](sparse_coding.md); reference defaults require LARS/OMP |
+| SparseCoder, sparse_encode | [Threshold, Lasso CD and OMP coding](sparse_coding.md). Pass an explicit supported algorithm to `sparse_encode`. |
 | DictionaryLearning, MiniBatchDictionaryLearning, dict_learning, dict_learning_online | Raising declarations; dense fitting solvers and dictionary optimization remain unfinished |
 | SparsePCA, MiniBatchSparsePCA | Raising declarations; dense dictionary-fitting prerequisites remain unfinished |
 

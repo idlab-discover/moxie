@@ -1,11 +1,12 @@
 # Adapted from sklearn/decomposition/_dict_learning.py, scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
-"""Dense threshold and coordinate-descent sparse coding."""
+"""Dense fixed-dictionary sparse coding."""
 from numojo import NDArray, Shape, zeros
 from std.math import abs, isfinite
 from moxie.base import UnsupervisedEstimator
 from moxie._dense import row_squared_norms
 from moxie.linear_model._cd_fast import coordinate_descent_gram
+from moxie.linear_model._omp import omp_gram_codes
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
@@ -75,8 +76,10 @@ def sparse_encode[dtype: DType](
     """Return dense (samples, atoms) codes for a fixed dictionary."""
     if algorithm not in [String("lasso_lars"), "lasso_cd", "lars", "omp", "threshold"]:
         raise Error("ValueError: invalid sparse coding algorithm")
-    if algorithm != "threshold" and algorithm != "lasso_cd":
-        raise Error("NotImplementedError: sparse coding requires a linear_model LARS/OMP solver for this algorithm")
+    if algorithm == "lars" or algorithm == "lasso_lars":
+        raise Error("NotImplementedError: sparse coding requires a linear_model LARS solver for this algorithm")
+    if algorithm == "omp" and positive:
+        raise Error("ValueError: Positive constraint not supported for 'omp' coding method.")
     if alpha and not (alpha.value() >= 0 and isfinite(alpha.value())):
         raise Error("ValueError: alpha must be finite and nonnegative")
     if max_iter < 0 or verbose < 0 or (n_nonzero_coefs and n_nonzero_coefs.value() < 1):
@@ -89,6 +92,28 @@ def sparse_encode[dtype: DType](
     var penalty = alpha.or_else(1.0)
     if algorithm == "lasso_cd":
         return _lasso_cd_code(X, dictionary, gram, init, penalty, max_iter, positive)
+    if algorithm == "omp":
+        var atoms = dictionary.shape[0]
+        var count = n_nonzero_coefs.or_else(min(max(X.shape[1] // 10, 1), atoms))
+        if count > atoms:
+            raise Error("ValueError: OMP n_nonzero_coefs cannot exceed the number of atoms")
+        var system: NDArray[dtype]
+        if gram:
+            ref supplied = gram.value()
+            if supplied.shape != Shape(atoms, atoms):
+                raise Error("ValueError: OMP gram must have shape (atoms, atoms)")
+            system = supplied.view_with_layout(supplied.shape, supplied.strides, supplied.offset)
+        else:
+            system = dictionary @ dictionary.T()
+        var correlations: NDArray[dtype]
+        if cov:
+            ref supplied = cov.value()
+            if supplied.shape != Shape(atoms, X.shape[0]):
+                raise Error("ValueError: OMP cov must have shape (atoms, samples)")
+            correlations = supplied.view_with_layout(supplied.shape, supplied.strides, supplied.offset)
+        else:
+            correlations = dictionary @ X.T()
+        return omp_gram_codes(system, correlations, count)
     var covariance = zeros[dtype](Shape(0, 0))
     if cov:
         validate_matrix(cov.value())
@@ -122,7 +147,7 @@ struct SparseCoderParams[dtype: DType](Copyable, Movable):
 
 
 struct SparseCoder[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
-    """Stateless coding with an owned fixed dictionary; threshold and lasso_cd modes supported."""
+    """Stateless coding with an owned fixed dictionary."""
     comptime Params = SparseCoderParams[Self.dtype]
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]

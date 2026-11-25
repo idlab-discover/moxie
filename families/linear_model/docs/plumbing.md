@@ -177,3 +177,20 @@ owns ElasticNet and Lasso, including weight normalization, solver seed
 generation, paths, lifecycle and public parameter/shape semantics. Both use
 family `_linear_base` for centering, intercepts, decisions and R2. See the child
 API for diagnostics, supported paths and remaining Gram and multi-task work.
+
+## Count-constrained Gram OMP
+
+`moxie.linear_model._omp.omp_gram_codes` solves one target per column of a
+borrowed (atoms, targets) covariance matrix using a shared, borrowed
+(atoms, atoms) Gram matrix. It returns owned (targets, atoms) coefficients in
+the input floating dtype. The solver tracks the permutation of selected atoms
+and extends their Cholesky factor one row at a time. Its workspace has one
+count-by-count factor and target-local vectors. It reuses the existing
+`mojo_linalg.triangular_solve` on progressively larger NuMojo views. Numax
+`linalg.solve_triangular` requires static dimensions. The active dimension
+here changes at runtime. Refactoring the full active Gram each step would
+repeat work on the unchanged Cholesky block.
+
+The decomposition sparse-coding parity driver exercises the shared solver
+against pinned scikit-learn's `orthogonal_mp_gram`. See the
+[decomposition contract](../../decomposition/docs/sparse_coding.md#dense-sparse-coding).

@@ -29,12 +29,16 @@ def evaluate[dtype: DType]() raises:
         gram = read_matrix[dtype](String(a[5]))
     if Int(a[14]) != 0:
         init = read_matrix[dtype](String(a[6]))
+    var count: Optional[Int] = None
+    if len(a) > 15 and Int(a[15]) > 0:
+        count = Int(a[15])
     var code = sparse_encode(x, d, cov=cov, gram=gram, init=init, algorithm=algorithm,
-        alpha=alpha, positive=positive, max_iter=max_iter)
+        alpha=alpha, positive=positive, max_iter=max_iter, n_nonzero_coefs=count)
     assert_equal(code.shape, Shape(x.shape[0], d.shape[0]))
     emit("functional", code)
     var m = SparseCoder[dtype](d, transform_algorithm=algorithm, transform_alpha=alpha,
-        positive_code=positive, split_sign=split, transform_max_iter=max_iter)
+        positive_code=positive, split_sign=split, transform_max_iter=max_iter,
+        transform_n_nonzero_coefs=count)
     m = Schema.decode(loads(dumps(Schema.encode(m))))
     var z = m.transform(x)
     emit("code", z)

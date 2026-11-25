@@ -2,7 +2,9 @@
   "schema": 1,
   "projects": [
     {
-      "assets": {},
+      "assets": {
+        "licenses/linear_model-scikit-learn.txt": "families/linear_model/LICENSES/scikit-learn.txt"
+      },
       "exports": {
         "packages": {
           "moxie": {
@@ -15,6 +17,7 @@
             "UnsupervisedEstimator": "moxie.base",
             "clone": "moxie.base"
           },
+          "moxie.linear_model": {},
           "moxie.utils": {
             "FittedState": "moxie.utils.validation",
             "check_is_fitted": "moxie.utils.validation"
@@ -26,6 +29,18 @@
       "modules": {
         "moxie.base": {
           "file": "src/moxie/base.mojo"
+        },
+        "moxie.linear_model._cd_fast": {
+          "file": "src/moxie/linear_model/_cd_fast.mojo"
+        },
+        "moxie.linear_model._contracts": {
+          "file": "src/moxie/linear_model/_contracts.mojo"
+        },
+        "moxie.linear_model._linear_base": {
+          "file": "src/moxie/linear_model/_linear_base.mojo"
+        },
+        "moxie.linear_model._omp": {
+          "file": "src/moxie/linear_model/_omp.mojo"
         },
         "moxie.serialization": {
           "file": "src/moxie/serialization.mojo"

@@ -91,12 +91,12 @@ def main() raises:
     result.add("transform", model.transform(query))
 
     var wrong = ages([35.0, 25.0, 15.0])
-    wrong.add_strings("color", ["red", "red", "amber"])
+    wrong.add_numeric("color", zeros[DType.int64](Shape(3)))
     wrong.add_categorical("shape", categorical_column(query_shapes))
     wrong.add_categorical("empty", categorical_column(query_empty))
-    with assert_raises(contains="requires category storage"):
+    with assert_raises(contains="requires string storage"):
         _ = model.transform(wrong)
-    # Fit selectors would omit the string column. In this refit the remaining
+    # Fit selectors would omit the numeric column. In this refit the remaining
     # categorical features are all empty, which leaves no features to encode.
     var invalid = ages([35.0, 25.0, 15.0])
     var absent: List[Optional[String]] = [None, None, None]

@@ -158,6 +158,21 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
                                "' has a different categorical domain than this component requires"))
         return column[Column].copy()
 
+    def _string_categories(self, indices: List[Int]) raises -> List[StringColumn]:
+        """Supply explicit string categories or infer them from raw strings."""
+        var result = List[StringColumn](capacity=len(indices))
+        for index in indices:
+            if self._schema.dtypes[index] == "category":
+                result.append(self._copy_category[StringCategories](index))
+                continue
+            self._check_index(index, "string")
+            ref column = self._added_columns[-1 - self._locations[index]][List[String]]
+            var values = List[Optional[String]](capacity=len(column))
+            for value in column:
+                values.append(Optional[String](value.copy()))
+            result.append(categorical_column(values))
+        return result^
+
     def _numeric_categories[column_dtype: DType](
         self, indices: List[Int],
     ) raises -> List[NumericColumn[column_dtype]]:

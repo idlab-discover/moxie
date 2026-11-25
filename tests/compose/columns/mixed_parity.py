@@ -243,10 +243,32 @@ def check_mixed_raw_float_categories():
     check_composition("mixed_raw_float_categories", model, train, test)
 
 
+def check_mixed_raw_string_categories():
+    train = pd.DataFrame({
+        "color": pd.Series(["red", "", "bleu", "café", ""], dtype=object),
+        "age": [10.0, np.nan, 30.0, 40.0, 20.0],
+        "group": pd.Series(["A", None, "B", "A", None], dtype=object),
+    })
+    test = pd.DataFrame({
+        "group": ["B", "A", "C"],
+        "age": [35.0, np.nan, 15.0],
+        "color": ["", "green", "café"],
+        "unused": ["", "", ""],
+    })
+    model = compose.ColumnTransformer([
+        ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
+         compose.make_column_selector(dtype_include="number")),
+        ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
+         compose.make_column_selector(dtype_include=object)),
+    ])
+    check_composition("mixed_raw_string_categories", model, train, test, ("after_fit",))
+
+
 if __name__ == "__main__":
     check_mixed("mixed", "color", ["red", "blue", "red", "amber", "blue"], ["green", None, "red"])
     check_mixed_numeric_categories()
     check_mixed_raw_float_categories()
+    check_mixed_raw_string_categories()
     check_categorical_imputation("mixed_categorical_impute")
     check_categorical_imputation("mixed_numeric_impute", numeric=True)
     check_mixed_float_columns()

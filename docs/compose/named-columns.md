@@ -105,8 +105,21 @@ floating NaN as missing. The column retains its raw dtype in the schema, so
 select it by name or raw dtype. Split different domains across entries and
 exclude raw columns from the numeric pipeline's selector when they should
 only be encoded. Use explicit categorical storage for a supplied dictionary
-or a separate missing mask. A list, mask,
-slice, or dtype selector supplies a collection of features. The component's
+or a separate missing mask.
+
+String-domain encoders also accept raw columns added with `add_strings`.
+Use a name list or a selector such as `dtype_include=string_kinds^`, where
+`string_kinds` is a `List[String]` containing `"string"`. Include
+`"category"` as well to select explicit string categorical columns in the
+same branch when the table's categorical columns all have the string
+domain. Compose infers the category dictionary from each raw column on every
+call. Empty strings are ordinary categories. Use `add_categorical` with a
+nullable string column to represent missing values. A fitted string encoder
+can receive either storage form for the same selected name at inference.
+The table's `categorical_columns()` accessor still reads explicit categorical
+storage.
+
+A list, mask, slice, or dtype selector supplies a collection of features. The component's
 target and dense result dtype must match the table dtype. Numeric components,
 including `"passthrough"`, gather selected numeric columns into an array of
 the table dtype in key order. The constructor matrix sets that dtype.
@@ -184,6 +197,8 @@ Raw category cases compare Int64 identity beyond `2**53` and Float64 NaN
 handling through a dense OneHotEncoder alongside the numeric pipeline.
 The Float64 case selects both a negative-strided matrix column and an added
 column in the same branch.
+The raw string case combines a raw column with nullable string categories
+in one encoder and checks inference with the two storage forms swapped.
 The mixed encoders parity case also compares ordinal codes and multiclass
 target encodings with exact equality, including cross-fitted training output.
 The mixed text comparison checks scalar name and position routing with

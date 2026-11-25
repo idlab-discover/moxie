@@ -31,6 +31,23 @@ Family and simple-algorithm Pixi environments retain their compatible locks and
 local build/test/parity commands. The root runner uses Moxie's locked environment.
 Generated binaries and raw oracle evidence remain ignored.
 
+The [missing-values notebook](../../notebooks/impute/plot_missing_values.ipynb)
+compares four unshuffled diabetes folds with scikit-learn. The Float64
+imputers feed `RandomForestRegressor[DType.float64]`, which converts features
+to Float32 inside the forest. Use `cross_val_score[Adapter]` with a
+`DenseSupervisedAdapter` specialized for the concrete pipeline and
+`NegMeanSquaredError` for the gallery's scoring convention.
+
+To rerun this notebook from the repository root, put the directory containing
+the pinned scikit-learn build on `PYTHONPATH` for the notebook kernel. Use the
+[tree oracle build](../../docs/tree/plumbing.md) for the compiled tree and forest
+code. With `SKLEARN_SITE_PACKAGES` set to that build's `site-packages` path:
+
+```sh
+PYTHONPATH="$SKLEARN_SITE_PACKAGES" OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
+  pixi run -e notebooks notebooks notebooks/impute/plot_missing_values.ipynb
+```
+
 - [Simple and indicator API](algorithms/simple/docs/api.md)
 - [KNN API](algorithms/knn/docs/api.md)
 - [Iterative API](algorithms/iterative/docs/api.md)

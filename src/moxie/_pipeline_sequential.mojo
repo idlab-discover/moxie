@@ -88,6 +88,7 @@ struct Pipeline[
     P: TransformerMixin & Deinitable,
     E: SupervisedEstimator & Predictor & Deinitable,
 ](SupervisedEstimator, PredictivePipeline, PipelineSteps, UnionFeatureNames, UnionInputFeatures, InputFeatureCount,
+  Copyable where conforms_to(P, Copyable) and conforms_to(E, Copyable),
   TransformingPipeline where conforms_to(E, TransformerMixin),
   FitTransformer where conforms_to(E, TransformerMixin),
   SupervisedScorer where conforms_to(E, SupervisedScorer),

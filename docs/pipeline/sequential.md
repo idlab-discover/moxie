@@ -65,6 +65,9 @@ fitted query delegates to its final estimator. A failed prefix refit can therefo
 leave that query true while prediction fails in the prefix, as in the reference.
 Clone delegates to each child hook, including any documented frozen-estimator
 exception. The pipeline does not cache a separate fitted flag.
+When both steps implement `Copyable`, `pipe.copy()` copies both child
+instances with their fitted state. Pipelines with a move-only step still support
+configuration cloning through the child's clone hook.
 
 ## Feature names
 

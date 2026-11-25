@@ -119,8 +119,11 @@ interval. A successful refit replaces the records, a failed fit preserves
 them, and a fitted copy owns its own records. Unfitted clones start empty.
 See the [shared fit-warning contract](../interfaces.md#fit-warnings).
 
-Prediction interpolates between retained thresholds, uses exact values at
-thresholds, and handles out-of-range inputs according to `out_of_bounds`.
+Prediction interpolates between retained thresholds and handles out-of-range
+inputs according to `out_of_bounds`. Float64 returns the fitted value at an
+exact knot. Float32 follows SciPy's normalized-distance blend, using the
+interval to the left at an interior knot. At extreme Float32 feature ranges,
+the interval width can overflow and the blend can produce zero or NaN.
 A single retained X threshold predicts a constant everywhere for all three
 modes, matching the reference. The training domain excludes discarded weights
 and uses the representative X values after duplicate consolidation.
@@ -282,8 +285,9 @@ for in-place fitting and typed configuration differences.
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
 strided arrays, direction, bounds, weighted R², and native persistence.
 `pixi run python tools/isotonic_checks.py parity` compares 858 Float64 and
-721 Float32 deterministic cases, including both public helpers with Lists and
-NDArrays, default and labeled transform output, scaler pipeline predictions,
+723 Float32 deterministic cases, including extreme Float32 interpolation,
+both public helpers with Lists and NDArrays, default and labeled transform
+output, scaler pipeline predictions,
 interpolator reconstruction, validation edges, warning
 diagnostics, sample-weight requests and input tags, against the pinned Python
 module and Cython tie engine. The scikit-learn

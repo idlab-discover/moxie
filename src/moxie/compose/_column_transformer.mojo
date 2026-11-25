@@ -8,12 +8,13 @@
 from numojo import NDArray, Shape, zeros
 from moxie._categorical import CategoricalColumn, CategoryDomain, NumericCategories, StringCategories
 from moxie.compose._table import ColumnSchema, ColumnTable, NumericColumn, StringColumn
+from std.iter import downcast
 from std.reflection.type_info import _unqualified_type_name
 from std.time import perf_counter_ns
 from std.sys import num_logical_cores
 from std.memory import Pointer
 from max.algorithm import parallelize
-from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut, InputFeatureCount
+from moxie._feature_metadata import EstimatorClassName, FeatureNamesOut as NativeFeatureNamesOut, InputFeatureCount
 from moxie.base import BaseEstimator, FitTransformer, TransformerMixin, UnsupervisedEstimator, clone
 from moxie.utils.validation import check_is_fitted
 from moxie.compose._base import ColumnComposer
@@ -1780,9 +1781,12 @@ def _auto_names(var labels: List[String]) -> List[String]:
 
 def _label[E: ColumnComponent](spec: TransformerSpec[E]) -> String:
     """`estimator if isinstance(estimator, str) else type(estimator).__name__.lower()`."""
-    if spec.estimator:
+    if not spec.estimator:
+        return spec.text
+    comptime if conforms_to(E, EstimatorClassName):
+        return downcast[E, EstimatorClassName].name().lower()
+    else:
         return _type_label[E]().lower()
-    return spec.text
 
 
 # GENERATED-MAKE-BEGIN (tools/gen_arity.py)

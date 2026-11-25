@@ -24,6 +24,15 @@ from sklearn import naive_bayes as nb
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
+# Bound compilation memory while retaining every case and its original index.
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--start", type=int, default=0, help="first case index (inclusive)")
+parser.add_argument("--stop", type=int, help="last case index (exclusive)")
+parser.add_argument("--batch-size", type=int, default=32, help="maximum cases per native compilation")
+parser.add_argument("--round-trip-bernoulli", action="store_true",
+                    help="run only Bernoulli oracle cases, restoring the model after each update")
+cli = parser.parse_args()
+
 ROOT = Path(__file__).resolve().parents[2]
 REFERENCE = ROOT.parent / "scikit-learn"
 REVISION = "4358542a1bd39af2e7e1cbace8b9fed067473c5b"
@@ -183,6 +192,8 @@ def compare(expr, value, *, labels=False, array_dtype=None):
 
 
 def case(name, params, X, y, Q, *, weights=None, chunks=None, classes=None, dtype=None, label=None):
+    if cli.round_trip_bernoulli and name != "BernoulliNB":
+        return
     scalar_weight = weights is not None and np.isscalar(weights)
     # Retained native deviation: Gaussian's default state/output dtype is
     # Float64 even for Float32 storage. Preserve the rounded storage values,
@@ -241,6 +252,8 @@ def case(name, params, X, y, Q, *, weights=None, chunks=None, classes=None, dtyp
     feature_models = ([nb.BernoulliNB(**dict(params, alpha=float(alpha)))
                        for alpha in params["alpha"]] if vector_bernoulli else [])
     def snapshot():
+        if cli.round_trip_bernoulli:
+            lines.append("    model = round_trip(model)")
         if feature_models:
             model.feature_log_prob_ = np.column_stack([
                 feature_model.feature_log_prob_[:, 0] for feature_model in feature_models])
@@ -312,6 +325,64 @@ def case(name, params, X, y, Q, *, weights=None, chunks=None, classes=None, dtyp
             start = len(lines)
             snapshot()
             lines[start:] = ['    ' + line for line in lines[start:]]
+
+
+def run_cases():
+    if cli.stop is None:
+        cli.stop = len(case_names)
+    if not 0 <= cli.start < cli.stop <= len(case_names):
+        parser.error(f"require 0 <= start < stop <= {len(case_names)}")
+    if cli.batch_size < 1:
+        parser.error("batch-size must be positive")
+    text = "\n".join(lines) + "\n"
+    # Fluent mutation returns are intentionally discarded by these oracle fixtures.
+    text = re.sub(r"(?m)^(\s*)([A-Za-z_]\w*\.(?:fit|partial_fit|set_params)\()", r"\1_ = \2", text)
+    starts = list(re.finditer(r"@no_inline\ndef case_\d+\(\) raises:", text))
+    assert len(starts) == len(case_names)
+    prefix = text[:starts[0].start()]
+    print(f"Reference: sklearn {sklearn.__version__}, {REVISION}", flush=True)
+    env = os.environ.copy()
+    for key, directory in (("MODULAR_CACHE_DIR", ROOT / ".pixi/modular-cache"),
+                           ("TMPDIR", ROOT / "builds/tmp")):
+        directory.mkdir(parents=True, exist_ok=True)
+        env[key] = str(directory)
+    if cli.round_trip_bernoulli:
+        prefix += """from moxie._naive_bayes_dense import ClassDomain
+from moxie.naive_bayes_serialization import BernoulliNBSchema
+from moxie.serialization import dumps, loads
+
+def round_trip[D: ClassDomain, dtype: DType](
+    model: BernoulliNB[D, dtype],
+) raises -> BernoulliNB[D, dtype]:
+    comptime Schema = BernoulliNBSchema[D, dtype]
+    var before = dumps(Schema.encode(model))
+    var restored = Schema.decode(loads(before))
+    assert_equal(dumps(Schema.encode(restored)), before)
+    return restored^
+
+"""
+
+    executed = []
+    for first in range(cli.start, cli.stop, cli.batch_size):
+        last = min(first + cli.batch_size, cli.stop)
+        end = starts[last].start() if last < len(starts) else len(text)
+        batch = prefix + text[starts[first].start():end] + "\ndef main() raises:\n"
+        for ident in case_names[first:last]:
+            batch += f"    {ident}()\n"
+        batch += f'    print("Passed {last - first} reference/regression cases [{first}, {last})")\n'
+        stem = "bernoulli_round_trip" if cli.round_trip_bernoulli else "reference_cases"
+        source = OUT / f"{stem}_{first}_{last}.mojo"
+        source.write_text(batch)
+        subprocess.run(["pixi", "run", "mojo", "run", "--fp-mode=contract=off", "-I",
+                        str(ROOT / "builds/deps"), str(source)], cwd=ROOT, env=env, check=True)
+        executed.extend(case_names[first:last])
+    assert executed == case_names[cli.start:cli.stop]
+    if cli.round_trip_bernoulli:
+        print(f"Passed all {len(executed)} BernoulliNB archive cases; vector alpha uses scalar sklearn fits",
+              flush=True)
+    else:
+        print(f"Passed all {len(executed)} reference/regression cases; Bernoulli vectors use scalar sklearn fits; "
+              "default Gaussian Float32 storage uses Float64 oracle arithmetic", flush=True)
 
 
 rng = np.random.default_rng(427)
@@ -479,6 +550,10 @@ for dtype in (None, "float32", "float64"):
     data = np.array([[-0.9, 1.9], [1.1, 0.9], [2.9, 3.1], [0.1, 2.8]], dtype=dtype or float)
     case("CategoricalNB", {"min_categories": [5]}, data, np.array([9, -2, 9, -2]),
          data, chunks=[slice(0, 1), slice(1, 3), slice(3, 4)], dtype=dtype)
+
+if cli.round_trip_bernoulli:
+    run_cases()
+    raise SystemExit(0)
 
 # Retained deviations are checked against the unmodified reference separately.
 # Negative weights with positive class totals succeed in sklearn; native rejects
@@ -664,41 +739,4 @@ for name in ("MultinomialNB", "ComplementNB", "BernoulliNB", "CategoricalNB"):
                       "    _ = model.fit(X, y)",
                       "    assert_equal(len(model.fit_warnings), 0)"])
 
-# Bound compilation memory while retaining every case and its original index.
-parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--start", type=int, default=0, help="first case index (inclusive)")
-parser.add_argument("--stop", type=int, default=len(case_names), help="last case index (exclusive)")
-parser.add_argument("--batch-size", type=int, default=32, help="maximum cases per native compilation")
-options = parser.parse_args()
-if not 0 <= options.start < options.stop <= len(case_names):
-    parser.error(f"require 0 <= start < stop <= {len(case_names)}")
-if options.batch_size < 1:
-    parser.error("batch-size must be positive")
-text = "\n".join(lines) + "\n"
-# Fluent mutation returns are intentionally discarded by these oracle fixtures.
-text = re.sub(r"(?m)^(\s*)([A-Za-z_]\w*\.(?:fit|partial_fit|set_params)\()", r"\1_ = \2", text)
-starts = list(re.finditer(r"@no_inline\ndef case_\d+\(\) raises:", text))
-assert len(starts) == len(case_names)
-prefix = text[:starts[0].start()]
-print(f"Reference: sklearn {sklearn.__version__}, {REVISION}", flush=True)
-env = os.environ.copy()
-for key, directory in (("MODULAR_CACHE_DIR", ROOT / ".pixi/modular-cache"),
-                       ("TMPDIR", ROOT / "builds/tmp")):
-    directory.mkdir(parents=True, exist_ok=True)
-    env[key] = str(directory)
-executed = []
-for first in range(options.start, options.stop, options.batch_size):
-    last = min(first + options.batch_size, options.stop)
-    end = starts[last].start() if last < len(starts) else len(text)
-    batch = prefix + text[starts[first].start():end] + "\ndef main() raises:\n"
-    for ident in case_names[first:last]:
-        batch += f"    {ident}()\n"
-    batch += f'    print("Passed {last - first} reference/regression cases [{first}, {last})")\n'
-    source = OUT / f"reference_cases_{first}_{last}.mojo"
-    source.write_text(batch)
-    subprocess.run(["pixi", "run", "mojo", "run", "--fp-mode=contract=off", "-I",
-                    str(ROOT / "builds/deps"), str(source)], cwd=ROOT, env=env, check=True)
-    executed.extend(case_names[first:last])
-assert executed == case_names[options.start:options.stop]
-print(f"Passed all {len(executed)} reference/regression cases; Bernoulli vectors use scalar sklearn fits; "
-      "default Gaussian Float32 storage uses Float64 oracle arithmetic", flush=True)
+run_cases()

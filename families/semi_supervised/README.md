@@ -20,8 +20,9 @@ consumer and compiles and runs the public example there.
 
 Graph estimators support RBF and typed dense callable affinities. Self-training
 supports threshold and k-best selection, finite or unlimited iteration counts,
-and native probabilistic estimator adapters. `GaussianNBAdapter` consumes
-Moxie's Naive Bayes implementation. Python is used only for validation.
+and adapters for native GaussianNB, logistic regression, graph classifiers,
+and calibrated classifiers such as calibrated SVC. Python is used only for
+validation.
 
 Side-by-side notebooks in `notebooks/semi_supervised/` replay
 `plot_label_propagation_digits`, `plot_self_training_varying_threshold` and

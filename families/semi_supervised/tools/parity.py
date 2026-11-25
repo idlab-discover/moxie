@@ -20,6 +20,9 @@ LOGISTIC_TOLERANCES = {
     'float64': {'probability': 2e-5, 'decision_or_log_probability': 1e-4},
     'float32': {'probability': 9e-4, 'decision_or_log_probability': 3e-3},
 }
+CALIBRATED_SVC_SEED = 2802
+# LIBSVM kernel arithmetic and the calibration optimizer differ at low bits.
+CALIBRATED_SVC_TOLERANCE = 3e-5
 
 
 def reference(name, relative):
@@ -133,6 +136,87 @@ def logistic_cases(training, logistic):
             yield name, '\n'.join(lines)
 
 
+def svc_reference():
+    from sklearn.svm import SVC
+
+    wheel = Path(sklearn.__file__).parent
+    paths = [REFERENCE / 'sklearn/svm' / name
+             for name in ('_base.py', '_classes.py', '_libsvm.pyx', '_libsvm.pxi')]
+    for folder in ('libsvm', 'newrand'):
+        paths.extend(sorted((REFERENCE / 'sklearn/svm/src' / folder).glob('*')))
+    hashes = {}
+    for path in paths:
+        if not path.is_file():
+            continue
+        relative = path.relative_to(REFERENCE)
+        committed = subprocess.check_output(
+            ['git', '-C', str(REFERENCE), 'show', f'{REVISION}:{relative}'])
+        installed = wheel / relative.relative_to('sklearn')
+        if committed != path.read_bytes() or committed != installed.read_bytes():
+            raise RuntimeError(f'SVC oracle source mismatch: {relative}')
+        hashes[str(relative)] = hashlib.sha256(committed).hexdigest()
+    return SVC, hashes
+
+
+def calibrated_svc_cases(training, calibration, svc):
+    rng = np.random.default_rng(CALIBRATED_SVC_SEED)
+    for n_classes in (2, 3):
+        centers = [[-3., -1.], [3., -1.], [0., 4.]][:n_classes]
+        X = np.concatenate([rng.normal(center, .7, (10, 2)) for center in centers])
+        truth = np.repeat([35, -7, 12][:n_classes], 10)
+        y = truth.copy()
+        y.reshape(n_classes, 10)[:, 6:] = -1
+        query = X[1::2] + .25
+        name = f'calibrated_svc_{n_classes}'
+        lines = [f'@no_inline\ndef {name}() raises:'] + array('X', X) + array('Q', query)
+        lines += [
+            '    var svc = SVC[Int](gamma=.5, random_state=42, tol=1e-7)',
+            '    var calibrated = CalibratedClassifierCV(ClassifierCalibrationAdapter(svc^, svc_classes, "SVC"), cv=5)',
+            '    var base = CalibratedClassifierAdapter(calibrated^)',
+            '    var model = SelfTrainingClassifier[type_of(base)](base.copy(), threshold=.60)',
+            '    with assert_raises():',
+            '        _ = base.classes()',
+            '    with assert_raises():',
+            '        _ = model.predict_proba(Q)',
+        ]
+        oracle_svc = svc(gamma=.5, random_state=42, tol=1e-7)
+        model = training.SelfTrainingClassifier(
+            calibration.CalibratedClassifierCV(oracle_svc, cv=5), threshold=.60)
+        for threshold, offset in ((.60, 0), (.88, 100)):
+            targets = np.where(y == -1, -1, y + offset)
+            model.set_params(threshold=threshold).fit(X, targets)
+            if not offset:
+                assert (model.labeled_iter_ > 0).any()
+            lines += [
+                f'    _ = model.set_params(threshold={threshold}).fit(X, {ints(targets)})',
+                f'    assert_equal(model.classes_, {ints(model.classes_)})',
+                f'    assert_equal(model.labeled_iter_, {ints(model.labeled_iter_)})',
+                f'    assert_equal(model.n_iter_, {model.n_iter_})',
+                f'    assert_equal(model.termination_condition_, "{model.termination_condition_}")',
+            ]
+            for i, label in enumerate(model.transduction_):
+                lines.append(f'    assert_equal(model.transduction_[{i}].value(), {label})'
+                             if label != -1 else f'    assert_true(not model.transduction_[{i}])')
+            lines += check_array('model.predict_proba(Q)', model.predict_proba(query), CALIBRATED_SVC_TOLERANCE)
+            lines += [
+                f'    assert_equal(model.predict(Q), {ints(model.predict(query))})',
+                f'    assert_equal(model.score(X, {ints(truth + offset)}), {literal(model.score(X, truth + offset))})',
+            ]
+        lines += [
+            '    var cloned = model.__sklearn_clone__()',
+            '    assert_true(not cloned.__sklearn_is_fitted__())',
+            '    assert_true(not base.estimator.__sklearn_is_fitted__())',
+            '    assert_equal(cloned.threshold, .88)',
+            '    assert_equal(cloned.estimator.value().estimator.estimator.estimator().random_state, 42)',
+            '    var overflowing_labels = List[Int](length=X.shape[0], fill=9007199254740993)',
+            '    with assert_raises():',
+            '        _ = model.fit(X, overflowing_labels)',
+            '    with assert_raises():',
+            '        _ = model.predict(Q)',
+        ]
+        yield name, '\n'.join(lines)
+
+
 def main():
     assert subprocess.check_output(['git', '-C', str(REFERENCE), 'rev-parse', 'HEAD'], text=True).strip() == REVISION
     OUT.mkdir(parents=True, exist_ok=True)
@@ -143,16 +227,26 @@ def main():
     # Reuse the logistic owner's pinned source loader and support-wheel checks.
     logistic_oracle = runpy.run_path(str(ROOT.parent / 'linear_model/algorithms/logistic/tests/parity.py'))
     logistic = logistic_oracle['oracle']()
+    calibration = reference('reference_calibration', 'sklearn/calibration.py')
+    svc, svc_hashes = svc_reference()
     rng = np.random.RandomState(731)
     source = ['''from std.testing import assert_equal, assert_true, assert_raises
 from std.math import abs, isnan
 from numojo import NDArray, Shape, zeros
-from moxie.semi_supervised import LabelPropagation, LabelSpreading, SelfTrainingClassifier, GaussianNBAdapter, LogisticRegressionAdapter
+from moxie.semi_supervised import LabelPropagation, LabelSpreading, SelfTrainingClassifier, GaussianNBAdapter, LogisticRegressionAdapter, CalibratedClassifierAdapter
+from moxie.calibration import CalibratedClassifierCV, ClassifierCalibrationAdapter
+from moxie.svm import SVC
 from moxie.linear_model import LogisticRegression
 from moxie.semi_supervised._contracts import DenseAffinity, ZeroMassPolicy
 from moxie.semi_supervised._probability import RowNormalizer
 from moxie._nb_gaussian import GaussianNB
 from moxie._naive_bayes_dense import IntListDomain
+
+def svc_classes(model: SVC[Int]) raises -> NDArray[DType.float64]:
+    var classes = NDArray[DType.float64](Shape(len(model.classes_)))
+    for i in range(len(model.classes_)):
+        classes.unsafe_set(i, Float64(model.classes_[i]))
+    return classes^
 
 @no_inline
 def check_matrix(actual: NDArray[DType.float64], expected: List[Float64], rows: Int, columns: Int, tolerance: Float64) raises:
@@ -263,7 +357,7 @@ struct FixtureAffinity(DenseAffinity, Copyable, Movable):
             truth = np.where(np.arange(len(y)) < 12, 0, 1)
             lines.append(f'    assert_equal(model.score(X, {ints(truth)}), {literal(estimator.score(X, truth))})')
             source.append('\n'.join(lines));cases.append(identifier)
-    for name, code in logistic_cases(training, logistic):
+    for name, code in [*logistic_cases(training, logistic), *calibrated_svc_cases(training, calibration, svc)]:
         source.append(code)
         cases.append(name)
     source.append('def main() raises:\n' + '\n'.join(f'    {case}()\n    print("PASS {case}")' for case in cases))
@@ -275,6 +369,12 @@ struct FixtureAffinity(DenseAffinity, Copyable, Movable):
     manifest = {'reference_revision': REVISION, 'support_sklearn_version': sklearn.__version__, 'python': platform.python_version(), 'numpy': np.__version__, 'seed':731, 'cases':len(cases), 'tolerances':{'float64':2e-9,'float32_graph':3e-5,'float32_gaussian':5e-5,'near_tie_float64':1e-14,'near_tie_float32':3e-7}, 'threads':{key:os.environ.get(key) for key in ('OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS')}, 'k_best':'input-order tie breaking; Float32 k-best oracle fixtures use var_smoothing=.05 to avoid saturated boundary ties', 'flags':['-O3','--fp-mode=contract=off'], 'source_hashes':{str(p.relative_to(REFERENCE)):hashlib.sha256(p.read_bytes()).hexdigest() for p in [REFERENCE/'sklearn/semi_supervised/_label_propagation.py',REFERENCE/'sklearn/semi_supervised/_self_training.py',REFERENCE/'sklearn/naive_bayes.py',REFERENCE/'sklearn/metrics/_classification.py']}}
     logistic_paths = [logistic_oracle[name] for name in ('LOSS', 'LOGISTIC', 'NEWTON')]
     manifest['source_hashes'].update(logistic_oracle['verify_reference'](logistic_paths))
+    calibration_path = 'sklearn/calibration.py'
+    manifest['source_hashes'][calibration_path] = hashlib.sha256(
+        (REFERENCE / calibration_path).read_bytes()).hexdigest()
+    manifest['source_hashes'].update(svc_hashes)
+    manifest['calibrated_svc_seed'] = CALIBRATED_SVC_SEED
+    manifest['tolerances']['calibrated_svc'] = CALIBRATED_SVC_TOLERANCE
     manifest['logistic_seed'] = LOGISTIC_SEED
     manifest['tolerances']['logistic'] = LOGISTIC_TOLERANCES
     (OUT/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')

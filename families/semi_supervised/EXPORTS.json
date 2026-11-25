@@ -9,7 +9,8 @@
       "SelfTrainingClassifier": "moxie.semi_supervised._self_training",
       "GraphClassifierAdapter": "moxie.semi_supervised._self_training",
       "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter",
-      "LogisticRegressionAdapter": "moxie.semi_supervised._logistic_adapter"
+      "LogisticRegressionAdapter": "moxie.semi_supervised._logistic_adapter",
+      "CalibratedClassifierAdapter": "moxie.semi_supervised._calibrated_adapter"
     }
   }
 }

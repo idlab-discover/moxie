@@ -1,9 +1,9 @@
 # Dense semi-supervised extension contracts
 
 The family owns `moxie.semi_supervised._contracts`, `_affinity`, `_probability`,
-`_label_propagation`, `_self_training`, `_gaussian_adapter`, and
-`_logistic_adapter`. Both graph estimators consume the same affinity and
-normalization engines. The foundation
+`_label_propagation`, `_self_training`, `_gaussian_adapter`,
+`_logistic_adapter`, and `_calibrated_adapter`. Both graph estimators consume the
+same affinity and normalization engines. The foundation
 capability traits remain unchanged. [Family development](development.md) defines
 the repository ownership boundary; [the API guide](api-surface.md) describes the
 concrete estimator interfaces.
@@ -74,6 +74,11 @@ and its existing optimizer dependency. It converts owned target and prediction
 vectors at the adapter boundary and copies fitted class labels in their original
 order. The adapter delegates fit, prediction and scoring to the classifier.
 
+`CalibratedClassifierAdapter` uses the calibration owner's classifier and
+validates integer label range before converting targets to Float64. It
+delegates clone, fit, prediction, probability, and scoring and converts
+ordered classes and predictions back to owned integer lists.
+
 ## Assembly and verification
 
 The primary family checks use Moxie's full `DEPENDENCIES.json` assembly.
@@ -87,8 +92,8 @@ pins or cached snapshots are used.
 Family modules and fixture modules are live inputs; edits do not require
 repinning their contents. Each consumer gets one `builds/deps` namespace.
 Module and export collisions fail before replacing an existing valid assembly.
-Runtime-unneeded RNG and historical readiness evidence are not build
-dependencies. Published baseline tags remain unchanged.
+The focused closure includes the splitters and their RNG dependency for
+calibration. Published baseline tags remain unchanged.
 
 Use Mojo 1.0.0 / MAX 26.5.0 with the current local NuMojo source. From Moxie, run
 `pixi run semi-supervised-test` and `pixi run semi-supervised-parity`. The latter records oracle revisions,

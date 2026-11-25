@@ -10,8 +10,8 @@ tagged string labels, hard and soft clamping, unseen-data probabilities,
 weighted accuracy, configuration cloning, repeated fits, and strided inputs.
 Self-training supports strict threshold and k-best selection, finite/zero/None
 iteration limits, final supervised refitting, owned transduction state, and
-capability-specific delegation. GaussianNB and LogisticRegression are consumed
-from their owners in Moxie.
+capability-specific delegation. GaussianNB, LogisticRegression, and
+CalibratedClassifierCV are consumed from their owners in Moxie.
 
 Deferred branches are sparse feature/target arrays, sparse callable affinities,
 sparse graph outputs, and `kernel="knn"`, even when the input features are dense.
@@ -28,8 +28,8 @@ scikit-learn parity. See the parity tool for fixtures and tolerances.
 
 All dependency sources follow their local HEAD and working tree through
 `tools/dependencies.py`. Builds record the consumed revisions and hashes;
-family modules are live inputs. Runtime-unneeded RNG and historical readiness-evidence
-projects are omitted from the build closure. Only the consumed numerical module
+family modules are live inputs. The focused closure includes the RNG used by
+calibration's splitter module. Only the consumed numerical module
 is required from the numerical owner, not its mutable development documents.
 Numax is an explicitly adopted runtime for GaussianNB's numerical primitives.
 No dependency source or shared cache is modified by builds.

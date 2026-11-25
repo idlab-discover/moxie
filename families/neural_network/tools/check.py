@@ -85,7 +85,6 @@ def test(consumer):
         run(ROOT/'builds'/('test_'+name))
     negative_compile(ROOT/'tests/compile_fail/missing_predict.mojo', "required function 'predict' is not implemented")
     negative_compile(ROOT/'tests/compile_fail/integer_matrix.mojo', 'comptime assert')
-    # MLP declarations remain explicitly unimplemented; tested by the public probe.
     results = [run(c/'builds/probe', consumer=c, capture=True).stdout for c in CONSUMERS]
     assert results[0] == results[1]
     for relative in ('moxie/_dense.mojo','moxie/_random.mojo','moxie/neural_network/_plumbing.mojo'):

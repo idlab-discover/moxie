@@ -8,7 +8,8 @@
       "RBMTransformer": "moxie.neural_network._base",
       "BernoulliRBM": "moxie.neural_network._rbm",
       "MLPClassifier": "moxie.neural_network._api",
-      "MLPRegressor": "moxie.neural_network._api"
+      "MLPRegressor": "moxie.neural_network._api",
+      "MLPParams": "moxie.neural_network._mlp_model"
     }
   }
 }

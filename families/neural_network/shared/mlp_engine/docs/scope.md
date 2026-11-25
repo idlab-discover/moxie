@@ -4,7 +4,8 @@ The [private engine](api.md) implements Float32 and Float64 parameter
 initialization and packing, forward propagation, and batch loss and gradients
 for the four dense output/loss pairs. It also provides full-batch L-BFGS and
 minibatch SGD and Adam. It has no package-level exports. The public estimator
-wrappers and validation-set early stopping remain open. Sparse inputs and
+[wrappers](../../../docs/mlp.md) use these trainers for ordinary fit.
+Validation-set early stopping remains open. Sparse inputs and
 targets follow the family's separate sparsity scope.
 
 From the Moxie root, run the focused check in the locked root environment

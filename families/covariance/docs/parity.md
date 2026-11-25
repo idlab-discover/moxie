@@ -26,9 +26,10 @@ supports explicit grids and materialized custom splits with typed results.
 
 ## Model files
 
-`EmpiricalCovarianceSchema`, `ShrunkCovarianceSchema`, `LedoitWolfSchema`, and
-`OASSchema` are exported from `moxie.covariance`. Pass the matching schema
-and dtype explicitly to the shared experimental model-file API:
+`EmpiricalCovarianceSchema`, `ShrunkCovarianceSchema`, `LedoitWolfSchema`,
+`OASSchema`, `MinCovDetSchema`, and `EllipticEnvelopeSchema` are exported from
+`moxie.covariance`. Pass the matching schema and dtype explicitly to the shared
+experimental model-file API:
 
 ```mojo
 from moxie.covariance import LedoitWolf, LedoitWolfSchema
@@ -43,6 +44,12 @@ var distances = restored.mahalanobis(X)
 
 Files preserve fitted or unfitted state, constructor settings, optional
 stored precision, and the widened Float64 matrices used for inference.
+Robust schemas also preserve the raw estimates, support masks, and training
+distances. `EllipticEnvelopeSchema` stores the learned finite offset so
+decisions after loading use the original fitted threshold. The archive encodes
+Boolean support masks as UInt32 arrays with values 0 and 1, then restores them
+as Boolean NDArrays. The seed setting is stored when present. A caller-owned
+`RandomState` stream stays with the caller.
 Post-fit parameter updates are saved separately from learned values. Loading
 never refits. The schemas reject inconsistent learned state, including partial
 first fits and feature-count mismatches after failed refits. Each schema

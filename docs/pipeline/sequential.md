@@ -381,6 +381,21 @@ uses the final estimator's aggregation. A concrete final-step method beyond
 these traits is accessible on `pipe.estimator`, with input already transformed
 by the caller. Configuration-dependent methods retain final-step validation.
 
+### Training-only transformation
+
+An unsupervised final step can provide `FitTransformer` independently of
+`TransformerMixin`. For example, `make_pipeline(StandardScaler(), ClassicalMDS())`
+supports `fit` and `fit_transform` on the training data. Its training embedding
+keeps the final estimator's Float64 output type for either supported input
+dtype. The pipeline exposes `transform` only when the final step implements
+`TransformerMixin`, and `inverse_transform` when both steps implement
+`InverseTransformer`. A training-only pipeline can be the final step of
+another unsupervised pipeline. Steps before the final one must transform
+new inputs.
+
+The [embedding parity check](../../tests/pipeline/embedding_parity.py)
+compares training, cloning and refitting against pinned scikit-learn.
+
 ### Outlier training labels
 
 ```mojo

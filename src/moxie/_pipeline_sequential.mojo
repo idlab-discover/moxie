@@ -365,7 +365,7 @@ struct TransformerPipeline[
     PredictivePipeline where conforms_to(E, Predictor),
     TransformerMixin where conforms_to(E, TransformerMixin),
     TransformingPipeline where conforms_to(E, TransformerMixin),
-    FitTransformer where conforms_to(E, TransformerMixin),
+    FitTransformer where conforms_to(E, FitTransformer) or conforms_to(E, TransformerMixin),
     FitPredictor where conforms_to(E, FitPredictor),
     ClusterMixin where conforms_to(E, ClusterMixin),
     SampleScorer where conforms_to(E, SampleScorer),
@@ -381,7 +381,11 @@ struct TransformerPipeline[
     comptime Final = Self.E
     comptime Input = Self.P.Input
     comptime Target = Self.E.Target
-    comptime Transformed where conforms_to(Self.E, TransformerMixin) = Self.E.Transformed
+    comptime Transformed where conforms_to(Self.E, FitTransformer) or conforms_to(
+        Self.E, TransformerMixin
+    ) = Self.E.Transformed if conforms_to(Self.E, TransformerMixin) else (
+        Self.E.Transformed if conforms_to(Self.E, FitTransformer) else NoneType
+    )
     comptime Labels where conforms_to(Self.E, FitPredictor) = Self.E.Labels
     comptime Prediction where conforms_to(Self.E, Predictor) = Self.E.Prediction
     comptime SampleScores where conforms_to(Self.E, SampleScorer) = Self.E.SampleScores
@@ -473,11 +477,22 @@ struct TransformerPipeline[
 
     def fit_transform(
         mut self, X: Self.Input, y: Optional[Self.Target] = None,
-    ) raises -> Self.Transformed where conforms_to(Self.E, TransformerMixin):
+    ) raises -> Self.Transformed where conforms_to(Self.E, FitTransformer) or conforms_to(
+        Self.E, TransformerMixin
+    ):
         self._validate_names()
         comptime if conforms_to(Self.Target, Copyable & Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
             var transformed = _fit_optional_step(self.transformer, X, y)
-            return _fit_optional_step(self.estimator, rebind[Self.E.Input](transformed), y)
+            comptime if conforms_to(Self.E, TransformerMixin):
+                return rebind_var[Self.Transformed](_fit_optional_transform(
+                    self.estimator, rebind[Self.E.Input](transformed), y,
+                ))
+            elif conforms_to(Self.E, FitTransformer):
+                return rebind_var[Self.Transformed](self.estimator.fit_transform(
+                    rebind[Self.E.Input](transformed), rebind[Optional[Self.E.Target]](y),
+                ))
+            else:
+                comptime assert False, "pipeline final step must support fit_transform or transform"
         else:
             comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
 
@@ -487,7 +502,7 @@ struct TransformerPipeline[
         check_is_fitted(self)
         comptime if conforms_to(Self.P.Transformed, Deinitable):
             var transformed = self.transformer.transform(X)
-            return self.estimator.transform(rebind[Self.E.Input](transformed))
+            return rebind_var[Self.Transformed](self.estimator.transform(rebind[Self.E.Input](transformed)))
         else:
             comptime assert False, "pipeline needs destructible intermediate values"
 
@@ -537,7 +552,7 @@ struct TransformerPipeline[
         """Apply the children’s inverse transforms in reverse order."""
         check_is_fitted(self)
         comptime if conforms_to(Self.E.Input, Deinitable):
-            var intermediate = self.estimator.inverse_transform(X)
+            var intermediate = self.estimator.inverse_transform(rebind[Self.E.Transformed](X))
             return self.transformer.inverse_transform(rebind[Self.P.Transformed](intermediate))
         else:
             comptime assert False, "pipeline needs destructible intermediate values"

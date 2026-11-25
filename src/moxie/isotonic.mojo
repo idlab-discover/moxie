@@ -13,6 +13,11 @@ from moxie.base import (
     WeightedSupervisedEstimator,
 )
 from moxie._isotonic_adapters import IsotonicCVAdapter, IsotonicScorer, IsotonicSearchValue
+from moxie.metadata_routing import (
+    FitScoreMetadataRequest,
+    SampleWeightRequest,
+    SampleWeightUpdate,
+)
 from moxie.utils.validation import check_is_fitted
 from moxie.warnings import FitWarning
 from numax.core.libm import log
@@ -321,6 +326,7 @@ struct IsotonicRegression[dtype: DType = DType.float64](
     var y_thresholds_: List[Scalar[Self.dtype]]
     var increasing_: Bool
     var fit_warnings: List[FitWarning]
+    var _metadata: FitScoreMetadataRequest
     var _fitted: Bool
     var _bounds_error: Bool
 
@@ -343,6 +349,7 @@ struct IsotonicRegression[dtype: DType = DType.float64](
         self.y_thresholds_ = List[Scalar[Self.dtype]]()
         self.increasing_ = True
         self.fit_warnings = []
+        self._metadata = FitScoreMetadataRequest(SampleWeightRequest(), SampleWeightRequest())
         self._fitted = False
         self._bounds_error = False
 
@@ -381,13 +388,34 @@ struct IsotonicRegression[dtype: DType = DType.float64](
             self.out_of_bounds = out_of_bounds.value().copy()
         return self
 
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.fit.set(sample_weight)
+        return self
+
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.score.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        return self._metadata.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(
+        var cloned = Self(
             y_min=self.y_min,
             y_max=self.y_max,
             increasing=self.increasing.copy(),
             out_of_bounds=self.out_of_bounds.copy(),
         )
+        cloned._metadata = self._metadata.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted

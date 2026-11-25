@@ -11,6 +11,9 @@
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },
+        "moxie.metadata_routing": {
+          "file": "src/moxie/metadata_routing.mojo"
+        },
         "moxie.warnings": {
           "file": "src/moxie/warnings.mojo"
         },

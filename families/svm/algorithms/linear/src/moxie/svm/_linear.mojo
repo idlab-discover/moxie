@@ -199,6 +199,27 @@ def _decision(X: Dense, coef: Dense, intercept: Dense, n_features: Int) raises -
     return result^
 
 
+def _check_feature_names_width[dtype: DType](
+    X: nm.NDArray[dtype], names: List[String],
+) raises:
+    if X.ndim != 2 or len(names) != X.shape[1]:
+        raise Error("ValueError: feature_names length must match X columns")
+
+
+def _check_feature_names[dtype: DType](
+    X: nm.NDArray[dtype],
+    names: List[String],
+    fitted_names: Optional[List[String]],
+    fitted: Bool,
+) raises:
+    if not fitted:
+        raise Error("NotFittedError: linear SVM is not fitted")
+    _check_feature_names_width(X, names)
+    if fitted_names:
+        if names != fitted_names.value():
+            raise Error("ValueError: feature names must match those passed during fit, in the same order")
+
+
 @fieldwise_init
 struct LinearSVCParams[Label: Copyable & Comparable & Deinitable = Float64](Copyable, Movable):
     var penalty: String
@@ -239,6 +260,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
     var coef_: Dense
     var intercept_: Dense
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var n_iter_: Int
     var fit_status_: Int
     var fit_warnings: List[FitWarning]
@@ -262,6 +284,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
         self.coef_ = nm.zeros[DType.float64](nm.Shape(0))
         self.intercept_ = nm.zeros[DType.float64](nm.Shape(0))
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self.n_iter_ = 0
         self.fit_status_ = 0
         self.fit_warnings = []
@@ -385,12 +408,90 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
         self.n_iter_ = _iteration(model)
         self.fit_status_ = model.fit_status
         self.n_features_in_ = X.shape[1]
+        self.feature_names_in_ = None
         self.coef_ = model.coef.copy()
         self.intercept_ = model.intercept.copy()
         self.fit_warnings = _linear_fit_warnings(model.fit_status)
         if self.verbose > 0:
             print("[LibLinear] iterations:", self.n_iter_)
         return self
+
+    def fit[
+        dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: nm.NDArray[dtype],
+        ref[y_origin] y: Self.Target,
+        *,
+        feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        _check_feature_names_width(X, feature_names)
+        var names = feature_names.copy()
+        comptime if dtype == DType.float64:
+            _ = self.fit(rebind[Dense](X), y, sample_weight)
+        else:
+            comptime assert dtype == DType.float32, "LinearSVC requires Float32 or Float64 features"
+            _ = self.fit(X.astype[DType.float64](), y, sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
+    def fit[
+        dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Dense,
+        ref[y_origin] y: nm.NDArray[dtype],
+        *,
+        feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        _check_feature_names_width(X, feature_names)
+        var names = feature_names.copy()
+        _ = self.fit(X, y, sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
+    def decision_function[dtype: DType](
+        self, X: nm.NDArray[dtype], *, feature_names: List[String],
+    ) raises -> Dense:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.decision_function(rebind[Dense](X))
+        else:
+            comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
+            return self.decision_function(X.astype[DType.float64]())
+
+    def predict[dtype: DType](
+        self, X: nm.NDArray[dtype], *, feature_names: List[String],
+    ) raises -> Self.Prediction:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.predict(rebind[Dense](X))
+        else:
+            comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
+            return self.predict(X.astype[DType.float64]())
+
+    def score[dtype: DType](
+        self,
+        X: nm.NDArray[dtype],
+        y: Self.Target,
+        *,
+        feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> Float64:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.score(rebind[Dense](X), y, sample_weight)
+        else:
+            comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
+            return self.score(X.astype[DType.float64](), y, sample_weight)
 
     def decision_function(self, X: Dense) raises -> Dense:
         return _decision(X, self.coef_, self.intercept_, self.n_features_in_)
@@ -509,6 +610,7 @@ struct LinearSVR(SupportVectorRegressor):
     var coef_: Dense
     var intercept_: Dense
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var n_iter_: Int
     var fit_status_: Int
     var fit_warnings: List[FitWarning]
@@ -529,6 +631,7 @@ struct LinearSVR(SupportVectorRegressor):
         self.coef_ = nm.zeros[DType.float64](nm.Shape(0))
         self.intercept_ = nm.zeros[DType.float64](nm.Shape(0))
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self.n_iter_ = 0
         self.fit_status_ = 0
         self.fit_warnings = []
@@ -613,12 +716,70 @@ struct LinearSVR(SupportVectorRegressor):
         self.n_iter_ = _iteration(model)
         self.fit_status_ = model.fit_status
         self.n_features_in_ = X.shape[1]
+        self.feature_names_in_ = None
         self.coef_ = model.coef.reshape(nm.Shape(X.shape[1]))
         self.intercept_ = model.intercept.copy()
         self.fit_warnings = _linear_fit_warnings(model.fit_status)
         if self.verbose > 0:
             print("[LibLinear] iterations:", self.n_iter_)
         return self
+
+    def fit[
+        xdtype: DType, ydtype: DType,
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: nm.NDArray[xdtype],
+        ref[y_origin] y: nm.NDArray[ydtype],
+        *,
+        feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        comptime if ydtype == DType.float32:
+            _ = self.fit(
+                X, y.astype[DType.float64](),
+                feature_names=feature_names, sample_weight=sample_weight,
+            )
+        else:
+            comptime assert ydtype == DType.float64, "LinearSVR requires Float32 or Float64 targets"
+            _check_feature_names_width(X, feature_names)
+            var names = feature_names.copy()
+            comptime if xdtype == DType.float64:
+                _ = self.fit(rebind[Dense](X), rebind[Dense](y), sample_weight)
+            else:
+                comptime assert xdtype == DType.float32, "LinearSVR requires Float32 or Float64 features"
+                _ = self.fit(X.astype[DType.float64](), rebind[Dense](y), sample_weight)
+            self.feature_names_in_ = names^
+        return self
+
+    def predict[dtype: DType](
+        self, X: nm.NDArray[dtype], *, feature_names: List[String],
+    ) raises -> Self.Prediction:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.predict(rebind[Dense](X))
+        else:
+            comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
+            return self.predict(X.astype[DType.float64]())
+
+    def score[dtype: DType](
+        self,
+        X: nm.NDArray[dtype],
+        y: Self.Target,
+        *,
+        feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> Float64:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.score(rebind[Dense](X), y, sample_weight)
+        else:
+            comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
+            return self.score(X.astype[DType.float64](), y, sample_weight)
 
     def predict(self, X: Dense) raises -> Dense:
         return _decision(X, self.coef_, self.intercept_, self.n_features_in_)

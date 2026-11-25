@@ -50,7 +50,7 @@ def reference():
     load(REF/'sklearn/svm/_classes.py',{'LinearSVC','LinearSVR','_validate_dual_parameter'},classes)
     return classes
 
-def native(x,y,sw,config,regression):
+def native(x,y,sw,config,regression,*,names=None):
     c=config.copy();cw=c.get('class_weight');mode='balanced' if cw=='balanced' else 'explicit' if isinstance(cw,dict) else 'none'
     k=len(cw) if isinstance(cw,dict) else 0
     header=[*x.shape,int(regression),c['loss'],c.get('penalty','l2'),str(c['dual']).lower(),c.get('multi_class','ovr'),mode,int(c['fit_intercept']),c['intercept_scaling'],c['C'],c.get('epsilon',0),c['tol'],c['max_iter'],c['random_state'],int(x.dtype==np.float32),k]
@@ -58,9 +58,15 @@ def native(x,y,sw,config,regression):
     if k:
         for label,weight in cw.items():values.extend([label,weight])
     case=ROOT/'builds/wrapper-case.txt';case.write_text(' '.join(map(str,values))+'\n')
-    proc=subprocess.run([str(ROOT/'builds/driver'),str(case)],text=True,capture_output=True,timeout=60)
+    args = [str(ROOT/'builds/driver'), str(case)]
+    if names is not None:
+        args.append('named')
+    proc=subprocess.run(args,text=True,capture_output=True,timeout=60)
     assert proc.returncode==0,proc.stderr
     lines=proc.stdout.splitlines();start=next(i for i,s in enumerate(lines) if s.startswith('RESULT '));_,r,p,it,status=lines[start].split();r,p,it,status=map(int,(r,p,it,status))
+    native_names = [line.removeprefix('FEATURE_NAME ') for line in lines[:start]
+                    if line.startswith('FEATURE_NAME ')]
+    assert native_names == ([] if names is None else list(names))
     a=np.array([float(s) for s in lines[start+1:]]);i=r*p
     coef=a[:i].reshape(r,p);intercept=a[i:i+r];i+=r
     decision=a[i:i+len(y)*r].reshape(len(y),r);i+=len(y)*r
@@ -69,8 +75,42 @@ def native(x,y,sw,config,regression):
                if line.startswith("WARNING ")]
     return coef,intercept,decision,predicted,a[-1],it,status,records
 
+def check_named_inputs(refs):
+    from pandas import DataFrame
+
+    for regression, cls in [(False, refs['LinearSVC']), (True, refs['LinearSVR'])]:
+        for dtype in (np.float32, np.float64):
+            x = np.array([[-3, 0], [-2, 1], [-1, 0], [1, 1], [2, 0], [3, 1]], dtype=dtype)
+            y = x[:, 0] / 3 if regression else np.array([-7, -7, -7, 4, 4, 4])
+            weights = np.linspace(0.5, 1.5, len(x))
+            config = dict(
+                loss='squared_epsilon_insensitive' if regression else 'squared_hinge',
+                dual=False, C=0.7, tol=1e-10, fit_intercept=True,
+                intercept_scaling=1.0, max_iter=10000, random_state=17,
+            )
+            frame = DataFrame(x, columns=['feature_0', 'feature_1'])
+            expected = cls(**config).fit(frame, y, sample_weight=weights)
+            _, _, decision, predicted, score, *_ = native(
+                x, y, weights, config, regression, names=expected.feature_names_in_
+            )
+            expected_decision = (
+                expected.predict(frame) if regression else expected.decision_function(frame)
+            )
+            np.testing.assert_allclose(decision[:, 0], expected_decision, rtol=7e-5, atol=2e-5)
+            if not regression:
+                np.testing.assert_array_equal(predicted, expected.predict(frame))
+            np.testing.assert_allclose(
+                score, expected.score(frame, y, sample_weight=weights), rtol=1e-6, atol=1e-6
+            )
+            with np.testing.assert_raises_regex(ValueError, 'same order'):
+                expected.predict(frame[frame.columns[::-1]])
+            expected.fit(x, y, sample_weight=weights)
+            assert not hasattr(expected, 'feature_names_in_')
+    print('PASS 4 named LinearSVC/LinearSVR cases against pinned sklearn DataFrames')
+
+
 def main():
-    refs=reference();rng=np.random.RandomState(45);results=[]
+    refs=reference();check_named_inputs(refs);rng=np.random.RandomState(45);results=[]
     modes=[('squared_hinge','l2','auto','ovr'),('squared_hinge','l2',False,'ovr'),('squared_hinge','l2',True,'ovr'),('hinge','l2','auto','ovr'),('hinge','l2',True,'ovr'),('squared_hinge','l1','auto','ovr'),('squared_hinge','l1',False,'ovr'),('hinge','l1',False,'crammer_singer'),('epsilon_insensitive','l2','auto','ovr'),('epsilon_insensitive','l2',True,'ovr'),('squared_epsilon_insensitive','l2','auto','ovr'),('squared_epsilon_insensitive','l2',True,'ovr'),('squared_epsilon_insensitive','l2',False,'ovr')]
     for mode in modes:
       loss,penalty,dual,multi=mode;regression='insensitive' in loss

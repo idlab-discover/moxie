@@ -83,6 +83,28 @@ configuration clones retain both requests. Native setters are always available.
 Parents can use the returned requests to resolve metadata. Direct calls to
 `fit` and `score` use the explicitly supplied weights.
 
+## Feature names
+
+Pass `feature_names=` with a `List[String]` to associate names with the
+columns of a dense array. The list must have one entry per column. Names
+can repeat and their order is significant.
+
+```mojo
+var names: List[String] = ["height", "width"]
+var predictions = classifier.fit(X, y, feature_names=names).predict(
+    X, feature_names=names
+)
+```
+
+Both estimators accept the keyword on `fit`, `predict`, and `score`.
+`LinearSVC.decision_function` accepts it too. Named inference checks the
+column count and, when the fit recorded names, their exact order. Arrays
+carry no column labels. Mixing named and unnamed calls is allowed without
+the Python warnings. The fitted estimator owns its
+`feature_names_in_: Optional[List[String]]`. A successful unnamed fit
+clears it, a failed fit preserves it, and an unfitted clone starts with
+`None`.
+
 ## Native model files
 
 Use the experimental [model file API](../../../../../docs/serialization.md)
@@ -99,17 +121,25 @@ save_model[LinearSVRSchema](regressor, "regressor.moxie")
 var restored_regressor = load_model[LinearSVRSchema]("regressor.moxie")
 ```
 
-Choose the same classifier label type on save and load. Schema version 2
+Choose the same classifier label type on save and load. Schema version 3
 supports String, Int, Int32, Int64, Float32, and Float64 labels, including
 explicit class weights. Both schemas preserve current configuration, fitted or
 unfitted state, and the estimator-owned random stream. Fitted loads restore
 independent coefficients and intercepts without retraining. Settings changed
 after fit apply to a subsequent fit. A stream borrowed through
 `fit_with_random_state` is owned by the caller.
-Version 2 preserves both sample-weight requests. Version 1 archives load with
-both requests unset. Both versions reconstruct `fit_warnings` from the saved
-fit status.
+Version 3 preserves fitted feature names and both sample-weight requests.
+Versions 1 and 2 load with names unset. Version 1 also leaves both requests
+unset. All three versions reconstruct `fit_warnings` from the saved fit
+status.
 
 The linear child test runner includes file round trips and malformed-state
 checks. The linear wrapper parity driver serializes and restores each
 successfully fitted estimator before comparing with pinned scikit-learn.
+
+The linear wrapper parity test also compares named weighted fits against
+scikit-learn DataFrames for Float32 and Float64. It checks exact name order
+and classifier predictions, then compares margins, regression predictions,
+and weighted scores at the wrapper tolerances. Native contract tests check
+name ownership, failed fits, unnamed refits, reordered names, and archive
+validation.

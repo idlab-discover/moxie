@@ -20,5 +20,5 @@ The retired calibration sibling is not required.
 The side-by-side notebook
 [`notebooks/calibration/plot_calibration.ipynb`](../../notebooks/calibration/plot_calibration.ipynb)
 replays `examples/calibration/plot_calibration.py` with Moxie's `GaussianNB`
-behind a `CalibrationEstimator` adapter. Rerun it with
+through `adapt_classifier`. Rerun it with
 `pixi run -e notebooks notebooks notebooks/calibration`.

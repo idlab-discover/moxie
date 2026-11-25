@@ -97,6 +97,19 @@ def unique(y: Array) raises -> Array:
     return result^
 
 
+comptime MAX_INTEGRAL_LABEL = 9007199254740991
+
+
+def validate_integral_labels(y: Array) raises:
+    for i in range(y.size):
+        var label = y.item(i)
+        if abs(label) > Float64(MAX_INTEGRAL_LABEL) or label != Float64(Int(label)):
+            raise Error(
+                "ValueError: classification requires integral numeric"
+                " labels"
+            )
+
+
 def encoded(y: Array, classes: Array) raises -> Array:
     var out = nm.zeros[DType.float64](nm.Shape(y.size))
     for i in range(y.size):
@@ -380,14 +393,7 @@ struct CalibratedClassifierCV[E: CalibrationEstimator](
         vector(y)
         if X.shape[0] != y.size:
             raise Error("ValueError: inconsistent sample count")
-        for i in range(y.size):
-            if abs(y.item(i)) > 9007199254740991.0 or y.item(i) != Float64(
-                Int(y.item(i))
-            ):
-                raise Error(
-                    "ValueError: classification requires integral numeric"
-                    " labels"
-                )
+        validate_integral_labels(y)
         if (
             self.method != "sigmoid"
             and self.method != "isotonic"

@@ -5,7 +5,9 @@
 
 Native estimator and split types are `CalibratedClassifier`,
 `CalibrationEstimator`, `CalibratedClassifierParams`, `CalibrationCV` and
-`CalibrationSplit`. `FrozenCalibrationEstimator` bridges Moxie frozen handles. Native display types are `CalibrationDisplayEstimator`,
+`CalibrationSplit`. `adapt_classifier` builds a `ClassifierCalibrationAdapter`
+for supported production classifiers. `FrozenCalibrationEstimator` bridges
+Moxie frozen handles. Native display types are `CalibrationDisplayEstimator`,
 `CalibrationAxes`, `CalibrationFigure` and `CalibrationLine`.
 
 See [the family guide](family.md) for supported inputs, examples and explicit

@@ -17,3 +17,5 @@ from ._calibration_display import (
 from ._calibration_splits import CalibrationCV, CalibrationSplit
 
 from ._calibration_frozen import FrozenCalibrationEstimator
+
+from ._calibration_adapter import ClassifierCalibrationAdapter, adapt_classifier

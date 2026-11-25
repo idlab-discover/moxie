@@ -17,6 +17,7 @@ from moxie.calibration_serialization import (
     CalibratedCategoricalNBClassifierCVSchema,
     CalibratedClassifierCVSchema,
     CalibratedComplementNBClassifierCVSchema,
+    CalibratedFrozenGaussianNBClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
     CalibratedLDAClassifierCVSchema,
     CalibratedMultinomialNBClassifierCVSchema,
@@ -28,6 +29,7 @@ from moxie.discriminant_analysis import (
     NoCovarianceEstimator,
     QuadraticDiscriminantAnalysis,
 )
+from moxie.frozen import FrozenEstimator
 from moxie.model_selection import KFold, LeaveOneOut, StratifiedKFold
 from moxie.naive_bayes import BernoulliNB, CategoricalNB, ComplementNB, GaussianNB, MultinomialNB
 from moxie.serialization import (
@@ -146,6 +148,78 @@ def test_discriminant_configuration(X: Dense) raises:
     )
     with assert_raises(contains="requires covariance_estimator=None"):
         _ = CalibratedQDAClassifierCVSchema.encode(unsupported_qda)
+
+
+def test_frozen_gaussian(X: Dense, y: Dense) raises:
+    comptime FrozenSchema = CalibratedFrozenGaussianNBClassifierCVSchema
+    var file = "builds/calibration-frozen-gaussian-model.moxie"
+    var model = CalibratedClassifierCV(
+        adapt_classifier(FrozenEstimator(GaussianNB())), method="sigmoid", cv=3,
+    )
+    check_unfitted[FrozenSchema](model, X)
+    var empty = FrozenSchema.decode(FrozenSchema.encode(model))
+    assert_true(empty.estimator.is_frozen())
+    assert_false(empty.estimator.__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = empty.fit(X, y)
+
+    var labels = List[Int](capacity=y.size)
+    for i in range(y.size):
+        labels.append(Int(y.item(i)))
+    var prefit = GaussianNB(var_smoothing=0.1)
+    _ = prefit.fit(X, labels)
+    _ = model.set_params(estimator=adapt_classifier(FrozenEstimator(prefit^)))
+    check_unfitted[FrozenSchema](model, X)
+    var restored_prefit = FrozenSchema.decode(loads(dumps(FrozenSchema.encode(model))))
+    assert_true(restored_prefit.estimator.is_frozen())
+    assert_true(restored_prefit.estimator.__sklearn_is_fitted__())
+    _ = model.fit(X, y)
+    _ = restored_prefit.fit(X, y)
+    assert_equal_predictions(model, restored_prefit, X, y)
+
+    var replacement = GaussianNB(var_smoothing=0.01)
+    _ = replacement.fit(X, labels)
+    _ = model.set_params(
+        estimator=adapt_classifier(FrozenEstimator(replacement^)),
+        method="isotonic",
+    )
+    save_model[FrozenSchema](model, file)
+    var restored = load_model[FrozenSchema](file)
+    assert_equal(restored.ensemble[String], "auto")
+    assert_equal(restored.method, "isotonic")
+    assert_equal(restored.estimator.estimator().estimator().var_smoothing, 0.01)
+    assert_equal(len(restored.calibrated_classifiers_), 1)
+    ref pair = restored.calibrated_classifiers_[0]
+    assert_true(pair.estimator.is_frozen())
+    assert_equal(pair.method, "sigmoid")
+    assert_equal(pair.estimator.estimator().estimator().var_smoothing, 0.1)
+    assert_equal_predictions(model, restored, X, y)
+
+    var cloned = clone(restored)
+    assert_false(cloned.__sklearn_is_fitted__())
+    assert_true(cloned.estimator.is_frozen())
+    assert_true(cloned.estimator.__sklearn_is_fitted__())
+    _ = cloned.fit(X, y)
+    assert_equal(len(cloned.calibrated_classifiers_), 1)
+    assert_equal(cloned.calibrated_classifiers_[0].method, "isotonic")
+    assert_equal(cloned.calibrated_classifiers_[0].estimator.estimator().estimator().var_smoothing, 0.01)
+    assert_equal(restored.calibrated_classifiers_[0].method, "sigmoid")
+
+    var archive = FrozenSchema.encode(restored)
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = CalibratedGaussianNBClassifierCVSchema.decode(loads(dumps(archive)))
+    archive.payloads[len(archive.payloads) - 1].name = "fold/0/estimator/unknown"
+    with assert_raises(contains="ModelFormatError: missing array var_"):
+        _ = FrozenSchema.decode(loads(dumps(archive)))
+
+    def classes(estimator: FrozenEstimator[GaussianNB[]]) raises -> Dense:
+        return Dense(nm.Shape(0))
+
+    var custom = CalibratedClassifierCV(
+        ClassifierCalibrationAdapter(FrozenEstimator(GaussianNB()), classes, "GaussianNB")
+    )
+    with assert_raises(contains="requires the built-in frozen GaussianNB adapter"):
+        _ = FrozenSchema.encode(custom)
 
 
 def test_gaussian(X: Dense, y: Dense) raises:
@@ -476,6 +550,7 @@ def main() raises:
     test_discriminant_configuration(X)
     test_lda_fold_fit_warnings(X, y)
     test_gaussian(X, y)
+    test_frozen_gaussian(X, y)
     test_multinomial(X, y)
     test_complement(X, y)
     test_bernoulli(X, y)

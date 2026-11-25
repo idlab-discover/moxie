@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from sklearn.exceptions import ConvergenceWarning
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'support'))
-from oracle import ROOT, REVISION, load_pinned, run_native, assert_close
+from oracle import ROOT, REVISION, load_pinned, run_native, assert_close, compile_pinned_extension
 sys.path.insert(0, str(ROOT.parent / 'linear_model/tools'))
 from pinned_coordinate import load as load_coordinate
 
@@ -152,3 +152,88 @@ for dtype in (np.float32, np.float64):
                     assert_close(got[key], value, tol, f'{dtype} {fixture=} {atom_count=} {use_gram=} {use_cov=} {key}')
                 count += 1
 print(f'PASS: {count} OMP coding cases against local sklearn {REVISION}')
+
+least_angle = load_pinned('sklearn/linear_model/_least_angle.py')
+least_angle.arrayfuncs = compile_pinned_extension('sklearn/utils/arrayfuncs.pyx')
+module.Lars = least_angle.Lars
+module.LassoLars = least_angle.LassoLars
+
+drop_rng = np.random.RandomState(120)
+for _ in range(4):
+    drop_dictionary = drop_rng.randn(5, 7)
+    drop_x = drop_rng.randn(1, 7)
+_, _, path = least_angle.lars_path_gram(
+    (drop_dictionary @ drop_x.T).ravel(), drop_dictionary @ drop_dictionary.T,
+    n_samples=7, method='lasso',
+)
+assert np.any((np.abs(path[:, 1:]) < 1e-10) & (np.abs(path[:, :-1]) > 1e-5))
+
+count = 0
+for dtype in (np.float32, np.float64):
+    fixtures = {
+        'drop-and-reentry': (drop_x, drop_dictionary),
+        'underdetermined': (rng.normal(size=(5, 4)), rng.normal(size=(7, 4))),
+        'determined': (rng.normal(size=(7, 25)), rng.normal(size=(5, 25))),
+        'single-sample': (rng.normal(size=(1, 5)), rng.normal(size=(3, 5))),
+        'singleton': ([[2.]], [[-4.]]),
+        'positive-endpoint': ([[3., -2., 0.]], np.eye(3)[:2]),
+        'zero': (np.zeros((2, 3)), np.eye(3)),
+        'dependent': ([[3., -2.]], [[1., 0.], [1., 0.], [0., 1.], [0., 0.]]),
+        'tie': ([[1., -1., 2.]], np.eye(3)),
+    }
+    for fixture, (x, dictionary) in fixtures.items():
+        x = np.asarray(x, dtype=dtype)
+        dictionary = np.asarray(dictionary, dtype=dtype)
+        k = len(dictionary)
+        modes = [
+            ('lars', None, False, 0, None),
+            ('lars', None, False, 0, min(k, 3)),
+            ('lasso_lars', None, False, 1000, None),
+            ('lasso_lars', .35, True, 1000, None),
+            ('lasso_lars', .35, False, 1, None),
+            ('lasso_lars', .35, True, 0, None),
+            ('lasso_lars', 10., False, 1000, None),
+        ]
+        # For dense underdetermined Float32 Gram inputs, requesting knots beyond
+        # the rank makes sklearn's active set sensitive to round-off in pivots.
+        # Exercise oversized counts on full-rank and exactly dependent fixtures.
+        if fixture != 'underdetermined':
+            modes.append(('lars', None, False, 0, k + 1))
+        if fixture == 'drop-and-reentry':
+            modes += [('lasso_lars', alpha, False, 1000, None) for alpha in (.5, .04, 0.)]
+        for algorithm, alpha, positive, max_iter, atom_count in modes:
+            for use_gram, use_cov in ((False, False), (True, True)):
+                gram = dictionary @ dictionary.T * dtype(1.25)
+                cov = dictionary @ (x + dtype(.125)).T
+                split = dtype == np.float64 and use_gram
+                model = module.SparseCoder(
+                    dictionary, transform_algorithm=algorithm, transform_alpha=alpha,
+                    transform_max_iter=max_iter, transform_n_nonzero_coefs=atom_count,
+                    positive_code=positive, split_sign=split,
+                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', ConvergenceWarning)
+                    expected = module.sparse_encode(
+                        x, dictionary, algorithm=algorithm, alpha=alpha, positive=positive,
+                        max_iter=max_iter, n_nonzero_coefs=atom_count,
+                        gram=gram if use_gram else None, cov=cov if use_cov else None,
+                    )
+                    z = model.transform(x)
+                    fit = model.fit_transform(x)
+                assert expected.shape == (len(x), k)
+                assert expected.dtype == z.dtype == dtype
+                got = run_native(
+                    ROOT / 'builds/sparse_coding_driver', dtype, [x, dictionary, cov, gram, x],
+                    algorithm, -1 if alpha is None else alpha, int(positive), int(split),
+                    max_iter, int(use_cov), int(use_gram), 1, atom_count or 0,
+                )
+                tol = 1e-4 if dtype == np.float32 else 2e-10
+                for key, value in dict(functional=expected, code=z, inverse=model.inverse_transform(z),
+                                       fit=fit, restored_fit=fit).items():
+                    assert_close(
+                        got[key], value, tol,
+                        f'{dtype} {fixture=} {algorithm=} {alpha=} {positive=} '
+                        f'{max_iter=} {atom_count=} {use_gram=} {key}',
+                    )
+                count += 1
+print(f'PASS: {count} least-angle coding cases against local sklearn {REVISION}')

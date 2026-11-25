@@ -8,7 +8,7 @@ non_negative_factorization (cd and mu, all beta losses), LatentDirichletAllocati
 (batch/online, sequential E-step; see [lda.md](lda.md)), KernelPCA
 (named/precomputed kernels, dense/dense-exact arpack/randomized eigenspaces,
 learned inverse maps; see [kernel_pca.md](kernel_pca.md)), SparseCoder/sparse_encode
-(threshold, lasso_cd and omp; see [sparse_coding.md](sparse_coding.md)), and randomized_svd (both
+(all five dense coding modes; see [sparse_coding.md](sparse_coding.md)), and randomized_svd (both
 drivers) from `shared/svd_engine`. See the per-estimator guides linked from the
 README for adaptations and tolerances.
 
@@ -18,10 +18,9 @@ satisfied; no Lanczos iteration is performed.
 
 Not yet implemented (raising declarations): DictionaryLearning, MiniBatchDictionaryLearning, dict_learning,
 dict_learning_online, SparsePCA and
-MiniBatchSparsePCA (integration with the current Moxie linear-model LARS/OMP solver contracts is unfinished).
+MiniBatchSparsePCA.
 
-`SparseCoder` defaults to OMP. The `lars` and `lasso_lars` modes remain
-unfinished. Pass `omp`, `threshold`, or `lasso_cd` explicitly to `sparse_encode`.
+`SparseCoder` defaults to OMP and `sparse_encode` defaults to Lasso LARS.
 
 Historical performance measurements for PCA/SVD/FA/ICA/NMF: the native kernels are scalar and certify every
 factorization; on 200x10 to 1000x20 inputs fits are 20-100x slower than

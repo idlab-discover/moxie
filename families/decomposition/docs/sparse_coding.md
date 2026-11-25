@@ -1,13 +1,14 @@
 # Dense sparse coding
 
 The public `sparse_encode` function and `SparseCoder` estimator support the
-`threshold`, `lasso_cd`, and `omp` algorithms over dense Float32/Float64 NuMojo
-arrays. The implementation lives in `shared/sparse_coding`, assembled
+`threshold`, `lasso_cd`, `omp`, `lars`, and `lasso_lars` algorithms over dense
+Float32 and Float64 NuMojo arrays. The implementation lives in `shared/sparse_coding`, assembled
 once into `moxie.decomposition._sparse_coding`.
 
 ```mojo
 from moxie.decomposition import SparseCoder, sparse_encode
-var code = sparse_encode(X, dictionary, algorithm="omp", n_nonzero_coefs=2)
+var code = sparse_encode(X, dictionary)  # Lasso LARS with alpha=1
+var pursuit = sparse_encode(X, dictionary, algorithm="omp", n_nonzero_coefs=2)
 var default_coder = SparseCoder(dictionary)
 var coder = SparseCoder(dictionary, transform_algorithm="lasso_cd",
                         transform_alpha=0.5, positive_code=True)
@@ -54,6 +55,18 @@ returns the current solution without a warning. OMP rejects `positive=True` and 
 atom count to control regularization. `alpha`, `max_iter` and `init` do not
 drive its solver.
 
+The least-angle modes share the linear-model Gram solver. `lars` stops after
+`n_nonzero_coefs` path steps, or earlier if the path ends. Its default count
+matches OMP's. It rejects `positive=True` and ignores `alpha` and `max_iter`. `lasso_lars` uses the same reconstruction objective and default
+`alpha` as `lasso_cd`. It follows Lasso coefficient drops and interpolates to
+the requested penalty. Positive Lasso LARS follows sklearn's knot interpolation
+when remaining inactive correlations become negative. `max_iter` caps path
+steps, including zero steps, and `n_nonzero_coefs` does not drive its solver.
+Both modes accept the same borrowed Gram and covariance layouts as OMP and
+ignore `init`. They return the current iterate at an early stop and skip
+rejected Cholesky pivots without emitting sklearn's warnings. The native
+solver accepts `verbose` without printing progress.
+
 All supported modes run serially for every nonzero `n_jobs` and preserve the
 dtype for unsplit output. Shape and finite-value checks remain enabled with
 `check_input=False`. Native codes always have rank 2, including for one sample
@@ -63,7 +76,7 @@ SparseCoder can transform and reconstruct before fit. Fit validates inputs and
 sets n_components_/n_features_in_; it does not learn a dictionary. Construction,
 clone and parameter records own dictionary copies. Set_params accepts a typed
 record or named updates. Clone has no fit metadata but remains usable as a
-stateless coder. All three algorithms are deterministic.
+stateless coder. All five algorithms are deterministic.
 
 Float64 supports split_sign=True: output concatenates positive and negative
 parts, and inverse_transform subtracts them before multiplication. Float32
@@ -73,9 +86,8 @@ Float64 dictionary/input for this mode. Unsplit outputs preserve input dtype.
 Feature-name behavior follows the reference, including its atom-count names
 for split-sign output. Fit/set_params mutate in place and return a mutable reference to self.
 
-`SparseCoder(dictionary)` uses OMP by default. The `lasso_lars` and `lars`
-modes raise NotImplementedError. Pass an implemented algorithm explicitly to
-`sparse_encode`, whose reference default is `lasso_lars`.
+`SparseCoder(dictionary)` defaults to OMP and `sparse_encode(X, dictionary)`
+defaults to Lasso LARS.
 
 Parity runs pinned sklearn's decomposition, Lasso, Cython Gram solver and
 `orthogonal_mp_gram`. The threshold, Lasso CD and OMP cases compare functional
@@ -87,3 +99,13 @@ OMP compares shapes, singleton cases, dependent dictionaries, correlation
 ties and supplied statistics. Its tolerances are 2e-12 in Float64 and
 2e-5 in Float32 for BLAS and triangular solve rounding. Near the dependence
 threshold, rounding can also change which atoms are selected.
+
+Least-angle parity also executes the pinned `_least_angle.py` and its
+`arrayfuncs.pyx` helper. It covers count and penalty stopping, Lasso coefficient
+drops and re-entry, positive constraints, supplied statistics, ties, and
+single-row and overcomplete dictionaries. Tests use 2e-10 in Float64 and
+1e-4 in Float32 to allow for Gram products, triangular solves, and successive
+correlation updates. Near tied or degenerate path events, rounding can change
+which atom joins the active set. The overcomplete random fixtures check LARS
+counts below the rank. Oversized counts are tested on full-rank and exactly
+dependent dictionaries.

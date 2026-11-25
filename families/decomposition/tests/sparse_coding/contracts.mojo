@@ -1,5 +1,6 @@
 """Dense coding, parameter and layout contracts."""
-from std.testing import assert_equal, assert_false, assert_raises
+from std.testing import assert_equal, assert_false, assert_raises, assert_true
+from std.math import abs
 from std.utils.numerics import inf
 from numojo import NDArray, Shape, zeros, NDArrayStrides
 from moxie.base import clone
@@ -35,8 +36,6 @@ def check[dtype: DType]() raises:
     assert_equal(c.transform(x).unsafe_get(1), 0)
     var reversed = x.view_with_layout(Shape(2, 3), NDArrayStrides(-3, 1), 3)
     assert_equal(c.transform(reversed).unsafe_get(2), 3)
-    with assert_raises(contains="NotImplementedError: sparse coding requires"):
-        _ = sparse_encode(x, d)  # default lasso_lars unavailable
     with assert_raises(contains="wrong feature count"):
         _ = model.transform(zeros[dtype](Shape(1, 4)))
     with assert_raises(contains="wrong code component count"):
@@ -162,6 +161,63 @@ def omp[dtype: DType]() raises:
     assert_equal(model.transform(reversed).unsafe_get(1), -5)
 
 
+def least_angle[dtype: DType]() raises:
+    var dictionary = zeros[dtype](Shape(2, 3))
+    dictionary.unsafe_set(0, 1)
+    dictionary.unsafe_set(4, 1)
+    var x = zeros[dtype](Shape(1, 3))
+    x.unsafe_set(0, 3)
+    x.unsafe_set(1, -2)
+    var default_code: NDArray[dtype] = sparse_encode(x, dictionary)
+    assert_equal(default_code.shape, Shape(1, 2))
+    assert_equal(default_code.unsafe_get(0), 2)
+    assert_true(abs(default_code.unsafe_get(1) + 1) <= 1e-6)
+    var positive = sparse_encode(x, dictionary, positive=True)
+    assert_true(abs(positive.unsafe_get(0) - 1.2) <= 1e-6)
+    assert_equal(positive.unsafe_get(1), 0)
+    var lar = sparse_encode(x, dictionary, algorithm="lars", max_iter=0)
+    assert_equal(lar.unsafe_get(0), 1)
+    assert_equal(lar.unsafe_get(1), 0)
+    var capped = sparse_encode(x, dictionary, max_iter=0, alpha=0.0)
+    assert_equal(capped.unsafe_get(0), 0)
+
+    var gram_buffer = zeros[dtype](Shape(3, 3))
+    gram_buffer.unsafe_set(4, 1)
+    gram_buffer.unsafe_set(8, 1)
+    var gram = gram_buffer.view_with_layout(Shape(2, 2), NDArrayStrides(3, 1), 4)
+    var cov_buffer = zeros[dtype](Shape(2, 2))
+    cov_buffer.unsafe_set(1, -2)
+    cov_buffer.unsafe_set(3, 3)
+    var cov = cov_buffer.view_with_layout(Shape(2, 1), NDArrayStrides(-2, 1), 3)
+    var supplied = sparse_encode(
+        x, dictionary, gram=gram.view(), cov=cov.view(), copy_cov=False,
+        init=x.view(), n_jobs=2, check_input=False,
+    )
+    assert_equal(supplied.unsafe_get(0), 2)
+    assert_true(abs(supplied.unsafe_get(1) + 1) <= 1e-6)
+    assert_equal(cov_buffer.unsafe_get(1), -2)
+    assert_equal(cov_buffer.unsafe_get(3), 3)
+    assert_equal(gram_buffer.unsafe_get(4), 1)
+    assert_equal(gram_buffer.unsafe_get(8), 1)
+    with assert_raises(contains="Positive constraint not supported for 'lars'"):
+        _ = sparse_encode(x, dictionary, algorithm="lars", positive=True)
+    with assert_raises(contains="gram must have shape"):
+        _ = sparse_encode(x, dictionary, gram=x.view())
+    with assert_raises(contains="cov must have shape"):
+        _ = sparse_encode(x, dictionary, cov=x.view())
+    cov_buffer.unsafe_set(1, inf[dtype]())
+    with assert_raises(contains="LARS: input cov contains NaN or infinity"):
+        _ = sparse_encode(x, dictionary, cov=cov.view(), check_input=False)
+
+    var model = SparseCoder[dtype](dictionary, transform_algorithm="lars")
+    _ = model.fit(x)
+    var copied = clone(model)
+    assert_false(copied.__sklearn_is_fitted__())
+    assert_equal(copied.transform(x).unsafe_get(0), 1)
+    _ = copied.set_params(transform_algorithm="lasso_lars")
+    assert_equal(copied.fit_transform(x).unsafe_get(0), 2)
+
+
 def main() raises:
     check[DType.float32]()
     check[DType.float64]()
@@ -169,4 +225,6 @@ def main() raises:
     lasso_cd[DType.float64]()
     omp[DType.float32]()
     omp[DType.float64]()
-    print("PASS: threshold, Lasso CD and OMP contracts Float32/Float64")
+    least_angle[DType.float32]()
+    least_angle[DType.float64]()
+    print("PASS: all five sparse coding contracts in Float32 and Float64")

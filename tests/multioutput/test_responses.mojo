@@ -3,6 +3,7 @@ import numojo as nm
 from std.math import log
 from std.testing import assert_equal, assert_raises
 from moxie.base import SupervisedEstimator, Predictor, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction
+from moxie.model_selection import StratifiedKFold
 from moxie.multioutput import ClassifierChain, ChainResponses
 from test_estimators import Nearest, Params
 
@@ -102,6 +103,18 @@ def main() raises:
         with assert_raises():
             _ = chain.fit(X, labels, cv=BadShapeCV())
         assert_equal(chain.score(X, labels), 1.0)
+
+    var log_chain = ClassifierChain(
+        Responses(), order=List[Int]([1, 0]), chain_method="predict_log_proba",
+    )
+    _ = log_chain.fit(X, labels, cv=StratifiedKFold(2))
+    # Held-out row 2 ties on distance and selects the first training neighbor.
+    # The next link uses that neighbor's log probability in original row order.
+    assert_equal(log_chain.estimators_[1].model.x.item(2, 1), log(0.25))
+    assert_equal(log_chain.estimators_[1].model.x.item(3, 1), log(0.75))
+    _ = log_chain.fit(X, labels)
+    assert_equal(log_chain.estimators_[1].model.x.item(2, 1), 1.0)
+
     var single = nm.zeros[DType.int64](nm.Shape(4, 1))
     var chain = ClassifierChain(Responses())
     _ = chain.fit(X, single, cv=RejectCV())

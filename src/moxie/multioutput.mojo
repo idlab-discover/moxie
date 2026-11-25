@@ -4,12 +4,20 @@ import numojo as nm
 from numojo import NDArray, Shape
 from std.math import isfinite, floor, nan, log
 from std.time import perf_counter_ns
+from std.utils import Variant
 from moxie.base import (BaseEstimator, SupervisedEstimator, Predictor, ProbabilityPredictor,
     DecisionFunction, LogProbabilityPredictor, IncrementalClassifier, IncrementalRegressor,
-    WeightedSupervisedEstimator, clone)
+    WeightedSupervisedEstimator, ClassifierMixin, clone)
+from moxie._labels import encode_column
 from moxie._multioutput_contracts import MultiOutputClassifierAPI, MultiOutputRegressorAPI, MultiOutputProbability
 from moxie._multioutput import validate_targets, clone_outputs, target_column, stack_predictions, augment_features, ChainOrder, ChainResponses
 from moxie._random import RandomState, entropy_state
+from moxie.model_selection import IndexSplit, KFold, StratifiedKFold
+from moxie.model_selection._indices import IndexArray, SplitCursor
+from moxie.model_selection._split import SplitLabels, check_cv, _rows
+from moxie.model_selection._validation import (
+    _align_class_response, _checked_prediction_splits, _scatter_prediction,
+)
 
 
 @fieldwise_init
@@ -154,6 +162,112 @@ def _check_method[E: Predictor](method: String) raises:
         if method == "decision_function":
             return
     raise Error("ValueError: unavailable chain_method")
+
+
+def _materialize_chain_folds[C: SplitCursor & Deinitable](var cursor: C) raises -> List[IndexSplit]:
+    var splits = List[IndexSplit]()
+    while True:
+        var pair = cursor.next()
+        if not pair:
+            break
+        splits.append(pair.take())
+    return splits^
+
+
+def _aligned_chain_response[T: Movable, out: DType](
+    var values: T, classes: IndexArray, n_classes: Int, method: String,
+) raises -> NDArray[out]:
+    comptime assert (
+        T == NDArray[DType.float32] or T == NDArray[DType.float64]
+    ), "component probabilities and decisions must be Float32 or Float64 NDArrays"
+    comptime raw_dtype = DType.float32 if T == NDArray[DType.float32] else DType.float64
+    var raw = rebind_var[NDArray[raw_dtype]](values^)
+    var aligned = _align_class_response(classes, raw, n_classes, method)
+    if aligned.ndim == 2:
+        aligned = target_column(aligned, 1)
+    return _dense[type_of(aligned), out](aligned^)
+
+
+def _chain_fold_response[E: Predictor, dtype: DType, label: DType](
+    model: E, X: NDArray[dtype], method: String, fold_classes: IndexArray, n_classes: Int,
+) raises -> NDArray[dtype]:
+    if method == "predict":
+        return _response[E, dtype, label](model, X, method)
+    if method == "predict_proba":
+        comptime if conforms_to(E, ProbabilityPredictor):
+            return _aligned_chain_response[E.Probabilities, dtype](
+                model.predict_proba(rebind[E.Input](X)), fold_classes, n_classes, method,
+            )
+    if method == "predict_log_proba":
+        comptime if conforms_to(E, LogProbabilityPredictor):
+            return _aligned_chain_response[E.Probabilities, dtype](
+                model.predict_log_proba(rebind[E.Input](X)), fold_classes, n_classes, method,
+            )
+    if method == "decision_function":
+        comptime if conforms_to(E, DecisionFunction):
+            return _aligned_chain_response[E.Decision, dtype](
+                model.decision_function(rebind[E.Input](X)), fold_classes, n_classes, method,
+            )
+    raise Error("ValueError: component lacks requested chain response")
+
+
+comptime _ChainFolds = Variant[Int, KFold, StratifiedKFold]
+
+
+@fieldwise_init
+struct _SplitterResponses[E: SupervisedEstimator & Predictor & Deinitable, dtype: DType, label: DType](ChainResponses):
+    comptime Estimator = Self.E
+    comptime Input = NDArray[Self.dtype]
+    comptime Target = NDArray[Self.label]
+    comptime Response = Self.Input
+
+    var cv: _ChainFolds
+
+    def _splits(self, y: Self.Target) raises -> List[IndexSplit]:
+        if self.cv.isa[KFold]():
+            return _materialize_chain_folds(self.cv[KFold].split(y.size))
+        if self.cv.isa[StratifiedKFold]():
+            return _materialize_chain_folds(
+                self.cv[StratifiedKFold].split(y.size, SplitLabels._numeric(y)),
+            )
+        comptime if conforms_to(Self.E, ClassifierMixin):
+            var labels = SplitLabels._numeric(y)
+            var splitter = check_cv(Optional[Int](self.cv[Int]), labels, classifier=True)
+            return _materialize_chain_folds(splitter.split(y.size, labels))
+        else:
+            return _materialize_chain_folds(KFold(self.cv[Int]).split(y.size))
+
+    def cross_val_response(self, estimator: Self.E, X: Self.Input, y: Self.Target, method: String) raises -> Self.Response:
+        var splits = self._splits(y)
+        _checked_prediction_splits(splits, y.size)
+        var codes = IndexArray(Shape(0))
+        var n_classes = 0
+        if method != "predict":
+            var domain = encode_column(y)
+            codes = domain.index.inverse.copy()
+            n_classes = domain.classes.size
+            if Int(Scalar[Self.label](n_classes - 1)) != n_classes - 1:
+                raise Error("ValueError: global class codes do not fit the component target dtype")
+        var output: Optional[Self.Response] = None
+        for fold in range(len(splits)):
+            ref split = splits[fold]
+            var train_X = _rows(X, split.train)
+            var test_X = _rows(X, split.test)
+            var fold_classes = IndexArray(Shape(0))
+            var train_y: Self.Target
+            if method == "predict":
+                train_y = _rows(y, split.train)
+            else:
+                var train_codes = _rows(codes, split.train)
+                fold_classes = encode_column(train_codes).classes.copy()
+                train_y = train_codes.astype[Self.label]()
+            var model = clone(estimator)
+            _ = model.fit(rebind[Self.E.Input](train_X), rebind[Self.E.Target](train_y))
+            var predicted = _chain_fold_response[Self.E, Self.dtype, Self.label](
+                model, test_X, method, fold_classes, n_classes,
+            )
+            _scatter_prediction(output, predicted, split.test, y.size)
+        return output.take()
 
 
 def _score[label: DType, classifier: Bool](y: NDArray[label], pred: NDArray[label], weights: Optional[NDArray[DType.float64]]) raises -> Float64:
@@ -674,6 +788,14 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         var prediction = self.predict(X)
         return _score[Self.label, False](y, prediction, sample_weight)
 
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, cv: _ChainFolds,
+    ) raises -> ref[self] Self:
+        """Fit with an integer fold count or a native KFold/StratifiedKFold."""
+        if cv.isa[Int]() and cv[Int] < 2:
+            raise Error("ValueError: n_splits must be at least 2")
+        return self.fit(X, y, cv=_SplitterResponses[Self.E, Self.dtype, Self.label](cv.copy()))
+
     def fit[CV: ChainResponses, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, cv: CV) raises -> ref[self] Self:
         """Use an explicit native out-of-fold provider in place of sklearn's CV object."""
         comptime assert CV.Estimator == Self.E, "CV provider estimator type mismatch"
@@ -890,6 +1012,14 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
 
     def decision_function(self, X: Self.Input) raises -> NDArray[DType.float64] where conforms_to(Self.E, DecisionFunction):
         return self._outputs(X, "decision_function")
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, cv: _ChainFolds,
+    ) raises -> ref[self] Self:
+        """Fit with an integer fold count or a native KFold/StratifiedKFold."""
+        if cv.isa[Int]() and cv[Int] < 2:
+            raise Error("ValueError: n_splits must be at least 2")
+        return self.fit(X, y, cv=_SplitterResponses[Self.E, Self.dtype, Self.label](cv.copy()))
 
     def fit[CV: ChainResponses, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, cv: CV) raises -> ref[self] Self:
         """Use an explicit native out-of-fold provider in place of sklearn's CV object."""

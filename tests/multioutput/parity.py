@@ -14,13 +14,19 @@ REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 def oracle():
     import numpy as np
     import sklearn.multioutput
+    from sklearn.model_selection import _split, _validation
     from sklearn.model_selection import KFold
     from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
     from sklearn.dummy import DummyRegressor
     path = REFERENCE / 'sklearn/multioutput.py'
-    expected = subprocess.check_output(['git', '-C', str(REFERENCE), 'show', REVISION + ':sklearn/multioutput.py'])
-    if path.read_bytes() != expected:
-        raise RuntimeError('Reference multioutput.py differs from the recorded revision')
+    for relative, source in [
+        ('sklearn/multioutput.py', path),
+        ('sklearn/model_selection/_split.py', Path(_split.__file__)),
+        ('sklearn/model_selection/_validation.py', Path(_validation.__file__)),
+    ]:
+        expected = subprocess.check_output(['git', '-C', str(REFERENCE), 'show', f'{REVISION}:{relative}'])
+        if source.read_bytes() != expected:
+            raise RuntimeError(f'Reference {source} differs from the recorded revision')
     spec = importlib.util.spec_from_file_location('sklearn.multioutput', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -79,7 +85,9 @@ def verbose_lines(text):
 
 def components(module, np):
     """Production-component scenario mirrored by test_components.mojo."""
+    import warnings
     from sklearn.linear_model import Ridge, RidgeClassifier
+    from sklearn.model_selection import KFold
     i = np.arange(12)
     X = np.array([[((r * (j + 3) + 2 * j) % 7) - 3.0 + 0.1 * r for j in range(3)] for r in i])
     Y = np.column_stack([0.5 * (i % 3) + X @ np.array([k + 1 - j for j in range(3)], dtype=float) for k in range(3)])
@@ -124,6 +132,27 @@ def components(module, np):
     out['ComponentsForestProba2'] = forest.fit(X32, multiclass.astype(float)).predict_proba(X32)[2].ravel().tolist()
     forest_chain = module.ClassifierChain(RandomForestClassifier(n_estimators=5, random_state=0), chain_method='predict_proba')
     out['ComponentsForestChainProba'] = forest_chain.fit(X32, binary.astype(float)).predict_proba(X32).ravel().tolist()
+    rare = binary.astype(float)
+    rare[:, 0] = -5
+    rare[0, 0] = 9
+    uneven = binary.copy()
+    uneven[:, 0] = (i < 4) | (i == 7)
+    label_cv = module.ClassifierChain(RidgeClassifier(), order=[0, 2, 1], cv=3)
+    out['ComponentsClassifierChainIntegerCVLabels'] = label_cv.fit(X, uneven).predict(X).ravel().tolist()
+    for suffix, cv in [('KFold', KFold(3)), ('IntegerCV', 3)]:
+        regression = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1], cv=cv)
+        out['ComponentsRegressorChain' + suffix] = regression.fit(X, Y).predict(X).ravel().tolist()
+        classification = module.ClassifierChain(
+            RidgeClassifier(), order=[0, 2, 1], chain_method='decision_function', cv=cv,
+        )
+        out['ComponentsDecisionChain' + suffix] = classification.fit(X, uneven).decision_function(X).ravel().tolist()
+        forest_cv = module.ClassifierChain(
+            RandomForestClassifier(n_estimators=5, random_state=0), chain_method='predict_proba', cv=cv,
+        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='The least populated class in y has only')
+            warnings.filterwarnings('ignore', message='Number of classes in training fold')
+            out['ComponentsForestChain' + suffix] = forest_cv.fit(X32, rare).predict_proba(X32).ravel().tolist()
     return out
 
 if __name__ == '__main__':

@@ -44,9 +44,16 @@ Chain constructors accept `order=None`, `random_state=None`,
 `random_order=True`; it is mutually exclusive with an explicit permutation.
 `verbose=True` prints sklearn's `[Chain] ... (i of n) Processing order k, total=...`
 line after each link is fitted, in ordinary and CV fit. Native CV uses
-`fit(X, Y, cv=provider)` with the `ChainResponses` protocol. Its returned vector
-must contain one out-of-fold response per original sample; the final link does
-not request a CV response.
+`fit(X, Y, cv=3)`, `fit(X, Y, cv=KFold(3))`, or
+`fit(X, Y, cv=StratifiedKFold(3))`. Import the splitters from
+`moxie.model_selection`. Native CV uses the model-selection target dtypes
+Int64, Float32 and Float64. Integer CV uses unshuffled KFold, with stratification
+for a classifier component and binary or multiclass targets. A shuffled native
+splitter requires an integer `random_state`. CV is a fit argument, so repeat
+fits specify it again. Custom split and response policies use
+`fit(X, Y, cv=provider)` with the `ChainResponses` protocol. The provider returns
+one out-of-fold response per original sample. Every link fits on the full
+data, and only links preceding the final one request CV responses.
 
 Regression chains always use `predict` responses. The native regression
 parameter record also contains `chain_method` for compatibility with the shared

@@ -111,15 +111,32 @@ var selector = SelectKBest(
 selector.fit(X, y.copy())
 ```
 
-For Int64 use `BuiltinScorer[DType.float32, DType.int64]("f_classif")`.
-The optional `target_type` parameter defaults to `NDArray[target_dt]`; its only
-other supported value is `StringTarget`. `List[Label]` targets, which `moxie.svm`
-classifiers such as `LinearSVC` use, are not accepted. A `Pipeline` needs one
-target type, so `Pipeline(SelectKBest(...), LinearSVC())` does not compile;
-chain the fitted steps explicitly (see
-`notebooks/feature_selection/plot_feature_selection.ipynb`). String regression scorers raise a
-clear error. As in sklearn, ANOVA groups finite fractional numeric labels,
-while chi-square requires discrete labels. Column-vector warnings are not emitted.
+For Int64 arrays use `BuiltinScorer[DType.float32, DType.int64]("f_classif")`.
+The optional `target_type` parameter defaults to `NDArray[target_dt]`. Choose
+`StringTarget` for string labels or `List[Scalar[target_dt]]` for a numeric
+list with Float32, Float64, or Int64 elements. The scorer materializes each
+numeric list as a rank-one array of the same dtype before scoring. The
+pipeline continues to pass the original target type to its final estimator.
+
+```mojo
+from moxie.feature_selection import BuiltinScorer, SelectKBest
+from moxie.model_selection import DenseSupervisedAdapter, cross_val_score
+from moxie.pipeline import Pipeline, make_pipeline
+from moxie.svm import SVC
+
+comptime Labels = List[Float64]
+comptime Scorer = BuiltinScorer[target_type=Labels]
+comptime Model = Pipeline[SelectKBest[Scorer], SVC[]]
+comptime Adapter = DenseSupervisedAdapter[Model, Labels]
+
+# X is a Float64 feature matrix and y is a List[Float64].
+var pipe = make_pipeline(SelectKBest(Scorer(), k=1), SVC())
+var scores = cross_val_score[Adapter](pipe, X, y, Adapter())
+```
+
+String regression scorers raise a clear error. As in sklearn, ANOVA groups finite
+fractional numeric labels, while chi-square requires discrete labels.
+Column-vector warnings are not emitted.
 
 `pixi run parity` includes `tests/feature_selection/parity_labels.py`: pinned sklearn scorer and
 selection-policy bodies check binary/multiclass labels, ordering, column and

@@ -20,8 +20,14 @@ example. `pixi run test` runs native contracts and isolated consumer probes;
 
 `KNNImputer[dtype=DType.float64]` accepts nonempty rank-two NuMojo NDArrays of
 its selected dtype, Float32 or Float64, including strided views. Outputs have
-the same dtype and row order. Integer/categorical arrays, cross-dtype calls,
-sparse arrays and Python dataframe integration are not supported by this API.
+the same dtype and row order. `KNNImputer[DType.float64]` also accepts integer
+NDArrays through the concrete `fit`, `transform` and `fit_transform` methods.
+They promote values to Float64 before masking, as scikit-learn's
+`FLOAT_DTYPES` validation does. Use a Float64 marker such as
+`MissingValue[DType.float64](-1)`. The associated transformer input type and
+transformed output type are both Float64, so generic composition takes Float64
+arrays. Categorical arrays, other cross-dtype calls, sparse arrays and Python
+dataframe integration are outside this API's scope.
 Infinite input values are rejected. A finite missing marker also rejects NaN
 input values, matching scikit-learn validation.
 

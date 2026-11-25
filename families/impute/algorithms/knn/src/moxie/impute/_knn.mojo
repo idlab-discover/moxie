@@ -4,7 +4,7 @@ from std.math import isnan, isfinite
 from moxie._feature_metadata import FeatureNamesOut
 from moxie.impute._base import Imputer
 from moxie.impute._indicator import MissingIndicator
-from moxie.impute._plumbing import MissingValue, FeatureLayout, missing_mask, select_features, append_indicator
+from moxie.impute._plumbing import MissingValue, FeatureLayout, missing_mask, select_features, append_indicator, validate_matrix
 from moxie.neighbors._contracts import DenseMetric
 from moxie.neighbors._distance import Metric
 from moxie.neighbors._query_engine import BruteForce, NeighborWeights, BuiltinWeights
@@ -249,6 +249,41 @@ struct KNNImputer[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Me
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
         _ = self.fit(X, y)
         return self.transform(X)
+
+    @staticmethod
+    def _promote_integer_input[int_dtype: DType](
+        X: nm.NDArray[int_dtype],
+    ) raises -> Self.Input:
+        comptime assert int_dtype.is_integral(), "KNNImputer promotes only integer input"
+        comptime assert Self.dtype == DType.float64, "integer input promotes to KNNImputer[DType.float64]"
+        validate_matrix(X)
+        # NuMojo astype traverses physical storage. Materialize strided views
+        # in logical row order before casting.
+        if X.is_c_contiguous():
+            return X.astype[Self.dtype]()
+        return X.contiguous().astype[Self.dtype]()
+
+    def fit[
+        int_dtype: DType,
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: nm.NDArray[int_dtype],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
+        self._fit(Self._promote_integer_input(X), y)
+        return self
+
+    def transform[int_dtype: DType](
+        self, X: nm.NDArray[int_dtype],
+    ) raises -> Self.Transformed:
+        return self.transform(Self._promote_integer_input(X))
+
+    def fit_transform[int_dtype: DType](
+        mut self, X: nm.NDArray[int_dtype], y: Optional[Self.Target] = None,
+    ) raises -> Self.Transformed:
+        return self.fit_transform(Self._promote_integer_input(X), y)
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         self._layout.state.check_features(self.n_features_in_)

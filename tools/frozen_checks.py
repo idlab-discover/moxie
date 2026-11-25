@@ -31,9 +31,11 @@ def test(run, executable):
         ('proba', "invalid call to 'predict_proba': violated constraint"),
         ('transform', "invalid call to 'transform': violated constraint"),
         ('partial_fit', "no matching method in call to 'partial_fit'"),
-        ('step_bounds', "no matching method in call to 'step'"),
+        ('step_bounds', "pipeline step index out of range"),
         ('step_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
         ('named_step_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
+        ('slice_stride', "pipeline slicing only supports a step of 1"),
+        ('slice_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
     ]:
         result = subprocess.run(
             ['mojo', 'build', '-I', str(DEPS), '-I', str(TESTS), '-I', str(EXAMPLES),

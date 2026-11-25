@@ -36,6 +36,22 @@ neighbors family. Consume current sources under the
 Run `pixi install --locked`, `pixi run build`, `pixi run test`, and
 `pixi run parity`. See tests for the reproducible SciPy and sklearn comparisons.
 
+## Scalar Float64 exp and log
+
+Run `pixi run libm-accuracy` here to compile the live Numax implementation and
+compare its scalar CPU results with Python `decimal` at 100-digit precision,
+rounded to binary64. Input and output fixtures preserve the binary64 bit
+patterns, including signed zeros and subnormals. The one-ULP bound applies to
+the deterministic test cases, which cover representable neighbors of range
+reduction boundaries, values near one for `log`, random inputs and extreme
+magnitudes.
+
+The check also requires `exp(±0) = 1`, `exp(-inf) = +0`,
+`exp(+inf) = +inf`, `log(±0) = -inf`, `log(1) = +0`, and
+`log(+inf) = +inf`. NaN inputs and negative arguments to `log` produce
+NaN. The test checks underflow to zero and overflow to infinity at the
+sampled boundaries. This is CPU evidence for the scalar Float64 overloads.
+
 ## Accuracy and references
 
 The parity suite covers shapes through 1e8, subnormal inputs, branch transitions,

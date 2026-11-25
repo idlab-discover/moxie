@@ -173,6 +173,7 @@ for the prefix and `frozen.step[1]()` for the final step. Negative indices
 `-2` and `-1` select the same steps from the end. Mojo resolves the index at
 compile time because the two steps can have different types. Invalid indices
 and calls on wrappers without the pipeline step capability fail compilation.
+`len(frozen)` counts the two immediate steps of a wrapped sequential pipeline.
 
 The result is an immutable borrow of the actual child, including its learned
 state. Access also works before fitting, and the child still applies its own
@@ -187,6 +188,27 @@ Float64 scaler. This returns the same immutable borrow as positional access
 and works when both children have the same type. A missing name raises a
 `KeyError`. A known name with a mismatched type raises a `TypeError`.
 Lookup itself works before fit, just like positional access.
+
+### Slicing a frozen pipeline
+
+Use `frozen.slice[stop=1]()` for the prefix, `frozen.slice[-1]()` for
+the final step, or `frozen.slice[]()` for the whole pipeline. The half-open
+bounds use Python's negative indexing and clipping rules. The bounds and
+optional stride are compile-time parameters. Strides other than 1 fail at
+compile time.
+
+`FrozenPipelineSlice` shares ownership of the wrapped pipeline. It supports `len`,
+slice-relative `step[index]()`, and `named_step[Step](name)` with the original
+names. A slice shares the fitted children with its source, including through
+clones and nested frozen wrappers. A slice remains usable after the source
+wrapper goes out of scope or is assigned a different estimator. Slice access
+is read-only in Mojo. sklearn returns a mutable Pipeline that shares its children.
+
+Nonempty slices expose `transform`, `predict`, and `predict_proba` when the
+selected estimator supports the operation. Use `slice.estimator()` to borrow
+that estimator for other read-only methods. A final-step slice takes the
+final step's input, such as the transformed data from the prefix slice.
+An empty slice has length zero and reports itself fitted, like sklearn.
 
 ### Access to column transformers
 
@@ -211,7 +233,7 @@ name or mismatched type raises `KeyError`. Use
   other wrapper values unchanged.
 - Learned attributes and custom read-only methods use `frozen.estimator()`;
   arbitrary attribute forwarding and inference overloads outside the shared
-  traits are not synthesized. Pipeline slices remain open.
+  traits are not synthesized.
 - Fit, partial fit, and parameter changes return a mutable borrow of this wrapper.
   Nested parameter rejection occurs at compile time rather than as a Python
   `ValueError`.

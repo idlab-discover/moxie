@@ -12,7 +12,10 @@
   `shrinkage` or `covariance_estimator`); `priors`; `store_covariance`; `tol` rank check;
   all prediction/decision/score methods.
 - Input: dense `numojo.NDArray[DType.float32 | DType.float64]` of shape (n, p), any strides.
-  Labels: any `ClassLabel` type (tested with `Int` and `String`).
+  Labels: any `ClassLabel` type (tested with `Int`, `String`, and `Int32`).
+- Native model archives support built-in covariance and `Int` or `String`
+  labels. Supply a codec to archive other native label types.
+  See [native model persistence](api.md#native-model-persistence).
 - Tested in parity (644 cases, pinned sklearn source): toy data from the sklearn test
   suite, 1-D data, 2/3/4 classes, string labels, Gaussian blobs (seeds 0-2), features
   scaled by 1..1e4, wide data (p > n), duplicated collinear features, saturated binary

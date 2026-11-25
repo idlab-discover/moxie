@@ -1,14 +1,136 @@
 # Adapted from sklearn/linear_model/_coordinate_descent.py, scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
 """Dense elastic-net estimators using the family coordinate engine."""
-from numojo import NDArray, Shape, zeros
-from std.math import isfinite
+from numojo import NDArray, Shape, full, logspace, zeros
+from std.builtin.sort import sort
+from std.math import isfinite, log10
 from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
 from moxie.linear_model._base import LinearRegressor
 from moxie.linear_model._contracts import validate_weights
-from moxie.linear_model._linear_base import preprocess_data, set_intercept, canonical_coef, public_coef, linear_decision, public_prediction, check_predict_input, r2_score, check_finite
-from moxie.linear_model._cd_fast import coordinate_descent
+from moxie.linear_model._linear_base import preprocess_data, set_intercept, canonical_coef, public_coef, linear_decision, public_prediction, check_predict_input, r2_score, check_finite, compact_vector
+from moxie.linear_model._cd_fast import _CoordinateDesign, coordinate_descent
+
+
+@fieldwise_init
+struct CoordinatePathResult[dtype: DType](Movable):
+    """Single-target regularization path with coefficients in columns."""
+
+    var alphas: NDArray[DType.float64]
+    var coefs: NDArray[Self.dtype]
+    var dual_gaps: NDArray[DType.float64]
+    var n_iters: Optional[List[Int]]
+
+
+def _path_alphas(
+    alphas: Optional[NDArray[DType.float64]],
+    n_alphas: Int,
+    alpha_max: Float64,
+    eps: Float64,
+) raises -> NDArray[DType.float64]:
+    if alphas:
+        ref supplied = alphas.value()
+        if supplied.ndim != 1 or supplied.shape[0] == 0:
+            raise Error("ValueError: alphas must be a nonempty vector")
+        var ordered = List[Float64](capacity=supplied.shape[0])
+        for i in range(supplied.shape[0]):
+            var alpha = supplied.unsafe_get(i * Int(supplied.strides[0]))
+            if not isfinite(alpha) or alpha < 0:
+                raise Error("ValueError: alphas must be finite and nonnegative")
+            ordered.append(alpha)
+        sort(Span(ordered))
+        var result = zeros[DType.float64](Shape(len(ordered)))
+        for i in range(len(ordered)):
+            result.unsafe_set(i, ordered[len(ordered) - 1 - i])
+        return result^
+
+    if not isfinite(alpha_max):
+        raise Error("ValueError: automatic alpha grid exceeds Float64 range")
+    comptime resolution = Float64(1e-15)
+    if alpha_max <= resolution or n_alphas == 1:
+        return full[DType.float64](Shape(n_alphas), max(alpha_max, resolution))
+    var endpoint = alpha_max * eps
+    if not isfinite(endpoint) or endpoint == 0:
+        raise Error("ValueError: automatic alpha endpoint exceeds Float64 range")
+    var grid = logspace[DType.float64](log10(alpha_max), log10(endpoint), n_alphas)
+    grid.unsafe_set(0, alpha_max)
+    grid.unsafe_set(n_alphas - 1, endpoint)
+    return grid^
+
+
+def enet_path[dtype: DType](
+    X: NDArray[dtype],
+    y: NDArray[dtype],
+    *,
+    l1_ratio: Float64 = 0.5,
+    eps: Float64 = 1e-3,
+    n_alphas: Int = 100,
+    alphas: Optional[NDArray[DType.float64]] = None,
+    coef_init: Optional[NDArray[dtype]] = None,
+    return_n_iter: Bool = False,
+    positive: Bool = False,
+    max_iter: Int = 1000,
+    tol: Float64 = 1e-4,
+    early_stopping: Bool = True,
+) raises -> CoordinatePathResult[dtype]:
+    """Fit a warm-started cyclic elastic-net path on a matrix and vector target."""
+    if not isfinite(l1_ratio) or l1_ratio < 0 or l1_ratio > 1:
+        raise Error("ValueError: l1_ratio must be in [0, 1]")
+    if not isfinite(eps) or eps <= 0 or n_alphas < 1:
+        raise Error("ValueError: eps and n_alphas must be positive")
+    if not alphas and l1_ratio == 0:
+        raise Error("ValueError: automatic alpha grids require l1_ratio > 0")
+    if max_iter < 1 or not isfinite(tol) or tol < 0:
+        raise Error("ValueError: max_iter must be positive and tol finite and nonnegative")
+
+    var design = _CoordinateDesign[dtype](X, y)
+    var n = Float64(X.shape[0])
+    var p = X.shape[1]
+    var alpha_max = Float64(0)
+    if not alphas:
+        alpha_max = design.max_correlation(positive) / (n * l1_ratio)
+    var grid = _path_alphas(alphas, n_alphas, alpha_max, eps)
+    var count = grid.shape[0]
+    var coefs = zeros[dtype](Shape(p, count))
+    var gaps = zeros[DType.float64](Shape(count))
+    var iterations = List[Int]()
+    var start = compact_vector(coef_init.value()) if coef_init else zeros[dtype](Shape(p))
+    for i in range(count):
+        var alpha = grid.unsafe_get(i)
+        var solved = design.solve(
+            start, alpha * l1_ratio * n, alpha * (1 - l1_ratio) * n,
+            max_iter, tol, positive, early_stopping=early_stopping,
+        )
+        for j in range(p):
+            coefs.unsafe_set(j * count + i, solved.coef.unsafe_get(j))
+        gaps.unsafe_set(i, solved.dual_gap / n)
+        if return_n_iter:
+            iterations.append(solved.iterations)
+        swap(start, solved.coef)
+    var counts = Optional[List[Int]](iterations^) if return_n_iter else None
+    return CoordinatePathResult[dtype](grid^, coefs^, gaps^, counts^)
+
+
+def lasso_path[dtype: DType](
+    X: NDArray[dtype],
+    y: NDArray[dtype],
+    *,
+    eps: Float64 = 1e-3,
+    n_alphas: Int = 100,
+    alphas: Optional[NDArray[DType.float64]] = None,
+    coef_init: Optional[NDArray[dtype]] = None,
+    return_n_iter: Bool = False,
+    positive: Bool = False,
+    max_iter: Int = 1000,
+    tol: Float64 = 1e-4,
+    early_stopping: Bool = True,
+) raises -> CoordinatePathResult[dtype]:
+    """Fit a warm-started cyclic Lasso path on a matrix and vector target."""
+    return enet_path(
+        X, y, l1_ratio=1, eps=eps, n_alphas=n_alphas, alphas=alphas,
+        coef_init=coef_init, return_n_iter=return_n_iter, positive=positive,
+        max_iter=max_iter, tol=tol, early_stopping=early_stopping,
+    )
 
 
 @fieldwise_init
@@ -98,6 +220,8 @@ struct ElasticNet[dtype: DType = DType.float64](Copyable, LinearRegressor, Weigh
     comptime Prediction = NDArray[Self.dtype]
     comptime SampleWeight = NDArray[Self.dtype]
     comptime Params = ElasticNetParams
+    comptime path = enet_path[Self.dtype]
+
     var alpha: Float64
     var l1_ratio: Float64
     var fit_intercept: Bool
@@ -239,6 +363,8 @@ struct Lasso[dtype: DType = DType.float64](Copyable, LinearRegressor, WeightedSu
     comptime Prediction = NDArray[Self.dtype]
     comptime SampleWeight = NDArray[Self.dtype]
     comptime Params = LassoParams
+    comptime path = lasso_path[Self.dtype]
+
     var alpha: Float64
     var fit_intercept: Bool
     var precompute: Bool

@@ -120,8 +120,25 @@ def test_pipeline_and_unsupported_configuration() raises:
     for i in range(y.size):
         assert_equal(prediction.unsafe_get(i), expected.unsafe_get(i))
 
-    with assert_raises(contains="warm starts"):
+    _ = standalone.fit(scaler.transform(X), y)
+    assert_equal(standalone.n_iter_, 3)
+    var params = standalone.get_params()
+    params.max_iter = 2
+    _ = standalone.set_params(params)
+    with assert_raises(contains="max_iter"):
         _ = standalone.fit(X, y)
+    params.max_iter = 5
+    _ = standalone.set_params(params)
+    with assert_raises(contains="fitted feature count"):
+        _ = standalone.fit(full[DType.float64](Shape(8, 2), 0.0), y)
+    assert_equal(standalone.n_iter_, 3)
+    assert_equal(standalone.predict(scaler.transform(X)).unsafe_get(0), expected.unsafe_get(0))
+    _ = standalone.fit(scaler.transform(X), y)
+    assert_equal(standalone.n_iter_, 5)
+    params.warm_start = False
+    params.max_iter = 1
+    _ = standalone.set_params(params).fit(X, y)
+    assert_equal(standalone.n_iter_, 1)
     var scorer = HistGradientBoostingRegressor(early_stopping=True, scoring=String("r2"))
     with assert_raises(contains="scoring=loss"):
         _ = scorer.fit(X, y)

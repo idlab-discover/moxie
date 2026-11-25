@@ -6,17 +6,17 @@ from std.math import ceil
 
 from numojo import NDArray, Shape, full
 
-from moxie._random import RandomState, check_random_state
+from moxie._random import RandomState
 from moxie.base import WeightedSupervisedEstimator
 from moxie.tree._classes import DecisionTreeRegressor
 
 from .._base import EnsembleRegressor, StagedPredictor
 from .binning import _BinMapper
 from .common import (
-    _EarlyStopping, _Interactions, _ValidationSize, _Values, _check_settings,
+    _EarlyStopping, _FitRandomState, _Interactions, _ValidationSize, _Values,
+    _check_settings, _check_warm_start, _resume_history,
     _history, _interaction_groups, _should_stop, _take_rows, _uses_early_stopping,
 )
-from .feature_sampling import _FeatureSampler
 from .grower import grow_tree
 from .losses import _RegressionLoss
 from .predictor import _RawTree, make_raw_tree
@@ -74,6 +74,7 @@ struct _FittedRegressor(Copyable, Movable):
     var baseline: Float64
     var trees: List[_RawTree]
     var n_features: Int
+    var random: _FitRandomState
 
 
 struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
@@ -188,8 +189,6 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
             raise Error("ValueError: quantile must be in [0, 1]")
         var loss = _RegressionLoss(self._params.loss, self._params.quantile)
         _validate_target(loss, y, X.shape[0], sample_weight)
-        if self._params.warm_start and self._model:
-            raise Error("NotImplementedError: histogram regression warm starts are pending")
         var early = _uses_early_stopping(params.early_stopping, X.shape[0])
         if early and self._params.scoring.or_else("") != "loss":
             raise Error("NotImplementedError: histogram regression early stopping supports scoring=loss")
@@ -207,11 +206,14 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
                 X_val.take(), y_val.take(), sample_weight_val^
             )
 
-        var seed: Int
-        var feature_seed: UInt32
-        with check_random_state(self._params.random_state) as rng:
-            seed = rng[].randint(4294967295)
-            feature_seed = UInt32(rng[].randint(4294967295))
+        var resume = params.warm_start and Bool(self._model)
+        var random: _FitRandomState
+        if resume:
+            ref prior = self._model.value()
+            _check_warm_start(params.max_iter, len(prior.trees), X.shape[1], prior.n_features)
+            random = prior.random.copy()
+        else:
+            random = _FitRandomState.start(params.random_state)
 
         if early and self._params.validation_fraction and not validation:
             ref size = self._params.validation_fraction.value()
@@ -219,7 +221,7 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
             var count = size[Int] if size.isa[Int]() else Int(ceil(Float64(n) * size[Float64]))
             if count >= n:
                 raise Error("ValueError: validation split leaves no training samples")
-            var split_rng = RandomState(seed)
+            var split_rng = RandomState(random.split_seed)
             var indices = split_rng.permutation(n)
             var train_weights: Optional[_Values] = None
             var validation_weights: Optional[_Values] = None
@@ -232,54 +234,62 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
             )
             self._fit(
                 _take_rows(X, indices, count, n), _take_rows(y, indices, count, n),
-                train_weights, validation, loss^, early, seed, feature_seed,
+                train_weights, validation, loss^, early, random^, resume,
             )
         else:
-            self._fit(X, y, sample_weight, validation, loss^, early, seed, feature_seed)
+            self._fit(X, y, sample_weight, validation, loss^, early, random^, resume)
         return self
 
     def _fit(
         mut self, X: Self.Input, y: Self.Target, weights: Optional[_Values],
         validation: Optional[_Validation[Self.feature_dtype]], var loss: _RegressionLoss,
-        early: Bool, seed: Int, feature_seed: UInt32,
+        early: Bool, var random: _FitRandomState, resume: Bool,
     ) raises:
         ref params = self._params
-        var baseline = loss.intercept(y, weights)
+        var baseline: Float64
+        var trees = List[_RawTree]()
+        var train_scores = List[Float64]()
+        var validation_scores = List[Float64]()
+        if resume:
+            ref prior = self._model.value()
+            baseline = prior.baseline
+            trees = prior.trees.copy()
+            train_scores = _resume_history(self.train_score_)
+            validation_scores = _resume_history(self.validation_score_)
+        else:
+            baseline = loss.intercept(y, weights)
         var n_features = X.shape[1]
         var monotonic = params.monotonic_cst.value().copy() if params.monotonic_cst else List[Int](length=n_features, fill=0)
         var interactions = _interaction_groups(params.interaction_cst, n_features)
         var n_bins = params.max_bins + 1
-        var mapper = _BinMapper(n_bins=n_bins, random_state=seed)
+        var mapper = _BinMapper(n_bins=n_bins, random_state=random.split_seed)
         _ = mapper.fit(X, sample_weight=weights)
         var binned = mapper.transform(X)
-        var raw = full[DType.float64](Shape(y.size), baseline)
+        var raw = Self._raw_predictions(X, baseline, trees)
         var raw_val = _Values(Shape(0))
         var binned_val: Optional[NDArray[DType.uint8]] = None
-        var train_scores = List[Float64]()
-        var validation_scores = List[Float64]()
         var score_validation = early and Bool(validation)
-        if early:
+        if early and not resume:
             train_scores.append(-loss.mean_loss(y, raw, weights))
-            if score_validation:
-                ref val_data = validation.value()
-                binned_val = mapper.transform(val_data.X)
-                raw_val = full[DType.float64](Shape(val_data.y.size), baseline)
+        if score_validation:
+            ref val_data = validation.value()
+            binned_val = mapper.transform(val_data.X)
+            raw_val = Self._raw_predictions(val_data.X, baseline, trees)
+            if not resume:
                 validation_scores.append(-loss.mean_loss(val_data.y, raw_val, val_data.weights))
 
-        var feature_sampler = _FeatureSampler(feature_seed)
         var gradients = List[Float32]()
         var hessians = List[Float32]()
-        var trees = List[_RawTree]()
         var options = _SplitOptions(
             min_samples_leaf=params.min_samples_leaf, l2_regularization=params.l2_regularization,
         )
         if params.verbose > 0:
             print("Fitting gradient boosted rounds:")
-        for stage in range(params.max_iter):
+        for stage in range(len(trees), params.max_iter):
             loss.gradient_hessian(y, raw, weights, gradients, hessians)
             var grown = grow_tree(
                 binned, n_bins, Span(gradients), Span(hessians), mapper.n_bins_non_missing_,
-                mapper.is_categorical_, monotonic, feature_sampler=feature_sampler,
+                mapper.is_categorical_, monotonic, feature_sampler=random.feature_sampler,
                 feature_fraction_per_split=params.max_features, interaction_groups=interactions,
                 max_leaf_nodes=params.max_leaf_nodes, max_depth=params.max_depth, options=options,
                 shrinkage=params.learning_rate,
@@ -313,7 +323,7 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         self.do_early_stopping_ = early
         self.train_score_ = train_history^
         self.validation_score_ = validation_history^
-        self._model = _FittedRegressor(loss^, baseline, trees^, n_features)
+        self._model = _FittedRegressor(loss^, baseline, trees^, n_features, random^)
 
     def _check_predict(self, X: Self.Input) raises:
         if not self._model:
@@ -329,13 +339,17 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
             result.unsafe_set(i, loss.inverse_link(raw.unsafe_get(i)))
         return result^
 
+    @staticmethod
+    def _raw_predictions(X: Self.Input, baseline: Float64, trees: List[_RawTree]) raises -> _Values:
+        var raw = full[DType.float64](Shape(X.shape[0]), baseline)
+        for tree in trees:
+            _add_prediction(raw, tree.predict(X))
+        return raw^
+
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check_predict(X)
         ref model = self._model.value()
-        var raw = full[DType.float64](Shape(X.shape[0]), model.baseline)
-        for tree in model.trees:
-            _add_prediction(raw, tree.predict(X))
-        return Self._linked(model.loss, raw)
+        return Self._linked(model.loss, Self._raw_predictions(X, model.baseline, model.trees))
 
     def staged_predict(self, X: Self.Input) raises -> Self.Stages:
         self._check_predict(X)

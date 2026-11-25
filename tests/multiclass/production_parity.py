@@ -10,6 +10,8 @@ wraps real Moxie estimators and their sklearn counterparts:
   `moxie.discriminant_analysis.LinearDiscriminantAnalysis`, and
   `moxie.naive_bayes.GaussianNB` through `BinaryAdapter` for the native List
   targets. GaussianNB also exercises incremental OvR and OvO updates.
+- `moxie.dummy.DummyClassifier` with integer-valued native labels through
+  `BinaryAdapter`.
 - `moxie.neighbors.KNeighborsClassifier` with Int64 array component targets
   and one native Float64 probability matrix per output.
 
@@ -29,6 +31,7 @@ Tolerances:
 - tree probabilities are leaf class frequencies (exact ratios of small
   integers) and must agree within 1e-15; OvO tree decisions combine them with
   votes through one division, allowed 1e-14 relative;
+- Dummy prior probabilities use the same tolerance for small count ratios.
 - LinearSVC uses the primal solver with tol=1e-9. Allow 1e-7 relative / 1e-8
   absolute for decision values because of reduction order and stopping;
 - SVC uses the SVM family's public parity tolerance (3e-5 relative / 3e-6
@@ -58,6 +61,7 @@ import numpy as np
 import sklearn
 from sklearn import discriminant_analysis, naive_bayes
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import RidgeClassifier
 from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier, OutputCodeClassifier, _predict_binary
 from sklearn.naive_bayes import GaussianNB
@@ -103,6 +107,8 @@ COMPONENTS = {
             "BinaryAdapter(LinearDiscriminantAnalysis[{dtype}]())"),
     "gaussian-nb": (GaussianNB,
                     "BinaryAdapter(GaussianNB[IntListDomain, {dtype}]())"),
+    "dummy": (DummyClassifier,
+              "BinaryAdapter(DummyClassifier[dtype={dtype}]())"),
     "knn": (lambda: KNeighborsClassifier(n_neighbors=3),
             "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3)"),
     "knn-distance": (lambda: KNeighborsClassifier(n_neighbors=3, weights="distance"),
@@ -126,6 +132,7 @@ COMPONENT_TYPE = {
     "svc-precomputed": "BinaryAdapter[SVC[]]",
     "lda": "BinaryAdapter[LinearDiscriminantAnalysis[{dtype}]]",
     "gaussian-nb": "BinaryAdapter[GaussianNB[IntListDomain, {dtype}]]",
+    "dummy": "BinaryAdapter[DummyClassifier[dtype={dtype}]]",
     "knn": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
     "knn-distance": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
     "knn-precomputed": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
@@ -138,6 +145,7 @@ OUTPUT_CODE_RESPONSE = {
     "tree": ("predict_proba", "response[0][Item(i, 1)]"),
     "tree-depth2": ("predict_proba", "response[0][Item(i, 1)]"),
     "gaussian-nb": ("predict_proba", "response[Item(i, 1)]"),
+    "dummy": ("predict_proba", "response[Item(i, 1)]"),
     "knn": ("predict_proba", "response[0][Item(i, 1)]"),
     "knn-distance": ("predict_proba", "response[0][Item(i, 1)]"),
     "svc": ("decision_function", "response[Item(i)]"),
@@ -257,6 +265,7 @@ def native_source(all_cases, expected):
     header += '''
 from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OutputCodeClassifier, StringLabels, StringTarget
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
+from moxie.dummy import DummyClassifier
 from moxie.linear_model import RidgeClassifier
 from moxie.naive_bayes import GaussianNB, IntListDomain
 from moxie.neighbors import KNeighborsClassifier
@@ -363,7 +372,7 @@ def tolerance(c, key):
         return TOLERANCE["lda32" if c["dtype"] == "float32" else "lda64"]
     if c["component"] == "gaussian-nb":
         return TOLERANCE["gaussian-nb32" if c["dtype"] == "float32" else "gaussian-nb64"]
-    if c["component"] in ("knn", "knn-precomputed"):
+    if c["component"] in ("dummy", "knn", "knn-precomputed"):
         return TOLERANCE["tree"]
     if c["component"] in ("knn-distance", "knn-precomputed-distance"):
         return TOLERANCE["knn-distance32" if c["dtype"] == "float32" else "knn-distance64"]
@@ -391,6 +400,7 @@ def main():
         "svc": SVC_COMPONENTS,
         "lda": ("lda",),
         "gaussian-nb": ("gaussian-nb",),
+        "dummy": ("dummy",),
         "knn": ("knn", "knn-distance"),
         "knn-precomputed": KNN_PRECOMPUTED,
     }
@@ -428,6 +438,10 @@ def main():
                 dict(c, name=c["name"] + "-incremental", incremental=True)
                 for c in batch if c["wrapper"] in ("ovr", "ovo")
             ]
+        if group == "dummy":
+            assert Path(inspect.getfile(DummyClassifier)).read_bytes() == (
+                REFERENCE / "sklearn/dummy.py"
+            ).read_bytes(), "install the pinned local scikit-learn checkout"
         ref = [reference(c) for c in batch]
         got.extend(run_native(group, batch, ref))
         all_cases.extend(batch)

@@ -140,7 +140,7 @@ def main() raises:
     var scaler = StandardScaler()
     _ = scaler.fit(X)
     var Xs = scaler.transform(X)
-    var pipe = make_pipeline(StandardScaler(), MOR(Ridge(0.5)))
+    var pipe = make_pipeline(StandardScaler(), MOR(Ridge(0.5), n_jobs=2))
     _ = pipe.fit(X, Y)
     var manual = MOR(Ridge(0.5))
     _ = manual.fit(Xs, Y)
@@ -154,7 +154,7 @@ def main() raises:
 
     # cross_val_score clones the wrapper per fold; scores equal manual fits.
     var splits = folds(30)
-    var template = MOR(Ridge(2.0))
+    var template = MOR(Ridge(2.0), n_jobs=2)
     var scores = cv_scores(template, X, Y, splits)
     assert_equal(scores.size, 3)
     for k in range(3):
@@ -170,7 +170,7 @@ def main() raises:
     # GridSearchCV tunes the nested estimator__alpha and refits the best wrapper.
     var grid = Dict[String, List[Float64]]()
     grid["estimator__alpha"] = [0.01, 10.0, 1000.0]
-    var search = GridSearchCV[Search[MOR]](MOR(Ridge()), grid, Search[MOR](), cv=folds(30))
+    var search = GridSearchCV[Search[MOR]](MOR(Ridge(), n_jobs=2), grid, Search[MOR](), cv=folds(30))
     search.fit(X, Y, None, None)
     var means = search.cv_results_().mean_test_score.copy()
     var best = 0

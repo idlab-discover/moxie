@@ -32,16 +32,40 @@ record and pass it to `set_params`. `clone(model)` recursively clones component
 configuration into an unfitted wrapper. A successful ordinary fit replaces all
 fitted components; a failed ordinary fit leaves the prior model intact.
 
-Independent estimators accept any `n_jobs` except `0` and fit serially. Their `partial_fit` exists
-only when the component has the appropriate incremental trait. A classifier's
-first incremental fit requires `classes=List[NDArray[label]]`, one complete
-class vector per output. Subsequent calls retain each fitted component.
+Independent estimators use `n_jobs` for `fit` and `partial_fit`. `None` and `1`
+use the calling thread. Positive values cap the number of MAX CPU workers,
+and negative values count back from the logical core count, with `-1` using
+all cores. The worker count stays between one and the output count. `0`
+raises. Components trained concurrently must support independent fits with
+shared, read-only inputs. Inference traverses the components serially.
+
+`partial_fit` exists only when the component has the appropriate incremental
+trait. A classifier's first incremental fit requires
+`classes=List[NDArray[label]]`, one complete class vector per output.
+A successful first incremental fit publishes all components together.
+Subsequent calls update components in place, so a failing call can leave
+some components updated. When multiple parallel tasks fail, the wrapper
+reports the error from the lowest target-column index.
 `fit(X, Y, sample_weight=weights)` requires a component with weighted-fit support.
 
 Chain constructors accept `order=None`, `random_state=None`,
 `random_order=False`, `verbose=False`, and `cv=None`. `ClassifierChain` also
-accepts a `chain_method` string, defaulting to `"predict"`. Use
-`random_order=True` to request a random permutation in the absence of an
+accepts a `chain_method` string, defaulting to `"predict"`, or a preference
+list such as `List[String](["predict_proba", "decision_function", "predict"])`.
+At fit time the chain selects the first response supported by the component's
+traits and records its name in `chain_method_`. An empty list or a list with
+no supported method raises a Mojo `Error`. Component-specific errors from the
+selected response propagate when that method is called.
+
+Classifier chain parameters store this setting as `ChainMethod`, a
+`Variant[String, List[String]]` from `moxie.multioutput`. Use the estimator's
+`Params` type or infer the record from `get_params()`. For a string setting,
+`params.chain_method[String]` reads the configured name. Both strings and
+lists can be assigned to `params.chain_method`. Cloning and parameter updates
+copy the configuration. Fit resolves it for out-of-fold responses and
+inference uses the fitted name.
+
+Use `random_order=True` to request a random permutation in the absence of an
 explicit order.
 `verbose=True` prints sklearn's `[Chain] ... (i of n) Processing order k, total=...`
 line after each link is fitted. Set `cv=3`, `cv=KFold(3)`, or

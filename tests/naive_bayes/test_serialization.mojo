@@ -6,7 +6,7 @@ from moxie._labels import StringTarget
 from moxie._naive_bayes_dense import ClassDomain, dense_from_lists
 from moxie.naive_bayes import IntListDomain, NumericDomain, StringDomain
 from moxie.naive_bayes_serialization import (
-    BernoulliNBSchema, ComplementNBSchema, GaussianNBSchema, MultinomialNBSchema,
+    BernoulliNBSchema, CategoricalNBSchema, ComplementNBSchema, GaussianNBSchema, MultinomialNBSchema,
 )
 from moxie.serialization import BinaryWriter, dumps, dtype_code, load_model, loads, save_model
 
@@ -406,6 +406,99 @@ def bernoulli_raw_state_and_validation() raises:
         _ = Schema.encode(model)
 
 
+def categorical_file_round_trip() raises:
+    comptime Schema = CategoricalNBSchema[StringDomain, DType.uint8]
+    var path = "builds/naive-bayes-categorical-model.moxie"
+    var X = array[DType.uint8]([5, 0, 0, 3], [2, 2])
+    var small = array[DType.uint8]([0, 1, 1, 0], [2, 2])
+    var grown = array[DType.uint8]([7, 2, 1, 0], [2, 2])
+    var y = StringTarget(["β", "a\0z"])
+    var model = Schema.Model(alpha=0.0, force_alpha=False, min_categories=3)
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_false(restored.__sklearn_is_fitted__())
+    assert_equal(restored.min_categories.value(), 3)
+    assert_false(Bool(restored.min_categories_values))
+    with assert_raises(contains="NotFittedError"):
+        _ = restored.predict(X)
+
+    _ = model.fit(X, y)
+    _ = restored.fit(X, y)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    _ = model.partial_fit(small, y)
+    var expected_categories: List[Int64] = [3, 3]
+    assert_equal(model.n_categories_.tolist(), expected_categories)
+    assert_equal(model.category_count_[0].shape.tolist(), [2, 6])
+    assert_equal(model.category_count_[1].shape.tolist(), [2, 4])
+    _ = model.set_params(force_alpha=True, fit_prior=False,
+                         min_categories_values=Optional[List[Int]](List[Int]([2, 4])))
+    var before = dumps(Schema.encode(model))
+    save_model[Schema](model, path)
+    restored = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(restored)), before)
+    assert_equal(restored.min_categories.value(), 3)
+    assert_equal(restored.min_categories_values.value(), [2, 4])
+    assert_equal(restored.classes_.get(0), "a\0z")
+    assert_equal(restored.classes_.get(1), "β")
+    assert_equal(restored.fit_warnings[0].message, model.fit_warnings[0].message)
+    assert_equal(restored.predict_proba(X).tolist(), model.predict_proba(X).tolist())
+    assert_false(restored.__sklearn_clone__().__sklearn_is_fitted__())
+    var weights: List[Float64] = [0.25, 2.0]
+    _ = restored.partial_fit(grown, y, sample_weight=weights.copy())
+    assert_equal(dumps(Schema.encode(model)), before)
+    _ = model.partial_fit(grown, y, sample_weight=weights^)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    assert_equal(restored.category_count_[0].shape.tolist(), [2, 8])
+    assert_equal(len(restored.fit_warnings), 0)
+
+
+def categorical_archive_validation() raises:
+    comptime Schema = CategoricalNBSchema[]
+    var model = Schema.Model()
+    _ = model.fit(dense_from_lists([[0.0, 2.0], [0.0, 0.0]]), List[Int]([2, 1]))
+    var archive = Schema.encode(model)
+    with assert_raises(contains="dtype mismatch"):
+        _ = CategoricalNBSchema[dtype=DType.float32].decode(archive)
+    with assert_raises(contains="label domain mismatch"):
+        _ = CategoricalNBSchema[NumericDomain[DType.int64]].decode(archive)
+    var bad = archive.copy()
+    bad.schema_version += 1
+    with assert_raises(contains="unsupported estimator"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    _ = bad.payloads.pop()
+    with assert_raises(contains="unexpected CategoricalNB arrays"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    bad.payloads[3].shape = [2, 4]
+    with assert_raises(contains="invalid packed CategoricalNB feature tables"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    var width_start = len(bad.manifest) - 8
+    bad.manifest[width_start] = 4
+    with assert_raises(contains="invalid CategoricalNB feature table width"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    bad.payloads[2].data[0] = 2
+    with assert_raises(contains="invalid CategoricalNB category count"):
+        _ = Schema.decode(bad)
+    model.category_count_[1][Item(0, 0)] = -1.0
+    with assert_raises(contains="invalid CategoricalNB feature statistics"):
+        _ = Schema.encode(model)
+
+
+def categorical_wide_archive() raises:
+    comptime Schema = CategoricalNBSchema[NumericDomain[DType.int64]]
+    var row = List[Float64](length=512, fill=0.0)
+    var X = dense_from_lists([row.copy(), row^])
+    var model = Schema.Model()
+    _ = model.fit(X, array[DType.int64]([2, 1], [2]))
+    var before = dumps(Schema.encode(model))
+    var restored = Schema.decode(loads(before))
+    assert_equal(dumps(Schema.encode(restored)), before)
+    assert_equal(len(restored.category_count_), 512)
+
+
 def main() raises:
     fitted_round_trip[IntListDomain, DType.float64](List[Int]([2, -1, 2, -1]))
     fitted_round_trip[StringDomain, DType.float32](StringTarget(["β", "a\0z", "β", "a\0z"]))
@@ -451,3 +544,7 @@ def main() raises:
     bernoulli_file_round_trip()
     bernoulli_raw_state_and_validation()
     print("PASS: BernoulliNB serialization contracts")
+    categorical_file_round_trip()
+    categorical_archive_validation()
+    categorical_wide_archive()
+    print("PASS: CategoricalNB serialization contracts")

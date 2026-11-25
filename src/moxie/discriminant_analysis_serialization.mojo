@@ -81,24 +81,96 @@ def _read_configuration(
         priors = values^
 
 
-def _write_classes[L: ClassLabel](mut writer: BinaryWriter, classes: List[L]):
-    writer.uint(UInt64(len(classes)))
-    for label in classes:
-        comptime if L == Int:
+trait DiscriminantLabelCodec:
+    """Opt-in wire encoding for a native discriminant analysis label type."""
+
+    comptime Label: ClassLabel
+    comptime TypeId: String
+
+    @staticmethod
+    def encode(mut writer: BinaryWriter, label: Self.Label) raises: ...
+
+    @staticmethod
+    def decode(mut reader: BinaryReader[_]) raises -> Self.Label: ...
+
+
+struct _LegacyLabelCodec[L: ClassLabel](DiscriminantLabelCodec):
+    comptime Label = Self.L
+    comptime TypeId = ""
+
+    @staticmethod
+    def encode(mut writer: BinaryWriter, label: Self.L):
+        comptime if Self.L == Int:
             writer.integer(rebind[Int](label))
-        else:
+        elif Self.L == String:
             writer.string(rebind[String](label))
-
-
-def _read_classes[L: ClassLabel](mut reader: BinaryReader[_], limit: Int) raises -> List[L]:
-    var count = reader.count(min(limit, reader.remaining() // 8))
-    var classes = List[L](capacity=count)
-    for _ in range(count):
-        comptime if L == Int:
-            classes.append(rebind[L](reader.integer()).copy())
         else:
-            classes.append(rebind[L](reader.string(reader.remaining())).copy())
-    return classes^
+            comptime assert False, "Provide a DiscriminantLabelCodec for this label type"
+
+    @staticmethod
+    def decode(mut reader: BinaryReader[_]) raises -> Self.L:
+        comptime if Self.L == Int:
+            return rebind[Self.L](reader.integer()).copy()
+        elif Self.L == String:
+            return rebind[Self.L](reader.string(reader.remaining())).copy()
+        else:
+            comptime assert False, "Provide a DiscriminantLabelCodec for this label type"
+
+
+struct _LabelArchive[L: ClassLabel, Codec: DiscriminantLabelCodec]:
+    comptime UsesCustomCodec = Self.Codec != _LegacyLabelCodec[Self.L]
+
+    @staticmethod
+    def _check_codec():
+        comptime assert Self.L == Self.Codec.Label, "DiscriminantLabelCodec must match the model label type"
+        comptime if Self.UsesCustomCodec:
+            comptime assert Self.Codec.TypeId != "", "DiscriminantLabelCodec requires a nonempty TypeId"
+
+    @staticmethod
+    def write_type(mut writer: BinaryWriter):
+        Self._check_codec()
+        comptime if Self.UsesCustomCodec:
+            writer.string(Self.Codec.TypeId)
+        else:
+            writer.boolean(Self.L == String)
+
+    @staticmethod
+    def read_type(mut reader: BinaryReader[_], has_custom_codec: Bool) raises:
+        Self._check_codec()
+        if has_custom_codec != Self.UsesCustomCodec:
+            raise Error("ModelSchemaError: discriminant label codec mismatch")
+        comptime if Self.UsesCustomCodec:
+            if reader.string(reader.remaining()) != Self.Codec.TypeId:
+                raise Error("ModelSchemaError: discriminant label codec mismatch")
+        else:
+            if reader.boolean() != (Self.L == String):
+                raise Error("ModelSchemaError: discriminant label type mismatch")
+
+    @staticmethod
+    def write_classes(mut writer: BinaryWriter, classes: List[Self.L]) raises:
+        writer.uint(UInt64(len(classes)))
+        for label in classes:
+            comptime if Self.UsesCustomCodec:
+                var record = BinaryWriter()
+                Self.Codec.encode(record, rebind[Self.Codec.Label](label))
+                var payload = record^.finish()
+                writer.bytes(Span(payload))
+            else:
+                _LegacyLabelCodec[Self.L].encode(writer, label)
+
+    @staticmethod
+    def read_classes(mut reader: BinaryReader[_], limit: Int) raises -> List[Self.L]:
+        var count = reader.count(min(limit, reader.remaining() // 8))
+        var classes = List[Self.L](capacity=count)
+        for _ in range(count):
+            comptime if Self.UsesCustomCodec:
+                var record = BinaryReader(reader.bytes(reader.remaining()))
+                var label = Self.Codec.decode(record)
+                record.finish()
+                classes.append(rebind[Self.L](label).copy())
+            else:
+                classes.append(_LegacyLabelCodec[Self.L].decode(reader))
+        return classes^
 
 
 def _validate_class_order[L: ClassLabel](classes: List[L]) raises:
@@ -208,25 +280,31 @@ def _validate_lda[dtype: DType, L: ClassLabel](
 
 
 struct LinearDiscriminantAnalysisSchema[
-    dtype: DType = DType.float64, L: ClassLabel = Int
+    dtype: DType = DType.float64,
+    L: ClassLabel = Int,
+    Codec: DiscriminantLabelCodec = _LegacyLabelCodec[L],
 ](ModelSchema):
-    """Dense LDA state with Int or String labels and built-in covariance."""
+    """Dense LDA state with native labels and built-in covariance."""
 
     comptime Model = LinearDiscriminantAnalysis[Self.dtype, Self.L]
     comptime TypeId = "moxie.discriminant_analysis.LinearDiscriminantAnalysis"
-    comptime StateVersion = 3
+    comptime _NamedStateVersion = 3
+    comptime _Labels = _LabelArchive[Self.L, Self.Codec]
+    comptime _LabelStateVersion = 4
+    comptime StateVersion = Self._LabelStateVersion if Self._Labels.UsesCustomCodec else Self._NamedStateVersion
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
-        comptime assert Self.L == Int or Self.L == String, "LDA schema requires Int or String labels"
         _validate_lda(model)
         var has_warning = len(model.fit_warnings) != 0
         var has_names = Bool(model.feature_names_in_)
-        var version = Self.StateVersion if has_names else (2 if has_warning else 1)
+        var version = Self._NamedStateVersion if has_names else (2 if has_warning else 1)
+        if Self._Labels.UsesCustomCodec:
+            version = Self.StateVersion
         var archive = ModelArchive(Self.TypeId, version)
         var writer = BinaryWriter()
         writer.uint(UInt64(dtype_code[Self.dtype]()))
-        writer.boolean(Self.L == String)
+        Self._Labels.write_type(writer)
         writer.string(model.solver)
         # Preserve configuration even after set_params changes it between fits.
         _write_configuration(writer, model.shrinkage, model.priors)
@@ -242,7 +320,7 @@ struct LinearDiscriminantAnalysisSchema[
             writer.integer(model.n_features_in_)
             writer.integer(model._max_components)
             writer.string(model._fitted_solver)
-            _write_classes(writer, model.classes_)
+            Self._Labels.write_classes(writer, model.classes_)
             _write_array(archive, "coef_", model.coef_)
             _write_array(archive, "intercept_", model.intercept_)
             _write_array(archive, "means_", model.means_)
@@ -251,26 +329,26 @@ struct LinearDiscriminantAnalysisSchema[
             _write_optional_array(writer, archive, "scalings_", model.scalings_)
             _write_optional_array(writer, archive, "xbar_", model.xbar_)
             _write_optional_array(writer, archive, "explained_variance_ratio_", model.explained_variance_ratio_)
-        if has_names:
+        if Self._Labels.UsesCustomCodec:
+            writer.boolean(has_names)
+        if has_warning or has_names or Self._Labels.UsesCustomCodec:
             writer.boolean(has_warning)
+        if has_names:
             _write_feature_names(writer, model.feature_names_in_.value())
-        elif has_warning:
-            writer.boolean(True)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        comptime assert Self.L == Int or Self.L == String, "LDA schema requires Int or String labels"
         var version = archive.schema_version
-        var has_names = version == Self.StateVersion
-        archive.expect(Self.TypeId, version if version == 2 or has_names else 1)
+        var has_custom_codec = version == Self._LabelStateVersion
+        var has_names = version == Self._NamedStateVersion
+        archive.expect(Self.TypeId, version if version == 2 or has_names or has_custom_codec else 1)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != UInt64(dtype_code[Self.dtype]()):
             raise Error("ModelSchemaError: LDA dtype mismatch")
-        if reader.boolean() != (Self.L == String):
-            raise Error("ModelSchemaError: LDA label type mismatch")
+        Self._Labels.read_type(reader, has_custom_codec)
         var model = Self.Model(solver=reader.string(reader.remaining()))
         _read_configuration(reader, model.shrinkage, model.priors)
         if reader.boolean():
@@ -283,10 +361,10 @@ struct LinearDiscriminantAnalysisSchema[
             model.n_features_in_ = reader.integer()
             model._max_components = reader.integer()
             model._fitted_solver = reader.string(reader.remaining())
-            model.classes_ = _read_classes[Self.L](reader, reader.remaining() // 8)
             model.coef_ = _read_array[Self.dtype](archive, "coef_")
             model.intercept_ = _read_array[Self.dtype](archive, "intercept_")
             model.means_ = _read_array[Self.dtype](archive, "means_")
+            model.classes_ = Self._Labels.read_classes(reader, model.means_.shape[0])
             model.priors_ = _read_array[Self.dtype](archive, "priors_")
             model.covariance_ = _read_optional_array[Self.dtype](reader, archive, "covariance_")
             model.scalings_ = _read_optional_array[Self.dtype](reader, archive, "scalings_")
@@ -297,8 +375,10 @@ struct LinearDiscriminantAnalysisSchema[
             expected_arrays = 4 + Int(Bool(model.covariance_)) + Int(Bool(model.scalings_))
             expected_arrays += Int(Bool(model.xbar_)) + Int(Bool(model.explained_variance_ratio_))
             model._state.record_fit(1, model.n_features_in_)
+        if has_custom_codec:
+            has_names = reader.boolean()
         var has_warning = False
-        if version == 2 or has_names:
+        if version == 2 or has_names or has_custom_codec:
             has_warning = reader.boolean()
             if version == 2 and not has_warning:
                 raise Error("ModelSchemaError: invalid LDA fit_warnings")
@@ -385,23 +465,30 @@ def _validate_qda[dtype: DType, L: ClassLabel](
 
 
 struct QuadraticDiscriminantAnalysisSchema[
-    dtype: DType = DType.float64, L: ClassLabel = Int
+    dtype: DType = DType.float64,
+    L: ClassLabel = Int,
+    Codec: DiscriminantLabelCodec = _LegacyLabelCodec[L],
 ](ModelSchema):
-    """Dense QDA state with Int or String labels and built-in covariance."""
+    """Dense QDA state with native labels and built-in covariance."""
 
     comptime Model = QuadraticDiscriminantAnalysis[Self.dtype, Self.L]
     comptime TypeId = "moxie.discriminant_analysis.QuadraticDiscriminantAnalysis"
-    comptime StateVersion = 2
+    comptime _NamedStateVersion = 2
+    comptime _Labels = _LabelArchive[Self.L, Self.Codec]
+    comptime _LabelStateVersion = 3
+    comptime StateVersion = Self._LabelStateVersion if Self._Labels.UsesCustomCodec else Self._NamedStateVersion
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
-        comptime assert Self.L == Int or Self.L == String, "QDA schema requires Int or String labels"
         _validate_qda(model)
         var has_names = Bool(model.feature_names_in_)
-        var archive = ModelArchive(Self.TypeId, Self.StateVersion if has_names else 1)
+        var version = Self._NamedStateVersion if has_names else 1
+        if Self._Labels.UsesCustomCodec:
+            version = Self.StateVersion
+        var archive = ModelArchive(Self.TypeId, version)
         var writer = BinaryWriter()
         writer.uint(UInt64(dtype_code[Self.dtype]()))
-        writer.boolean(Self.L == String)
+        Self._Labels.write_type(writer)
         writer.string(model.solver)
         _write_configuration(writer, model.shrinkage, model.priors)
         writer.scalar[DType.float64](model.reg_param)
@@ -411,7 +498,7 @@ struct QuadraticDiscriminantAnalysisSchema[
         writer.boolean(fitted)
         if fitted:
             writer.integer(model.n_features_in_)
-            _write_classes(writer, model.classes_)
+            Self._Labels.write_classes(writer, model.classes_)
             writer.boolean(Bool(model.covariance_))
             _write_array(archive, "means_", model.means_)
             _write_array(archive, "priors_", model.priors_)
@@ -419,6 +506,8 @@ struct QuadraticDiscriminantAnalysisSchema[
             _write_class_arrays(archive, "scalings_", model.scalings_)
             if model.covariance_:
                 _write_class_arrays(archive, "covariance_", model.covariance_.value())
+        if Self._Labels.UsesCustomCodec:
+            writer.boolean(has_names)
         if has_names:
             _write_feature_names(writer, model.feature_names_in_.value())
         archive.manifest = writer^.finish()
@@ -426,15 +515,15 @@ struct QuadraticDiscriminantAnalysisSchema[
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        comptime assert Self.L == Int or Self.L == String, "QDA schema requires Int or String labels"
-        var has_names = archive.schema_version == Self.StateVersion
-        archive.expect(Self.TypeId, Self.StateVersion if has_names else 1)
+        var version = archive.schema_version
+        var has_custom_codec = version == Self._LabelStateVersion
+        var has_names = version == Self._NamedStateVersion
+        archive.expect(Self.TypeId, version if has_names or has_custom_codec else 1)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != UInt64(dtype_code[Self.dtype]()):
             raise Error("ModelSchemaError: QDA dtype mismatch")
-        if reader.boolean() != (Self.L == String):
-            raise Error("ModelSchemaError: QDA label type mismatch")
+        Self._Labels.read_type(reader, has_custom_codec)
         var model = Self.Model(solver=reader.string(reader.remaining()))
         _read_configuration(reader, model.shrinkage, model.priors)
         model.reg_param = reader.scalar[DType.float64]()
@@ -446,7 +535,7 @@ struct QuadraticDiscriminantAnalysisSchema[
             var features = reader.integer()
             model.means_ = _read_array[Self.dtype](archive, "means_")
             var max_classes = model.means_.shape[0]
-            model.classes_ = _read_classes[Self.L](reader, max_classes)
+            model.classes_ = Self._Labels.read_classes(reader, max_classes)
             var classes = len(model.classes_)
             if features < 1 or classes < 2:
                 raise Error("ModelSchemaError: invalid fitted QDA dimensions")
@@ -460,6 +549,8 @@ struct QuadraticDiscriminantAnalysisSchema[
                 model.covariance_ = _read_class_arrays[Self.dtype](archive, "covariance_", classes, [features, features])
             expected_arrays = 4 + Int(has_covariance)
             model._state.record_fit(1, features)
+        if has_custom_codec:
+            has_names = reader.boolean()
         if has_names:
             model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
         reader.finish()

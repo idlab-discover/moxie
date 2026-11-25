@@ -55,42 +55,77 @@ def main() raises:
             costs.labels.append(Float64(t[cursor]))
             costs.values.append(Float64(t[cursor+1]))
             cursor += 2
+    var named = len(args) > 2
+    var names = List[String]()
+    if named:
+        for i in range(p):
+            names.append(String("feature_") + String(i))
     if regression:
         var model = LinearSVR(loss=loss, dual=dual.copy(), C=c, epsilon=epsilon, tol=tol, fit_intercept=fit, intercept_scaling=scale, max_iter=limit, random_state=seed)
         # Requests govern parent routing only. Direct weighted calls still work.
         _ = model.set_fit_request(sample_weight=False).set_score_request(
             sample_weight="evaluation_weight"
         )
-        if single:
-            model.fit(x.astype[DType.float32](), y, sw.copy())
+        if named:
+            if single:
+                _ = model.fit(
+                    x.astype[DType.float32](), y, feature_names=names, sample_weight=sw.copy()
+                )
+            else:
+                _ = model.fit(x, y, feature_names=names, sample_weight=sw.copy())
+        elif single:
+            _ = model.fit(x.astype[DType.float32](), y, sw.copy())
         else:
-            model.fit(x, y, sw.copy())
+            _ = model.fit(x, y, sw.copy())
         model = LinearSVRSchema.decode(loads(dumps(LinearSVRSchema.encode(model))))
+        if named:
+            for name in model.feature_names_in_.value():
+                print("FEATURE_NAME", name)
         for warning in model.fit_warnings:
             print("WARNING", warning.category, warning.message)
         print("RESULT", 1, p, model.n_iter_, model.fit_status_)
         emit(model.coef_)
         emit(model.intercept_)
-        emit(model.predict(x))
-        print(model.score(x, y, sw.copy()))
+        if named:
+            emit(model.predict(x, feature_names=names))
+            print(model.score(x, y, feature_names=names, sample_weight=sw.copy()))
+        else:
+            emit(model.predict(x))
+            print(model.score(x, y, sw.copy()))
     else:
         var model = LinearSVC(loss=loss, penalty=penalty, dual=dual.copy(), multi_class=multi, class_weight=costs.copy(), C=c, tol=tol, fit_intercept=fit, intercept_scaling=scale, max_iter=limit, random_state=seed)
         # Requests govern parent routing only. Direct weighted calls still work.
         _ = model.set_fit_request(sample_weight=False).set_score_request(
             sample_weight="evaluation_weight"
         )
-        if single:
-            model.fit(x.astype[DType.float32](), labels, sw.copy())
+        if named:
+            if single:
+                _ = model.fit(
+                    x.astype[DType.float32](), labels, feature_names=names, sample_weight=sw.copy()
+                )
+            else:
+                _ = model.fit(x, labels, feature_names=names, sample_weight=sw.copy())
+        elif single:
+            _ = model.fit(x.astype[DType.float32](), labels, sw.copy())
         else:
-            model.fit(x, labels, sw.copy())
+            _ = model.fit(x, labels, sw.copy())
         model = LinearSVCSchema[Float64].decode(loads(dumps(LinearSVCSchema[Float64].encode(model))))
+        if named:
+            for name in model.feature_names_in_.value():
+                print("FEATURE_NAME", name)
         for warning in model.fit_warnings:
             print("WARNING", warning.category, warning.message)
         print("RESULT", model.coef_.shape[0], p, model.n_iter_, model.fit_status_)
         emit(model.coef_)
         emit(model.intercept_)
-        emit(model.decision_function(x))
-        var predicted = model.predict(x)
+        if named:
+            emit(model.decision_function(x, feature_names=names))
+        else:
+            emit(model.decision_function(x))
+        var predicted = model.predict(x, feature_names=names) if named else model.predict(x)
         for i in range(len(predicted)):
             print(predicted[i])
-        print(model.score(x, labels, sw.copy()))
+        if named:
+            print(model.score(x, labels, feature_names=names, sample_weight=sw.copy()))
+        else:
+            print(model.score(x, labels, sw.copy()))

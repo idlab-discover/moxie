@@ -11,10 +11,9 @@ supported calls, dtype requirements and current limitations.
 
 ## Exact helper interfaces and layouts
 
-All helpers borrow arguments, return owned results, and raise Mojo `Error` with
-`ValueError` prefixes for invalid shape/order. They do not implement fit, predict,
-scoring, label encoding, CV, response selection or concurrency. `dtype` is a
-compile-time `DType`; no implicit dtype promotion occurs.
+Layout helpers borrow arguments, return owned results, and raise Mojo `Error`
+with `ValueError` prefixes for invalid shape or order. `dtype` is a compile-time
+`DType`.
 
 | Interface | Contract |
 | --- | --- |
@@ -57,6 +56,15 @@ excluded general NuMojo axis sum/dot/solvers/variance/RNG. Shared random state
 provides `permutation(q)` as an Int64 NDArray; the chain owner converts its q
 indices to the owned `ChainOrder`. Integer seeds reset per reference operation;
 mutable states advance. Native `None` uses an application-owned entropy context.
+
+## Independent output fitting
+
+`fit_outputs` gives each MAX task exclusive access to one model slot. Workers
+borrow shared inputs, and their callbacks may mutate only their own output
+state. Parallel execution joins before the wrapper reads either the fitted
+state or the recorded errors. Error selection follows target-column order.
+Ordinary fit and the first incremental batch publish fresh models after all
+tasks succeed. Later incremental batches update the fitted models in place.
 
 ## CV response contract
 

@@ -17,7 +17,7 @@ BUILDS = Path(__file__).resolve().parents[1] / "builds"
 
 def cases():
     for index, (loss, q, X, query, y, _, weights, stages) in enumerate(loss_cases()):
-        yield loss, q, X, query, y, weights, stages, 0, 0, False, index
+        yield loss, q, X, query, y, weights, stages, 0, 0, False, index, 0
     for seed in (0, 41, 421):
         rng = np.random.default_rng(seed)
         X = rng.normal(size=(167, 4))
@@ -28,20 +28,23 @@ def cases():
         weights = rng.integers(1, 8, len(X)) / 4
         for mode in (0, 1, 2, 3, 5):
             for constraints, sampled in ((0, True), (1, False), (1, True)):
-                yield "squared_error", 0.5, X, query, y, weights, 18, mode, constraints, sampled, seed
+                yield "squared_error", 0.5, X, query, y, weights, 18, mode, constraints, sampled, seed, 0
+        for mode in (0, 1, 2, 3, 5):
+            for loss in ("squared_error", "absolute_error", "quantile"):
+                yield loss, 0.6, X, query, y, weights, 18, mode, 0, True, seed, 6
         for constraints in (2, 3):
-            yield "squared_error", 0.5, X, query, y, weights, 6, 2, constraints, False, seed
+            yield "squared_error", 0.5, X, query, y, weights, 6, 2, constraints, False, seed, 0
     # The original Poisson target is valid even when its sole positive row
     # lands in the internal validation set.
     X = np.arange(10, dtype=np.float64).reshape(-1, 1)
     y = np.zeros(len(X))
     split_seed = np.random.RandomState(2).randint(np.iinfo(np.uint32).max, dtype="uint64")
     y[np.random.RandomState(split_seed).permutation(len(y))[0]] = 1.0
-    yield "poisson", 0.5, X, X, y, None, 4, 2, 0, False, 2
+    yield "poisson", 0.5, X, X, y, None, 4, 2, 0, False, 2, 0
     rng = np.random.default_rng(123)
     X = rng.normal(size=(10_001, 2))
     y = np.ones(len(X))
-    yield "squared_error", 0.5, X, X[:5], y, None, 10, 4, 0, False, 123
+    yield "squared_error", 0.5, X, X[:5], y, None, 10, 4, 0, False, 123, 0
 
 
 def explicit_validation(query):
@@ -49,10 +52,10 @@ def explicit_validation(query):
 
 
 def fixture(case):
-    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed = case
+    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial = case
     fields = [
         loss, *bits64([q]), *X.shape, len(query), stages, int(weights is not None),
-        mode, constraints, int(sampled), seed,
+        mode, constraints, int(sampled), seed, initial,
         *bits64(X.ravel()), *bits64(query.ravel()), *bits64(y),
     ]
     if weights is not None:
@@ -64,20 +67,24 @@ def fixture(case):
 
 
 def reference(case):
-    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed = case
+    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial = case
     validation_size = {1: None, 5: 9}.get(mode, 0.1)
     validation = {}
     if mode == 3:
         y_val, w_val = explicit_validation(query)
         validation = dict(X_val=query, y_val=y_val, sample_weight_val=w_val)
     model = HistGradientBoostingRegressor(
-        loss=loss, quantile=q, max_iter=stages, early_stopping="auto" if mode == 4 else mode != 0,
-        max_bins=16, max_leaf_nodes=5, max_depth=3, learning_rate=0.125,
+        loss=loss, quantile=q, max_iter=initial or stages,
+        warm_start=bool(initial), early_stopping="auto" if mode == 4 else mode != 0,
+        max_bins=16, max_leaf_nodes=5, max_depth=2 if initial else 3, learning_rate=0.125,
         min_samples_leaf=3, l2_regularization=0.25, max_features=0.6 if sampled else 1.0,
         validation_fraction=validation_size, n_iter_no_change=3, tol=0.125, random_state=seed,
         monotonic_cst=[1, 1, 0, 0] if constraints == 1 else None,
         interaction_cst={1: [[0, 1], [2, 3]], 2: "pairwise", 3: "no_interactions"}.get(constraints),
     ).fit(X, y, sample_weight=weights, **validation)
+    if initial:
+        model.set_params(max_iter=stages, max_depth=3, random_state=seed + 1)
+        model.fit(X, y, sample_weight=weights, **validation)
     attrs = [model.n_iter_, model.n_features_in_, model.n_trees_per_iteration_,
              model.do_early_stopping_, model.is_categorical_ is not None,
              len(model.train_score_), len(model.validation_score_)]
@@ -112,7 +119,7 @@ def main():
                                 err_msg=context)
                 predictions += len(expected)
     assert next(records, None) is None
-    print(f"PASS: {len(all_cases)} regression fits, {scores} scores, {predictions} predictions")
+    print(f"PASS: {len(all_cases)} regression cases, {scores} scores, {predictions} predictions")
 
 
 if __name__ == "__main__":

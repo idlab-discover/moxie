@@ -104,7 +104,9 @@ def adapt_classifier(
     def classes(model: BernoulliNB[]) raises -> Array:
         return _numeric_classes(model.classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "BernoulliNB")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "BernoulliNB")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(

@@ -408,7 +408,9 @@ struct DummyClassifierParams(Copyable, Movable):
     var constant: Optional[Self.Constants]
 
 
-struct DummyClassifier[multioutput: Bool = False, dtype: DType = DType.float64](BaselineClassifier, WeightedSupervisedEstimator):
+struct DummyClassifier[multioutput: Bool = False, dtype: DType = DType.float64](
+    BaselineClassifier, Copyable, WeightedSupervisedEstimator,
+):
     """Statically shaped single-output (default) or multioutput classification."""
     comptime Params = DummyClassifierParams
     comptime Input = NDArray[Self.dtype]

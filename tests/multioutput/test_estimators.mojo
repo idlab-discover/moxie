@@ -42,6 +42,8 @@ struct Nearest[label: DType, dtype: DType = DType.float64](Copyable, SupervisedE
         return self.fitted
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target) raises -> ref[self] Self:
+        if y.unsafe_get(0) <= Scalar[Self.label](-1000):
+            raise Error(t"Test component rejected target {Int(y.unsafe_get(0))}")
         self.x = X.copy()
         self.y = y.copy()
         self.fitted = True
@@ -289,6 +291,30 @@ def main() raises:
     assert_equal(probability_chain.score(X, labels), Float64(1))
     parity_matrix("ClassifierChainProbabilityResponse", probability_chain.predict(query))
     parity_matrix("ClassifierChainProbabilityResponseProba", probability_chain.predict_proba(query))
+    var preferences = List[String](["decision_function", "predict_proba", "predict"])
+    var preferred = ClassifierChain(Nearest[DType.int64](), chain_method=preferences.copy())
+    preferences[1] = "predict"
+    _ = preferred.fit(X, labels)
+    assert_equal(preferred.chain_method_, "predict_proba")
+    var preferred_clone = clone(preferred)
+    assert_false(preferred_clone.__sklearn_is_fitted__())
+    assert_equal(preferred_clone.fit(X, labels).chain_method_, "predict_proba")
+    var response_params = preferred.get_params()
+    response_params.chain_method = List[String](["predict", "predict_proba"])
+    assert_equal(preferred.get_params().chain_method[List[String]][1], "predict_proba")
+    _ = preferred.set_params(response_params)
+    assert_equal(preferred.chain_method_, "predict_proba")
+    assert_equal(preferred.fit(X, labels).chain_method_, "predict")
+    response_params.chain_method = List[String]()
+    _ = preferred.set_params(response_params)
+    with assert_raises(contains="preference list must not be empty"):
+        _ = preferred.fit(X, labels)
+    response_params.chain_method = List[String](["decision_function", "predict_log_proba"])
+    _ = preferred.set_params(response_params)
+    with assert_raises(contains="lacks all requested chain_method responses"):
+        _ = preferred.fit(X, labels)
+    assert_equal(preferred.chain_method_, "predict")
+    assert_equal(preferred.score(X, labels), Float64(1))
     var random_a = ClassifierChain(Nearest[DType.int64](), random_order=True, random_state=7)
     var random_b = ClassifierChain(Nearest[DType.int64](), random_order=True, random_state=7)
     _ = random_a.fit(X, labels)
@@ -342,9 +368,37 @@ def main() raises:
         var observed = parallel.fit(X, y).predict(query)
         for i in range(6):
             assert_equal(observed.unsafe_get(i), expected.unsafe_get(i))
+        for j in range(2):
+            for i in range(4):
+                assert_equal(parallel.estimators_[j].y.unsafe_get(i), y.item(i, j))
+        var parallel_inc = MultiOutputRegressor(Nearest[DType.float64](), n_jobs=jobs)
+        _ = parallel_inc.partial_fit(X, y)
+        _ = parallel_inc.partial_fit(X, y)
         var parallel_clf = MultiOutputClassifier(Nearest[DType.int64](), n_jobs=jobs)
-        _ = parallel_clf.partial_fit(X, labels, clf.classes_.copy())
+        _ = parallel_clf.fit(X, labels)
         assert_equal(parallel_clf.score(X, labels), Float64(1))
+        var parallel_inc_clf = clone(parallel_clf)
+        _ = parallel_inc_clf.partial_fit(X, labels, clf.classes_.copy())
+        _ = parallel_inc_clf.partial_fit(X, labels)
+        for j in range(2):
+            assert_equal(parallel_inc.estimators_[j].x.shape[0], 8)
+            assert_equal(parallel_inc_clf.estimators_[j].x.shape[0], 8)
+            for i in range(8):
+                assert_equal(parallel_inc.estimators_[j].y.unsafe_get(i), y.item(i % 4, j))
+                assert_equal(parallel_inc_clf.estimators_[j].y.unsafe_get(i), labels.item(i % 4, j))
+
+    var invalid_columns = y.copy()
+    invalid_columns.unsafe_set(0, -1000)
+    invalid_columns.unsafe_set(1, -2000)
+    var failed = MultiOutputRegressor(Nearest[DType.float64](), n_jobs=2)
+    with assert_raises(contains="Test component rejected target -1000"):
+        _ = failed.partial_fit(X, invalid_columns)
+    assert_false(failed.__sklearn_is_fitted__())
+    assert_equal(len(failed.estimators_), 0)
+    _ = failed.fit(X, y)
+    with assert_raises(contains="Test component rejected target -1000"):
+        _ = failed.fit(X, invalid_columns)
+    assert_equal(failed.score(X, y), Float64(1))
     var weighted = MultiOutputRegressor(WeightedMean())
     for i in range(4):
         weights.unsafe_set(i, Float64(i + 1))

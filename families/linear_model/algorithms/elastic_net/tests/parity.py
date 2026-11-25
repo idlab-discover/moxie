@@ -32,6 +32,45 @@ for bits, dtype in ((64, np.float64), (32, np.float32)):
                 cases.append(dict(id=f'{name}-{ratio}-{mode}-{bits}', bits=bits, X=X, y=target, Z=rng.normal(size=(4, p)).astype(dtype),
                     alpha=100. if mode == 'large-alpha' else .1, ratio=ratio, intercept=mode != 'no-intercept',
                     positive=mode == 'positive', warm=mode == 'warm', max_iter=1 if mode == 'one-iteration' else 1000, tol=1e-4, sw=sw))
+path_cases = []
+for bits, dtype in ((64, np.float64), (32, np.float32)):
+    for name, n, p in [('tall', 31, 5), ('wide', 9, 13), ('singleton', 5, 1)]:
+        X = rng.normal(size=(n, p)).astype(dtype)
+        X = X if p == 1 else np.column_stack((X[:, :-1], np.zeros(n, dtype=dtype)))
+        y = (X @ rng.normal(size=p) + rng.normal(size=n) * .1 + 1).astype(dtype)
+        for ratio, mode in [
+            (0.5, 'default'), (1., 'default'), (0.3, 'explicit'),
+            (1., 'explicit'), (0., 'explicit'), (1., 'one'),
+            (0.5, 'positive'), (1., 'positive'), (1., 'negative-correlations'),
+            (0.5, 'zero-target'), (1., 'one-iteration'), (0.3, 'increasing'),
+        ]:
+            design, target = X, y
+            count, eps, max_iter = 100, 1e-3, 1000
+            alphas, initial = None, None
+            positive = mode in ('positive', 'negative-correlations')
+            if mode in ('explicit', 'one-iteration'):
+                alphas = np.array([0.15, 4.0, 0.4, 0.15])
+                initial = rng.normal(size=p).astype(dtype)
+                if p > 1:
+                    initial[-1] = 0
+            if mode == 'one':
+                count = 1
+            if mode == 'positive':
+                count = 11
+            if mode == 'negative-correlations':
+                design, target, count = np.abs(X), -np.abs(y), 7
+            if mode == 'zero-target':
+                target, count = np.zeros_like(y), 7
+            if mode == 'one-iteration':
+                max_iter = 1
+            if mode == 'increasing':
+                count, eps = 7, 3.
+            path_cases.append(dict(
+                id=f'path-{name}-{ratio}-{mode}-{bits}', bits=bits,
+                X=design, y=target, ratio=ratio, count=count, eps=eps,
+                alphas=alphas, initial=initial, max_iter=max_iter, positive=positive,
+            ))
+
 folder = ROOT / 'builds/parity'
 folder.mkdir(parents=True, exist_ok=True)
 lines=[]
@@ -40,11 +79,16 @@ for c in cases:
     arrays={k:c[k] for k in ('X','y','Z')}
     if c['sw'] is not None: arrays['sw']=c['sw']
     lines.append(io.case_line(c['id'],c['bits'],params,arrays))
+for case in path_cases:
+    params = {k: case[k] for k in ('ratio', 'count', 'eps', 'max_iter')}
+    params.update(path=1, positive=int(case['positive']))
+    arrays = {k: case[k] for k in ('X', 'y', 'alphas', 'initial') if case[k] is not None}
+    lines.append(io.case_line(case['id'], case['bits'], params, arrays))
 fixtures=folder/'fixtures.txt'; fixtures.write_text('\n'.join(lines)+'\n')
 output=subprocess.run([str(ROOT/'builds/parity_driver'),str(fixtures)],env=environment(ROOT),text=True,capture_output=True,check=True).stdout
 (folder/'native.txt').write_text(output)
 results=io.parse_results(output)
-assert set(results)=={c['id'] for c in cases}
+assert set(results) == {c['id'] for c in cases + path_cases}
 report=[]
 for c in cases:
     got=results[c['id']]
@@ -70,5 +114,48 @@ for c in cases:
     if c['bits']==64:
         assert np.array_equal(got['iterations'],iterations),(c['id'],got['iterations'],iterations)
     report.append(dict(case=c['id'],**errors,native_iterations=got['iterations'].tolist(),reference_iterations=iterations.tolist()))
+path_report = []
+for case in path_cases:
+    ident = case['id']
+    got = results[ident]
+    assert 'error' not in got, (ident, got)
+    kwargs = dict(
+        eps=case['eps'], precompute=False, positive=case['positive'],
+        max_iter=case['max_iter'], return_n_iter=True,
+        alphas=case['count'] if case['alphas'] is None else case['alphas'],
+    )
+    if case['initial'] is not None:
+        kwargs['coef_init'] = case['initial'].copy()
+    if case['ratio'] == 1:
+        path = reference.lasso_path
+    else:
+        path = reference.enet_path
+        kwargs['l1_ratio'] = case['ratio']
+    io.pinned_code(path, 'sklearn/linear_model/_coordinate_descent.py')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', ConvergenceWarning)
+        alphas, coefs, gaps, iterations = path(case['X'], case['y'], **kwargs)
+
+    is_f64 = case['bits'] == 64
+    scale = max(1., float(np.max(np.abs(case['y']))))
+    tol = 1e-8 if is_f64 else 3e-4
+    errors = {
+        'alphas': io.close(got['alphas'], alphas, 2e-9 if is_f64 else 2e-6, 1e-17, ident + ' alphas'),
+        'coefs': io.close(got['coefs'], coefs, tol, tol * scale, ident + ' coefs'),
+        'dual_gaps': io.close(got['dual_gaps'], gaps, tol, tol * scale**2, ident + ' dual_gaps'),
+    }
+    counts = got['iterations']
+    assert counts.shape == (len(alphas),), (ident, counts.shape)
+    assert np.all((0 <= counts) & (counts <= case['max_iter'])), (ident, counts)
+    if is_f64:
+        np.testing.assert_array_equal(counts, iterations, err_msg=ident)
+    path_report.append(dict(
+        case=ident, **errors, native_iterations=got['iterations'].tolist(),
+        reference_iterations=iterations,
+    ))
+(folder/'path-report.json').write_text(
+    json.dumps(dict(revision=io.REVISION, sources=hashes, results=path_report), indent=2) + '\n'
+)
+print(f'Cyclic ElasticNet/Lasso path parity passed: {len(path_cases)} cases')
 (folder/'report.json').write_text(json.dumps(dict(revision=io.REVISION,sources=hashes,cases=len(cases),results=report),indent=2)+'\n')
 print(f'Cyclic ElasticNet/Lasso parity passed: {len(cases)} cases; pinned sklearn Python and Cython {io.REVISION[:10]}')

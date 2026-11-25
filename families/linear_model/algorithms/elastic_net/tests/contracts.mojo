@@ -64,8 +64,17 @@ def contracts[dtype: DType]() raises:
         _ = a.predict(zeros[dtype](Shape(2, 3)))
     with assert_raises(contains="warm_start"):
         model.fit(X, Y)
-    var random = Lasso[dtype](selection="random", random_state=0, max_iter=1)
-    _ = random.fit(X, y)
+    var random = Lasso[dtype](positive=True, copy_X=True)
+    _ = random.set_params(
+        selection=String("random"), random_state=0, max_iter=1,
+        positive=False, copy_X=False, fit_intercept=False,
+    ).fit(X, y)
+    var configured = random.get_params()
+    assert_false(configured.positive)
+    assert_false(configured.copy_X)
+    assert_false(configured.fit_intercept)
+    assert_equal(random.intercept_.unsafe_get(0), Scalar[dtype](0))
+    assert_equal(X.unsafe_get(8), Scalar[dtype](4))
     var random_copy = clone(random)
     assert_false(random_copy.__sklearn_is_fitted__())
     assert_equal(random_copy.selection, "random")
@@ -76,13 +85,18 @@ def contracts[dtype: DType]() raises:
     for j in range(X.shape[1]):
         assert_equal(random_coef.unsafe_get(j), random.coef_.unsafe_get(j))
         assert_equal(random_coef.unsafe_get(j), random_copy.coef_.unsafe_get(j))
-    random.random_state = -1
+    _ = random.set_params(random_state=-1)
     with assert_raises(contains="random_state"):
         _ = random.fit(X, y)
     assert_equal(random_coef.unsafe_get(0), random.coef_.unsafe_get(0))
+    configured.random_state = None
+    _ = random.set_params(configured).set_params(selection=String("cyclic"))
+    assert_false(Bool(random.get_params().random_state))
     with assert_raises(contains="NotImplementedError"):
-        var gram = Lasso[dtype](precompute=True)
-        gram.fit(X, y)
+        _ = random.set_params(precompute=True).fit(X, y)
+    assert_equal(random_coef.unsafe_get(0), random.coef_.unsafe_get(0))
+    _ = random.set_params(precompute=False).fit(X, y)
+    assert_false(random.get_params().precompute)
     with assert_raises(contains="alpha"):
         var invalid = ElasticNet[dtype](alpha=-1)
         invalid.fit(X, y)
@@ -156,8 +170,9 @@ def path_contracts[dtype: DType]() raises:
         )
     assert_equal(initial_storage.unsafe_get(1), Scalar[dtype](0.5))
 
-    var model = ElasticNet[dtype](alpha=0.25, l1_ratio=0.5, fit_intercept=False)
-    _ = model.fit(X, y)
+    var model = ElasticNet[dtype](l1_ratio=0.8)
+    _ = model.set_params(alpha=0.25, l1_ratio=0.5, fit_intercept=False).fit(X, y)
+    assert_equal(model.get_params().l1_ratio, 0.5)
     var single_alpha = zeros[DType.float64](Shape(1))
     single_alpha.unsafe_set(0, 0.25)
     var single = ElasticNet[dtype].path(X, y, alphas=single_alpha^)

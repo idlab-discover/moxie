@@ -14,9 +14,18 @@ Constructors keep sklearn defaults: alpha=1, fit_intercept=True,
 precompute=False, max_iter=1000, copy_X=True, tol=1e-4, warm_start=False,
 positive=False, random_state=None, selection="cyclic"; ElasticNet l1_ratio=0.5.
 Inputs are always preserved, including when copy_X=False. Fit mutates in place.
-`get_params` and `set_params` use typed `ElasticNetParams`/`LassoParams` records;
-keyword updates are provided for alpha, tol, max_iter and warm_start. Clone
-copies configuration only. Failed fits retain the previous learned state.
+`get_params` returns a typed `ElasticNetParams` or `LassoParams` record.
+`set_params` accepts that record or keyword updates for every constructor
+parameter. Omitted keywords preserve their values. To reset a seed, set
+`random_state = None` on the record and pass it back to `set_params`.
+The method returns a mutable borrow for chaining with `fit`.
+Fit validates the configuration. Clone copies configuration only.
+Failed fits retain the previous learned state.
+
+```mojo
+var model = Lasso()
+_ = model.set_params(selection=String("random"), random_state=0).fit(X, y)
+```
 
 Learned `coef_` is (features,) for a vector or one-column target, otherwise
 (outputs, features). `intercept_` is always (outputs,), including zeros without

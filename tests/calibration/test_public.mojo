@@ -3,6 +3,7 @@ import numojo as nm
 from std.math import nan
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from std.sys import argv
+from moxie._calibration_estimator import _cast_calibration_array
 from moxie.base import clone, SupervisedEstimator
 from moxie.calibration import (
     adapt_classifier, CalibratedClassifierCV, CalibrationSplit,
@@ -93,6 +94,60 @@ def test_default_classifier(X: Array, y: Array) raises:
             assert_equal(cloned_probability.item(i, j), first.item(i, j))
 
 
+def test_frozen_float32_pipeline(X: Array, y: Array) raises:
+    var pipeline = make_pipeline(
+        StandardScaler[DType.float32](), LinearDiscriminantAnalysis[DType.float32]()
+    )
+    var unfitted = CalibratedClassifierCV(adapt_classifier(FrozenEstimator(pipeline.copy())))
+    var features = X.astype[DType.float32]()
+    with assert_raises(contains="NotFittedError"):
+        _ = unfitted.fit(features, y)
+    var labels = List[Int](capacity=y.size)
+    for i in range(y.size):
+        labels.append(Int(y.item(i)))
+    _ = pipeline.fit(features, labels)
+    var frozen = FrozenEstimator(pipeline^)
+    var adapter = adapt_classifier(frozen.copy())
+    var backed = nm.full[DType.float64](nm.Shape(X.shape[0], 4), 999)
+    var strided = backed.view_with_layout(
+        X.shape, nm.NDArrayStrides(-4, 2), 4 * (X.shape[0] - 1)
+    )
+    for i in range(X.shape[0]):
+        for j in range(X.shape[1]):
+            strided[nm.Item(i, j)] = X.item(i, j)
+    var native_scores = frozen.decision_function(features)
+    var native_probabilities = frozen.predict_proba(features)
+    var scores = adapter.response(strided)
+    var probabilities = adapter.calibration_probabilities(strided)
+    assert_equal(scores.shape, nm.Shape(X.shape[0], 1))
+    assert_equal(probabilities.shape, nm.Shape(X.shape[0], 2))
+    for i in range(X.shape[0]):
+        assert_equal(scores.item(i, 0), Float64(native_scores.item(i)))
+        for j in range(2):
+            assert_equal(probabilities.item(i, j), Float64(native_probabilities.item(i, j)))
+    var model = CalibratedClassifierCV(clone(adapter))
+    var first = model.fit(features, y).predict_proba(strided)
+    var second = model.fit(strided, y).predict_proba(features)
+    assert_equal(len(model.calibrated_classifiers_), 1)
+    assert_equal(model.classes_.item(0), -3)
+    assert_equal(model.classes_.item(1), 7)
+    for i in range(first.size):
+        assert_equal(first.item(i), second.item(i))
+
+
+def test_widen_strided_binary_response() raises:
+    var backing = nm.full[DType.float32](nm.Shape(5), 99)
+    backing[nm.Item(0)] = 1.5
+    backing[nm.Item(2)] = -2.25
+    backing[nm.Item(4)] = 3.75
+    var response = backing.view_with_layout(nm.Shape(3), nm.NDArrayStrides(-2), 4)
+    var widened = _cast_calibration_array[target=DType.float64](response)
+    assert_equal(widened.shape, nm.Shape(3))
+    assert_equal(widened.item(0), 3.75)
+    assert_equal(widened.item(1), -2.25)
+    assert_equal(widened.item(2), 1.5)
+
+
 def test_float32_features(X: Array, y: Array) raises:
     var rows = X.shape[0]
     var owner = nm.full[DType.float32](nm.Shape(rows, 4), Float32(999))
@@ -156,6 +211,8 @@ def main() raises:
         y[nm.Item(i)] = -3.0 if i % 2 == 0 else 7.0
     test_default_classifier(X, y)
     test_generic_frozen_classifier(X, y)
+    test_frozen_float32_pipeline(X, y)
+    test_widen_strided_binary_response()
     test_float32_features(X, y)
     var base = adapt_classifier(LinearDiscriminantAnalysis())
     with assert_raises():

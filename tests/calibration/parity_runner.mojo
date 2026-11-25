@@ -436,6 +436,23 @@ def main() raises:
                     adapt_classifier(FrozenEstimator(estimator^)),
                     x, y, w, q, expected, fields, context,
                 )
+            elif kind == "production_frozen_gaussian32":
+                var estimator = GaussianNB[dtype=DType.float32]()
+                _ = estimator.fit(train_x.astype[DType.float32](), labels)
+                compare_production(
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            elif kind == "production_frozen_pipeline32":
+                var estimator = make_pipeline(
+                    StandardScaler[DType.float32](),
+                    LinearDiscriminantAnalysis[DType.float32](),
+                )
+                _ = estimator.fit(train_x.astype[DType.float32](), labels)
+                compare_production(
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
             elif kind == "production_frozen_pipeline":
                 var estimator = make_pipeline(StandardScaler(), LinearDiscriminantAnalysis())
                 _ = estimator.fit(train_x, labels)

@@ -13,6 +13,7 @@ from ._calibration_estimator import (
     ClassifierCalibrationAdapter,
     MAX_INTEGRAL_LABEL,
     _adapt_linear_svc,
+    _cast_calibration_array,
     validate_integral_labels,
 )
 from .base import ClassifierMixin, ProbabilityPredictor
@@ -120,6 +121,7 @@ def response[
     if values.shape[0] != X.shape[0] or values.shape[1] != columns:
         raise Error("ValueError: estimator response has incorrect shape")
     if estimator.uses_probabilities():
+        var tolerance = estimator.probability_sum_tolerance()
         for i in range(values.shape[0]):
             var total = Float64(0)
             for j in range(columns):
@@ -129,7 +131,7 @@ def response[
                         "ValueError: estimator probabilities must be in [0, 1]"
                     )
                 total += p
-            if abs(total - 1) > 1e-8:
+            if abs(total - 1) > tolerance:
                 raise Error(
                     "ValueError: estimator probabilities must sum to one"
                 )
@@ -264,14 +266,7 @@ comptime _DefaultCalibrationEstimator = ClassifierCalibrationAdapter[LinearSVC[]
 def _widen_features(X: nm.NDArray[DType.float32]) raises -> Array:
     if X.ndim != 2 or X.shape[0] == 0 or X.shape[1] == 0:
         raise Error("ValueError: expected a nonempty matrix")
-    if X.is_c_contiguous() or X.is_f_contiguous():
-        return X.astype[DType.float64]()
-    # NuMojo astype reads consecutive storage even for strided views.
-    var result = Array(X.shape)
-    for i in range(X.shape[0]):
-        for j in range(X.shape[1]):
-            result[nm.Item(i, j)] = Float64(X.item(i, j))
-    return result^
+    return _cast_calibration_array[target=DType.float64](X)
 
 
 struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstimator](

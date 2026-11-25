@@ -1,4 +1,5 @@
 """Compare native calibration to the recorded local sklearn revision."""
+from functools import wraps
 import importlib.util
 import json
 from pathlib import Path
@@ -136,6 +137,14 @@ def encode(value):
         return str(value)
     a = np.asarray(value)
     return f'{a.shape[0]}:{a.shape[1] if a.ndim == 2 else 0}:' + ','.join(repr(float(v)) for v in a.flat)
+
+
+def widen_response(response):
+    @wraps(response)
+    def widened(X):
+        return np.asarray(response(X), dtype=np.float64)
+
+    return widened
 
 
 def main():
@@ -400,6 +409,22 @@ def main():
 
         X32 = X.astype(np.float32)
         q32 = q.astype(np.float32)
+        for method in ('sigmoid', 'isotonic', 'temperature'):
+            y = codes if method == 'temperature' else 5 * codes - 7
+            for name, estimator in (
+                ('pipeline32', make_pipeline(StandardScaler(), lda())),
+                ('gaussian32', gaussian()),
+            ):
+                prefit = estimator.fit(X32[:45], y[:45])
+                # Match the native adapter's Float64 calibration boundary.
+                response_name = 'decision_function' if name == 'pipeline32' else 'predict_proba'
+                setattr(prefit, response_name, widen_response(getattr(prefit, response_name)))
+                model = ref.CalibratedClassifierCV(
+                    FrozenEstimator(prefit), method=method, cv=3,
+                ).fit(X32[45:], y[45:], sample_weight=w[45:])
+                add(f'production_frozen_{name}', X32[45:], y[45:], w[45:], q32,
+                    model.predict_proba(q32), method, 'auto', model.predict(q32),
+                    model.classes_, X32[:45], y[:45])
         for name, estimator in [('default', None), ('gaussian', gaussian())]:
             # Match the documented widening for GaussianNB, whose sklearn
             # implementation selects its statistics dtype from X.

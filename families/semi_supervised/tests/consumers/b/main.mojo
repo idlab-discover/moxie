@@ -1,6 +1,7 @@
 from std.testing import assert_equal
 from moxie.semi_supervised import produce, consume
 from moxie.semi_supervised._contracts import ClassEncoding, integer_targets
+from moxie.semi_supervised._probe_a import check_default_calibration
 
 def main() raises:
     var values = produce()
@@ -12,4 +13,5 @@ def main() raises:
     var codes = codec.encode(integer_targets(List[Int]([-1, 2, -7])))
     assert_equal(codes[0], -1)
     assert_equal(codes[1], 1)
+    check_default_calibration()
     print("isolated consumer passed")

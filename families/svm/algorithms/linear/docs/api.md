@@ -32,7 +32,9 @@ use "none" (the native None default), "balanced", or
 `ClassWeight[Label](labels, values)`. Missing mapping labels have weight one;
 extraneous labels are ignored. Public configuration records own their arrays.
 
-`sample_weight` is an optional Float64 vector. Passing an existing array into
+`sample_weight` is an optional Float64 vector. `LinearSVC` also implements
+the `moxie.base.WeightedSupervisedEstimator` keyword fit contract for Float64
+features and native list labels. Passing an existing array into
 an Optional may need `.copy()` under Mojo's ownership rules:
 `model.fit(X, labels, sample_weight=weights.copy())`. This explicit copy does
 not turn the training data into a mutable alias. Models own learned arrays.

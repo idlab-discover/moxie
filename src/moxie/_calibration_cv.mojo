@@ -8,7 +8,15 @@ from ._calibration_splits import (
     resolve_splits,
 )
 from ._calibration_display import CalibrationDisplayEstimator
-from .base import BaseEstimator, ClassifierMixin, ProbabilityPredictor
+from ._calibration_estimator import (
+    CalibrationEstimator,
+    ClassifierCalibrationAdapter,
+    MAX_INTEGRAL_LABEL,
+    _adapt_linear_svc,
+    validate_integral_labels,
+)
+from .base import ClassifierMixin, ProbabilityPredictor
+from .svm._linear import LinearSVC
 from ._calibration_algorithms import (
     Array,
     vector,
@@ -23,33 +31,6 @@ from ._calibration_algorithms import (
 
 trait CalibratedClassifier(ClassifierMixin, ProbabilityPredictor):
     pass
-
-
-trait CalibrationEstimator(BaseEstimator, Copyable, Deinitable):
-    """Adapter for a classifier's preferred response and class ordering.
-
-    response returns a matrix: one decision column for binary classification,
-    otherwise one column per class. Probability responses always have all classes.
-    fit accepts weights; adapters without weighted fitting must reject supplied
-    weights. class_labels must be sorted numeric labels after fitting.
-    """
-
-    def fit(
-        mut self, X: Array, y: Array, sample_weight: Optional[Array] = None
-    ) raises:
-        ...
-
-    def response(self, X: Array) raises -> Array:
-        ...
-
-    def class_labels(self) raises -> Array:
-        ...
-
-    def uses_probabilities(self) -> Bool:
-        ...
-
-    def is_frozen(self) -> Bool:
-        return False
 
 
 @fieldwise_init
@@ -95,19 +76,6 @@ def unique(y: Array) raises -> Array:
             j += 1
             result[nm.Item(j)] = y.item(indices[i])
     return result^
-
-
-comptime MAX_INTEGRAL_LABEL = 9007199254740991
-
-
-def validate_integral_labels(y: Array) raises:
-    for i in range(y.size):
-        var label = y.item(i)
-        if abs(label) > Float64(MAX_INTEGRAL_LABEL) or label != Float64(Int(label)):
-            raise Error(
-                "ValueError: classification requires integral numeric"
-                " labels"
-            )
 
 
 def encoded(y: Array, classes: Array) raises -> Array:
@@ -290,7 +258,10 @@ struct _CalibratedClassifier[E: CalibrationEstimator](Copyable, Movable):
         return _clip_rounding(out^)
 
 
-struct CalibratedClassifierCV[E: CalibrationEstimator](
+comptime _DefaultCalibrationEstimator = ClassifierCalibrationAdapter[LinearSVC[]]
+
+
+struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstimator](
     CalibratedClassifier, CalibrationDisplayEstimator, Copyable, Movable
 ):
     comptime Input = Array
@@ -325,6 +296,23 @@ struct CalibratedClassifierCV[E: CalibrationEstimator](
         self.classes_ = nm.zeros[DType.float64](nm.Shape(0))
         self.n_features_in_ = 0
         self.calibrated_classifiers_ = List[_CalibratedClassifier[Self.E]]()
+
+    def __init__(
+        out self,
+        estimator: NoneType = None,
+        *,
+        var method: String = "sigmoid",
+        var cv: CalibrationCV = None,
+        n_jobs: Optional[Int] = None,
+        var ensemble: Variant[Bool, String] = "auto",
+    ) raises where Self.E == _DefaultCalibrationEstimator:
+        self = Self(
+            rebind_var[Self.E](_adapt_linear_svc(LinearSVC(random_state=0))),
+            method=method^,
+            cv=cv^,
+            n_jobs=n_jobs,
+            ensemble=ensemble^,
+        )
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(

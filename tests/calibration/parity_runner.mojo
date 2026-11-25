@@ -67,6 +67,18 @@ def compare(
                 )
 
 
+def compare_estimator_result[E: CalibrationEstimator, origin: ImmOrigin](
+    model: CalibratedClassifierCV[E],
+    q: Array,
+    expected: Array,
+    fields: List[StringSpan[origin]],
+    context: String,
+) raises:
+    compare(model.classes_, array(String(fields[9])), 0, context)
+    compare(model.predict_proba(q), expected, 5e-6, context)
+    compare(model.predict(q), array(String(fields[8])), 0, context)
+
+
 def compare_production[E: CalibrationEstimator, origin: ImmOrigin](
     var estimator: E,
     x: Array,
@@ -85,9 +97,7 @@ def compare_production[E: CalibrationEstimator, origin: ImmOrigin](
         estimator^, cv=3, method=String(fields[6]), ensemble=ensemble^
     )
     _ = model.fit(x, y, w)
-    compare(model.classes_, array(String(fields[9])), 0, context)
-    compare(model.predict_proba(q), expected, 5e-6, context)
-    compare(model.predict(q), array(String(fields[8])), 0, context)
+    compare_estimator_result(model, q, expected, fields, context)
     if use_auto and len(model.calibrated_classifiers_) != 1:
         raise Error(context + ": frozen calibration must fit a single calibrator")
 
@@ -235,6 +245,18 @@ def main() raises:
             _ = model.fit(x, y, w)
             compare(model.predict_proba(q), expected, 5e-6, context)
             compare(model.predict(q), array(String(fields[10])), 0, context)
+        elif kind == "default_linear_svc":
+            var ensemble: Variant[Bool, String] = "auto"
+            if String(fields[7]) != "auto":
+                ensemble = fields[7] == "true"
+            var model = CalibratedClassifierCV(
+                method=String(fields[6]), ensemble=ensemble^
+            )
+            _ = model.fit(x, y, w)
+            compare_estimator_result(model, q, expected, fields, context)
+            var expected_folds = 1 if fields[7] == "false" else 5
+            if len(model.calibrated_classifiers_) != expected_folds:
+                raise Error(context + ": incorrect number of fitted classifiers")
         elif kind == "production_gaussian":
             compare_production(
                 adapt_classifier(GaussianNB()),

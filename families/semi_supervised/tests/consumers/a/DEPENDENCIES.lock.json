@@ -15,6 +15,9 @@
             "UnsupervisedEstimator": "moxie.base",
             "clone": "moxie.base"
           },
+          "moxie.frozen": {
+            "FrozenEstimatorAPI": "moxie.frozen._base"
+          },
           "moxie.utils": {
             "FittedState": "moxie.utils.validation",
             "check_is_fitted": "moxie.utils.validation"
@@ -32,6 +35,8 @@
         "src/moxie/isotonic.mojo": null,
         "src/moxie/_calibration_algorithms.mojo": null,
         "src/moxie/_calibration_curve.mojo": null,
+        "src/moxie/_calibration_estimator.mojo": null,
+        "src/moxie/frozen/_base.mojo": null,
         "src/moxie/_calibration_cv.mojo": null,
         "src/moxie/_calibration_display.mojo": null,
         "src/moxie/_calibration_splits.mojo": null
@@ -52,6 +57,12 @@
         },
         "moxie._calibration_curve": {
           "file": "src/moxie/_calibration_curve.mojo"
+        },
+        "moxie._calibration_estimator": {
+          "file": "src/moxie/_calibration_estimator.mojo"
+        },
+        "moxie.frozen._base": {
+          "file": "src/moxie/frozen/_base.mojo"
         },
         "moxie._calibration_cv": {
           "file": "src/moxie/_calibration_cv.mojo"
@@ -857,6 +868,94 @@
       "modules": {},
       "path": "../../../../../../.worktrees/mojo-linalg-covariance",
       "files": {},
+      "revision": "HEAD"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.svm": {
+            "SupportVectorClassifier": "moxie.svm._base",
+            "ProbabilisticSVC": "moxie.svm._base",
+            "SupportVectorRegressor": "moxie.svm._base",
+            "OneClassSupportVector": "moxie.svm._base"
+          }
+        }
+      },
+      "id": "svm-scaffold",
+      "modules": {
+        "moxie.svm._base": {
+          "file": "src/moxie/svm/_base.mojo"
+        },
+        "moxie.svm._contracts": {
+          "file": "src/moxie/svm/_contracts.mojo"
+        }
+      },
+      "path": "../../../../svm",
+      "files": {
+        "src/moxie/svm/_base.mojo": null,
+        "src/moxie/svm/_contracts.mojo": null
+      },
+      "revision": "HEAD"
+    },
+    {
+      "assets": {
+        "licenses/svm-liblinear/LIBLINEAR.txt": "LICENSES/LIBLINEAR.txt",
+        "licenses/svm-liblinear/scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie.svm": {}
+        },
+        "schema": 1
+      },
+      "id": "svm-liblinear",
+      "modules": {
+        "moxie.svm._liblinear": {
+          "file": "src/moxie/svm/_liblinear.mojo"
+        }
+      },
+      "path": "../../../../svm/shared/liblinear",
+      "files": {
+        "LICENSES/LIBLINEAR.txt": null,
+        "LICENSES/scikit-learn.txt": null,
+        "src/moxie/svm/_liblinear.mojo": null
+      },
+      "revision": "HEAD"
+    },
+    {
+      "assets": {
+        "licenses/svm-linear/scikit-learn.txt": "SCIKIT_LEARN_LICENSE"
+      },
+      "exports": {
+        "packages": {
+          "moxie.svm": {
+            "ClassWeight": "moxie.svm._linear",
+            "Dual": "moxie.svm._linear",
+            "LinearSVC": "moxie.svm._linear",
+            "LinearSVR": "moxie.svm._linear",
+            "l1_min_c": "moxie.svm._bounds"
+          }
+        },
+        "schema": 1
+      },
+      "id": "svm-linear",
+      "modules": {
+        "moxie.svm._bounds": {
+          "file": "src/moxie/svm/_bounds.mojo"
+        },
+        "moxie.svm._linear": {
+          "file": "src/moxie/svm/_linear.mojo"
+        }
+      },
+      "path": "../../../../svm/algorithms/linear",
+      "files": {
+        "SCIKIT_LEARN_LICENSE": null,
+        "src/moxie/svm/_bounds.mojo": null,
+        "src/moxie/svm/_linear.mojo": null
+      },
       "revision": "HEAD"
     }
   ],

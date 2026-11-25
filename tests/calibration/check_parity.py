@@ -82,6 +82,7 @@ def production_reference():
         da.LinearDiscriminantAnalysis,
         da.QuadraticDiscriminantAnalysis,
         logistic.LogisticRegression,
+        load('svm/_classes', 'sklearn.svm').LinearSVC,
     )
 
 
@@ -307,7 +308,7 @@ def main():
                     False, False, model.predict(q))
     # Cover both response protocols, weighted fitting and class-column ordering
     # with production classifiers rather than a shared test double.
-    gaussian, lda, qda, logistic = production_reference()
+    gaussian, lda, qda, logistic, ref.LinearSVC = production_reference()
     production = [
         ('gaussian', gaussian(), True),
         ('lda', lda(), False),
@@ -336,6 +337,17 @@ def main():
         )
         add('production_frozen_logistic', X[45:], y[45:], w[45:], q, model.predict_proba(q),
             'sigmoid', 'auto', model.predict(q), model.classes_, X[:45], y[:45])
+        for method in ('sigmoid', 'isotonic', 'temperature'):
+            y = codes if method == 'temperature' else 5 * codes - 7
+            for ensemble in ('auto', False, True):
+                for sample_weight in (None, w):
+                    model = ref.CalibratedClassifierCV(
+                        method=method, ensemble=ensemble
+                    ).fit(X, y, sample_weight=sample_weight)
+                    assert isinstance(model.calibrated_classifiers_[0].estimator, ref.LinearSVC)
+                    assert model.calibrated_classifiers_[0].estimator.random_state == 0
+                    add('default_linear_svc', X, y, sample_weight, q,
+                        model.predict_proba(q), method, ensemble, model.predict(q), model.classes_)
     fixtures = out / 'cases.txt'
     fixtures.write_text('\n'.join(records) + '\n')
     command = ['mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', 'builds/deps', '-I', 'examples/calibration_support', 'tests/calibration/parity_runner.mojo', '-o', str(out / 'runner')]

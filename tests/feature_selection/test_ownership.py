@@ -8,7 +8,7 @@ for consumer in [ROOT, *(ROOT / 'tests/feature_selection/consumers' / name for n
     manifest = json.loads((consumer / 'DEPENDENCIES.json').read_text())
     owner = next(project for project in manifest['projects'] if project['id'] == 'moxie')
     assert (consumer / owner['path']).resolve() == ROOT
-    adapters = {'LinearRegressionImportance', 'LinearSVCImportance', 'LogisticRegressionImportance'}
+    adapters = {'LinearRegressionImportance', 'LinearSVCImportance', 'LogisticRegressionImportance', 'RidgeClassifierImportance'}
     assert PUBLIC | adapters <= owner['exports']['packages']['moxie.feature_selection'].keys()
     report = json.loads((consumer / 'builds/deps/ASSEMBLY.json').read_text())
     for project in manifest['projects']:

@@ -5,7 +5,11 @@ from ._base import (
     GaussianProcessPosterior,
     GaussianUncertainty,
 )
-from ._gpc import GaussianProcessClassifier, GaussianProcessClassifierParams
+from ._gpc import (
+    GaussianProcessClassifier,
+    GaussianProcessClassifierParams,
+    StructuredGaussianProcessClassifier,
+)
 from ._gpr import (
     DenseGaussianProcessRegressor,
     FminLBFGSB,

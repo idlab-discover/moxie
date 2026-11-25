@@ -1,6 +1,6 @@
 # Adapted from scikit-learn; authors: scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
-"""Dense Gaussian process classification with independent Laplace posteriors."""
+"""Gaussian process classification with independent Laplace posteriors."""
 
 from numojo import NDArray, Shape, zeros
 from std.math import abs
@@ -11,7 +11,7 @@ from moxie._random import check_random_state
 from moxie.metrics._classification import accuracy_score
 
 from ._base import GaussianProcessClassifierAPI
-from ._gpr import LikelihoodResult, _bounds_warnings, _check_finite, _prior_kernel
+from ._gpr import LikelihoodResult, _bounds_warnings, _check_finite, _covariance_copy, _prior_kernel
 from ._kernel_math import as_dense64, fexp
 from ._laplace import (
     _LaplaceMode,
@@ -21,15 +21,18 @@ from ._laplace import (
     _positive_probability,
 )
 from ._optimization import LBFGSBOptimizer, check_restart_bounds, restart_initial_theta, select_best
-from ._plumbing import Dense64, LatentMoments, OptimizationResult, validate_likelihood
+from ._plumbing import Dense64, KernelContract, LatentMoments, OptimizationResult, validate_likelihood
 from .kernels import CompoundKernel, Kernel
 
 
+comptime GaussianProcessClassifierParams = _ClassifierParams[Kernel]
+
+
 @fieldwise_init
-struct GaussianProcessClassifierParams(Copyable, Movable):
+struct _ClassifierParams[K: KernelContract](Copyable, Movable):
     """Constructor configuration for a Gaussian process classifier."""
 
-    var kernel: Optional[Kernel]
+    var kernel: Optional[Self.K]
     var optimizer: Optional[String]
     var n_restarts_optimizer: Int
     var max_iter_predict: Int
@@ -40,6 +43,9 @@ struct GaussianProcessClassifierParams(Copyable, Movable):
     var n_jobs: Optional[Int]
 
     def validate(self) raises:
+        comptime if Self.K != Kernel:
+            if not self.kernel or self.kernel.value().requires_vector_input():
+                raise Error("ValueError: an explicit non-vector kernel is required")
         if self.optimizer and self.optimizer.value() != "fmin_l_bfgs_b":
             raise Error("ValueError: optimizer must be fmin_l_bfgs_b or None")
         if self.n_restarts_optimizer < 0:
@@ -54,23 +60,55 @@ struct GaussianProcessClassifierParams(Copyable, Movable):
             raise Error("ValueError: multi_class must be one_vs_rest or one_vs_one")
 
 
+def _sample_count[K: KernelContract](X: K.Input) raises -> Int:
+    comptime if K == Kernel:
+        return rebind[Dense64](X).shape[0]
+    else:
+        return len(X)
+
+
+def _component_input[K: KernelContract](mut X: K.Input) raises -> K.Input:
+    comptime if K == Kernel:
+        ref matrix = rebind[Dense64](X)
+        return rebind_var[K.Input](matrix.view())
+    else:
+        return X.copy()
+
+
 @fieldwise_init
-struct _BinaryPosterior(Copyable, Movable):
-    var objective: _LaplaceObjective
+struct _BinaryPosterior[K: KernelContract](Copyable, Movable):
+    var objective: _LaplaceObjective[Self.K]
     var mode: _LaplaceMode
     var value: Float64
     var warnings: List[String]
 
-    def kernel_(self) -> Kernel:
+    def kernel_(self) -> Self.K:
         return self.objective.kernel.copy()
 
-    def posterior_mean(self, var X: Dense64) raises -> Dense64:
-        var cross = self.objective.kernel(self.objective.X, X^)
+    def _cross_covariance(self, var X: Self.K.Input, rows: Int) raises -> Dense64:
+        comptime if Self.K == Kernel:
+            return rebind[Kernel](self.objective.kernel)(
+                rebind[Dense64](self.objective.X), rebind_var[Dense64](X^)
+            )
+        else:
+            var evaluation = self.objective.kernel.evaluate(
+                self.objective.X, Optional[Self.K.Input](X^)
+            )
+            return _covariance_copy(evaluation.covariance, self.objective.y.size, rows)
+
+    def posterior_mean(self, var X: Self.K.Input) raises -> Dense64:
+        var rows = _sample_count[Self.K](X)
+        var cross = self._cross_covariance(X^, rows)
         return _latent_mean(cross, self.mode.residual)
 
-    def latent_mean_and_variance(self, var X: Dense64) raises -> LatentMoments:
+    def latent_mean_and_variance(self, var X: Self.K.Input) raises -> LatentMoments:
+        var rows = _sample_count[Self.K](X)
         var diagonal = self.objective.kernel.diag(X)
-        var cross = self.objective.kernel(self.objective.X, X^)
+        comptime if Self.K != Kernel:
+            if diagonal.shape != Shape(rows):
+                raise Error("ValueError: expected kernel diagonal shape (n,)")
+            diagonal = diagonal.contiguous()
+        var cross = self._cross_covariance(X^, rows)
         var mean = _latent_mean(cross, self.mode.residual)
         var variance = _latent_variance(
             diagonal^, cross^, self.mode.root_weights, self.mode.factor
@@ -86,16 +124,16 @@ struct _BinaryPosterior(Copyable, Movable):
         return self.objective.likelihood(trial, eval_gradient)
 
 
-def _fit_binary(
-    var X: Dense64, var y: Dense64, var kernel: Kernel, params: GaussianProcessClassifierParams
-) raises -> _BinaryPosterior:
-    var objective = _LaplaceObjective(
+def _fit_binary[K: KernelContract](
+    var X: K.Input, var y: Dense64, var kernel: K, params: _ClassifierParams[K]
+) raises -> _BinaryPosterior[K]:
+    var objective = _LaplaceObjective[K](
         kernel^, X^, y^, params.max_iter_predict, params.warm_start
     )
     var warnings = List[String]()
     var value: Float64
-    if params.optimizer and objective.kernel.n_dims() > 0:
-        var optimizer = LBFGSBOptimizer[_LaplaceObjective]()
+    if params.optimizer and len(objective.kernel.theta()) > 0:
+        var optimizer = LBFGSBOptimizer[_LaplaceObjective[K]]()
         var bounds = objective.kernel.bounds()
         if params.n_restarts_optimizer > 0:
             check_restart_bounds(bounds)
@@ -123,18 +161,27 @@ def _fit_binary(
     else:
         var initial_kernel = objective.kernel.copy()
         value = objective.likelihood(initial_kernel, False).value
-    var covariance = objective.kernel(objective.X)
+    var covariance: Dense64
+    comptime if K == Kernel:
+        covariance = rebind[Kernel](objective.kernel)(rebind[Dense64](objective.X))
+    else:
+        var evaluation = objective.kernel.evaluate(objective.X)
+        var n = objective.y.size
+        covariance = _covariance_copy(evaluation.covariance, n, n)
     var mode = objective.mode(covariance)
-    return _BinaryPosterior(objective^, mode^, value, warnings^)
+    return _BinaryPosterior[K](objective^, mode^, value, warnings^)
 
 
-def _fit_pair(
-    X: Dense64,
-    first: List[Int],
-    second: List[Int],
-    kernel: Kernel,
-    params: GaussianProcessClassifierParams,
-) raises -> _BinaryPosterior:
+@fieldwise_init
+struct _PairTarget(Movable):
+    var rows: List[Int]
+    var target: Dense64
+
+    def take_target(deinit self) -> Dense64:
+        return self.target^
+
+
+def _pair_target(first: List[Int], second: List[Int]) raises -> _PairTarget:
     # Merge the two sorted row lists to preserve the original training order.
     var size = len(first) + len(second)
     var rows = List[Int](capacity=size)
@@ -149,25 +196,31 @@ def _fit_pair(
             target.unsafe_set(len(rows), 1.0)
             rows.append(second[j])
             j += 1
-    return _fit_binary(X[rows], target^, kernel.copy(), params)
+    return _PairTarget(rows^, target^)
 
 
 @fieldwise_init
-struct _ClassifierPosterior(Copyable, Movable):
+struct _ClassifierPosterior[K: KernelContract](Copyable, Movable):
     """Snapshot of the fitted binary components in classification order."""
 
-    var estimators_: List[_BinaryPosterior]
+    var estimators_: List[_BinaryPosterior[Self.K]]
     var one_vs_one: Bool
     var value: Float64
     var warnings: List[String]
 
-    def kernel_(self) raises -> Kernel:
-        if len(self.estimators_) == 1:
-            return self.estimators_[0].kernel_()
-        var kernels = List[Kernel](capacity=len(self.estimators_))
+    comptime FittedKernel = Kernel if Self.K == Kernel else List[Self.K]
+
+    def kernel_(self) raises -> Self.FittedKernel:
+        comptime if Self.K == Kernel:
+            if len(self.estimators_) == 1:
+                return rebind_var[Self.FittedKernel](self.estimators_[0].kernel_())
+        var kernels = List[Self.K](capacity=len(self.estimators_))
         for estimator in self.estimators_:
             kernels.append(estimator.kernel_())
-        return CompoundKernel(kernels^)
+        comptime if Self.K == Kernel:
+            return rebind_var[Self.FittedKernel](CompoundKernel(rebind_var[List[Kernel]](kernels^)))
+        else:
+            return rebind_var[Self.FittedKernel](kernels^)
 
     def likelihood(
         mut self, theta: Dense64, eval_gradient: Bool, clone_kernel: Bool
@@ -177,10 +230,10 @@ struct _ClassifierPosterior(Copyable, Movable):
             return self.estimators_[0].likelihood(theta, eval_gradient, clone_kernel)
         if eval_gradient:
             raise Error("NotImplementedError: likelihood gradients require binary classification")
-        var width = self.estimators_[0].objective.kernel.n_dims()
+        var width = len(self.estimators_[0].objective.kernel.theta())
         if theta.ndim != 1 or (theta.size != width and theta.size != count * width):
             raise Error("ValueError: theta must contain log parameters for one or all components")
-        var trials = List[Kernel](capacity=count if not clone_kernel else 0)
+        var trials = List[Self.K](capacity=count if not clone_kernel else 0)
         var total: Float64 = 0.0
         for i in range(count):
             ref objective = self.estimators_[i].objective
@@ -197,12 +250,12 @@ struct _ClassifierPosterior(Copyable, Movable):
             self.estimators_[i].objective.kernel = trials[i].copy()
         return LikelihoodResult(total / Float64(count), None)
 
-    def rest_probabilities(self, mut X: Dense64) raises -> Dense64:
-        var rows = X.shape[0]
+    def rest_probabilities(self, mut X: Self.K.Input) raises -> Dense64:
+        var rows = _sample_count[Self.K](X)
         var count = len(self.estimators_)
         var probabilities = zeros[DType.float64](Shape(rows, count))
         for c in range(count):
-            var latent = self.estimators_[c].latent_mean_and_variance(X.view())
+            var latent = self.estimators_[c].latent_mean_and_variance(_component_input[Self.K](X))
             for i in range(rows):
                 probabilities.unsafe_set(
                     i * count + c,
@@ -212,14 +265,14 @@ struct _ClassifierPosterior(Copyable, Movable):
                 )
         return probabilities^
 
-    def pair_scores(self, mut X: Dense64, classes: Int) raises -> Dense64:
-        var rows = X.shape[0]
+    def pair_scores(self, mut X: Self.K.Input, classes: Int) raises -> Dense64:
+        var rows = _sample_count[Self.K](X)
         var votes = zeros[DType.float64](Shape(rows, classes))
         var confidence = zeros[DType.float64](Shape(rows, classes))
         var k = 0
         for first in range(classes):
             for second in range(first + 1, classes):
-                var latent = self.estimators_[k].latent_mean_and_variance(X.view())
+                var latent = self.estimators_[k].latent_mean_and_variance(_component_input[Self.K](X))
                 for i in range(rows):
                     var mean = latent.mean.unsafe_get(i)
                     var p = _positive_probability(mean, latent.variance.unsafe_get(i))
@@ -239,26 +292,35 @@ struct _ClassifierPosterior(Copyable, Movable):
         return votes^
 
 
-struct GaussianProcessClassifier[
-    dtype: DType = DType.float64, label: DType = DType.int64
-](Copyable, GaussianProcessClassifierAPI):
-    """Dense binary, one-vs-rest and one-vs-one Gaussian process classification."""
+comptime StructuredGaussianProcessClassifier[
+    K: KernelContract, Sample: Copyable & Deinitable, label: DType = DType.int64
+] = GaussianProcessClassifier[DType.float64, label, K, Sample]
 
-    comptime Input = NDArray[Self.dtype]
+
+struct GaussianProcessClassifier[
+    dtype: DType = DType.float64,
+    label: DType = DType.int64,
+    K: KernelContract = Kernel,
+    Sample: Copyable & Deinitable = String
+](Copyable, GaussianProcessClassifierAPI):
+    """Binary, one-vs-rest and one-vs-one Gaussian process classification."""
+
+    comptime Input = NDArray[Self.dtype] if Self.K == Kernel else Self.K.Input
+    comptime FittedKernel = _ClassifierPosterior[Self.K].FittedKernel
     comptime Target = NDArray[Self.label]
     comptime Prediction = Self.Target
     comptime Probabilities = Dense64
     comptime SampleWeight = Dense64
-    comptime Params = GaussianProcessClassifierParams
+    comptime Params = _ClassifierParams[Self.K]
 
     var _params: Self.Params
-    var _posterior: Optional[_ClassifierPosterior]
+    var _posterior: Optional[_ClassifierPosterior[Self.K]]
     var _classes: Self.Target
     var n_features_in_: Int
 
     def __init__(
         out self,
-        kernel: Optional[Kernel] = None,
+        kernel: Optional[Self.K] = None,
         *,
         optimizer: Optional[String] = "fmin_l_bfgs_b",
         n_restarts_optimizer: Int = 0,
@@ -274,6 +336,9 @@ struct GaussianProcessClassifier[
         )
         comptime assert Self.label in [DType.int64, DType.float32, DType.float64], (
             "GaussianProcessClassifier targets must be Int64, Float32 or Float64"
+        )
+        comptime assert Self.K == Kernel or Self.K.Input == List[Self.Sample], (
+            "StructuredGaussianProcessClassifier kernel input must be List[Sample]"
         )
         self._params = Self.Params(
             kernel.copy(), optimizer.copy(), n_restarts_optimizer, max_iter_predict,
@@ -296,9 +361,34 @@ struct GaussianProcessClassifier[
         random_state: Optional[Int] = None,
         multi_class: String = "one_vs_rest",
         n_jobs: Optional[Int] = None,
-    ) raises:
+    ) raises where Self.K == Kernel:
         self = Self(
-            Optional[Kernel](kernel.copy()),
+            Optional[Self.K](rebind[Self.K](kernel).copy()),
+            optimizer=optimizer,
+            n_restarts_optimizer=n_restarts_optimizer,
+            max_iter_predict=max_iter_predict,
+            warm_start=warm_start,
+            copy_X_train=copy_X_train,
+            random_state=random_state,
+            multi_class=multi_class,
+            n_jobs=n_jobs,
+        )
+
+    def __init__(
+        out self,
+        kernel: Self.K,
+        *,
+        optimizer: Optional[String] = "fmin_l_bfgs_b",
+        n_restarts_optimizer: Int = 0,
+        max_iter_predict: Int = 100,
+        warm_start: Bool = False,
+        copy_X_train: Bool = True,
+        random_state: Optional[Int] = None,
+        multi_class: String = "one_vs_rest",
+        n_jobs: Optional[Int] = None,
+    ) raises where Self.K != Kernel:
+        self = Self(
+            Optional[Self.K](kernel.copy()),
             optimizer=optimizer,
             n_restarts_optimizer=n_restarts_optimizer,
             max_iter_predict=max_iter_predict,
@@ -322,7 +412,7 @@ struct GaussianProcessClassifier[
     def set_params[origin: MutOrigin](
         ref[origin] self,
         *,
-        kernel: Optional[Optional[Kernel]] = None,
+        kernel: Optional[Optional[Self.K]] = None,
         optimizer: Optional[Optional[String]] = None,
         n_restarts_optimizer: Optional[Int] = None,
         max_iter_predict: Optional[Int] = None,
@@ -348,8 +438,17 @@ struct GaussianProcessClassifier[
         return self.set_params(params)
 
     def __sklearn_clone__(self) raises -> Self:
-        var model = Self()
-        _ = model.set_params(self._params)
+        var model = Self(
+            self._params.kernel,
+            optimizer=self._params.optimizer,
+            n_restarts_optimizer=self._params.n_restarts_optimizer,
+            max_iter_predict=self._params.max_iter_predict,
+            warm_start=self._params.warm_start,
+            copy_X_train=self._params.copy_X_train,
+            random_state=self._params.random_state,
+            multi_class=self._params.multi_class,
+            n_jobs=self._params.n_jobs,
+        )
         return model^
 
     def __sklearn_is_fitted__(self) -> Bool:
@@ -359,27 +458,46 @@ struct GaussianProcessClassifier[
         if not self.__sklearn_is_fitted__():
             raise Error("NotFittedError: GaussianProcessClassifier is not fitted")
 
-    def _input(self, X: Self.Input) raises -> Dense64:
-        if X.ndim != 2 or X.shape[0] == 0 or X.shape[1] == 0:
-            raise Error("ValueError: X must be a nonempty 2-D feature array")
-        var dense = as_dense64(X, "GaussianProcessClassifier X")
-        _check_finite(dense, "X")
-        return dense^
+    @staticmethod
+    def _input(X: Self.Input) raises -> Self.K.Input:
+        comptime if Self.K == Kernel:
+            ref matrix = rebind[NDArray[Self.dtype]](X)
+            if matrix.ndim != 2 or matrix.shape[0] == 0 or matrix.shape[1] == 0:
+                raise Error("ValueError: X must be a nonempty 2-D feature array")
+            var dense = as_dense64(matrix, "GaussianProcessClassifier X")
+            _check_finite(dense, "X")
+            return rebind_var[Self.K.Input](dense^)
+        else:
+            if len(X) == 0:
+                raise Error("ValueError: expected at least one structured sample")
+            return rebind_var[Self.K.Input](X.copy())
 
-    def _query(self, X: Self.Input) raises -> Dense64:
+    @staticmethod
+    def _subset(X: Self.K.Input, rows: List[Int]) raises -> Self.K.Input:
+        comptime if Self.K == Kernel:
+            return rebind_var[Self.K.Input](rebind[Dense64](X)[rows])
+        else:
+            ref samples = rebind[List[Self.Sample]](X)
+            var selected = List[Self.Sample](capacity=len(rows))
+            for i in rows:
+                selected.append(samples[i].copy())
+            return rebind_var[Self.K.Input](selected^)
+
+    def _query(self, X: Self.Input) raises -> Self.K.Input:
         self._require_fitted()
-        var query = self._input(X)
-        if query.shape[1] != self.n_features_in_:
-            raise Error("ValueError: X feature count does not match fit")
+        var query = Self._input(X)
+        comptime if Self.K == Kernel:
+            if rebind[Dense64](query).shape[1] != self.n_features_in_:
+                raise Error("ValueError: X feature count does not match fit")
         return query^
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target
     ) raises -> ref[self] Self:
-        var dense = self._input(X)
+        var samples = Self._input(X)
         if y.ndim != 1 and (y.ndim != 2 or y.shape[1] != 1):
             raise Error("ValueError: y must be rank one or a single column")
-        if y.size != dense.shape[0]:
+        if y.size != _sample_count[Self.K](samples):
             raise Error("ValueError: X and y have different numbers of samples")
         var encoding = encode_column(y)
         var classes = encoding.classes.size
@@ -387,36 +505,40 @@ struct GaussianProcessClassifier[
             raise Error("ValueError: GaussianProcessClassifier requires at least two classes")
         if classes > 2 and self._params.n_jobs.or_else(1) == 0:
             raise Error("ValueError: n_jobs cannot be zero for multiclass classification")
-        var kernel = _prior_kernel()
-        if self._params.kernel:
+        var kernel: Self.K
+        var features = 0
+        comptime if Self.K == Kernel:
+            kernel = self._params.kernel.value().copy() if self._params.kernel else rebind_var[Self.K](_prior_kernel())
+            if rebind[Kernel](kernel).name() == "CompoundKernel":
+                raise Error("ValueError: kernel cannot be a CompoundKernel")
+            features = rebind[Dense64](samples).shape[1]
+        else:
             kernel = self._params.kernel.value().copy()
-        if kernel.name() == "CompoundKernel":
-            raise Error("ValueError: kernel cannot be a CompoundKernel")
 
-        var features = dense.shape[1]
         ref codes = encoding.index.inverse
         var one_vs_one = classes > 2 and self._params.multi_class == "one_vs_one"
-        var estimators = List[_BinaryPosterior]()
+        var estimators = List[_BinaryPosterior[Self.K]]()
         if one_vs_one:
             var class_rows = List[List[Int]](length=classes, fill=List[Int]())
             for i in range(codes.size):
                 class_rows[Int(codes.unsafe_get(i))].append(i)
             for first in range(classes):
                 for second in range(first + 1, classes):
+                    var pair = _pair_target(class_rows[first], class_rows[second])
+                    var pair_samples = Self._subset(samples, pair.rows)
                     estimators.append(
-                        _fit_pair(
-                            dense, class_rows[first], class_rows[second], kernel, self._params
-                        )
+                        _fit_binary(pair_samples^, pair^.take_target(), kernel.copy(), self._params)
                     )
         else:
-            # The owned feature snapshot is shared internally by OvR components.
             for c in range(1 if classes == 2 else classes):
                 var positive = Int64(1 if classes == 2 else c)
                 var target = zeros[DType.float64](Shape(y.size, 1))
                 for i in range(y.size):
                     target.unsafe_set(i, Float64(codes.unsafe_get(i) == positive))
                 estimators.append(
-                    _fit_binary(dense.view(), target^, kernel.copy(), self._params)
+                    _fit_binary(
+                        _component_input[Self.K](samples), target^, kernel.copy(), self._params
+                    )
                 )
 
         var value: Float64 = 0.0
@@ -428,7 +550,7 @@ struct GaussianProcessClassifier[
         for warning in warnings:
             print(warning, file=stderr)
         value /= Float64(len(estimators))
-        self._posterior = _ClassifierPosterior(estimators^, one_vs_one, value, warnings^)
+        self._posterior = _ClassifierPosterior[Self.K](estimators^, one_vs_one, value, warnings^)
         self._classes = encoding.classes.copy()
         self.n_features_in_ = features
         return self
@@ -441,12 +563,12 @@ struct GaussianProcessClassifier[
         self._require_fitted()
         return self._classes.size
 
-    def base_estimator_(self) raises -> _ClassifierPosterior:
+    def base_estimator_(self) raises -> _ClassifierPosterior[Self.K]:
         """An independent snapshot with the fitted components in estimators_."""
         self._require_fitted()
         return self._posterior.value().copy()
 
-    def kernel_(self) raises -> Kernel:
+    def kernel_(self) raises -> Self.FittedKernel:
         self._require_fitted()
         return self._posterior.value().kernel_()
 
@@ -477,7 +599,7 @@ struct GaussianProcessClassifier[
         var query = self._query(X)
         ref posterior = self._posterior.value()
         var classes = self._classes.size
-        var rows = query.shape[0]
+        var rows = _sample_count[Self.K](query)
         var prediction = zeros[Self.label](Shape(rows))
         if classes == 2:
             var mean = posterior.estimators_[0].posterior_mean(query^)
@@ -510,7 +632,7 @@ struct GaussianProcessClassifier[
         var classes = self._classes.size
         if classes > 2:
             var probabilities = posterior.rest_probabilities(query)
-            for i in range(query.shape[0]):
+            for i in range(_sample_count[Self.K](query)):
                 var total: Float64 = 0.0
                 for c in range(classes):
                     total += probabilities.unsafe_get(i * classes + c)

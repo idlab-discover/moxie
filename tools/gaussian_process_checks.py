@@ -117,8 +117,10 @@ if __name__ == '__main__':
     if action in ('build', 'test', 'parity', 'classification'):
         check.run(sys.executable, ROOT / 'shared/assembly/tools/assemble_family.py',
                   '--consumer', ROOT, '--lock', ROOT / 'DEPENDENCIES.json', '--output', DEPS)
-        selected = (sorted((TESTS / 'classification').glob('*.mojo'))
-                    if action == 'classification' else sources() + EXAMPLES)
+        selected = (
+            sorted((TESTS / 'classification').glob('*.mojo')) + [TESTS / 'regression/structured.mojo']
+            if action == 'classification' else sources() + EXAMPLES
+        )
         for source in selected:
             binary = check.executable(source)
             binary.parent.mkdir(parents=True, exist_ok=True)
@@ -131,5 +133,6 @@ if __name__ == '__main__':
         ownership()
         check.run(check.executable(TESTS / 'classification/contracts.mojo'))
         check.run(sys.executable, TESTS / 'classification/parity.py')
+        check.run(sys.executable, TESTS / 'regression/structured_parity.py')
     elif action != 'build':
         raise ValueError(action)

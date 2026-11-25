@@ -1,4 +1,4 @@
-# Dense Gaussian process classification
+# Gaussian process classification
 
 `GaussianProcessClassifier` fits binary Laplace posteriors for binary and
 multiclass classification.
@@ -83,6 +83,40 @@ which cannot represent all fitted pairs. Multiclass likelihood gradients and
 latent moments raise. Changing `multi_class` through `set_params` takes
 effect on the next successful fit.
 
+## Structured inputs
+
+Use `StructuredGaussianProcessClassifier[MyKernel, Sample]` with an explicit
+`KernelContract` whose `Input` is `List[Sample]` and whose
+`requires_vector_input()` returns false. For example, a sequence kernel can
+take `List[String]`, with each string representing one sample. `Sample`
+must be copyable. The optional third type parameter selects the label dtype.
+Training and query lists must contain at least one sample. The kernel defines
+the semantics and validity of each sample.
+
+The same kernel can be used with `StructuredGaussianProcessRegressor[MyKernel]`.
+Return covariance with shape `(n_X, n_Y)`, a diagonal of shape `(n_X,)`, and
+log-theta derivatives of shape `(n_X, n_X, n_dims)` when requested. The
+classifier passes the stored training list as `X` and the query list as
+explicit `Y` for cross-covariance. It copies retained samples using their
+native copy operations. OvO selects the two classes' samples in their
+original input order. Binary, OvR, and OvO fits use the same Float64 Laplace
+engine and optimizer as the dense classifier.
+
+For structured fits, `kernel_()` returns a typed `List[MyKernel]` in the
+same order as `base_estimator_().estimators_`, with one element in the binary
+case. This preserves the fitted kernel type across binary and multiclass
+fits. `n_features_in_` is zero because the input consists of structured
+samples. Targets, class ordering, output shapes and fit lifecycle follow the
+dense classifier contract.
+
+The shared sequence-kernel probe in
+[structured parity](../../../tests/gaussian_process/regression/structured_parity.py)
+compares fixed and optimized binary models and three-class OvR and OvO
+models with pinned scikit-learn. The OvO oracle uses integer row IDs to
+carry sequences through scikit-learn's numeric matrix validation and decodes
+the IDs inside the same kernel. The probe checks class order, predictions,
+probabilities, latent moments, fitted theta and log marginal likelihood.
+
 ## Numerical implementation
 
 Algorithm 3.1 factors `I + sqrt(W) K sqrt(W)` and uses triangular solves.
@@ -108,5 +142,5 @@ one-step Newton limit with warm-start enabled and disabled. Tolerances account
 for Float32 kernel arithmetic and stopping decisions in the reference optimizer.
 
 Run `python tools/gaussian_process_checks.py classification` in the locked
-environment to assemble live sources, compile the two classification probes,
-and run the contracts and pinned parity.
+environment to assemble live sources, compile the classification and
+structured-input probes, and run their contracts and pinned parity.

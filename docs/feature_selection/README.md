@@ -9,6 +9,10 @@ and examples in `examples/feature_selection.mojo` and `examples/feature_selectio
 The previous family checkout is retired; consumers must remove its module and
 export contributions and use Moxie's current dependency manifests.
 
+The [Titanic release-highlight notebook](../../notebooks/release_highlights/plot_release_highlights_1_1_0.ipynb)
+checks the feature names emitted by a mixed-column preprocessor and
+`SelectKBest` in the order used by the fitted logistic regression coefficients.
+
 Run from Moxie:
 
 ```sh

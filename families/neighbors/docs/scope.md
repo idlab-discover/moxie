@@ -21,9 +21,10 @@ multilabel target dispatch, native callable metrics and stored callable weights,
 self-query standardized-Euclidean variance inference, arbitrary positive Minkowski
 powers through native Float64 power, and default-stream KDE sampling. Capability
 traits and native API adaptations are documented in [estimators.md](estimators.md).
-This does not claim exhaustive sklearn parity: Python reflection/metadata routing,
-radius prediction warning emission and the documented numerical-domain restrictions remain outside
-the supported native interface. `n_jobs` remains a serial scheduling hint.
+Radius prediction writes warning categories and messages to stderr.
+The supported native interface excludes Python reflection and metadata routing
+and follows the documented numerical-domain restrictions. `n_jobs` remains a
+serial scheduling hint.
 
 Deferred by the retained dense-only contract: sparse
 feature/precomputed storage, VALID_METRICS_SPARSE, KNeighborsTransformer,
@@ -36,7 +37,8 @@ Validation commands are `pixi run build`, `pixi run test`, `pixi run parity`,
 `pixi run start`, and the query-engine's `pixi run test` / `pixi run parity`.
 Build/test compose two isolated downstream consumers with real estimator calls,
 verify shared ownership, reject drift/conflicting exports, compile all owned
-modules and reject sparse imports. Parity covers 192 supervised configurations across auto, KDTree and BallTree,
+modules and reject sparse imports. Parity covers 192 supervised configurations
+across auto, KDTree and BallTree, including radius prediction warnings,
 LOF reachability/novelty calculations, 576 KDE configurations across three metrics
 and backend selections, and 432 centroid configurations. KDTree adds 336 independent configurations and 205 original local sklearn
 test invocations with a compiled pinned oracle. BallTree adds 602 independent

@@ -163,7 +163,11 @@ Radius regression returns NaN for empty neighborhoods. Radius classification
 raises by default; pass `outlier_label` as a one-dimensional array with one label
 per output, or `outlier_most_frequent=True` for the reference's `"most_frequent"`
 setting. An outlier label outside the fitted classes yields all-zero probabilities
-and the requested prediction. Native warnings are not emitted.
+and the requested prediction. Radius regression writes one `UserWarning` if
+any prediction is NaN. Radius classification writes one `UserWarning` per
+output with an outlier label outside its fitted classes when a query has no
+neighbors. Both `predict` and classifier `predict_proba` write the category
+and message to stderr. Label text uses native Mojo formatting.
 
 ## LocalOutlierFactor
 

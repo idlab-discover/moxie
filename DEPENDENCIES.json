@@ -565,6 +565,9 @@
         },
         "moxie.ensemble._hist_gradient_boosting.histogram": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/histogram.mojo"
+        },
+        "moxie.ensemble._hist_gradient_boosting.splitting": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/splitting.mojo"
         }
       },
       "assets": {

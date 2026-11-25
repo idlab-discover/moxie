@@ -46,10 +46,10 @@ below. Fit/prediction errors always propagate.
 Execution is serial. Python parallelism, `pre_dispatch`, routing and scorer-name
 reflection are not exposed. Sparse inputs, slicing and predictions remain deferred.
 Incremental adapters and native SVG displays are implemented as described below.
-On Mojo 1.0 the evaluated estimator cannot be a struct with a struct-level
-`where` clause, such as `moxie.pipeline.Pipeline`, `GridSearchCV` or
-`RandomizedSearchCV`: naming it as a scorer's `Estimator` fails to compile.
-See the [search composition limits](../../search/docs/search.md#composition-limits).
+Concrete Pipeline and search types can be a scorer's `Estimator`, including
+`cross_val_score(GridSearchCV(...))`. Scorer-associated value requirements are
+declared on `TypedScorer`; evaluated estimators need no search-specific
+struct-level bounds. See [search composition](../../search/docs/search.md#composition).
 
 ## Out-of-fold predictions
 

@@ -207,7 +207,7 @@ def main() raises:
     var grid = Dict[String, List[Float64]]()
     grid["svc__C"] = cs.copy()
     var search = GridSearchCV[ScaledSearch](scaled(), grid, ScaledSearch(), cv=folds())
-    search.fit(X, y, None, None)
+    _ = search.fit(X, y, None, None)
     var means = search.cv_results_().mean_test_score.copy()
     var best = 0
     for i in range(3):
@@ -235,7 +235,7 @@ def main() raises:
         Pipeline(PCA(), SVC(), transformer_name="pca", estimator_name="svc"),
         reduced_grid, ReducedSearch(), cv=folds(),
     )
-    reduced.fit(X, y, None, None)
+    _ = reduced.fit(X, y, None, None)
     var reduced_means = reduced.cv_results_().mean_test_score.copy()
     # Pinned sklearn values for this fixture (fold accuracies are multiples of
     # 1/10, so means agree to the last bits of a three-term float average).
@@ -252,4 +252,27 @@ def main() raises:
         assert_true(abs(scores.item(k) - sklearn_scaled[k]) < 1e-12)
         assert_true(abs(means.item(k) - sklearn_means[k]) < 1e-12)
     assert_equal(cs[best], 1.0)
+    for f in range(3):
+        print("pipeline_cv", scores.item(f))
+    var scaled_result = search.cv_results_()
+    for c in range(3):
+        print("pipeline_candidate", scaled_result.params[c]["svc__C"])
+        print("pipeline_mean", scaled_result.mean_test_score.item(c, 0))
+        print("pipeline_rank", scaled_result.rank_test_score.item(c, 0))
+        for f in range(3):
+            print("pipeline_fold", scaled_result.scores.test_scores.item(c, f, 0))
+    print("pipeline_best", search.best_index_())
+    for i in range(len(a)):
+        print("pipeline_prediction", a[i])
+    var reduced_result = reduced.cv_results_()
+    for c in range(4):
+        print("pca_candidate", reduced_result.params[c]["pca__n_components"], reduced_result.params[c]["svc__C"])
+        print("pca_mean", reduced_result.mean_test_score.item(c, 0))
+        print("pca_rank", reduced_result.rank_test_score.item(c, 0))
+        for f in range(3):
+            print("pca_fold", reduced_result.scores.test_scores.item(c, f, 0))
+    print("pca_best", reduced.best_index_())
+    var reduced_prediction = reduced.predict(X)
+    for i in range(len(reduced_prediction)):
+        print("pca_prediction", reduced_prediction[i])
     print("PASS: Pipeline under cross_val_score and GridSearchCV")

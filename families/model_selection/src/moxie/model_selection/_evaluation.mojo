@@ -1,11 +1,11 @@
 """Estimator-independent lifecycle seam; no CV evaluation engine."""
 from moxie.base import BaseEstimator, clone
 
-trait TypedScorer(Movable):
+trait TypedScorer(Movable, Deinitable):
     comptime Estimator: BaseEstimator & Deinitable
-    comptime Input: Movable
-    comptime Target: Movable
-    comptime Metadata: Movable
+    comptime Input: Movable & Deinitable
+    comptime Target: Movable & Deinitable
+    comptime Metadata: Movable & Deinitable
 
     def score(self, estimator: Self.Estimator, X: Self.Input,
               y: Self.Target, metadata: Self.Metadata) raises -> Float64:

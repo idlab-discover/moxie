@@ -151,7 +151,7 @@ for i, case in enumerate(cases):
         warnings.simplefilter('ignore')
         estimator.fit(X, y)
     expected[i] = estimator
-    code += f'    var s{i} = {kind}(model, {native_grid}, Adapter(), '+', '.join(args)+f')\n    s{i}.fit(arrays[0], arrays[1], None, None)\n    emit(s{i}.cv_results_(), {i})\n'
+    code += f'    var s{i} = {kind}(model, {native_grid}, Adapter(), '+', '.join(args)+f')\n    _ = s{i}.fit(arrays[0], arrays[1], None, None)\n    emit(s{i}.cv_results_(), {i})\n'
     if refit or not multi:
         code += f'    print({i}, "best", s{i}.best_index_())\n'
     if refit:

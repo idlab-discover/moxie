@@ -28,11 +28,14 @@ assert sklearn.__version__ == '1.9.1'
 assert subprocess.check_output(['git', '-C', str(ORACLE), 'rev-parse', 'HEAD'], text=True).strip() == REVISION
 files = ['sklearn/model_selection/_search.py', 'sklearn/model_selection/_validation.py', 'sklearn/utils/_metadata_requests.py', 'sklearn/dummy.py']
 svc_only = '--svc-only' in sys.argv
-if svc_only:
+fit_time_cv = '--fit-time-cv' in sys.argv
+if svc_only or fit_time_cv:
     split_source = 'sklearn/model_selection/_split.py'
+    files.append(split_source)
+if svc_only:
     svc_source = 'sklearn/svm/_classes.py'
     iris_source = 'sklearn/datasets/data/iris.csv'
-    files += [split_source, svc_source, iris_source]
+    files += [svc_source, iris_source]
 assert not subprocess.check_output(['git', '-C', str(ORACLE), 'status', '--porcelain', '--', *files], text=True)
 
 def module(name, path):
@@ -66,6 +69,16 @@ if svc_only:
     ns['check_cv'] = split.check_cv
     binary = Path(sys.argv[sys.argv.index('--svc-only') + 1]).resolve()
     check_svc_search(reference, ns['cross_val_score'], split.KFold, svc, ORACLE / iris_source, binary)
+    raise SystemExit()
+
+
+if fit_time_cv:
+    from fit_time_cv_parity import check_fit_time_cv
+
+    split = module('sklearn.model_selection._moxie_search_split', split_source)
+    reference.check_cv = split.check_cv
+    binary = Path(sys.argv[sys.argv.index('--fit-time-cv') + 1]).resolve()
+    check_fit_time_cv(reference, split, dummy, binary)
     raise SystemExit()
 
 

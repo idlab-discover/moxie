@@ -69,7 +69,7 @@ def _evaluate_fold[A: CVAdapter](
     adapter: A, scorers: List[A.Scorer], split: IndexSplit,
     fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata,
     mut scores: ScoreTable, candidate: Int, fold: Int, error_score: ErrorPolicy,
-) raises -> FitStatus where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer, Deinitable):
+) raises -> FitStatus:
     """Fit a fresh caller-owned clone and fill its score cells; no aggregate policy."""
     var X_train = adapter.input_rows(X, split.train, split.train)
     var X_test = adapter.input_rows(X, split.test, split.train)
@@ -117,7 +117,7 @@ def _cross_validate[A: CVAdapter](
     *, return_train_score: Bool = False, return_estimator: Bool = False,
     return_indices: Bool = False, allow_all_failed: Bool = False,
     error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
-) raises -> CVResult[A.Scorer.Estimator] where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer, Deinitable):
+) raises -> CVResult[A.Scorer.Estimator]:
     var n = adapter.n_samples(X, y)
     _checked_splits(cv, n)
     var metrics = len(scorers)
@@ -157,11 +157,11 @@ def cross_validate[A: CVAdapter](
     *, return_train_score: Bool = False, return_estimator: Bool = False,
     return_indices: Bool = False,
     error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
-) raises -> CVResult[A.Scorer.Estimator] where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer, Deinitable):
+) raises -> CVResult[A.Scorer.Estimator]:
     return _cross_validate[A](estimator, X, y, adapter, scorers, metric_names, cv, fit_metadata, score_metadata, return_train_score=return_train_score, return_estimator=return_estimator, return_indices=return_indices, error_score=error_score)
 
 
-def cross_val_score[A: CVAdapter](estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target, adapter: A, var scorer: A.Scorer, cv: List[IndexSplit], fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata, *, error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000)))) raises -> NDArray[DType.float64] where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer, Deinitable):
+def cross_val_score[A: CVAdapter](estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target, adapter: A, var scorer: A.Scorer, cv: List[IndexSplit], fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata, *, error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000)))) raises -> NDArray[DType.float64]:
     var scorers = List[A.Scorer]()
     scorers.append(scorer^)
     var result = cross_validate[A](estimator, X, y, adapter, scorers, List[String](["score"]), cv, fit_metadata, score_metadata, error_score=error_score)
@@ -183,7 +183,7 @@ def _checked_prediction_splits(cv: List[IndexSplit], n: Int) raises:
             raise Error("ValueError: cross_val_predict requires test indices to partition samples")
 
 
-def cross_val_predict[A: PredictionAdapter](estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target, adapter: A, cv: List[IndexSplit], fit_metadata: A.Scorer.Metadata, *, method: String = "predict") raises -> NDArray[A.PredictionDType] where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer, Deinitable):
+def cross_val_predict[A: PredictionAdapter](estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target, adapter: A, cv: List[IndexSplit], fit_metadata: A.Scorer.Metadata, *, method: String = "predict") raises -> NDArray[A.PredictionDType]:
     if method != "predict":
         raise Error("ValueError: numeric prediction adapter supports method='predict' only; class responses require ClassPredictionAdapter")
     var n = adapter.n_samples(X, y)
@@ -207,7 +207,7 @@ def validation_curve[A: CVAdapter & ParameterAdapter](
     fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata,
     *, param_name: String, param_range: List[A.Value],
     error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
-) raises -> Tuple[NDArray[DType.float64], NDArray[DType.float64]] where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer, Deinitable):
+) raises -> Tuple[NDArray[DType.float64], NDArray[DType.float64]]:
     """Return train/test scores (parameter, split), evaluating split-first."""
     _checked_splits(cv, adapter.n_samples(X, y))
     if len(param_range) == 0:
@@ -295,7 +295,7 @@ def learning_curve[A: CVAdapter, size_dtype: DType = DType.float64](
     shuffle: Bool = False, return_times: Bool = False,
     exploit_incremental_learning: Bool = False,
     error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
-) raises -> LearningCurveResult where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer, Deinitable):
+) raises -> LearningCurveResult:
     """Serial dense learning curve with an explicitly borrowed RNG stream."""
     comptime if not conforms_to(A, IncrementalCVAdapter):
         if exploit_incremental_learning:
@@ -387,7 +387,7 @@ def learning_curve[A: CVAdapter, size_dtype: DType = DType.float64](
     shuffle: Bool = False, random_state: Optional[Int] = None,
     return_times: Bool = False, exploit_incremental_learning: Bool = False,
     error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
-) raises -> LearningCurveResult where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer, Deinitable):
+) raises -> LearningCurveResult:
     """An integer seed reconstructs a stream for each call, like check_random_state."""
     if shuffle and not random_state:
         raise Error("ValueError: shuffle=True requires an integer seed or a mutable RandomState")
@@ -429,7 +429,7 @@ def _permutation_score[C: PermutationCV](
     adapter: C.Adapter, scoring: C.Adapter.Scorer, mut cv: C,
     fit_metadata: C.Adapter.Scorer.Metadata, score_metadata: C.Adapter.Scorer.Metadata,
     groups: Optional[SplitLabels],
-) raises -> Float64 where conforms_to(C.Adapter.Scorer.Input, Deinitable) and conforms_to(C.Adapter.Scorer.Target, Deinitable) and conforms_to(C.Adapter.Scorer.Metadata, Deinitable):
+) raises -> Float64:
     # The reference clones ONCE per dataset, then refits that clone across folds.
     # In particular, replacing this with cross_val_score changes warm-start behavior.
     var model = clone(estimator)
@@ -467,7 +467,7 @@ def permutation_test_score[C: PermutationCV](
     adapter: C.Adapter, scoring: C.Adapter.Scorer, mut cv: C,
     fit_metadata: C.Adapter.Scorer.Metadata, score_metadata: C.Adapter.Scorer.Metadata,
     mut random_state: RandomState, *, groups: Optional[SplitLabels] = None, n_permutations: Int = 100,
-) raises -> PermutationTestResult where conforms_to(C.Adapter.Scorer.Input, Deinitable) and conforms_to(C.Adapter.Scorer.Target, Deinitable) and conforms_to(C.Adapter.Scorer.Metadata, Deinitable):
+) raises -> PermutationTestResult:
     if n_permutations < 1:
         raise Error("ValueError: n_permutations must be at least one")
     var n = adapter.n_samples(X, y)
@@ -506,7 +506,7 @@ def permutation_test_score[C: PermutationCV](
     adapter: C.Adapter, scoring: C.Adapter.Scorer, mut cv: C,
     fit_metadata: C.Adapter.Scorer.Metadata, score_metadata: C.Adapter.Scorer.Metadata,
     *, groups: Optional[SplitLabels] = None, n_permutations: Int = 100, random_state: Int = 0,
-) raises -> PermutationTestResult where conforms_to(C.Adapter.Scorer.Input, Deinitable) and conforms_to(C.Adapter.Scorer.Target, Deinitable) and conforms_to(C.Adapter.Scorer.Metadata, Deinitable):
+) raises -> PermutationTestResult:
     var rng = RandomState(random_state)
     return permutation_test_score[C](estimator, X, y, adapter, scoring, cv, fit_metadata, score_metadata, rng, groups=groups, n_permutations=n_permutations)
 
@@ -516,7 +516,7 @@ def permutation_test_score[A: CVAdapter](
     adapter: A, scoring: A.Scorer, cv: List[IndexSplit],
     fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata,
     mut random_state: RandomState, *, groups: Optional[SplitLabels] = None, n_permutations: Int = 100,
-) raises -> PermutationTestResult where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable):
+) raises -> PermutationTestResult:
     var provider = FixedPermutationCV[A](cv)
     return permutation_test_score[FixedPermutationCV[A]](estimator, X, y, adapter, scoring, provider, fit_metadata, score_metadata, random_state, groups=groups, n_permutations=n_permutations)
 
@@ -526,7 +526,7 @@ def permutation_test_score[A: CVAdapter](
     adapter: A, scoring: A.Scorer, cv: List[IndexSplit],
     fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata,
     *, groups: Optional[SplitLabels] = None, n_permutations: Int = 100, random_state: Int = 0,
-) raises -> PermutationTestResult where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable):
+) raises -> PermutationTestResult:
     var rng = RandomState(random_state)
     return permutation_test_score[A](estimator, X, y, adapter, scoring, cv, fit_metadata, score_metadata, rng, groups=groups, n_permutations=n_permutations)
 
@@ -617,7 +617,7 @@ def cross_val_predict[A: StringPredictionAdapter](
     estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
     adapter: A, cv: List[IndexSplit], fit_metadata: A.Scorer.Metadata,
     *, method: String = "predict",
-) raises -> StringTarget where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable):
+) raises -> StringTarget:
     if method != "predict":
         raise Error("ValueError: string prediction adapter supports method='predict' only")
     var n = adapter.n_samples(X, y)
@@ -685,7 +685,7 @@ def cross_val_predict[A: ClassPredictionAdapter](
     estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
     adapter: A, cv: List[IndexSplit], fit_metadata: A.Scorer.Metadata,
     *, method: String,
-) raises -> CVClassPrediction[A.ResponseDType] where conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable):
+) raises -> CVClassPrediction[A.ResponseDType]:
     if method != "predict_proba" and method != "predict_log_proba" and method != "decision_function":
         raise Error("ValueError: class prediction method must be predict_proba, predict_log_proba or decision_function")
     var n = adapter.n_samples(X, y)

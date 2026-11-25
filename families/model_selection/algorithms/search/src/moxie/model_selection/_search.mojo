@@ -1,6 +1,6 @@
 # Adapted from scikit-learn; SPDX-License-Identifier: BSD-3-Clause
 """Serial typed grid/random search, shared candidate evaluation and refitting."""
-from moxie.base import BaseEstimator, InputEstimator, clone, Predictor, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, TransformerMixin, InverseTransformer, SampleScorer
+from moxie.base import SupervisedEstimator, SupervisedScorer, ClassifierMixin, RegressorMixin, BaseEstimator, InputEstimator, clone, Predictor, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, TransformerMixin, InverseTransformer, SampleScorer
 from moxie.model_selection._base import SearchEstimator
 from moxie.model_selection._evaluation import TypedScorer, ParameterAdapter
 from moxie.model_selection._validation import CVAdapter, _cross_validate
@@ -22,6 +22,7 @@ trait SearchScorer(TypedScorer, Copyable):
 
 trait SearchAdapter(CVAdapter, ParameterAdapter, Copyable, Deinitable):
     """Extend CV with typed partial parameter application and default policies."""
+
     def default_scorer(self) raises -> Self.Scorer:
         ...
 
@@ -31,7 +32,7 @@ trait SearchAdapter(CVAdapter, ParameterAdapter, Copyable, Deinitable):
 
 
 @fieldwise_init
-struct SearchResults[V: Copyable & Deinitable](Movable):
+struct SearchResults[V: Copyable & Deinitable](Copyable, Movable):
     var params: List[Dict[String, Self.V]]
     var scores: ScoreTable
     var status: List[FitStatus]
@@ -184,8 +185,15 @@ def _copy_splits(cv: Optional[List[IndexSplit]]) -> Optional[List[IndexSplit]]:
     return result^
 
 
+def _copy_scorers[S: TypedScorer](scorers: List[S]) -> List[S]:
+    comptime if conforms_to(S, Copyable):
+        return scorers.copy()
+    else:
+        comptime assert False, "SearchAdapter.Scorer must be copyable"
+
+
 @fieldwise_init
-struct SearchOptions[A: SearchAdapter, R: SearchRefitPolicy](Copyable, Movable) where conforms_to(A.Scorer, Copyable) and conforms_to(A.Scorer, Deinitable) and conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Input, Copyable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer.Estimator.Params, Deinitable):
+struct SearchOptions[A: SearchAdapter, R: SearchRefitPolicy](Copyable, Movable):
     var adapter: Self.A
     var scoring: List[Self.A.Scorer]
     var metric_names: List[String]
@@ -197,7 +205,7 @@ struct SearchOptions[A: SearchAdapter, R: SearchRefitPolicy](Copyable, Movable) 
 
     def __init__(out self, *, copy: Self):
         self.adapter = copy.adapter.copy()
-        self.scoring = copy.scoring.copy()
+        self.scoring = _copy_scorers(copy.scoring)
         self.metric_names = copy.metric_names.copy()
         self.multimetric = copy.multimetric
         self.cv = _copy_splits(copy.cv)
@@ -206,10 +214,11 @@ struct SearchOptions[A: SearchAdapter, R: SearchRefitPolicy](Copyable, Movable) 
         self.error_score = copy.error_score.copy()
 
 
-def _options[A: SearchAdapter, R: SearchRefitPolicy](adapter: A, scoring: Optional[List[A.Scorer]], metric_names: Optional[List[String]], cv: Optional[List[IndexSplit]], refit: R, return_train_score: Bool, error_score: ErrorPolicy) raises -> SearchOptions[A, R] where conforms_to(A.Scorer, Copyable) and conforms_to(A.Scorer, Deinitable) and conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Input, Copyable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer.Estimator.Params, Deinitable):
+def _options[A: SearchAdapter, R: SearchRefitPolicy](adapter: A, scoring: Optional[List[A.Scorer]], metric_names: Optional[List[String]], cv: Optional[List[IndexSplit]], refit: R, return_train_score: Bool, error_score: ErrorPolicy) raises -> SearchOptions[A, R]:
+    comptime assert conforms_to(A.Scorer, Copyable), "SearchAdapter.Scorer must be copyable"
     var scorers = List[A.Scorer]()
     if scoring:
-        scorers = scoring.value().copy()
+        scorers = _copy_scorers(scoring.value())
     else:
         scorers.append(adapter.default_scorer())
     var names: List[String] = ["score"]
@@ -219,13 +228,13 @@ def _options[A: SearchAdapter, R: SearchRefitPolicy](adapter: A, scoring: Option
 
 
 @fieldwise_init
-struct SearchParams[A: SearchAdapter, S: Copyable & Deinitable, R: SearchRefitPolicy](Copyable, Movable) where conforms_to(A.Scorer, Copyable) and conforms_to(A.Scorer, Deinitable) and conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Input, Copyable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer.Estimator.Params, Deinitable):
+struct SearchParams[A: SearchAdapter, S: Copyable & Deinitable, R: SearchRefitPolicy](Copyable, Movable):
     var estimator: Self.A.Scorer.Estimator.Params
     var space: Self.S
     var options: SearchOptions[Self.A, Self.R]
 
 
-struct _Search[A: SearchAdapter, R: SearchRefitPolicy](Movable) where conforms_to(A.Scorer, Copyable) and conforms_to(A.Scorer, Deinitable) and conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Input, Copyable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer.Estimator.Params, Deinitable):
+struct _Search[A: SearchAdapter, R: SearchRefitPolicy](Movable, Copyable where conforms_to(A.Scorer.Estimator, Copyable)):
     var estimator: Self.A.Scorer.Estimator
     var options: SearchOptions[Self.A, Self.R]
     var results: Optional[SearchResults[Self.A.Value]]
@@ -362,17 +371,23 @@ def _domains[D: ParameterDistribution & Copyable & Deinitable](grid: ParameterGr
 
 struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value]](
     SearchEstimator, InputEstimator,
+    Copyable where conforms_to(A.Scorer.Estimator, Copyable),
+    SupervisedEstimator where conforms_to(A.Scorer.Metadata, Defaultable),
+    SupervisedScorer where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, SupervisedScorer),
+    ClassifierMixin where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, ClassifierMixin),
+    RegressorMixin where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, RegressorMixin),
     Predictor where conforms_to(A.Scorer.Estimator, Predictor),
     ProbabilityPredictor where conforms_to(A.Scorer.Estimator, ProbabilityPredictor),
     LogProbabilityPredictor where conforms_to(A.Scorer.Estimator, LogProbabilityPredictor),
     DecisionFunction where conforms_to(A.Scorer.Estimator, DecisionFunction),
     TransformerMixin where conforms_to(A.Scorer.Estimator, TransformerMixin),
     SampleScorer where conforms_to(A.Scorer.Estimator, SampleScorer),
-) where conforms_to(A.Scorer, Copyable) and conforms_to(A.Scorer, Deinitable) and conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Input, Copyable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer.Estimator.Params, Deinitable):
+):
     comptime E = Self.A.Scorer.Estimator
     comptime Input = Self.A.Scorer.Input
     comptime Target = Self.A.Scorer.Target
     comptime Metadata = Self.A.Scorer.Metadata
+    comptime SampleWeight = Self.E.SampleWeight if conforms_to(Self.E, SupervisedScorer) else Int
     comptime Params = SearchParams[Self.A, ParameterGrid[Self.A.Value], Self.R]
     comptime Prediction where conforms_to(Self.E, Predictor) = Self.E.Prediction
     comptime Probabilities where conforms_to(Self.E, ProbabilityPredictor) = Self.E.Probabilities
@@ -417,7 +432,15 @@ struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._core.results)
 
-    def fit(mut self, X: Self.Input, y: Self.Target, fit_metadata: Self.Metadata, score_metadata: Self.Metadata) raises:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self where conforms_to(Self.Metadata, Defaultable):
+        return self.fit(X, y, Self.Metadata(), Self.Metadata())
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        fit_metadata: Self.Metadata, score_metadata: Self.Metadata,
+    ) raises -> ref[self] Self:
         self._core.reset()
         var cursor = ParameterGrid[Self.A.Value](self._space.param_grid)
         var candidates = List[Dict[String, Self.A.Value]]()
@@ -427,6 +450,7 @@ struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value
                 break
             candidates.append(candidate.value().copy())
         self._core.fit(candidates, X, y, fit_metadata, score_metadata)
+        return self
 
     def cv_results_(self) raises -> SearchResults[Self.A.Value]:
         self._core.check()
@@ -462,13 +486,18 @@ struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value
 
     def scorer_(self) raises -> List[Self.A.Scorer]:
         self._core.check()
-        return self._core.options.scoring.copy()
+        return _copy_scorers(self._core.options.scoring)
 
     def refit_time_(self) raises -> Float64:
         self._core.check_refit()
         return self._core.refit_time.value()
 
-    def score(self, X: Self.Input, y: Self.Target, metadata: Self.Metadata) raises -> Float64:
+    def score(self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64 where conforms_to(Self.Metadata, Defaultable) and conforms_to(Self.E, SupervisedScorer):
+        if sample_weight:
+            raise Error("ValueError: search sample weights must be supplied through score(X, y, metadata=...)")
+        return self.score(X, y, metadata=Self.Metadata())
+
+    def score(self, X: Self.Input, y: Self.Target, *, metadata: Self.Metadata) raises -> Float64:
         self._core.check_refit()
         var metric = self._core.options.refit.metric(self._core.options.metric_names, self._core.options.multimetric)
         if not self._core.options.multimetric:
@@ -522,17 +551,23 @@ struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value
 
 struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable & Deinitable = DiscreteDistribution[A.Value], R: SearchRefitPolicy = SearchRefit[A.Value]](
     SearchEstimator, InputEstimator,
+    Copyable where conforms_to(A.Scorer.Estimator, Copyable),
+    SupervisedEstimator where conforms_to(A.Scorer.Metadata, Defaultable),
+    SupervisedScorer where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, SupervisedScorer),
+    ClassifierMixin where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, ClassifierMixin),
+    RegressorMixin where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, RegressorMixin),
     Predictor where conforms_to(A.Scorer.Estimator, Predictor),
     ProbabilityPredictor where conforms_to(A.Scorer.Estimator, ProbabilityPredictor),
     LogProbabilityPredictor where conforms_to(A.Scorer.Estimator, LogProbabilityPredictor),
     DecisionFunction where conforms_to(A.Scorer.Estimator, DecisionFunction),
     TransformerMixin where conforms_to(A.Scorer.Estimator, TransformerMixin),
     SampleScorer where conforms_to(A.Scorer.Estimator, SampleScorer),
-) where conforms_to(A.Scorer, Copyable) and conforms_to(A.Scorer, Deinitable) and conforms_to(A.Scorer.Input, Deinitable) and conforms_to(A.Scorer.Input, Copyable) and conforms_to(A.Scorer.Target, Deinitable) and conforms_to(A.Scorer.Metadata, Deinitable) and conforms_to(A.Scorer.Estimator.Params, Deinitable):
+):
     comptime E = Self.A.Scorer.Estimator
     comptime Input = Self.A.Scorer.Input
     comptime Target = Self.A.Scorer.Target
     comptime Metadata = Self.A.Scorer.Metadata
+    comptime SampleWeight = Self.E.SampleWeight if conforms_to(Self.E, SupervisedScorer) else Int
     comptime Params = SearchParams[Self.A, RandomSearchSpace[Self.D], Self.R]
     comptime Prediction where conforms_to(Self.E, Predictor) = Self.E.Prediction
     comptime Probabilities where conforms_to(Self.E, ProbabilityPredictor) = Self.E.Probabilities
@@ -584,7 +619,15 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._core.results)
 
-    def fit(mut self, X: Self.Input, y: Self.Target, fit_metadata: Self.Metadata, score_metadata: Self.Metadata) raises:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self where conforms_to(Self.Metadata, Defaultable):
+        return self.fit(X, y, Self.Metadata(), Self.Metadata())
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        fit_metadata: Self.Metadata, score_metadata: Self.Metadata,
+    ) raises -> ref[self] Self:
         self._core.reset()
         var cursor = ParameterSampler[Self.D](self._space.domains, self._space.n_iter, random_state=self._space.random_state)
         var candidates = List[Dict[String, Self.A.Value]]()
@@ -594,8 +637,12 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
                 break
             candidates.append(rebind[Dict[String, Self.A.Value]](candidate.value()).copy())
         self._core.fit(candidates, X, y, fit_metadata, score_metadata)
+        return self
 
-    def fit(mut self, X: Self.Input, y: Self.Target, fit_metadata: Self.Metadata, score_metadata: Self.Metadata, mut rng: RandomState) raises:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        fit_metadata: Self.Metadata, score_metadata: Self.Metadata, mut rng: RandomState,
+    ) raises -> ref[self] Self:
         self._core.reset()
         if self._space.random_state:
             raise Error("ValueError: use either the configured seed or an application-owned RNG")
@@ -607,6 +654,7 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
                 break
             candidates.append(rebind[Dict[String, Self.A.Value]](candidate.value()).copy())
         self._core.fit(candidates, X, y, fit_metadata, score_metadata)
+        return self
 
     def cv_results_(self) raises -> SearchResults[Self.A.Value]:
         self._core.check()
@@ -642,13 +690,18 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
 
     def scorer_(self) raises -> List[Self.A.Scorer]:
         self._core.check()
-        return self._core.options.scoring.copy()
+        return _copy_scorers(self._core.options.scoring)
 
     def refit_time_(self) raises -> Float64:
         self._core.check_refit()
         return self._core.refit_time.value()
 
-    def score(self, X: Self.Input, y: Self.Target, metadata: Self.Metadata) raises -> Float64:
+    def score(self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64 where conforms_to(Self.Metadata, Defaultable) and conforms_to(Self.E, SupervisedScorer):
+        if sample_weight:
+            raise Error("ValueError: search sample weights must be supplied through score(X, y, metadata=...)")
+        return self.score(X, y, metadata=Self.Metadata())
+
+    def score(self, X: Self.Input, y: Self.Target, *, metadata: Self.Metadata) raises -> Float64:
         self._core.check_refit()
         var metric = self._core.options.refit.metric(self._core.options.metric_names, self._core.options.multimetric)
         if not self._core.options.multimetric:

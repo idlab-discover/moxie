@@ -1,10 +1,10 @@
 """Lifecycle/capability probe, not an implemented statistical estimator."""
 from moxie.base import BaseEstimator, InverseTransformer, DecisionFunction, SampleScorer, clone
-from moxie.model_selection import GridSearchCV, SearchScorer, SearchAdapter, KFold, IndexArray, IndexSplit
+from moxie.model_selection import GridSearchCV, ParameterGrid, SearchScorer, SearchAdapter, KFold, IndexArray, IndexSplit
 from std.testing import assert_equal, assert_true
 
 @fieldwise_init
-struct Probe(BaseEstimator, InverseTransformer, DecisionFunction, SampleScorer):
+struct Probe(BaseEstimator, Copyable, InverseTransformer, DecisionFunction, SampleScorer):
     comptime Params = Int
     comptime Input = Int
     comptime Transformed = Int
@@ -82,7 +82,7 @@ def main() raises:
     var grid = Dict[String, List[Int]]()
     grid["parameter"] = [1, 3, 2]
     var search = GridSearchCV[Adapter](model, grid, Adapter(), scoring=List[Scorer]([Scorer(0), Scorer(1)]), metric_names=List[String](["a", "b"]), refit="a")
-    search.fit(10, 0, 0, 0)
+    _ = search.fit(10, 0, 0, 0)
     assert_equal(search.best_index_(), 1)
     assert_equal(model.fit_count, 99)
     assert_equal(search.transform(10), 13)
@@ -91,4 +91,13 @@ def main() raises:
     assert_equal(search.score_samples(10), 3)
     var clone_search = clone(search)
     assert_true(not clone_search.__sklearn_is_fitted__())
+    var snapshot = search.copy()
+    var changed = search.get_params()
+    var replacement = Dict[String, List[Int]]()
+    replacement["parameter"] = [5]
+    changed.space = ParameterGrid[Int](replacement)
+    _ = search.set_params(changed).fit(10, 0)
+    assert_equal(search.decision_function(10), 5)
+    assert_equal(snapshot.decision_function(10), 3)
+    assert_equal(snapshot.best_index_(), 1)
     print("PASS public search imports, nonpredictive estimator, one fit per multimetric fold and delegated capabilities")

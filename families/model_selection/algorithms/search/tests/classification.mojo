@@ -76,7 +76,7 @@ def main() raises:
     params["strategy"] = ["most_frequent", "prior", "uniform", "stratified"]
     var model = DummyClassifier(random_state=42)
     var search = GridSearchCV[ClassificationAdapter](model, params, ClassificationAdapter(), return_train_score=True)
-    search.fit(X, y, None, None)
+    _ = search.fit(X, y, None, None)
     assert_equal(search.best_index_(), 0)
     assert_equal(search.n_splits_(), 5)
     assert_equal(search.best_params_()["strategy"], "most_frequent")
@@ -93,6 +93,6 @@ def main() raises:
         for f in range(5):
             print("class_test", c, f, result.scores.test_scores[Item(c, f, 0)])
     var random = RandomizedSearchCV[ClassificationAdapter](model, ParameterGrid[String](params), ClassificationAdapter(), n_iter=3, random_state=42)
-    random.fit(X, y, None, None)
+    _ = random.fit(X, y, None, None)
     assert_equal(random.best_params_()["strategy"], "prior")
     print("PASS classification, stratified defaults, string candidates and probability delegation")

@@ -70,9 +70,9 @@ def main() raises:
     grid["constant"] = [0.0, 2.0, 4.0, 5.0, 9.0]
     var model = DummyRegressor(strategy="constant")
     var search = GridSearchCV[RegressionAdapter](model, grid, RegressionAdapter())
-    search.fit(X, y, None, None)
+    _ = search.fit(X, y, None, None)
     print("grid winner:", search.best_params_()["constant"], "mean CV R2:", search.best_score_())
     var random = RandomizedSearchCV[RegressionAdapter](model, ParameterGrid[Float64](grid), RegressionAdapter(), n_iter=3, random_state=42)
-    random.fit(X, y, None, None)
+    _ = random.fit(X, y, None, None)
     print("random winner:", random.best_params_()["constant"], "mean CV R2:", random.best_score_())
     print("refitted prediction:", random.predict(X)[Item(0)])

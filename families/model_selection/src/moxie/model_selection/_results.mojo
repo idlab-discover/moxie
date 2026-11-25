@@ -2,7 +2,7 @@
 from numojo import NDArray
 
 @fieldwise_init
-struct ScoreTable(Movable):
+struct ScoreTable(Copyable, Movable):
     # Shape (candidate, split, metric); Float64 even for Float32 estimators.
     var test_scores: NDArray[DType.float64]
     var train_scores: Optional[NDArray[DType.float64]]

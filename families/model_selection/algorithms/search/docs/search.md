@@ -12,7 +12,7 @@ var grid = Dict[String, List[Float64]]()
 grid["constant"] = [0.0, 2.0, 4.0, 5.0, 9.0]
 var model = DummyRegressor(strategy="constant")
 var search = GridSearchCV[RegressionAdapter](model, grid, RegressionAdapter())
-search.fit(X, y, None, None)
+_ = search.fit(X, y, None, None)
 print(search.best_params_()["constant"])
 var prediction = search.predict(X)
 
@@ -20,7 +20,7 @@ var random = RandomizedSearchCV[RegressionAdapter](
     model, ParameterGrid[Float64](grid), RegressionAdapter(),
     n_iter=3, random_state=42,
 )
-random.fit(X, y, None, None)
+_ = random.fit(X, y, None, None)
 ```
 
 Run `pixi run test` in `algorithms/search` to compile and run the example.
@@ -45,11 +45,12 @@ search import is required by the validation engine. Its contracts are:
 - `default_cv(X, y)`, supplying five unshuffled folds for `cv=None`: stratified
   for binary/multiclass classification, ordinary KFold otherwise.
 
-Adapters and scorers are copyable. Inputs must be copyable and deinitializable;
-targets, metadata and estimator parameter records must be deinitializable. The
-wrapped estimator needs `BaseEstimator` and cloning, not fitted-state copying
-or prediction. Fit/score metadata are separate required arguments to `fit`;
-use `None` or an explicit empty record when unused. The inherited adapter slices
+Search adapters and their scorers are copyable. Inputs, targets, metadata and
+estimator parameter records must be deinitializable. The wrapped estimator needs
+`BaseEstimator` and cloning. Prediction and fitted-state copying depend on the
+wrapped estimator’s capabilities. The explicit `fit` overload takes separate fit/score metadata;
+the two-argument overload constructs them when their type is `Defaultable`.
+Use `None` or an explicit empty record when unused. The inherited adapter slices
 sample-aligned weights and preserves unsliced options. Pairwise inputs require
 a pairwise-aware adapter. These responsibilities are not inferred dynamically.
 
@@ -135,25 +136,53 @@ random search's `param_distributions`, `n_iter`, and `random_state`. Clones own
 unfitted constructor configuration. A new fit first clears learned state;
 failed repeated fits and failed final refits cannot expose an old winner.
 
-## Composition limits
+## Composition
 
-`fit(X, y, fit_metadata, score_metadata)` mutates in place and returns None,
-unlike the shared fluent `fit` contract, and the explicit metadata arguments
-mean the search structs do not conform to `SupervisedEstimator`. A search
-therefore cannot be the final step of `moxie.pipeline.Pipeline`.
+Both searches can be the estimator in a concrete CV scorer.
+`TypedScorer` and its input, target and metadata are deinitializable. Search
+also checks at compile time that its scorer is copyable. The shared
+`BaseEstimator.Params` contract supplies parameter ownership.
 
-On Mojo 1.0 a struct with a struct-level `where` clause cannot be named as a
-parameter, field or associated type outside its own generic context: the
-compiler reports "cannot implicitly convert 'GridSearchCV[...]' value to
-'GridSearchCV[...]'" or crashes. `GridSearchCV`, `RandomizedSearchCV` and
-`moxie.pipeline.Pipeline` all carry such clauses, so none of them can be a
-scorer's `Estimator`: `cross_validate`, `cross_val_score`, the curves, the
-permutation test and the searches do not accept a search or a pipeline as the
-evaluated estimator. Write nested cross-validation as an explicit loop: `clone`
-the search per outer fold, `fit` on the outer training rows and `score` the
-outer test rows (see `notebooks/model_selection/plot_nested_cross_validation_iris.ipynb`).
+Every search `fit` overload returns a mutable borrow of the search, including
+random search's application-owned RNG overload. `fit(X, y)` constructs separate
+default fit and score metadata values when `Metadata` is `Defaultable`. Only
+those searches conform to `SupervisedEstimator`; metadata with a required
+constructor remains explicit. A defaultable metadata type must represent a
+valid empty request if it is intended for this convenience overload.
+
+With defaultable metadata, searches also forward the underlying estimator's
+classifier/regressor kind and supervised scoring capability. `score(X, y)` uses
+the selected refit scorer, which may differ from accuracy or R2 when configured,
+as in sklearn. `score(X, y, metadata=request)` supplies typed score metadata.
+The metadata keyword is required to distinguish it from the shared
+`sample_weight` argument, whose type may be identical. A nonempty
+`sample_weight=` raises with guidance to use metadata; no routing is inferred.
+This keyword requirement replaces the old positional metadata call.
+
+A search is copyable when its estimator is copyable. A copy preserves fitted
+state with independent buffers; `clone(search)` retains only constructor
+configuration. A supervised search with prediction support can be a
+Pipeline’s final step.
+
 Inner folds that must follow each training subset belong in the adapter's
 `default_cv`, because `cv` holds materialized indices for one sample count.
+From the repository root, use the locked environment to assemble live
+sources and run the Pipeline and nested SVC comparisons.
+
+```sh
+python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
+mkdir -p builds/search-composition
+for name in pipeline_model_selection nested_search; do
+    mojo build -O3 --fp-mode=contract=off -I builds/deps \
+        "tests/pipeline/test_$name.mojo" -o "builds/search-composition/$name"
+done
+python tests/pipeline/composition_parity.py builds/search-composition
+```
+
+The comparison loads the pinned sklearn search and validation sources.
+Candidate order, folds, ranks, best selections and refit predictions match
+exactly. Float64 candidate means allow an absolute tolerance of 1e-12 for
+reduction rounding.
 
 ## Failures and supported scope
 

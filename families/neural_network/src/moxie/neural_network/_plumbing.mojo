@@ -61,6 +61,17 @@ struct LayerTensors[dtype: DType](Copyable, Movable):
             self.coefs.append(coefs[i].copy())
             self.intercepts.append(intercepts[i].copy())
 
+    def __init__(out self, *, contiguous: Self) raises:
+        """Copy logical layer data into independent C-contiguous buffers."""
+        self.coefs = List[NDArray[Self.dtype]](capacity=len(contiguous.coefs))
+        self.intercepts = List[NDArray[Self.dtype]](
+            capacity=len(contiguous.intercepts),
+        )
+        for coef in contiguous.coefs:
+            self.coefs.append(coef.contiguous())
+        for intercept in contiguous.intercepts:
+            self.intercepts.append(intercept.contiguous())
+
 
 def validate_incremental(solver: String, early_stopping: Bool) raises:
     if solver != "sgd" and solver != "adam":

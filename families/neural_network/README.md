@@ -5,7 +5,8 @@
 and `MLPRegressor` preserve their public declarations but raise
 `NotImplementedError`; neither trains a model. Private `_mlp_engine` supplies
 initialization, parameter packing, forward propagation, batch losses and
-backpropagation. The private `_mlp_lbfgs` adapter supplies full-batch training.
+backpropagation. Private trainers supply full-batch L-BFGS and minibatch SGD
+and Adam.
 
 From the Moxie root:
 

@@ -72,3 +72,49 @@ result carries the scikit-learn convergence warning text for the caller.
 The loss follows SciPy's last evaluated objective, including after an abnormal
 line search that restores an earlier parameter vector. Invalid settings,
 callback errors and nonfinite output parameters raise Mojo errors.
+
+## Minibatch SGD and Adam
+
+`moxie.neural_network._mlp_stochastic.StochasticTrainer(initial, options)`
+copies coefficients and intercepts into independent contiguous arrays and
+initializes the optimizer. `OptimizerOptions` accepts `solver="sgd"` or
+`"adam"`, SGD's constant, inverse scaling and adaptive learning rates,
+momentum and Nesterov momentum, and Adam's moment and epsilon settings.
+Call `parameters()` to borrow the current parameters for prediction.
+
+`trainer.train(X, y, rng, hidden_activation, output_activation, loss, alpha,
+options)` accepts the same encoded target layouts and loss pairs as the
+batch objective. The weighted overload takes `sample_weight` between
+`alpha` and `options`. Each minibatch uses its own weight sum in the objective
+and requires that sum to be finite and nonzero. The epoch loss weights these
+batch losses by sample count, matching sklearn.
+The RNG is borrowed explicitly and shuffles the index order from the preceding
+epoch. Each call starts with the original row order.
+
+`StochasticOptions` controls the run. `batch_size=None` selects
+`min(200, n_samples)` and `n_iter_no_change=None` represents infinite patience.
+With `incremental=True`, one call takes one epoch and preserves the optimizer
+for the next call. `reset_optimizer(options)` replaces the optimizer state
+while preserving the parameters, processed sample count, loss curve and stopping
+history, as needed by warm starts. The trainer tracks the current call's epoch
+count and fit-time conditions for clipping and iteration-limit warnings.
+It stops on training loss using the pinned tolerance and patience comparisons.
+The estimator wrapper will own the validation split, scoring, and public warning
+records. Train a candidate copy when a caller needs to preserve a previous fit
+on error. A failing run may have processed earlier batches and advanced the RNG.
+
+The trainer uses the engine's NuMojo matrix products. The batch gather uses
+stride-aware access and allocates only the batch. At NuMojo revision
+`515fb2856f0ecf3d2740a34d958fe168183e1129`, advanced integer indexing crashed
+on negative-stride fixtures, and `NDArray.take` copies the entire source even
+for a single minibatch. Numax's `take` takes `TensorLike` inputs and returns
+`Dynamic` storage. SGD and Adam fuse the elementwise operations over contiguous
+NuMojo buffers with Mojo SIMD, avoiding intermediate arrays for gradients
+scaled by the learning rate, updated moments, and parameter deltas.
+Numax's `optimize.minimize` operates on a whole objective and has no SGD or
+Adam update step. Adam's moments stay in the parameter dtype. Its bias-corrected
+learning rate promotes the update and addition to Float64 before assignment,
+matching the locked NumPy behavior.
+Learning-rate powers use the Float64 LLVM intrinsic. On the locked toolchain,
+`std.math.pow` changed the inverse-scaling rate by 6.6e-11 relative in a
+fractional-exponent parity fixture.

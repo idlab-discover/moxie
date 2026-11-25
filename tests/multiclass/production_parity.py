@@ -7,9 +7,10 @@ wraps real Moxie estimators and their sklearn counterparts:
 - `moxie.tree.DecisionTreeClassifier` through the dense
   `moxie.feature_selection.DecisionTreeClassifierImportance` adapter
   (predict_proba component; the tree's own API returns List probabilities), and
-- `moxie.svm.LinearSVC` and
-  `moxie.discriminant_analysis.LinearDiscriminantAnalysis` through
-  `BinaryAdapter` for the native List targets.
+- `moxie.svm.LinearSVC`,
+  `moxie.discriminant_analysis.LinearDiscriminantAnalysis`, and
+  `moxie.naive_bayes.GaussianNB` through `BinaryAdapter` for the native List
+  targets. GaussianNB also exercises incremental OvR and OvO updates.
 
 Cases cover OvR, OvO and OutputCode; 2, 3 and 5 classes; int64, float64 and
 string labels; Float32 and Float64 features; seeded OutputCode codebooks.
@@ -32,6 +33,10 @@ Tolerances:
 - LDA uses the default SVD solver. Allow 1e-9 relative / 1e-11 absolute for
   Float64 responses across SVD implementations, and 1e-5 relative / 5e-6
   absolute for Float32 responses because Moxie accumulates in Float64.
+- GaussianNB allows 1e-9 relative / 1e-11 absolute for Float64 responses,
+  and 1e-5 relative / 5e-6 absolute for Float32 responses because the
+  native estimator stores its running moments and computes likelihoods in
+  Float32, while sklearn retains Float64 learned means and variances.
 """
 import argparse
 import inspect
@@ -43,10 +48,11 @@ from pathlib import Path
 
 import numpy as np
 import sklearn
-from sklearn import discriminant_analysis
+from sklearn import discriminant_analysis, naive_bayes
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.linear_model import RidgeClassifier
 from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier, OutputCodeClassifier, _predict_binary
+from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import LinearSVC, _classes as svm_classes
 from sklearn.tree import DecisionTreeClassifier
 
@@ -59,6 +65,8 @@ TOLERANCE = {
     "linear-svc": (1e-7, 1e-8),
     "lda64": (1e-9, 1e-11),
     "lda32": (1e-5, 5e-6),
+    "gaussian-nb64": (1e-9, 1e-11),
+    "gaussian-nb32": (1e-5, 5e-6),
 }
 
 COMPONENTS = {
@@ -74,6 +82,8 @@ COMPONENTS = {
                    "BinaryAdapter(LinearSVC(dual=False, tol=1e-9, random_state=0))"),
     "lda": (LinearDiscriminantAnalysis,
             "BinaryAdapter(LinearDiscriminantAnalysis[{dtype}]())"),
+    "gaussian-nb": (GaussianNB,
+                    "BinaryAdapter(GaussianNB[IntListDomain, {dtype}]())"),
 }
 COMPONENT_TYPE = {
     "ridge": "RidgeClassifier[{dtype}]", "ridge-noint": "RidgeClassifier[{dtype}]",
@@ -81,6 +91,7 @@ COMPONENT_TYPE = {
     "tree-depth2": "DecisionTreeClassifierImportance[{dtype}]",
     "linear-svc": "BinaryAdapter[LinearSVC[]]",
     "lda": "BinaryAdapter[LinearDiscriminantAnalysis[{dtype}]]",
+    "gaussian-nb": "BinaryAdapter[GaussianNB[IntListDomain, {dtype}]]",
 }
 STRINGS = ["setosa", "versicolor", "virginica", "", "zeta"]
 
@@ -126,11 +137,29 @@ def reference(c):
         model = OneVsOneClassifier(base)
     else:
         model = OutputCodeClassifier(base, code_size=c["code_size"], random_state=c["seed"])
-    model.fit(c["X"], c["y"])
-    out = dict(classes=[str(v) if c["labels"] == "string" else float(v) for v in model.classes_],
+    target = c["y"]
+    decoded_classes = None
+    if c.get("incremental"):
+        mid = len(target) // 2
+        if c["wrapper"] == "ovo" and c["labels"] == "string":
+            # Pinned sklearn uses zeros_like(y) for OvO batch codes, producing
+            # string codes that GaussianNB rejects against numeric classes.
+            with np.testing.assert_raises_regex(ValueError, "initial classes"):
+                model.partial_fit(c["X"][:mid], target[:mid], classes=np.unique(target))
+            decoded_classes, target = np.unique(target, return_inverse=True)
+            model = OneVsOneClassifier(base)
+        model.partial_fit(c["X"][:mid], target[:mid], classes=np.unique(target))
+        model.partial_fit(c["X"][mid:], target[mid:])
+    else:
+        model.fit(c["X"], target)
+    classes, predict = model.classes_, model.predict(c["Xt"])
+    if decoded_classes is not None:
+        classes, predict = decoded_classes[classes], decoded_classes[predict]
+    convert = str if c["labels"] == "string" else float
+    out = dict(classes=[convert(v) for v in classes],
                n_estimators=len(model.estimators_),
-               predict=[str(v) if c["labels"] == "string" else float(v) for v in model.predict(c["Xt"])],
-               score=float(model.score(c["X"], c["y"])))
+               predict=[convert(v) for v in predict],
+               score=float(model.score(c["X"], target)))
     if c["wrapper"] in ("ovr", "ovo") and hasattr(model, "decision_function"):
         out["decision"] = np.asarray(model.decision_function(c["Xt"]), dtype=float).tolist()
     if c["wrapper"] == "ovr" and hasattr(model, "predict_proba"):
@@ -149,12 +178,19 @@ def exact_tie(ref, row, a, b):
     return dist[index[a]] == dist[index[b]] == min(dist)
 
 
+def target_source(values, label):
+    if label is None:
+        return "StringTarget([" + ", ".join(json.dumps(str(v)) for v in values) + "])"
+    return f"vec[{label}]([{', '.join(lit(v) for v in values)}])"
+
+
 def native_source(all_cases, expected):
     header = driver([]).split("def main() raises:")[0]
     header += '''
 from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OutputCodeClassifier, StringLabels, StringTarget
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.linear_model import RidgeClassifier
+from moxie.naive_bayes import GaussianNB, IntListDomain
 from moxie.svm import LinearSVC
 from moxie.tree import DecisionTreeClassifier
 from moxie.feature_selection import DecisionTreeClassifierImportance
@@ -179,19 +215,32 @@ def emit(name: String, y: StringTarget) raises:
         cls = {"ovr": "OneVsRestClassifier", "ovo": "OneVsOneClassifier", "oc": "OutputCodeClassifier"}[c["wrapper"]]
         if c["labels"] == "string":
             params = f"{ctype}, {dtype}, kind=StringLabels"
-            target = "StringTarget([" + ", ".join(json.dumps(str(v)) for v in c["y"]) + "])"
+            label = None
         else:
             label = "DType.float64" if c["labels"] == "float64" else "DType.int64"
             params = f"{ctype}, {dtype}, {label}"
-            target = f"vec[{label}]([{', '.join(lit(v) for v in c['y'])}])"
+
         extra = (f", code_size={lit(c['code_size'])}, random_state={c['seed']}" if c["wrapper"] == "oc" else "")
         body += [
             f"# {c['name']}", "@no_inline", f"def case_{i}() raises:",
             f"    var X = mat({matrix(c['X'])}).astype[{dtype}]()",
             f"    var Xt = mat({matrix(c['Xt'])}).astype[{dtype}]()",
-            f"    var y = {target}",
+            f"    var y = {target_source(c['y'], label)}",
             f"    var m = {cls}[{params}]({component}{extra})",
-            "    _ = m.fit(X, y)",
+        ]
+        if c.get("incremental"):
+            mid = len(c["y"]) // 2
+            known = "StringTarget" if label is None else f"NDArray[{label}]"
+            first = matrix(c["X"][:mid])
+            second = matrix(c["X"][mid:])
+            body += [
+                f"    var classes = Optional[{known}]({target_source(np.unique(c['y']), label)})",
+                f"    _ = m.partial_fit(mat({first}).astype[{dtype}](), {target_source(c['y'][:mid], label)}, classes^)",
+                f"    _ = m.partial_fit(mat({second}).astype[{dtype}](), {target_source(c['y'][mid:], label)})",
+            ]
+        else:
+            body.append("    _ = m.fit(X, y)")
+        body += [
             f"    print('{{\"case\": {i},')",
             "    emit('classes', m.classes_)",
             "    print('\"n_estimators\":', len(m.estimators_), ',')",
@@ -204,6 +253,20 @@ def emit(name: String, y: StringTarget) raises:
             body.append("    emit('proba', m.predict_proba(Xt))")
         if "code_book" in ref:
             body.append("    emit('code_book', m.code_book_)")
+            if c["component"] == "gaussian-nb":
+                body += [
+                    "    var scores = NDArray[DType.float64](Shape(Xt.shape[0], len(m.estimators_)))",
+                    "    for k in range(len(m.estimators_)):",
+                    "        ref fitted = m.estimators_[k]",
+                    "        if fitted.is_constant():",
+                    "            for i in range(Xt.shape[0]):",
+                    "                scores[Item(i, k)] = Float64(fitted.constant())",
+                    "        else:",
+                    "            var proba = fitted.estimator().predict_proba(Xt)",
+                    "            for i in range(Xt.shape[0]):",
+                    "                scores[Item(i, k)] = Float64(proba[Item(i, 1)])",
+                    "    emit('scores', scores)",
+                ]
         body.append("    print('\"end\": 0}')")
     body.append("def main() raises:")
     body += [f"    case_{i}()" for i in range(len(all_cases))]
@@ -215,6 +278,8 @@ def tolerance(c, key):
         return TOLERANCE["linear-svc"]
     if c["component"] == "lda":
         return TOLERANCE["lda32" if c["dtype"] == "float32" else "lda64"]
+    if c["component"] == "gaussian-nb":
+        return TOLERANCE["gaussian-nb32" if c["dtype"] == "float32" else "gaussian-nb64"]
     if c["component"].startswith("tree"):
         return (1e-14, 1e-15) if key == "decision" else TOLERANCE["tree"]
     return TOLERANCE["ridge32" if c["dtype"] == "float32" else "ridge64"]
@@ -236,6 +301,7 @@ def main():
         "ridge-tree": ("ridge", "ridge-noint", "tree", "tree-depth2"),
         "linear-svc": ("linear-svc",),
         "lda": ("lda",),
+        "gaussian-nb": ("gaussian-nb",),
     }
     parser = argparse.ArgumentParser()
     parser.add_argument("--group", choices=("all", *groups), default="all")
@@ -253,6 +319,14 @@ def main():
                 REFERENCE / "sklearn/discriminant_analysis.py"
             ).read_bytes(), "install the pinned local scikit-learn checkout"
         batch = cases(components)
+        if group == "gaussian-nb":
+            assert Path(inspect.getfile(naive_bayes)).read_bytes() == (
+                REFERENCE / "sklearn/naive_bayes.py"
+            ).read_bytes(), "install the pinned local scikit-learn checkout"
+            batch += [
+                dict(c, name=c["name"] + "-incremental", incremental=True)
+                for c in batch if c["wrapper"] in ("ovr", "ovo")
+            ]
         ref = [reference(c) for c in batch]
         got.extend(run_native(group, batch, ref))
         all_cases.extend(batch)
@@ -268,8 +342,8 @@ def main():
                 tied_rows.append((c["name"], rows))
         if "code_book" in ref:
             checks["code_book"] = np.array_equal(ref["code_book"], out["code_book"])
-        for key in ("decision", "proba"):
-            if key in ref:
+        for key in ("decision", "proba", "scores"):
+            if key in ref and (key != "scores" or c["component"] == "gaussian-nb"):
                 a, b = np.asarray(ref[key], float), np.asarray(out.get(key, []), float)
                 rtol, atol = tolerance(c, key)
                 checks[key] = a.shape == b.shape and np.allclose(b, a, rtol=rtol, atol=atol)

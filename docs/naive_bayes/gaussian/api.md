@@ -47,9 +47,10 @@ dtype. Read scalars with `.item`. `epsilon_` is a scalar in that dtype and
 NDArray probability methods return `(samples, classes)` NDArrays in that dtype;
 List input retains nested-List probability output. `predict`, `predict_proba`,
 `predict_log_proba`, `predict_joint_log_proba` and weighted/unweighted accuracy
-score all accept either feature representation. Native shared estimator traits
-retain List feature input as their associated Input; array overloads are concrete
-methods, not a new global array trait contract.
+score all accept either feature representation. Generic compositions use the
+NDArray feature and probability types. With the default List label domain,
+use [BinaryAdapter](../../multiclass/family.md#binary-adapter-for-numeric-list-labels)
+for dense multiclass composition.
 
 The compile-time `dtype` parameter selects `DType.float32` or `DType.float64`
 (default). Use `GaussianNB[dtype=DType.float32]()` for List[Int] labels or

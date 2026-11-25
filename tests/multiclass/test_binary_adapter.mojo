@@ -1,9 +1,16 @@
 """Native target bridge lifecycle over production classifiers."""
 
 import numojo as nm
-from moxie.base import DecisionFunction, LogProbabilityPredictor, ProbabilityPredictor, clone
+from moxie.base import (
+    DecisionFunction,
+    IncrementalClassifier,
+    LogProbabilityPredictor,
+    ProbabilityPredictor,
+    clone,
+)
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.multiclass import BinaryAdapter
+from moxie.naive_bayes import GaussianNB
 from moxie.svm import LinearSVC
 from std.testing import assert_equal, assert_false, assert_raises, assert_true
 
@@ -12,6 +19,7 @@ def check_labels[Label: Copyable & Comparable & Deinitable]() raises:
     comptime Adapter = BinaryAdapter[LinearSVC[Label]]
     comptime assert conforms_to(Adapter, DecisionFunction)
     comptime assert not conforms_to(Adapter, ProbabilityPredictor)
+    comptime assert not conforms_to(Adapter, IncrementalClassifier)
 
     var X = nm.zeros[DType.float64](nm.Shape(4, 1))
     for i in range(4):
@@ -138,8 +146,63 @@ def check_lda() raises:
     assert_equal(model.predict(X)[nm.Item(0)], -1)
 
 
+def check_gaussian_nb() raises:
+    comptime Adapter = BinaryAdapter[GaussianNB[]]
+    comptime assert conforms_to(Adapter, IncrementalClassifier)
+    comptime assert conforms_to(Adapter, LogProbabilityPredictor)
+    comptime assert not conforms_to(Adapter, DecisionFunction)
+
+    var X = nm.zeros[DType.float64](nm.Shape(4, 1))
+    for i in range(4):
+        X[nm.Item(i, 0)] = Float64(i) - 1.5
+    var y = nm.full[DType.int64](nm.Shape(4), -1)
+    y[nm.Item(2)] = 1
+    y[nm.Item(3)] = 1
+    var storage = nm.full[DType.int64](nm.Shape(3), 99)
+    storage[nm.Item(0)] = 1
+    storage[nm.Item(2)] = -1
+    var classes = storage.view_with_layout(nm.Shape(2), nm.NDArrayStrides(-2), 2)
+
+    var model = BinaryAdapter(GaussianNB())
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict_proba(X)
+    with assert_raises(contains="classes"):
+        _ = model.partial_fit(X, y)
+    var invalid_classes = nm.zeros[DType.int64](nm.Shape(2, 1))
+    with assert_raises(contains="rank-one"):
+        _ = model.partial_fit(X, y, invalid_classes^)
+    assert_false(model.__sklearn_is_fitted__())
+
+    var positive_rows: List[Int] = [2, 3]
+    var negative_rows: List[Int] = [0, 1]
+    _ = model.partial_fit(X[positive_rows], y[positive_rows], classes^)
+    assert_equal(model.estimator.classes_[0], -1)
+    assert_equal(model.estimator.classes_[1], 1)
+    var fitted_copy = model.copy()
+    _ = model.partial_fit(X[negative_rows], y[negative_rows])
+    assert_equal(fitted_copy.estimator.class_count_.item(0), 0.0)
+    assert_equal(model.estimator.class_count_.item(0), 2.0)
+    assert_false(clone(model).__sklearn_is_fitted__())
+    assert_equal(model.score(X, y), 1.0)
+
+    var proba = model.predict_proba(X)
+    var native_proba = model.estimator.predict_proba(X)
+    assert_equal(proba.shape, nm.Shape(4, 2))
+    for i in range(proba.size):
+        assert_equal(proba.item(i), native_proba.item(i))
+
+    y[nm.Item(0)] = 0
+    y[nm.Item(1)] = 0
+    with assert_raises(contains="previously unseen label"):
+        _ = model.partial_fit(X, y)
+    assert_equal(model.estimator.class_count_.item(0), 2.0)
+    assert_equal(model.fit(X, y).predict(X).item(0), 0)
+    assert_equal(model.estimator.class_count_.item(1), 2.0)
+
+
 def main() raises:
     check_labels[Float64]()
     check_labels[Float32]()
     check_labels[Int64]()
     check_lda()
+    check_gaussian_nb()

@@ -50,7 +50,11 @@ between Float32 and Float64. A zero iteration limit or one retained feature
 uses the initial fill. Bounds apply to regression predictions. Pass scalar or
 original-feature-order vector bounds using `IterativeBound(Float64(...))` or
 `IterativeBound(bounds^)` for a `List[Float64]`. Omitting either argument uses
-its corresponding infinity. Pass `verbose` for diagnostics on fit.
+its corresponding infinity. Pass `verbose=1` to show the working shape on
+fit and replay, plus the stopping diagnostics during deterministic fit.
+`verbose=2` also reports completed rounds. The native console messages omit
+elapsed times. Replay that returns the initial result immediately, such as
+after a zero-round fit or on an entirely missing query, emits no messages.
 
 `IterativeImputer[dtype, Regressor](estimator)` accepts a copyable native
 supervised predictor whose inputs, rank-one targets and rank-one predictions
@@ -170,6 +174,8 @@ counts, estimator ordering, sampled predictor indices, RNG draws and feature nam
 against the pinned iterative, simple and Bayesian regression sources.
 The stopping cases compare exact round counts where dtype rounding affects
 the scaled tolerance or the sum of changes within a row.
+Replay diagnostics are compared by event and round count, including
+summary-only output, early returns and a fitted sequence with zero steps.
 Integer cases compare signed and unsigned input layouts, mixed integer and
 Float64 fit and replay, and missing-mask equality after Float64 rounding.
 Float64 comparisons use absolute and relative tolerances of `5e-8`. Float32
@@ -202,11 +208,17 @@ The Nystroem + Ridge integration checks training fills, held-out replay,
 round counts, feature order, sampled basis indices, and preservation of
 observed cells. It also checks that a configuration clone starts unfitted
 and that a fitted copy survives mutation and refitting of the original.
-It uses a full-rank Float32 fixture and a rank-deficient Float64 fixture.
+It uses a full-rank Float32 fixture, a Float32 fixture with duplicate basis
+rows, and a rank-deficient Float64 fixture. In the duplicate-row case, each
+regression for an incomplete training feature fits 13 rows from four distinct
+predictor pairs. The native check verifies that regression changes the initial
+fill.
 Fill tolerances are `3e-4` for Float32 and `5e-8` for Float64, accounting for
 the different SVD and Ridge solvers. Severely ill-conditioned Float32 bases
-can diverge in both fills and convergence rounds, as described in the
-[Nystroem numerical contract](../../../../../docs/kernel_approximation/nystroem/api.md).
+can diverge in both fills and convergence rounds. Running the unscaled 17-row
+Float64 fixture in Float32 exposes this limit even when the two basis Gram
+matrices agree elementwise. The same clipping and transform stages are
+described in the [Nystroem numerical contract](../../../../../docs/kernel_approximation/nystroem/api.md).
 
 ```sh
 mkdir -p builds/pr6-nystroem

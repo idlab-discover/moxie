@@ -13,11 +13,17 @@ sys.path.insert(0, str(FAMILY.parent / "linear_model" / "tools"))
 from parity_io import load_pinned, pinned_code, verify_reference
 
 
-def fixture(start, rows, dtype):
+def fixture(start, rows, dtype, *, repeated_basis=False):
     i = np.arange(start, start + rows)[:, None]
     j = np.arange(3)
-    values = ((((i + 3) * (i + 17 * j + 8)) % 67) / 4).astype(dtype)
-    values[(i % 5 == j) & ((start != 0) | (j < 2))] = np.nan
+    pattern = i % 4 if repeated_basis and start == 0 else i
+    values = ((((pattern + 3) * (pattern + 17 * j + 8)) % 67) / 4).astype(dtype)
+    if repeated_basis:
+        values /= 16
+    missing = (i % 5 == j) & ((start != 0) | (j < 2))
+    if repeated_basis and start == 0:
+        missing = (i % 5 == 0) & (j < 2)
+    values[missing] = np.nan
     return values
 
 
@@ -56,9 +62,14 @@ def main(binary):
     iterative, _ = oracle()
     nystroem, ridge, make_pipeline = regressors()
     lines = iter(subprocess.check_output([binary], text=True).splitlines())
-    for dtype, tolerance in ((np.float32, 3e-4), (np.float64, 5e-8)):
-        rows = 6 if dtype == np.float32 else 17
-        train, query = fixture(0, rows, dtype), fixture(17, 7, dtype)
+    cases = (
+        ("full-rank", np.float32, 6, False, 3e-4),
+        ("duplicate-basis", np.float32, 17, True, 3e-4),
+        ("rank-deficient", np.float64, 17, False, 5e-8),
+    )
+    for name, dtype, rows, repeated_basis, tolerance in cases:
+        train = fixture(0, rows, dtype, repeated_basis=repeated_basis)
+        query = fixture(17, 7, dtype, repeated_basis=repeated_basis)
         model = iterative(
             estimator=make_pipeline(
                 nystroem(kernel="polynomial", degree=2, random_state=0),
@@ -75,7 +86,13 @@ def main(binary):
             model.n_iter_, model.n_features_with_missing_, len(model.imputation_sequence_),
         )
         for step in model.imputation_sequence_:
-            indices = step.estimator.steps[0][1].component_indices_
+            transformer = step.estimator.steps[0][1]
+            indices = transformer.component_indices_
+            if repeated_basis and step.feat_idx < 2:
+                # All these fitted bases have exact row repetitions. Their
+                # Gram matrices are singular even after Float32 rounding.
+                assert np.unique(transformer.components_, axis=0).shape[0] == 4
+                assert indices.size == 13
             assert tuple(map(int, next(lines).split())) == (
                 step.feat_idx, len(step.neighbor_feat_idx), indices.size,
             )
@@ -90,7 +107,7 @@ def main(binary):
             np.testing.assert_array_equal(actual[observed], source[observed])
             np.testing.assert_allclose(actual, expected, rtol=tolerance, atol=tolerance)
             max_error = max(max_error, np.max(np.abs(actual - expected)))
-        print(f"PASS {dtype.__name__} against {REVISION}: {model.n_iter_} rounds, "
+        print(f"PASS {name} {dtype.__name__} against {REVISION}: {model.n_iter_} rounds, "
               f"exact sequence and basis indices, max fill error {max_error:.3g}")
     assert next(lines, None) is None
 

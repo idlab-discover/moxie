@@ -668,7 +668,7 @@ struct IterativeImputer[
             raise Error("ValueError: input feature count differs from fitted data")
         var filled = self.initial_imputer_.transform(X)
         var mask = self._initial_mask(original_mask)
-        if len(self.imputation_sequence_) > 0 and not nm.all(mask):
+        if self.n_iter_ > 0 and not nm.all(mask):
             if self._posterior_stream:
                 var lease = self._posterior_stream.value().lease()
                 self._replay(filled, mask, lease[])
@@ -681,8 +681,20 @@ struct IterativeImputer[
         self, mut filled: Self.Input, mask: nm.NDArray[DType.bool],
         mut rng: Optional[RandomState],
     ) raises:
+        if self._params.verbose > 0:
+            print("[IterativeImputer] Completing matrix with shape", filled.shape)
+        if len(self.imputation_sequence_) == 0:
+            return
+        var steps_per_round = len(self.imputation_sequence_) // self.n_iter_
+        var completed_steps = 0
         for step in self.imputation_sequence_:
             self._apply_step(filled, mask, step, rng)
+            completed_steps += 1
+            if self._params.verbose > 1 and completed_steps % steps_per_round == 0:
+                print(
+                    "[IterativeImputer] Ending imputation round",
+                    completed_steps // steps_per_round, "/", self.n_iter_,
+                )
 
     @staticmethod
     def _promote_integer_input[input_dtype: DType](

@@ -1,20 +1,27 @@
 # SPDX-License-Identifier: BSD-3-Clause
-"""Experimental native persistence for calibration with dense LinearSVC."""
+"""Experimental native persistence for calibration with dense LinearSVC and SVC."""
 
 from numojo import Item, Shape
 from std.math import isfinite
 from std.utils import Variant
+from ._calibration_adapter import adapt_classifier
 from ._calibration_algorithms import Array, _IsotonicCalibration, _SigmoidCalibration
 from ._calibration_cv import (
     CalibratedClassifierCV,
     _CalibratedClassifier,
-    _DefaultCalibrationEstimator,
 )
-from ._calibration_estimator import _adapt_linear_svc, validate_integral_labels
+from ._calibration_estimator import (
+    CalibrationEstimator,
+    ClassifierCalibrationAdapter,
+    _adapt_linear_svc,
+    validate_integral_labels,
+)
 from ._calibration_splits import CalibrationCV, CalibrationSplit
 from .isotonic_serialization import IsotonicRegressionSchema
 from .model_selection import KFold, LeaveOneOut, StratifiedKFold
 from .serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema
+from .svm import LinearSVC, SVC
+from .svm.kernel_serialization import SVCSchema
 from .svm.linear_serialization import LinearSVCSchema
 
 
@@ -171,11 +178,66 @@ def _validate_classes(classes: Array) raises:
     validate_integral_labels(classes)
 
 
-comptime _Pair = _CalibratedClassifier[_DefaultCalibrationEstimator]
+trait _AdapterCodec:
+    comptime Adapter: CalibrationEstimator
+    comptime TypeId: StaticString
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive: ...
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter: ...
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int: ...
 
 
-def _check_pair(pair: _Pair, classes: Array, features: Int) raises:
-    if pair.estimator.estimator().n_features_in_ != features:
+struct _LinearSVCCodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[LinearSVC[]]
+    comptime TypeId: StaticString = "moxie.calibration.CalibratedClassifierCV.LinearSVC"
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in LinearSVC adapter"
+            )
+        return LinearSVCSchema[].encode(adapter.estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return _adapt_linear_svc(LinearSVCSchema[].decode(archive))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().n_features_in_
+
+
+struct _SVCCodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[SVC[]]
+    comptime TypeId: StaticString = "moxie.calibration.CalibratedClassifierCV.SVC"
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in SVC adapter"
+            )
+        return SVCSchema[].encode(adapter.estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(SVCSchema[].decode(archive))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().n_features_in_
+
+
+def _check_pair[Codec: _AdapterCodec](
+    pair: _CalibratedClassifier[Codec.Adapter], classes: Array, features: Int
+) raises:
+    if Codec.feature_count(pair.estimator) != features:
         raise Error("ModelSchemaError: calibration child feature count mismatch")
     var child_classes = pair.estimator.class_labels()
     _validate_classes(child_classes)
@@ -254,24 +316,16 @@ def _check_pair(pair: _Pair, classes: Array, features: Int) raises:
         raise Error("ModelSchemaError: unknown fitted calibration method")
 
 
-def _encode_estimator(adapter: _DefaultCalibrationEstimator) raises -> ModelArchive:
-    if not adapter._builtin_linear_svc_reader:
-        raise Error(
-            "ModelSchemaError: calibration requires the built-in LinearSVC adapter"
-        )
-    return LinearSVCSchema[].encode(adapter.estimator())
-
-
-def _write_pair(
+def _write_pair[Codec: _AdapterCodec](
     mut writer: BinaryWriter,
     mut archive: ModelArchive,
-    pair: _Pair,
+    pair: _CalibratedClassifier[Codec.Adapter],
     prefix: String,
 ) raises:
     writer.string(pair.method)
     _write_classes(archive, prefix + "classes_", pair.classes)
     _write_child(
-        writer, archive, prefix + "estimator/", _encode_estimator(pair.estimator)
+        writer, archive, prefix + "estimator/", Codec.encode(pair.estimator)
     )
     if pair.method == "temperature":
         writer.scalar[DType.float64](pair.temperature.beta_)
@@ -292,22 +346,20 @@ def _write_pair(
             )
 
 
-def _read_pair(
+def _read_pair[Codec: _AdapterCodec](
     mut reader: BinaryReader[_],
     archive: ModelArchive,
     prefix: String,
     mut array_index: Int,
-) raises -> _Pair:
+) raises -> _CalibratedClassifier[Codec.Adapter]:
     var method = reader.string(reader.remaining())
     if method != "sigmoid" and method != "isotonic" and method != "temperature":
         raise Error("ModelSchemaError: unknown fitted calibration method")
     var classes = _read_classes(archive, prefix + "classes_", array_index)
-    var estimator = _adapt_linear_svc(
-        LinearSVCSchema[].decode(
-            _read_child(reader, archive, prefix + "estimator/", array_index)
-        )
+    var estimator = Codec.decode(
+        _read_child(reader, archive, prefix + "estimator/", array_index)
     )
-    var pair = _Pair(estimator^, classes^, method.copy())
+    var pair = _CalibratedClassifier(estimator^, classes^, method.copy())
     if method == "temperature":
         pair.temperature.beta_ = reader.scalar[DType.float64]()
         pair.temperature.n_classes_ = reader.integer()
@@ -338,11 +390,9 @@ def _read_pair(
     return pair^
 
 
-struct CalibratedClassifierCVSchema(ModelSchema):
-    """Version 1 for the built-in dense LinearSVC calibration adapter."""
-
-    comptime Model = CalibratedClassifierCV[]
-    comptime TypeId = "moxie.calibration.CalibratedClassifierCV.LinearSVC"
+struct _CalibrationSchema[Codec: _AdapterCodec](ModelSchema):
+    comptime Model = CalibratedClassifierCV[Self.Codec.Adapter]
+    comptime TypeId = Self.Codec.TypeId
     comptime StateVersion = 1
 
     @staticmethod
@@ -365,11 +415,11 @@ struct CalibratedClassifierCVSchema(ModelSchema):
         writer.uint(UInt64(count))
 
         _write_classes(archive, "classes_", model.classes_)
-        _write_child(writer, archive, "estimator/", _encode_estimator(model.estimator))
+        _write_child(writer, archive, "estimator/", Self.Codec.encode(model.estimator))
         for i in range(count):
             ref pair = model.calibrated_classifiers_[i]
-            _check_pair(pair, model.classes_, model.n_features_in_)
-            _write_pair(writer, archive, pair, "fold/" + String(i) + "/")
+            _check_pair[Self.Codec](pair, model.classes_, model.n_features_in_)
+            _write_pair[Self.Codec](writer, archive, pair, "fold/" + String(i) + "/")
         archive.manifest = writer^.finish()
         return archive^
 
@@ -394,15 +444,15 @@ struct CalibratedClassifierCVSchema(ModelSchema):
         Self._check_state(features, classes.size, count)
 
         var child = _read_child(reader, archive, "estimator/", array_index)
-        var estimator = _adapt_linear_svc(LinearSVCSchema[].decode(child))
+        var estimator = Self.Codec.decode(child)
         var model = Self.Model(
             estimator^, method=method^, cv=cv^, n_jobs=n_jobs, ensemble=ensemble^
         )
         for i in range(count):
-            var pair = _read_pair(
+            var pair = _read_pair[Self.Codec](
                 reader, archive, "fold/" + String(i) + "/", array_index
             )
-            _check_pair(pair, classes, features)
+            _check_pair[Self.Codec](pair, classes, features)
             model.calibrated_classifiers_.append(pair^)
         reader.finish()
         if array_index != len(archive.payloads):
@@ -417,3 +467,8 @@ struct CalibratedClassifierCVSchema(ModelSchema):
             count > 0 and (features < 1 or classes < 2)
         ):
             raise Error("ModelSchemaError: invalid calibration fitted state")
+
+
+# Each concrete schema has a distinct archive identifier.
+comptime CalibratedClassifierCVSchema = _CalibrationSchema[_LinearSVCCodec]
+comptime CalibratedSVCClassifierCVSchema = _CalibrationSchema[_SVCCodec]

@@ -3,6 +3,7 @@ import importlib.util
 import os
 import subprocess
 import sys
+import warnings
 from unittest.mock import patch
 
 import numpy as np
@@ -317,7 +318,7 @@ def weighted_hamming_checks(reference):
             np.testing.assert_allclose(got, expected, atol=2e-5, rtol=0)
 
 
-def weighted_ratio_checks(reference):
+def weighted_distance_checks(reference, metrics):
     rng = np.random.RandomState(68)
     X = rng.normal(size=(24, 5))
     X[:2, 1] = 0
@@ -325,7 +326,7 @@ def weighted_ratio_checks(reference):
     for dtype in (np.float32, np.float64):
         data = X.astype(dtype)
         weights = np.array([0, 1.25, 2, 0.5, 3], dtype=dtype)
-        for metric in ("canberra", "braycurtis"):
+        for metric in metrics:
             expected_distances = pairwise_distances(data, metric=metric, w=weights)
             values = native("distances", data.dtype, matrix("X", data), metric,
                             matrix("weights", weights[None, :]))
@@ -343,8 +344,16 @@ def weighted_ratio_checks(reference):
             assert (iteration, rate, features) == (model.n_iter_, model.learning_rate_, model.n_features_in_)
             np.testing.assert_allclose(kl, model.kl_divergence_, atol=5e-6, rtol=0)
             np.testing.assert_allclose(got, expected, atol=2e-5, rtol=0)
-            with np.testing.assert_raises_regex(TypeError, "unexpected keyword argument 'w'"):
-                model.set_params(method="barnes_hut").fit(data)
+            if metric == "sqeuclidean":
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    weighted = model.set_params(method="barnes_hut").fit_transform(data)
+                assert any("metric_kwargs" in str(w.message) and "ignored" in str(w.message) for w in caught)
+                unweighted = model.set_params(metric_params=None).fit_transform(data)
+                np.testing.assert_array_equal(weighted, unweighted)
+            else:
+                with np.testing.assert_raises_regex(TypeError, "unexpected keyword argument 'w'"):
+                    model.set_params(method="barnes_hut").fit(data)
 
 
 def initialization_checks(reference):
@@ -479,8 +488,11 @@ def main():
     print("PASS: 2 exact matching fits and 2 Barnes–Hut matching rejections")
     weighted_hamming_checks(reference)
     print("PASS: 4 weighted Hamming/matching distance matrices and 4 exact fits")
-    weighted_ratio_checks(reference)
+    weighted_distance_checks(reference, ("canberra", "braycurtis"))
     print("PASS: 4 weighted Canberra/Bray–Curtis distance matrices, 4 exact fits and 4 Barnes–Hut rejections")
+    weighted_distance_checks(reference, ("chebyshev", "sqeuclidean"))
+    print("PASS: 4 weighted Chebyshev/squared Euclidean distance matrices and 4 exact fits")
+    print("PASS: sklearn Barnes–Hut rejects Chebyshev weights and warns before ignoring squared Euclidean weights")
     patience_check(reference)
     print("PASS: no-progress stopping against pinned sklearn gradient descent")
     draws, seeds = initialization_checks(reference)

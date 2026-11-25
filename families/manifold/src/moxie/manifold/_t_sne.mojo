@@ -490,6 +490,39 @@ struct TSNE[dtype: DType = DType.float64, embedding_dtype: DType = DType.float32
         return coordinates^
 
 
+def _feature_weights[dtype: DType](weights: NDArray[dtype]) raises -> List[Float64]:
+    if weights.ndim != 1:
+        raise Error("ValueError: TSNE feature weights must be a vector")
+    var values = List[Float64](capacity=weights.shape[0])
+    for feature in range(weights.shape[0]):
+        var weight = Float64(weights.unsafe_get(feature * Int(weights.strides[0])))
+        if not isfinite(weight) or weight < 0:
+            raise Error("ValueError: TSNE feature weights must be finite and nonnegative")
+        values.append(weight)
+    return values^
+
+
+@fieldwise_init
+struct _WeightedSquaredEuclidean[input_dtype: DType](DenseMetric):
+    comptime dtype = Self.input_dtype
+    var weights: List[Float64]
+
+    def validate_features(self, n_features: Int) raises:
+        if len(self.weights) != n_features:
+            raise Error("ValueError: TSNE weights must match features")
+
+    def distance(
+        self, x: NDArray[Self.dtype], i: Int, y: NDArray[Self.dtype], j: Int,
+    ) raises -> Float64:
+        var total: Float64 = 0
+        for feature in range(len(self.weights)):
+            var weight = self.weights[feature]
+            if weight != 0:
+                var delta = at(x, i, feature) - at(y, j, feature)
+                total += (weight * delta) * delta
+        return total
+
+
 struct _ExactRatioDistance[input_dtype: DType](DenseMetric):
     comptime dtype = Self.input_dtype
     var _canberra: Bool
@@ -501,16 +534,7 @@ struct _ExactRatioDistance[input_dtype: DType](DenseMetric):
         self._canberra = name == "canberra"
         self._weights = None
         if weights:
-            ref source = weights.value()
-            if source.ndim != 1:
-                raise Error("ValueError: TSNE feature weights must be a vector")
-            var values = List[Float64](capacity=source.shape[0])
-            for feature in range(source.shape[0]):
-                var weight = Float64(source.unsafe_get(feature * Int(source.strides[0])))
-                if not isfinite(weight) or weight < 0:
-                    raise Error("ValueError: TSNE feature weights must be finite and nonnegative")
-                values.append(weight)
-            self._weights = values^
+            self._weights = _feature_weights(weights.value())
 
     def validate_features(self, n_features: Int) raises:
         if self._weights and len(self._weights.value()) != n_features:
@@ -619,6 +643,18 @@ def _squared_distances[dtype: DType](
             var weighted = _WeightedHamming(params.w.value())
             weighted.validate_features(X.shape[1])
             return _symmetric_squared_distances(weighted, X, name)
+    if (name == "chebyshev" or name == "sqeuclidean") and options:
+        ref params = options.value()
+        if params.w:
+            if params.p or params.V or params.VI or params.missing_values:
+                raise Error("ValueError: metric_params do not match the selected metric")
+            if name == "chebyshev":
+                var chebyshev = Metric[dtype]("minkowski", p=inf[DType.float64](), w=params.w)
+                chebyshev.validate_features(X.shape[1])
+                return _symmetric_squared_distances(chebyshev, X, name)
+            var squared_euclidean = _WeightedSquaredEuclidean[dtype](_feature_weights(params.w.value()))
+            squared_euclidean.validate_features(X.shape[1])
+            return _symmetric_squared_distances(squared_euclidean, X, name)
     var kernel = _metric("hamming" if name == "matching" else name, options, squared_euclidean=True)
     kernel.validate_features(X.shape[1])
     kernel = kernel.self_query_metric(X)

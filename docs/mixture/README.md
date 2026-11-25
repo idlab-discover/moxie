@@ -98,12 +98,13 @@ observed before relocation; new exceptional cases fail the parity command.
 Side-by-side notebooks replay `plot_gmm_init`, `plot_concentration_prior` and
 `plot_gmm_selection` against the pinned reference. Run the search notebook with
 `pixi run -e notebooks notebooks notebooks/mixture/plot_gmm_selection.ipynb`.
-Both searches use the public `select_rows` function and a
-`Variant[Int, String]` grid. The adapter supplies five unshuffled folds,
-accepts an explicit `None` target, and defaults to the estimator's mean
-log-likelihood score. Pass the negative-BIC function in a typed
-`SearchScorer` through `scoring` to select by BIC. The notebook compares each
-search's fold scores, rankings, and held-out score after refitting.
+Both searches use a `Variant[Int, String]` grid and call `fit(X, None)`.
+`DenseUnsupervisedSearchAdapter` supplies five unshuffled folds and uses
+the estimator's mean log-likelihood score. For negative BIC, the notebook
+uses a custom adapter with public `select_rows` and passes a typed
+`SearchScorer` through `scoring`. Both adapters share the same parameter
+applier. The notebook compares fold scores, rankings, and held-out scores
+after refitting.
 
 The notebook also compares `make_pipeline(StandardScaler(), GaussianMixture(2,
 random_state=0))` with the equivalent pinned scikit-learn Pipeline. It checks

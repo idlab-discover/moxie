@@ -3,7 +3,7 @@ from numojo import NDArray, Shape, zeros
 from std.math import abs, isinf
 from std.testing import assert_true, assert_false, assert_equal, assert_raises
 from moxie._random import RandomState
-from moxie.base import clone
+from moxie.base import FitPredictor, clone
 from moxie.mixture import BayesianGaussianMixture, GaussianMixture, MixtureDensity
 from moxie._mixture_linalg.special_gamma import digamma
 
@@ -26,6 +26,12 @@ def fit_new(var model: BayesianGaussianMixture[DType.float64], X: NDArray[DType.
     _ = model.fit(X)
 
 
+def fit_labels[M: FitPredictor](
+    mut model: M, X: M.Input, y: Optional[M.Target],
+) raises -> M.Labels:
+    return model.fit_predict(X, y)
+
+
 def shapes[dtype: DType]() raises:
     var X = blobs[dtype]()
     var kinds: List[String] = ["full", "tied", "diag", "spherical"]
@@ -34,7 +40,7 @@ def shapes[dtype: DType]() raises:
         for kind in kinds:
             var model = BayesianGaussianMixture[dtype](n_components=4, covariance_type=kind, weight_concentration_prior_type=prior, max_iter=300, random_state=0)
             assert_true(is_density(model))
-            var labels = model.fit_predict(X)
+            var labels = fit_labels(model, X, None)
             var predicted = model.predict(X)
             for i in range(90):
                 assert_equal(labels.unsafe_get(i), predicted.unsafe_get(i))

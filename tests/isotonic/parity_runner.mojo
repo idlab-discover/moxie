@@ -1,11 +1,12 @@
 """Read oracle fixtures produced by check_parity.py; no Python runtime."""
 from std.sys import argv
-from std.testing import assert_equal, assert_raises
+from std.testing import assert_equal, assert_raises, assert_true
 from numojo import array
 from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
 from moxie.isotonic_serialization import IsotonicRegressionSchema
 from moxie.serialization import dumps, loads
+from moxie.metadata_routing import SampleWeightRequest, SampleWeightUpdate
 from std.math import isfinite, isnan
 from moxie.isotonic import (
     IsotonicRegression,
@@ -34,6 +35,48 @@ def optional_vector[dtype: DType](text: String) raises -> Optional[List[Scalar[d
     if text == "-":
         return None
     return vector[dtype](text)
+
+
+def request_update(setting: String) -> SampleWeightUpdate:
+    if setting == "-":
+        return SampleWeightUpdate(None)
+    if setting == "false" or setting == "true":
+        return SampleWeightUpdate(setting == "true")
+    return SampleWeightUpdate(setting.copy())
+
+
+def check_serialized_request(request: SampleWeightRequest, expected: String) raises:
+    var value = request.value()
+    if expected == "-":
+        assert_true(value.isa[NoneType]())
+    elif expected == "false" or expected == "true":
+        assert_equal(value[Bool], expected == "true")
+    else:
+        assert_equal(value[String], expected)
+
+
+def check_routing[dtype: DType](method: String, setting: String, key: String, expected: String) raises:
+    var model = IsotonicRegression[dtype]()
+    var request = request_update(setting)
+    if setting == "$UNCHANGED$":
+        _ = model.set_fit_request(sample_weight=True).set_score_request(sample_weight=True)
+    if method == "fit":
+        _ = model.set_fit_request(sample_weight=request)
+    else:
+        _ = model.set_score_request(sample_weight=request)
+    var snapshot = model.get_metadata_routing()
+    var method_request = snapshot.fit.copy() if method == "fit" else snapshot.score.copy()
+    var metadata = Dict[String, Int]()
+    if key == "sample_weight":
+        metadata[key] = 1
+    elif key == "_weights2":
+        metadata[key] = 2
+    if expected == "reject":
+        with assert_raises(contains="UnsetMetadataPassedError"):
+            _ = method_request.route(metadata)
+    else:
+        var routed = method_request.route(metadata)
+        assert_equal(String(routed.or_else(0)) if routed else "-", expected)
 
 
 def compare[dtype: DType](
@@ -90,7 +133,23 @@ def run_cases[dtype: DType]() raises:
         var fields = line.split("|")
         var kind = String(fields[0])
         var context = kind + " case " + String(count)
-        if kind == "kernel":
+        if kind == "routing":
+            check_routing[dtype](String(fields[1]), String(fields[2]), String(fields[3]), String(fields[4]))
+        elif kind == "serialized_requests":
+            comptime Schema = IsotonicRegressionSchema[dtype]
+            var model = IsotonicRegression[dtype]()
+            _ = model.set_fit_request(sample_weight=request_update(String(fields[2])))
+            _ = model.set_score_request(sample_weight=request_update(String(fields[3])))
+            var fitted = fields[1] == "true"
+            if fitted:
+                var x: List[Scalar[dtype]] = [0, 1]
+                _ = model.fit(x, x)
+            var restored = Schema.decode(loads(dumps(Schema.encode(model))))
+            assert_equal(restored.__sklearn_is_fitted__(), fitted)
+            var routing = restored.get_metadata_routing()
+            check_serialized_request(routing.fit, String(fields[4]))
+            check_serialized_request(routing.score, String(fields[5]))
+        elif kind == "kernel":
             var y = vector[dtype](String(fields[1]))
             var result = isotonic_regression(
                 y,

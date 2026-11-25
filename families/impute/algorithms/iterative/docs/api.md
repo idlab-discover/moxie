@@ -75,6 +75,26 @@ var imputer = IterativeImputer[DType.float64, Regressor](
 )
 ```
 
+The polynomial Nystroem + Ridge gallery regressor uses the regular typed
+pipeline. Pass its type to the imputer and move in the configured pipeline.
+Both children support fitted copies, so copying the imputer also copies
+each round's fitted basis and coefficients.
+
+```mojo
+from moxie.impute import IterativeImputer
+from moxie.kernel_approximation import Nystroem
+from moxie.linear_model import Ridge
+from moxie.pipeline import make_pipeline
+
+var regressor = make_pipeline(
+    Nystroem(kernel="polynomial", degree=2.0, random_state=0),
+    Ridge(alpha=1e4),
+)
+var imputer = IterativeImputer[DType.float64, type_of(regressor)](
+    regressor^, random_state=0, max_iter=40, tol=1e-1,
+)
+```
+
 Set `sample_posterior=True` to draw from the predictive Gaussian truncated to
 the fitted feature bounds. Each missing row with a positive deviation and a
 mean inside the bounds consumes one uniform draw. A nonpositive deviation
@@ -150,4 +170,21 @@ mkdir -p builds/pr6-iterative-knn
 python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
 mojo build -O3 --fp-mode=contract=off -I builds/deps families/impute/algorithms/iterative/tests/integration/knn_regressor.mojo -o builds/pr6-iterative-knn/knn_regressor
 python families/impute/algorithms/iterative/tests/knn_regressor_parity.py builds/pr6-iterative-knn/knn_regressor
+```
+
+The Nystroem + Ridge integration checks training fills, held-out replay,
+round counts, feature order, sampled basis indices, and preservation of
+observed cells. It also checks that a configuration clone starts unfitted
+and that a fitted copy survives mutation and refitting of the original.
+It uses a full-rank Float32 fixture and a rank-deficient Float64 fixture.
+Fill tolerances are `3e-4` for Float32 and `5e-8` for Float64, accounting for
+the different SVD and Ridge solvers. Severely ill-conditioned Float32 bases
+can diverge in both fills and convergence rounds, as described in the
+[Nystroem numerical contract](../../../../../docs/kernel_approximation/nystroem/api.md).
+
+```sh
+mkdir -p builds/pr6-nystroem
+python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
+mojo build -O3 --fp-mode=contract=off -I builds/deps families/impute/algorithms/iterative/tests/integration/nystroem_ridge.mojo -o builds/pr6-nystroem/nystroem_ridge
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python families/impute/algorithms/iterative/tests/nystroem_ridge_parity.py builds/pr6-nystroem/nystroem_ridge
 ```

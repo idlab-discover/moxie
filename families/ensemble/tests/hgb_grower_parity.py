@@ -1,4 +1,5 @@
 """Compare complete trees and binned and raw predictions against sklearn."""
+from copy import deepcopy
 from itertools import product
 from pathlib import Path
 import subprocess
@@ -25,6 +26,7 @@ def make_case(
     X, gradients, counts, *, n_bins=8, hessians=None, categorical=None,
     monotonic=None, groups=None, l2=0.0, min_hessian=1e-3, min_leaf=1,
     min_gain=0.0, max_leaves=None, max_depth=None, shrinkage=1.0, query=None,
+    fraction=1.0, feature_seed=0, feature_rng=None,
 ):
     X = np.asfortranarray(X, dtype=np.uint8)
     n_rows, n_features = X.shape
@@ -41,6 +43,8 @@ def make_case(
     if query is None:
         query = np.concatenate([X, np.full((1, n_features), n_bins - 1, dtype=np.uint8)])
     query = np.ascontiguousarray(query, dtype=np.uint8)
+    if feature_rng is None:
+        feature_rng = np.random.default_rng(feature_seed)
     grower = TreeGrower(
         X, gradients, hessians, n_bins=n_bins, n_bins_non_missing=counts,
         has_missing_values=missing, is_categorical=categorical, monotonic_cst=monotonic,
@@ -48,6 +52,7 @@ def make_case(
         l2_regularization=l2, min_hessian_to_split=min_hessian, min_samples_leaf=min_leaf,
         min_gain_to_split=min_gain, max_leaf_nodes=max_leaves, max_depth=max_depth,
         shrinkage=shrinkage, n_threads=1,
+        feature_fraction_per_split=fraction, rng=feature_rng,
     )
     grower.grow()
     thresholds = [thresholds_for_feature(count, cat) for count, cat in zip(counts, categorical)]
@@ -99,10 +104,15 @@ def make_case(
     expected.extend([value] for value in bits64(predictions))
     expected.extend([value] for value in bits64(raw_predictions))
 
+    mask = np.arange(65) < 33
+    deepcopy(feature_rng).shuffle(mask)
+    expected.extend([int(selected)] for selected in mask)
+
     fields = [
         n_rows, n_features, n_bins, int(unit_hessian), max_leaves or 0, max_depth or 0,
         min_leaf, *bits64([l2, min_hessian, min_gain, shrinkage]), len(groups or ()),
-        len(query), *np.column_stack([counts, categorical, monotonic]).ravel(),
+        len(query), feature_seed, *bits64([fraction]),
+        *np.column_stack([counts, categorical, monotonic]).ravel(),
     ]
     for group in groups or ():
         fields.extend([len(group), *group])
@@ -162,9 +172,9 @@ def targeted_cases():
         )
 
 
-def generated_cases():
+def generated_cases(*, sample_features=False):
     rng = np.random.default_rng(7711)
-    for seed in range(120):
+    for seed in range(18 if sample_features else 120):
         n_rows = int(rng.integers(19, 211))
         X = rng.integers(0, 7, size=(n_rows, 6), dtype=np.uint8)
         n_bins = 256 if seed % 5 == 0 else 8
@@ -179,7 +189,7 @@ def generated_cases():
         hessians = rng.uniform(0.2, 2.0, n_rows) if seed % 2 else None
         query = rng.integers(0, 8, size=(17, 6), dtype=np.uint8)
         query[query == 7] = n_bins - 1
-        yield f"generated {seed}", make_case(
+        yield f"generated {seed}, sampling={sample_features}", make_case(
             X, gradient, [7] * 6, n_bins=n_bins, hessians=hessians,
             categorical=categorical, monotonic=monotonic,
             groups=[[0, 1, 2], [1, 3], [2, 4, 5]] if seed % 3 == 0 else None,
@@ -189,12 +199,42 @@ def generated_cases():
             min_hessian=[1e-3, 0.8, 3.5][seed % 3],
             min_gain=[0.0, 0.25, 5.0][seed % 3],
             shrinkage=[1.0, 0.5, 0.125][seed % 3], query=query,
+            fraction=[0.125, 0.5, 0.8][seed % 3] if sample_features else 1.0,
+            feature_seed=seed,
+        )
+
+
+def sampled_cases():
+    X = np.array(list(product(range(2), repeat=6)), dtype=np.uint8)
+    gradient = -(X @ np.array([32, 16, 8, 4, 2, 1]) - 31.5)
+    for seed in (0, 1, 42, 2**31, 2**32 - 2, 2**32 - 1):
+        rng = np.random.default_rng(seed)
+        # Include a floor-stopped root, ties, depth/leaf caps, and a rounded
+        # all-true mask followed by a fractional mask on the same stream.
+        for i, fraction in enumerate((0.2, 0.375, 1.0, 0.999, 0.5, 0.001, 0.5)):
+            yield f"sampled stream seed={seed} tree={i}", make_case(
+                X, gradient if i != 5 else np.zeros(len(X)), [2] * 6,
+                fraction=fraction, feature_seed=seed if i == 0 else -1,
+                feature_rng=rng, max_leaves=7, max_depth=1 if i == 3 else 4,
+                min_leaf=33 if i == 4 else 1,
+                groups=[[0, 1, 2], [1, 3], [2, 4, 5]] if i % 2 == 0 else None,
+            )
+
+    # Equal gains must follow the path's feature order after sampling.
+    X = np.broadcast_to(np.arange(8, dtype=np.uint8)[:, None] % 2, (8, 12))
+    for seed in range(12):
+        yield f"sampled ties seed={seed}", make_case(
+            X, np.where(X[:, 0] == 0, 1, -1), [2] * X.shape[1],
+            fraction=0.25, feature_seed=seed, max_depth=2,
         )
 
 
 def main():
     assert Path(sklearn.__file__).resolve().is_relative_to(BUILDS / "oracle-env")
-    cases = [*targeted_cases(), *generated_cases()]
+    cases = [
+        *targeted_cases(), *generated_cases(), *sampled_cases(),
+        *generated_cases(sample_features=True),
+    ]
     fixtures = BUILDS / "hgb_grower_fixtures.txt"
     fixtures.write_text("".join(f"{case[0]}\n" for _, case in cases))
     run = subprocess.run(
@@ -213,7 +253,8 @@ def main():
     print(
         f"hgb grower parity: {len(cases)} cases, {nodes} nodes ({cat} categorical splits), "
         f"{positions} partition positions, {predictions} binned predictions and "
-        f"{predictions} raw predictions matched bit for bit"
+        f"{predictions} raw predictions matched bit for bit; "
+        f"{65 * len(cases)} post-growth mask entries matched exactly"
     )
 
 

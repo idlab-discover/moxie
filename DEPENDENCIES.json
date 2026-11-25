@@ -11,6 +11,9 @@
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },
+        "moxie.metadata_routing": {
+          "file": "src/moxie/metadata_routing.mojo"
+        },
         "moxie.warnings": {
           "file": "src/moxie/warnings.mojo"
         },
@@ -599,6 +602,9 @@
         "moxie.ensemble._hist_gradient_boosting.binning": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/binning.mojo"
         },
+        "moxie.ensemble._hist_gradient_boosting.feature_sampling": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/feature_sampling.mojo"
+        },
         "moxie.ensemble._hist_gradient_boosting.grower": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/grower.mojo"
         },
@@ -627,7 +633,8 @@
         "licenses/mixture-scikit-learn.txt": "LICENSES/mixture-scikit-learn.txt",
         "licenses/linear_model-scikit-learn.txt": "families/linear_model/LICENSES/scikit-learn.txt",
         "licenses/ensemble-scikit-learn.txt": "families/ensemble/LICENSES/scikit-learn.txt",
-        "licenses/ensemble-NumPy.txt": "families/ensemble/LICENSES/NumPy.txt"
+        "licenses/ensemble-NumPy.txt": "families/ensemble/LICENSES/NumPy.txt",
+        "licenses/ensemble-PCG64.txt": "families/ensemble/LICENSES/PCG64.txt"
       },
       "exports": {
         "packages": {
@@ -866,6 +873,7 @@
             "PLSCanonical": "moxie.cross_decomposition._pls",
             "CCA": "moxie.cross_decomposition._pls",
             "PLSEngine": "moxie.cross_decomposition._pls",
+            "PLSMetadataRequest": "moxie.cross_decomposition._pls",
             "PLSParams": "moxie.cross_decomposition._pls",
             "PLSSVD": "moxie.cross_decomposition._plssvd",
             "PLSSVDParams": "moxie.cross_decomposition._plssvd",
@@ -1624,6 +1632,9 @@
         "moxie.model_selection._indices": {
           "file": "src/moxie/model_selection/_indices.mojo"
         },
+        "moxie.model_selection._classification_scoring": {
+          "file": "src/moxie/model_selection/_classification_scoring.mojo"
+        },
         "moxie.model_selection._evaluation": {
           "file": "src/moxie/model_selection/_evaluation.mojo"
         },
@@ -1650,6 +1661,10 @@
             "IndexSplit": "moxie.model_selection._indices",
             "SplitCursor": "moxie.model_selection._indices",
             "validate_indices": "moxie.model_selection._indices",
+            "Accuracy": "moxie.model_selection._classification_scoring",
+            "PrecisionMacro": "moxie.model_selection._classification_scoring",
+            "RecallMacro": "moxie.model_selection._classification_scoring",
+            "F1Macro": "moxie.model_selection._classification_scoring",
             "EstimatorScore": "moxie.model_selection._evaluation",
             "NegMeanSquaredError": "moxie.model_selection._evaluation",
             "NegMeanAbsoluteError": "moxie.model_selection._evaluation",

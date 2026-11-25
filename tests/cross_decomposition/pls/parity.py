@@ -22,6 +22,7 @@ import warnings
 import zlib
 
 import numpy as np
+from sklearn import config_context
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKSPACE = Path(os.environ.get("MOXIE_WORKSPACE", ROOT.parent)).resolve()
@@ -257,7 +258,15 @@ def reference(module, case, perturb=0.0):
         result["predict"] = est.predict(Xt.copy())
         result["inverse_x"] = est.inverse_transform(xs)
         result["inverse_y"] = est.inverse_transform(xs, ys)[1]
-        result["score"] = np.array([est.score(Xt, yt, sample_weight=case["w"])])
+        score_params = {}
+        if case["w"] is not None:
+            with config_context(enable_metadata_routing=True):
+                est.set_score_request(sample_weight="weights")
+                score_params = est.get_metadata_routing().score._route_params(
+                    {"weights": case["w"]}, parent="parity", caller="score"
+                )
+                assert score_params["sample_weight"] is case["w"]
+        result["score"] = np.array([est.score(Xt, yt, **score_params)])
         result["names"] = ",".join(est.get_feature_names_out())
         Xc = Xt.copy()
         result["transform_inplace"] = est.transform(Xc, copy=False)

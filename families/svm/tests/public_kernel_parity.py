@@ -102,7 +102,7 @@ def native(x, y, sw, query, kind, config, single=False, expect_error=False, roun
               gamma_mode, gamma_value, config.get("degree", 3), config.get("coef0", 0),
               config.get("C", 1), config.get("nu", .5), config.get("epsilon", .1),
               config.get("tol", .001), int(config.get("shrinking", True)),
-              int(config.get("probability", False)), config.get("max_iter", -1),
+              int(config.get("probability", -1)), config.get("max_iter", -1),
               config.get("random_state", 42), mode, config.get("decision_function_shape", "ovr"),
               int(config.get("break_ties", False)), int(single), len(weights) if isinstance(weights, dict) else 0,
               *np.asarray(x, dtype=float).ravel(), *y, *sw, *np.asarray(query, dtype=float).ravel()]
@@ -120,8 +120,15 @@ def native(x, y, sw, query, kind, config, single=False, expect_error=False, roun
         return None
     assert result.returncode == 0, result.stdout + result.stderr
     lines = iter(result.stdout.splitlines())
-    arrays = {}
+    arrays = {"fit_warnings": []}
+    assert not any(line.startswith(("ConvergenceWarning:", "FutureWarning:"))
+                   for line in result.stdout.splitlines())
+    assert not result.stderr, result.stderr
     for line in lines:
+        if line.startswith("WARNING "):
+            _, category, message = line.split(" ", 2)
+            arrays["fit_warnings"].append((category, message))
+            continue
         words = line.split()
         if not words or words[0] not in ("ARRAY", "LIST", "SCALAR"):
             continue
@@ -132,6 +139,12 @@ def native(x, y, sw, query, kind, config, single=False, expect_error=False, roun
         shape = tuple(map(int, words[2:]))
         arrays[name] = np.array([float(next(lines)) for _ in range(int(np.prod(shape)))]).reshape(shape)
     return arrays
+
+
+def compare_fit_warnings(expected, got):
+    assert got["fit_warnings"] == [
+        (record.category.__name__, str(record.message)) for record in expected
+    ], (got["fit_warnings"], expected)
 
 
 def compare(expected, got, query, kind, config):
@@ -197,11 +210,13 @@ def main():
                 if single:
                     x, query = x.astype(np.float32), query.astype(np.float32)
                 print(name, kernel, variant, flush=True)
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
+                with warnings.catch_warnings(record=True) as fit_warnings:
+                    warnings.simplefilter("always")
                     expected = classes[name](**config)
                     expected.fit(x, sample_weight=sw) if kind == 2 else expected.fit(x, y, sample_weight=sw)
                     got = native(x, y, sw, query, kind, config, single, round_trip=round_trip)
+                    compare_fit_warnings(fit_warnings, got)
+                    warnings.simplefilter("ignore")
                     compare(expected, got, query, kind, config)
                     if kind != 2:
                         np.testing.assert_allclose(got["score"], expected.score(x, y, sample_weight=sw), rtol=3e-5, atol=3e-6)
@@ -220,11 +235,13 @@ def main():
                           max_iter=int(edge[-1]) if edge.startswith("limit") else -1)
             if kind < 2:
                 config["random_state"] = 17
+                if edge == "limit1":
+                    config["probability"] = False
             if kind in (1, 2, 4):
                 config["nu"] = .3
             print(name, edge, flush=True)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+            with warnings.catch_warnings(record=True) as fit_warnings:
+                warnings.simplefilter("always")
                 expected = classes[name](**config)
                 try:
                     expected.fit(x, sample_weight=sw) if kind == 2 else expected.fit(x, y, sample_weight=sw)
@@ -233,6 +250,8 @@ def main():
                     results.append(dict(estimator=name, edge=edge, rejected=True))
                     continue
                 got = native(x, y, sw, query, kind, config, round_trip=round_trip)
+                compare_fit_warnings(fit_warnings, got)
+                warnings.simplefilter("ignore")
                 compare(expected, got, query, kind, config)
                 if kind != 2:
                     np.testing.assert_allclose(got["score"], expected.score(x, y, sample_weight=sw), rtol=3e-5, atol=3e-6)

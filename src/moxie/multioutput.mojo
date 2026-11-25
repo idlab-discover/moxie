@@ -9,6 +9,7 @@ from moxie.base import (BaseEstimator, SupervisedEstimator, Predictor, Probabili
     DecisionFunction, LogProbabilityPredictor, IncrementalClassifier, IncrementalRegressor,
     WeightedSupervisedEstimator, ClassifierMixin, clone)
 from moxie._labels import encode_column
+from moxie.dummy import Label
 from moxie._multioutput_contracts import MultiOutputClassifierAPI, MultiOutputRegressorAPI, MultiOutputProbability
 from moxie._multioutput import validate_targets, clone_outputs, target_column, stack_predictions, augment_features, ChainOrder, ChainResponses
 from moxie._random import RandomState, entropy_state
@@ -184,6 +185,15 @@ def _list_target[T: Copyable & Deinitable, label: DType](target: NDArray[label])
         raise Error("ValueError: component target must be a vector")
     comptime if T == Scalar[label]:
         return rebind_var[List[T]](target.tolist())
+    elif T == Label:
+        var values = List[Label](capacity=target.size)
+        for i in range(target.size):
+            comptime if label == DType.int64:
+                values.append(Label(Int(target.item(i))))
+            else:
+                comptime assert label in (DType.float32, DType.float64)
+                values.append(Label(Float64(target.item(i))))
+        return rebind_var[List[T]](values^)
     else:
         comptime assert label == DType.int64 and T == Int
         var values = List[Int](capacity=target.size)
@@ -198,6 +208,21 @@ def _prediction_vector[T: Movable, label: DType](var values: T) raises -> NDArra
     elif T == List[Scalar[label]]:
         var labels = rebind_var[List[Scalar[label]]](values^)
         return nm.array[label](labels, [len(labels)])
+    elif T == List[Label]:
+        var labels = rebind_var[List[Label]](values^)
+        var result = NDArray[label](Shape(len(labels)))
+        for i in range(len(labels)):
+            ref value = labels[i]
+            comptime if label == DType.int64:
+                if value.kind != 0:
+                    raise Error("ValueError: component must predict integer labels")
+                result.unsafe_set(i, Scalar[label](value.integer))
+            else:
+                comptime assert label in (DType.float32, DType.float64)
+                if value.kind != 1:
+                    raise Error("ValueError: component must predict floating-point labels")
+                result.unsafe_set(i, Scalar[label](value.number))
+        return result^
     else:
         comptime assert label == DType.int64 and T == List[Int]
         var labels = rebind_var[List[Int]](values^)
@@ -220,7 +245,9 @@ def _fit_component[E: SupervisedEstimator, dtype: DType, label: DType](
     comptime if E.Target == NDArray[label]:
         _fit_native_component(model, rebind[E.Input](X), rebind[E.Target](target), weights)
     else:
-        comptime NativeLabel = Int if E.Target == List[Int] else Scalar[label]
+        comptime NativeLabel = (
+            Label if E.Target == List[Label] else Int if E.Target == List[Int] else Scalar[label]
+        )
         var native_target = _list_target[NativeLabel, label](target)
         _fit_native_component(
             model, rebind[E.Input](X), rebind[E.Target](native_target), weights,
@@ -673,7 +700,8 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         comptime assert (
             Self.E.Target == Self.Target or Self.E.Target == List[Scalar[Self.label]]
             or (Self.label == DType.int64 and Self.E.Target == List[Int])
-        ), "component target must use the wrapper label dtype as an NDArray or a numeric List"
+            or (Self.E.Target == List[Label] and Self.label in (DType.int64, DType.float32, DType.float64))
+        ), "component target must use the wrapper label dtype as an NDArray or a compatible List"
         comptime assert Self.E.Prediction == Self.E.Target, "component prediction and target types must match"
         self.estimator = estimator^
         self.n_jobs = n_jobs
@@ -806,7 +834,9 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
                     rebind[Optional[Self.E.Classes]](known),
                 )
             else:
-                comptime NativeLabel = Int if Self.E.Target == List[Int] else Scalar[Self.label]
+                comptime NativeLabel = (
+                    Label if Self.E.Target == List[Label] else Int if Self.E.Target == List[Int] else Scalar[Self.label]
+                )
                 var known: Optional[List[NativeLabel]] = None
                 if classes:
                     known = _list_target[NativeLabel, Self.label](classes.value()[j])
@@ -1083,7 +1113,8 @@ struct ClassifierChain[
         comptime assert (
             Self.E.Target == Self.Target or Self.E.Target == List[Scalar[Self.label]]
             or (Self.label == DType.int64 and Self.E.Target == List[Int])
-        ), "component target must use the wrapper label dtype as an NDArray or a numeric List"
+            or (Self.E.Target == List[Label] and Self.label in (DType.int64, DType.float32, DType.float64))
+        ), "component target must use the wrapper label dtype as an NDArray or a compatible List"
         comptime assert Self.E.Prediction == Self.E.Target, "component prediction and target types must match"
         self.estimator = estimator^
         self.n_jobs = None

@@ -24,7 +24,7 @@ from the assembled package.
 | OrthogonalMatchingPursuit, orthogonal_mp, orthogonal_mp_gram, OrthogonalMatchingPursuitCV | Missing |
 | BayesianRidge | Dense empirical-Bayes fitting, full posterior covariance and predictive uncertainty; see [API and validation](../algorithms/bayesian/docs/api.md) |
 | ARDRegression | Missing |
-| LogisticRegression | [Dense L-BFGS, Newton-CG, Newton-Cholesky, SAG and SAGA](../algorithms/logistic/docs/api.md) with L2 or no penalty. SAGA also supports L1 and elastic net. Binary LIBLINEAR supports primal L1 and primal or dual L2. Newton coordinate-descent solvers remain open. |
+| LogisticRegression | [Dense L-BFGS, Newton-CG, Newton-Cholesky, SAG and SAGA](../algorithms/logistic/docs/api.md) with L2 or no penalty. SAGA and binary Newton-CD also support L1 and elastic net. Binary LIBLINEAR supports primal L1 and primal or dual L2. Newton-CD-Gram remains open. |
 | LogisticRegressionCV | Missing |
 | PoissonRegressor, GammaRegressor, TweedieRegressor | Missing |
 | HuberRegressor, QuantileRegressor, RANSACRegressor, TheilSenRegressor | Missing |

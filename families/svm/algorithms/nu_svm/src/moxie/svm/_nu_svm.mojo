@@ -4,10 +4,11 @@ import numojo as nm
 from std.math import log
 from moxie.svm._contracts import Dense, Indices, KernelModel, KernelSpec, KernelOptions, KernelProvider, TrainingSnapshot, validate_matrix, validate_vector
 from moxie.svm._libsvm import LibSVM
-from moxie.svm._classification import Gamma, Probability, class_scores, support_counts, linear_coefficients, public_support, checked_int32
+from moxie.svm._classification import Gamma, Probability, class_scores, support_counts, linear_coefficients, public_support, checked_int32, _KernelFitDiagnostics
 from moxie.svm._linear import ClassWeight, _labels, _codes, _weights, _class_weights
 from moxie.svm._base import ProbabilisticSVC, SupportVectorRegressor, OneClassSupportVector
 from moxie._random import RandomState, entropy_state
+from moxie.warnings import FitWarning
 
 @fieldwise_init
 struct NuSVCParams[Label: Copyable & Comparable & Deinitable = Float64](Copyable, Movable):
@@ -60,6 +61,8 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
     var n_features_in_: Int
     var n_iter_: nm.NDArray[DType.int32]
     var fit_status_: Int
+    var fit_warnings: List[FitWarning]
+    var _fit_diagnostics: Optional[_KernelFitDiagnostics]
     var shape_fit_: nm.Shape
     var _gamma: Float64
     var _kernel: KernelSpec
@@ -95,6 +98,8 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         self.n_features_in_ = 0
         self.n_iter_ = nm.zeros[DType.int32](nm.Shape(0))
         self.fit_status_ = 0
+        self.fit_warnings = []
+        self._fit_diagnostics = None
         self.shape_fit_ = nm.Shape(0, 0)
         self._gamma = 0
         self._kernel = KernelSpec("rbf", 0.0, 3, 0.0)
@@ -222,8 +227,9 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         self._kernel = spec^
         self._model = model^
         self._snapshot = snapshot^
-        if self.fit_status_ != 0:
-            print("ConvergenceWarning: LIBSVM reached max_iter")
+        var diagnostics = _KernelFitDiagnostics(self.max_iter, self.probability.boolean)
+        self.fit_warnings = diagnostics.warnings(self.fit_status_)
+        self._fit_diagnostics = diagnostics^
         if self.verbose:
             print("[LibSVM] support vectors:", self.support_.shape[0])
         return self
@@ -489,6 +495,8 @@ struct NuSVR(SupportVectorRegressor):
     var n_features_in_: Int
     var n_iter_: Int
     var fit_status_: Int
+    var fit_warnings: List[FitWarning]
+    var _fit_diagnostics: Optional[_KernelFitDiagnostics]
     var shape_fit_: nm.Shape
     var _gamma: Float64
     var _kernel: KernelSpec
@@ -516,6 +524,8 @@ struct NuSVR(SupportVectorRegressor):
         self.n_features_in_ = 0
         self.n_iter_ = 0
         self.fit_status_ = 0
+        self.fit_warnings = []
+        self._fit_diagnostics = None
         self.shape_fit_ = nm.Shape(0, 0)
         self._gamma = 0
         self._kernel = KernelSpec("rbf", 0.0, 3, 0.0)
@@ -608,8 +618,9 @@ struct NuSVR(SupportVectorRegressor):
         self._kernel = spec^
         self._model = model^
         self._snapshot = snapshot^
-        if self.fit_status_ != 0:
-            print("ConvergenceWarning: LIBSVM reached max_iter")
+        var diagnostics = _KernelFitDiagnostics(self.max_iter, False)
+        self.fit_warnings = diagnostics.warnings(self.fit_status_)
+        self._fit_diagnostics = diagnostics^
         if self.verbose:
             print("[LibSVM] support vectors:", self.support_.shape[0])
         return self

@@ -33,6 +33,7 @@ def test(run, executable):
         ('partial_fit', "no matching method in call to 'partial_fit'"),
         ('step_bounds', "no matching method in call to 'step'"),
         ('step_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
+        ('named_step_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
     ]:
         result = subprocess.run(
             ['mojo', 'build', '-I', str(DEPS), '-I', str(TESTS), '-I', str(EXAMPLES),

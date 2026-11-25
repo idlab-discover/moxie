@@ -50,6 +50,23 @@ comptime MAEAdapter = DenseSupervisedAdapter[Model, S=MAE]
 var scores = cross_val_score[MAEAdapter](model, X, y, MAEAdapter())
 ```
 
+Classification scorers `Accuracy`, `PrecisionMacro`, `RecallMacro`, and
+`F1Macro` select the corresponding scikit-learn scorer by Mojo type. For SVC
+with its default Float64 labels:
+
+```mojo
+comptime Model = SVC[]
+comptime Labels = List[Float64]
+comptime Scorer = PrecisionMacro[Model, NDArray[DType.float64], Labels]
+comptime Adapter = DenseSupervisedAdapter[Model, Labels, S=Scorer]
+var scores = cross_val_score[Adapter](SVC(), X, y, Adapter())
+```
+
+The scorer's prediction and target types must agree. Its optional score-weight
+dtype defaults to Float64. Use `weight_dtype=DType.float32` for Float32 weights
+and match that dtype in the adapter. The underlying metrics handle class
+selection and undefined scores.
+
 The optional
 `apply_params` argument accepts a noncapturing Mojo function with signature
 `def(mut E, Dict[String, V]) thin raises`. `V` defaults to Float64. An empty

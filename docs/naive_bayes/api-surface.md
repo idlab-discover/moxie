@@ -37,6 +37,9 @@ probabilities; its default remains Float64. Other classifiers retain Float64
 statistics. See
 [Gaussian API](gaussian/api.md) for shapes and examples.
 
+Native model files are available for [GaussianNB](gaussian/api.md#persistence)
+and [MultinomialNB](counts/scope.md#multinomialnb-model-files).
+
 Other explicit differences remain in [family.md](family.md): typed parameter
 records, fluent mutable-reference returns, descriptive Mojo errors, stricter
 negative-weight/prior validation and default Gaussian arithmetic dtype. See

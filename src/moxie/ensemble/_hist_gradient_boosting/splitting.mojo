@@ -262,6 +262,7 @@ def find_node_split[
     monotonic_cst: List[Int],
     *,
     allowed_features: Span[Int, features_origin],
+    feature_mask: List[Bool] = [],
     bounds: _ValueBounds = _ValueBounds(),
     options: _SplitOptions = _SplitOptions(),
 ) raises -> Optional[_Split]:
@@ -274,6 +275,8 @@ def find_node_split[
         or len(monotonic_cst) != n_features
     ):
         raise Error("ValueError: split metadata must match histogram features")
+    if feature_mask and len(feature_mask) != len(allowed_features):
+        raise Error("ValueError: subsampling mask must match allowed features")
     options.validate()
     if isnan(bounds.lower) or isnan(bounds.upper) or bounds.lower > bounds.upper:
         raise Error("ValueError: invalid split options or value bounds")
@@ -288,7 +291,10 @@ def find_node_split[
         options.min_gain_to_split,
         None,
     )
-    for feature in allowed_features:
+    for i in range(len(allowed_features)):
+        if feature_mask and not feature_mask[i]:
+            continue
+        var feature = allowed_features[i]
         ref bins = histograms.feature(feature)
         if not bins:
             raise Error("ValueError: requested split feature is absent from histograms")

@@ -402,6 +402,9 @@ struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstim
         ref[y_origin] y: Self.Target,
         sample_weight: Optional[Self.SampleWeight],
     ) raises -> ref[self] Self:
+        # NuMojo's rank-one flat reads assume unit stride.
+        if y.ndim == 1 and y.size > 0 and not y.is_c_contiguous():
+            return self.fit(X, y.contiguous(), sample_weight)
         matrix(X)
         vector(y)
         if X.shape[0] != y.size:
@@ -531,6 +534,8 @@ struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstim
         y: Self.Target,
         sample_weight: Optional[Self.SampleWeight] = None,
     ) raises -> Float64:
+        if y.ndim == 1 and y.size > 0 and not y.is_c_contiguous():
+            return self.score(X, y.contiguous(), sample_weight)
         var predictions = self.predict(X)
         vector(y)
         if y.size != predictions.size:

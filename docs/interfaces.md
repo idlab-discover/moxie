@@ -33,7 +33,9 @@ recorded revision when adding algorithms; upstream main may have changed.
 | Probability | `ProbabilityPredictor`, `LogProbabilityPredictor` | Columns follow `classes_`; rows normalize |
 | Decision values | `DecisionFunction` | Shape/sign follow the individual estimator |
 | Transformation | `TransformerMixin`, `FitTransformer`, `InverseTransformer` | Independently opt into each capability |
+| Training labels | `FitPredictor` | `fit_predict(X, y=None)` labels the training rows |
 | Clustering | `ClusterMixin` | `fit_predict`; unseen-data prediction is separate |
+| Unsupervised scoring | `UnsupervisedScorer` | `score(X, y=None)` applies the estimator's aggregation |
 | Density | `DensityMixin` | `score_samples`; `score` aggregation follows the estimator |
 | Outliers | `OutlierMixin` | +1 inliers, -1 outliers; zero decision boundary |
 | Weighted fit | `WeightedSupervisedEstimator` | Explicit opt-in overload |
@@ -103,9 +105,23 @@ process-wide warning filters and emission.
 - The weighted-fit trait requires an explicit `sample_weight` value on its
   overload. Score accepts optional weights. Incremental weight support and
   estimator-specific extra fit arguments are added by the concrete algorithm.
-- Python reflection, rich repr, pandas output, metadata routing,
+- Python reflection, rich repr, pandas output, automatic metadata forwarding,
   full sklearn tags, and Python bindings are outside this scaffold. They must
   be designed and tested before claiming compatibility with those facilities.
+
+## Sample-weight requests
+
+`moxie.metadata_routing` provides `SampleWeightRequest` for one method and
+`FitScoreMetadataRequest` for independent fit and score requests. A parent
+can use `requested_name()` to discover the incoming key and `route(metadata)`
+to resolve a weight value from a homogeneous `Dict[String, T]`. The parent
+owns validation of the supplied keys across all children. An unset request
+raises `UnsetMetadataPassedError` when it receives `sample_weight`; an explicit
+`False` request declines it. An alias must be an ASCII identifier. Passing
+the standard name as an alias is equivalent to `True`.
+
+Isotonic regression exposes these requests directly. Composition forwarding
+depends on the parent and is tracked by the composition owners.
 
 ## Fluent implementation convention
 

@@ -239,7 +239,11 @@ def _normalization[dtype: DType](
     return _scaled_normalization(factor.u(), factor.singular_values(), factor.vt())
 
 
-struct Nystroem[dtype: DType = DType.float64, Kernel: RowKernel & Copyable & Deinitable = NoCallableKernel, output_dtype: DType = dtype](KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
+struct Nystroem[
+    dtype: DType = DType.float64,
+    Kernel: RowKernel & Copyable & Deinitable = NoCallableKernel,
+    output_dtype: DType = dtype,
+](Copyable, KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
     """Approximate a kernel map using a random subset of the training rows (dense input).
 
     Learned: `components_` `(k, p)` (copies of the basis rows),

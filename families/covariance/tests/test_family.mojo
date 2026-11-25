@@ -158,6 +158,9 @@ struct ContractProbe(
     ) raises -> ref[self] Self:
         raise Error("Contract probe: no algorithm implemented")
 
+    def covariance_(self) raises -> Self.Input:
+        raise Error("Contract probe: no algorithm implemented")
+
     def get_precision(self) raises -> Self.Precision:
         raise Error("Contract probe: no algorithm implemented")
 

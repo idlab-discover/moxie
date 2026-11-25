@@ -1,3 +1,4 @@
+from std.math import nan
 from std.testing import assert_equal, assert_false, assert_true, assert_raises
 import numojo as nm
 from moxie.calibration import CalibratedClassifierCV, adapt_classifier, calibration_curve
@@ -48,8 +49,43 @@ def check_float32_list_targets() raises:
     assert_equal(snapshot.class_labels().item(0), 16777216.0)
 
 
+def check_strided_cv_targets() raises:
+    var X = array([-3.0, 1.0, -2.0, 2.0, -1.0, 3.0]).reshape(nm.Shape(6, 1))
+    var labels = array([-7.0, 4.0, -7.0, 4.0, -7.0, 4.0])
+    var backing = nm.full[DType.float64](nm.Shape(18), nan[DType.float64]())
+    var y = backing.view_with_layout(nm.Shape(6), nm.NDArrayStrides(-2), 11)
+    for i in range(labels.size):
+        y[nm.Item(i)] = labels.item(i)
+    var weight = array([1.0, 2.0, 3.0, 1.0, 2.0, 3.0])
+
+    for ensemble in [False, True]:
+        var model = CalibratedClassifierCV(
+            adapt_classifier(LinearSVC[Float32](dual=False, random_state=0)),
+            cv=3, ensemble=ensemble,
+        )
+        _ = model.fit(X, labels, weight.copy())
+        var expected = model.predict_proba(X)
+        var expected_score = model.score(X, labels, weight.copy())
+
+        _ = model.fit(X, y, weight.copy())
+        assert_equal(model.classes_.item(0), -7.0)
+        assert_equal(model.classes_.item(1), 4.0)
+        assert_equal(model.score(X, y, weight.copy()), expected_score)
+        y[nm.Item(2)] = nan[DType.float64]()
+        with assert_raises(contains="input must be finite"):
+            _ = model.fit(X, y, weight.copy())
+        with assert_raises(contains="input must be finite"):
+            _ = model.score(X, y, weight.copy())
+        y[nm.Item(2)] = labels.item(2)
+        var actual = model.predict_proba(X)
+        for i in range(labels.size):
+            for j in range(2):
+                assert_equal(actual.item(i, j), expected.item(i, j))
+
+
 def main() raises:
     check_float32_list_targets()
+    check_strided_cv_targets()
     var x = array([5.0, -4.0, 1.0])
     var y = array([1.0, -1.0, -1.0])
     var sigmoid = _SigmoidCalibration()

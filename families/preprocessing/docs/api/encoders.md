@@ -168,6 +168,9 @@ Behavior follows sklearn:
   splitters keep all rows of each group in the same validation fold.
   `LeaveOneOut` validates one row per fold, and `LeaveOneGroupOut`
   validates one group per fold. Both are deterministic.
+  `PredefinedSplit` uses one Int64 fold label per input row and validates
+  folds in ascending label order. Its labels must cover every row, so the
+  splitter's training-only label `-1` raises `ValueError` in `fit_transform`.
   Both stratified splitters require binary or multiclass labels in the
   original target, even when `target_type="continuous"`. A shuffled
   splitter with no seed uses Moxie's process default RNG.
@@ -220,7 +223,7 @@ shuffle, and `n_splits` greater than every class count all raise.
   `Optional[Optional[...]]`. The outer `None` leaves the value unchanged, and
   an inner `None` restores `"auto"`/`"deprecated"`.
 * `cv` accepts an integer of at least 2, `None`, `KFold`, `StratifiedKFold`,
-  `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneOut`, `LeaveOneGroupOut`, or
+  `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneOut`, `LeaveOneGroupOut`, `PredefinedSplit`, or
   `TargetEncoderSplits` in the constructor and `set_params`. `cv=None` uses
   five folds with the same target-based splitter as `cv=5`. The constructor
   default is the integer `5`. Omitting `cv` in `set_params` keeps the existing
@@ -299,6 +302,8 @@ Estimator cases cover:
   groups, unshuffled and seeded splitters, and seeded global shuffling;
 - direct `LeaveOneOut` with continuous targets and `LeaveOneGroupOut` with
   multiclass targets, string groups, and unknown training categories;
+- direct `PredefinedSplit` with nonconsecutive labels, including a negative
+  fold label, a single fold, and invalid assignment lengths or training-only rows;
 - explicit train/test pairs with reordered and repeated training rows,
   one split, and missing or overlapping validation rows;
 - explicit categories with unknown training values;

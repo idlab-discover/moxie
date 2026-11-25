@@ -20,6 +20,9 @@ trait PipelineSteps(BaseEstimator):
     comptime Prefix: BaseEstimator
     comptime Final: BaseEstimator
 
+    def _step_index(self, name: StringSpan) raises -> Int:
+        ...
+
     def _prefix_step[origin: ImmOrigin](
         ref[origin] self,
     ) -> ref[origin] Self.Prefix:

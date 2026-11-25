@@ -20,6 +20,7 @@ Mojo adaptations (see docs/mixture/gaussian/api.md):
 from numojo import NDArray, Shape, zeros
 from std.math import sqrt, abs
 from moxie._random import RandomState, entropy_state
+from moxie.base import FitPredictor
 from moxie.mixture._base import MixtureDensity, InformationCriteria
 from moxie.mixture._contracts import EMControl, check_input, covariance_shape
 from moxie.mixture._em import MixtureEMModel, EMSettings, run_em, weighted_log_prob
@@ -204,7 +205,7 @@ def _check_means[dtype: DType](means: NDArray[dtype], n_components: Int, n_featu
     return values^
 
 
-struct GaussianMixture[dtype: DType = DType.float64](MixtureDensity, InformationCriteria, Copyable):
+struct GaussianMixture[dtype: DType = DType.float64](MixtureDensity, FitPredictor, InformationCriteria, Copyable):
     """Gaussian mixture model fitted by expectation-maximization.
 
     Parameters, defaults and learned attributes follow
@@ -215,6 +216,7 @@ struct GaussianMixture[dtype: DType = DType.float64](MixtureDensity, Information
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
     comptime Prediction = NDArray[DType.int64]
+    comptime Labels = Self.Prediction
     comptime Probabilities = NDArray[Self.dtype]
     comptime SampleScores = NDArray[Self.dtype]
     comptime Samples = Tuple[NDArray[DType.float64], NDArray[DType.int64]]
@@ -424,7 +426,7 @@ struct GaussianMixture[dtype: DType = DType.float64](MixtureDensity, Information
         _ = self.fit_predict_with_rng(X, rng)
         return self
 
-    def fit_predict(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> NDArray[DType.int64]:
+    def fit_predict(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Labels:
         """Fit and return argmax labels of the final E-step (y is ignored)."""
         var rng = RandomState(self.random_state.value()) if self.random_state else entropy_state()
         return self.fit_predict_with_rng(X, rng)

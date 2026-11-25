@@ -96,7 +96,7 @@ def contract[dtype: DType]() raises:
     var ws = zero_weights.view_with_layout(Shape(6), Strides(-1), 5)
     for i in range(6):
         zero_weights.unsafe_set(i, Scalar[dtype](i + 1))
-    var solvers: List[String] = ["lbfgs", "newton-cholesky", "newton-cg", "liblinear"]
+    var solvers: List[String] = ["lbfgs", "newton-cholesky", "newton-cg", "newton-cd", "liblinear"]
     for solver in solvers:
         var strided = LogisticRegression[dtype](solver=solver.copy())
         _ = strided.fit(Xs, ys, sample_weight=ws)

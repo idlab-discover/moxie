@@ -47,6 +47,14 @@ conditional distributions. The input is borrowed and remains intact. Precomputed
 distances require random or explicit array initialization. Unsupported metric
 names raise `ValueError`.
 
+Both methods accept `metric="braycurtis"`. Exact t-SNE follows SciPy and
+divides the sum of absolute differences by `sum(abs(x + y))`. An undefined
+distance between distinct rows raises `ValueError`. Barnes–Hut uses
+`sum(abs(x) + abs(y))` and gives two zero rows distance zero, as in sklearn's
+BallTree and optimized brute-force neighbor kernels. Native Barnes–Hut keeps
+this convention for every input layout. Sklearn can use the SciPy formula
+when its optimized neighbor backends are unavailable.
+
 Both methods accept a native metric through
 `metric="callable", metric_params=TSNEMetricParams[dtype](distance=my_distance)`.
 The callback type is
@@ -122,8 +130,10 @@ across seeds. Barnes–Hut comparisons cover fixed-k probabilities, KL, and
 forces for one, two and three dimensions, angles from zero to 0.85, and
 coincident points. Barnes–Hut's Float32 summation order differs from sklearn's
 CSR row reductions. Explicit-initialization fit tolerances account for that
-rounding across iterations. Callable-distance comparisons cover both input
-dtypes and both optimization methods. SciPy, NumPy and scikit-learn are used
-in validation only.
+rounding across iterations. Callable and Bray–Curtis comparisons cover both
+input dtypes and both optimization methods. The signed Bray–Curtis fixtures
+exercise sklearn's BallTree and optimized brute-force neighbor paths and allow
+`5e-6` absolute error in KL and `2e-5` in coordinates for accumulated rounding.
+SciPy, NumPy and scikit-learn are used in validation only.
 The estimator and perplexity oracle sources come from sklearn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.

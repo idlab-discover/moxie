@@ -39,8 +39,10 @@ PLSRegression uses mode A and regression deflation. PLSCanonical uses mode A
 and canonical deflation, with NIPALS or SVD. CCA uses mode B and canonical
 deflation. PLSSVD takes one SVD of centered/scaled cross covariance. All four
 share centering/scaling and the PLS engine. PLSRegression, PLSCanonical and
-CCA expose structured `fit_warnings`. Sparse inputs, pandas output, Python
-metadata routing, feature-name input metadata, and pickling are excluded.
+CCA expose structured `fit_warnings` and a typed request for score weights.
+Pandas output, fitted input feature names, and automatic metadata forwarding
+require shared support. The native estimators accept dense inputs and use
+the native model container for persistence.
 
 Examples cover [PLS/CCA](../../examples/cross_decomposition.mojo),
 [PLSSVD](../../examples/cross_decomposition_svd.mojo), and
@@ -71,6 +73,8 @@ Parameters changed after fit are saved separately from the learned dimensions,
 projection state, and prediction rank. Learned arrays are saved in logical row
 order, so strided arrays load as contiguous arrays. PLS and CCA model files
 store the formatted diagnostics and reconstruct the warning records on load.
+PLS and CCA archives with an explicit score-weight request use schema version
+2. Archives with the default unset request use version 1, as does PLSSVD.
 
 ## Cross-validation and search
 
@@ -132,9 +136,10 @@ regression and inverse-transform methods; assembly tests reject conflicting
 module and export ownership. The serialization contract checks on-disk
 round trips, exact learned and inference values, and malformed archives.
 
-The parity suites retain 124 PLS/CCA and 93 PLSSVD cases against scikit-learn
+The parity suites retain 125 PLS/CCA and 93 PLSSVD cases against scikit-learn
 revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Native results are evaluated
-after serializing and restoring each fitted model. Reports under
+after serializing and restoring each fitted model. Weighted PLS/CCA cases
+route the weights through a score request alias on both sides. Reports under
 `builds/cross_decomposition/{pls,plssvd}/parity/` record current results and
 runner hashes. The suites retain conditioning-aware tolerances, reference
 perturbation checks, component objectives, score spectra, and null-space

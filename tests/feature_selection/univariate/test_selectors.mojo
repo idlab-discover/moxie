@@ -1,7 +1,8 @@
 import numojo as nm
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie._feature_metadata import FeatureNamesOut
-from moxie.base import clone
+from moxie.base import FitTransformer, TransformerMixin, clone
+from moxie.compose import ColumnEntry, ColumnTransformer
 from moxie.feature_selection import ConfiguredScorer, ScoreResult
 from moxie.feature_selection import SelectKBest, SelectPercentile, SelectFpr, SelectFdr, SelectFwe, GenericUnivariateSelect, BuiltinScorer, SelectionParameter
 
@@ -23,6 +24,25 @@ struct Float32Regression(ConfiguredScorer):
 def composed_names[T: FeatureNamesOut](selector: T, names: Optional[List[String]]) raises -> List[String]:
     return selector.get_feature_names_out(names)
 
+def check_column_selector[
+    dtype: DType, E: FitTransformer & TransformerMixin & Copyable & FeatureNamesOut & Deinitable,
+](var selector: E, x: nm.NDArray[dtype], y: nm.NDArray[dtype]) raises:
+    with assert_raises(contains="NotFittedError"):
+        _ = composed_names(selector, None)
+    var composer = ColumnTransformer(ColumnEntry[E, dtype]("selection", selector^, [2, 0, 1]))
+    var selected = composer.fit_transform(x, y.copy())
+    assert_equal(selected.shape[1], 1)
+    assert_equal(selected.unsafe_get(5), 5)
+    assert_equal(composer.get_feature_names_out()[0], "selection__x0")
+    var names: List[String] = ["signal", "noise", "constant"]
+    assert_equal(
+        composer.get_feature_names_out(Optional[List[String]](names^))[0],
+        "selection__signal",
+    )
+    var snapshot = composer.copy()
+    _ = composer.fit(x, y.copy())
+    assert_equal(snapshot.get_feature_names_out()[0], "selection__x0")
+
 def main() raises:
     var x = nm.ones[DType.float64](nm.Shape(6, 3))
     var y = nm.zeros[DType.float64](nm.Shape(6))
@@ -30,6 +50,12 @@ def main() raises:
         y.unsafe_set(i, Float64(i // 3))
         x.unsafe_set(i * 3, Float64(i))
         x.unsafe_set(i * 3 + 1, Float64(i % 2))
+    check_column_selector(SelectKBest(k=1), x, y)
+    check_column_selector(SelectPercentile(percentile=50), x, y)
+    check_column_selector(SelectFpr(alpha=0.1), x, y)
+    check_column_selector(SelectFdr(alpha=0.1), x, y)
+    check_column_selector(SelectFwe(alpha=0.1), x, y)
+    check_column_selector(GenericUnivariateSelect(mode="k_best", param=1), x, y)
     var selector = SelectKBest(k=SelectionParameter(1))
     with assert_raises():
         _ = selector.get_support()
@@ -50,6 +76,18 @@ def main() raises:
     _ = selector.set_params(k=SelectionParameter(1))
     selector.fit_named(x, y.copy(), [String("a"), String("b"), String("c")])
     assert_equal(selector.get_feature_names_out()[0], "a")
+    assert_equal(selector.get_feature_names_out(List[String]())[0], "a")
+    with assert_raises(contains="length mismatch"):
+        _ = composed_names(selector, Optional[List[String]](List[String]()))
+    var conflicting: List[String] = ["a", "other", "c"]
+    with assert_raises(contains="differ from fit"):
+        _ = composed_names(selector, Optional[List[String]](conflicting^))
+    var fitted_best = selector.copy()
+    _ = selector.set_params(k=0)
+    assert_equal(len(selector.get_feature_names_out()), 0)
+    assert_equal(fitted_best.get_feature_names_out()[0], "a")
+    assert_false(clone(fitted_best).__sklearn_is_fitted__())
+    _ = selector.set_params(k=1)
     assert_equal(selector.inverse_transform(selector.transform(x)).shape[1], 3)
     var percentile = SelectPercentile(percentile=50)
     with assert_raises(contains="NotFittedError"):
@@ -84,6 +122,7 @@ def main() raises:
     assert_equal(regression.transform(x).shape[1], 2)
     var x32 = x.astype[DType.float32]()
     var y32 = y.astype[DType.float32]()
+    check_column_selector(SelectKBest(BuiltinScorer[DType.float32](), k=1), x32, y32)
     var float32_selector = SelectKBest(BuiltinScorer[DType.float32](), k=SelectionParameter(1))
     _ = float32_selector.fit(x32, y32.copy())
     var selected32: nm.NDArray[DType.float32] = float32_selector.transform(x32)

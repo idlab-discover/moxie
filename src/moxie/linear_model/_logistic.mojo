@@ -15,7 +15,7 @@ from moxie.linear_model._linear_base import (
 )
 from moxie.linear_model._linear_loss import LogisticLoss, logistic_probability
 from moxie.linear_model._logistic_solver import (
-    LogisticSolution, logistic_lbfgs, logistic_newton, logistic_newton_cg, logistic_sag,
+    LogisticSolution, logistic_lbfgs, logistic_newton, logistic_newton_cd, logistic_newton_cg, logistic_sag,
 )
 from moxie.linear_model._ridge_labels import (
     ClassWeight, LabelEncoding, _label, accuracy, fit_labels,
@@ -310,9 +310,9 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             if seed < 0 or seed > 4294967295:
                 raise Error("ValueError: random_state must be in [0, 2**32 - 1]")
         var liblinear = self.solver == "liblinear"
-        var saga = self.solver == "saga"
+        var proximal = self.solver == "saga" or self.solver == "newton-cd"
         if not (
-            liblinear or saga or self.solver == "sag" or self.solver == "lbfgs"
+            liblinear or proximal or self.solver == "sag" or self.solver == "lbfgs"
             or self.solver == "newton-cholesky" or self.solver == "newton-cg"
         ):
             raise Error(String("NotImplementedError: LogisticRegression solver ", self.solver))
@@ -341,11 +341,11 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
                 raise Error("ValueError: liblinear requires L2 regularization when dual=True")
         elif unpenalized:
             C = inf[DType.float64]()
-        elif saga and penalty == "elasticnet":
+        elif proximal and penalty == "elasticnet":
             if not self.l1_ratio:
                 raise Error("ValueError: elasticnet requires l1_ratio")
             return C, ratio
-        elif saga and penalty == "l1":
+        elif proximal and penalty == "l1":
             return C, 1.0
         elif penalty != "l2":
             raise Error("ValueError: LogisticRegression supports L2 or no penalty for the selected solver")
@@ -366,6 +366,8 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
         var liblinear = self.solver == "liblinear"
         if liblinear and classes != 2:
             raise Error("ValueError: liblinear supports binary classification only")
+        if self.solver == "newton-cd" and classes != 2:
+            raise Error("ValueError: newton-cd supports binary classification only")
         var targets = List[Int](capacity=X.shape[0])
         for i in range(X.shape[0]):
             targets.append(encoding.index(_label(y, i, 0)))
@@ -469,9 +471,10 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
                 raise Error("ValueError: logistic regression requires finite positive total weight")
             for i in range(len(targets)):
                 weights.unsafe_set(i, weights.unsafe_get(i) / mass)
-            l2 = (1 / mass) / C if C < 1 else (1 / C) / mass
-            if not isfinite(l2):
-                raise Error("ValueError: LogisticRegression L2 strength overflows")
+            var regularization = (1 / mass) / C if C < 1 else (1 / C) / mass
+            if not isfinite(regularization):
+                raise Error("ValueError: LogisticRegression regularization strength overflows")
+            l2 = (1 - ratio) * regularization
             var objective = LogisticLoss(
                 compact_matrix(X), targets^, weights^, outputs, l2, self.fit_intercept, newton and self.max_iter > 0,
             )
@@ -481,6 +484,10 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
                 )
             elif self.solver == "newton-cg":
                 solution = logistic_newton_cg(objective, initial^, outputs, self.max_iter, self.tol)
+            elif self.solver == "newton-cd":
+                solution = logistic_newton_cd(
+                    objective, initial^, ratio * regularization, l2, self.max_iter, self.tol,
+                )
             else:
                 solution = logistic_lbfgs(objective, initial, self.max_iter, self.tol)
 

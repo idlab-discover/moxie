@@ -46,11 +46,23 @@ extraction stops on a constant target residual. Each successful fit replaces
 the list. Failed fits preserve it, and unfitted clones start with an empty list.
 See the shared [fit warning contract](../../interfaces.md#fit-warnings).
 
+`set_score_request(sample_weight=...)` configures the request for a parent
+that forwards weights to `score`. It takes `True`, `False`, `None`, or a
+`String` alias. Omitting the keyword retains the request. The setter returns a
+mutable borrow, and `get_metadata_routing().score` returns an independent
+`SampleWeightRequest`. The typed API is always available in Mojo. Cloning
+preserves the request, as do fitting and native archive round trips. Direct
+calls accept weights through the `score` argument regardless of the request.
+See the [shared sample-weight contract](../../interfaces.md#sample-weight-requests).
+Parent forwarding is owned by each composition. Mojo exposes the mutating
+prediction and transform operations as separate methods, so they take no
+`copy` metadata.
+
 Numerical failures that make SciPy raise (NaN reaching an SVD after a zero
 deflation denominator) raise `LinAlgError: ...` here; NaN in inputs is
 rejected with scikit-learn's first-line message (its imputation hint is
-omitted). Pandas output, feature_names_in_, metadata routing and pickling are
-binding work, not implemented.
+omitted). Pandas output, fitted input feature names, and pickling still require
+shared support.
 
 `PLSEngine` also exposes `projection_weights` (PLSSVD) and `rotations`, and
 `moxie.cross_decomposition._pls.pinv(a, rtol, context)`.

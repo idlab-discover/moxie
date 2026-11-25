@@ -9,17 +9,16 @@ comptime _AddedColumn = Variant[
     StringColumn, NumericColumn[DType.bool], NumericColumn[DType.int64],
     NumericColumn[DType.float32], NumericColumn[DType.float64], List[String],
     NDArray[DType.float32], NDArray[DType.float64], NDArray[DType.int64],
+    NDArray[DType.bool],
 ]
 
 
 def _numeric_kind[dtype: DType]() -> String:
     comptime assert (
-        dtype == DType.float32 or dtype == DType.float64 or dtype == DType.int64
-    ), "add_numeric requires Float32, Float64 or Int64"
-    comptime if dtype == DType.int64:
-        return "int64"
-    else:
-        return "float32" if dtype == DType.float32 else "float64"
+        dtype == DType.float32 or dtype == DType.float64
+        or dtype == DType.int64 or dtype == DType.bool
+    ), "add_numeric requires Float32, Float64, Int64 or Bool"
+    return String(dtype)
 
 
 struct ColumnSchema(Copyable, Movable):
@@ -37,8 +36,8 @@ struct ColumnSchema(Copyable, Movable):
                 raise Error("ValueError: native column names must be unique")
             seen[name] = True
         for dtype in dtypes:
-            if dtype not in ("float32", "float64", "int64", "category", "string"):
-                raise Error("ValueError: native column schemas support float32, float64, int64, category and string")
+            if dtype not in ("float32", "float64", "int64", "bool", "category", "string"):
+                raise Error("ValueError: native column schemas support float32, float64, int64, bool, category and string")
         self.names = names.copy()
         self.dtypes = dtypes.copy()
 
@@ -81,7 +80,7 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
     def add_numeric[column_dtype: DType](
         mut self, name: String, column: NDArray[column_dtype], *, position: Optional[Int] = None,
     ) raises:
-        """Insert an owned rank-one numeric column and retain its storage dtype."""
+        """Insert an owned rank-one numeric or Boolean column of its original dtype."""
         var kind = _numeric_kind[column_dtype]()
         if column.ndim != 1:
             raise Error("ValueError: add_numeric requires a rank-1 array")
@@ -182,9 +181,11 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
                 _gather_column(column[NDArray[DType.float64]], result, output_index, width)
             elif column.isa[NDArray[DType.int64]]():
                 _gather_column(column[NDArray[DType.int64]], result, output_index, width)
+            elif column.isa[NDArray[DType.bool]]():
+                _gather_column(column[NDArray[DType.bool]], result, output_index, width)
             else:
                 raise Error(String("TypeError: column '", self._schema.names[index],
-                                   "' requires numeric storage (float32, float64 or int64) for this component"))
+                                   "' requires numeric storage (float32, float64, int64 or bool) for this component"))
         return result^
 
     def _check_index(self, index: Int, expected: String) raises:

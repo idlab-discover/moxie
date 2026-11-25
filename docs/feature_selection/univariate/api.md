@@ -32,12 +32,15 @@ Native adaptations:
 - Learned attributes are owned accessors: `scores_()`, `pvalues_()`,
   `n_features_in_()` and `feature_names_in_()`. They reject unfitted access and
   prevent callers from mutating the estimator through returned buffers.
-- `fit_named(X, y, names)` records explicit String feature names. Output names and
-  support return the family's native types. Empty name lists mean absent names.
-  `SelectPercentile` also implements the composition `FeatureNamesOut` trait.
-  Its optional-name overload uses `None` for learned or default names and
-  validates a supplied list against the fitted width. `SelectPercentile.copy()`
-  copies the fitted selector for use in typed transformer pipelines.
+- `fit_named(X, y, names)` records explicit String feature names. All six
+  univariate selectors implement the shared `FeatureNamesOut` trait, so
+  `ColumnTransformer` can report the names of the selected columns.
+  `get_feature_names_out()` and the optional overload with `None` use learned
+  names or generate `x0`, `x1`, and so on. A list wrapped in `Optional` must
+  match the fitted width, including when it is empty. The direct
+  `List[String]` overload retains the native convention that an empty list
+  requests learned or default names. `copy()` preserves independent fitted
+  state, including scores and learned names.
 - `get_params()` returns typed `SelectorParams`; `set_params(params)` validates
   and updates configuration. Named policy parameter updates are also available.
   `clone(selector)` is unfitted. Policy changes update support from stored scores
@@ -151,3 +154,9 @@ Exact-mask parity fixtures use separated cutoffs. Equal or nearly equal scores
 can select different features after floating-point reduction rounding; sklearn
 also leaves selection among tied scores unspecified. This applies to native
 labels and numeric labels alike, and is not a promise of bitwise statistics.
+
+With live dependencies assembled and the locked toolchain active, run
+`python tests/feature_selection/univariate/parity_names.py` to compare generated,
+supplied, and fitted names exactly against the pinned scikit-learn selector
+mixin in both feature dtypes. The native `univariate/test_selectors.mojo` test
+also checks name propagation through `ColumnTransformer`.

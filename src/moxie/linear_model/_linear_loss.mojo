@@ -85,6 +85,28 @@ struct LogisticLoss[source_dtype: DType](Objective):
     ) raises -> Float64:
         return self._evaluate[True](weights, gradient)
 
+    def binary_working_response(
+        mut self, coefficients: NDArray[DType.float64],
+        mut response: NDArray[DType.float64], mut curvature: NDArray[DType.float64],
+    ) raises:
+        """Binary Newton-CD response and clipped pointwise curvature."""
+        var features = self._X.shape[1]
+        for i in range(self._X.shape[0]):
+            Self._project_row(
+                self._X, i * features, features, self._fit_intercept,
+                coefficients, self._scores,
+            )
+            var raw = self._scores[0]
+            var sign = Float64(1 if self._targets[i] == 0 else -1)
+            var margin = sign * raw
+            var tail = exp(-abs(margin))
+            var denominator = 1 + tail
+            var h = max(0.0, self._weights.unsafe_get(i) * (tail / (denominator * denominator)))
+            if h > 0:
+                raw -= sign * (denominator if margin <= 0 else denominator / tail)
+            response.unsafe_set(i, raw)
+            curvature.unsafe_set(i, h)
+
     @staticmethod
     def _project_row(
         X: NDArray[Self.source_dtype], row: Int, features: Int, fit_intercept: Bool,

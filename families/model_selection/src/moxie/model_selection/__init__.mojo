@@ -1,3 +1,7 @@
+from moxie.model_selection._classification_scoring import Accuracy
+from moxie.model_selection._classification_scoring import PrecisionMacro
+from moxie.model_selection._classification_scoring import RecallMacro
+from moxie.model_selection._classification_scoring import F1Macro
 """Dense model selection, owned by Moxie."""
 from moxie.model_selection._split import BaseCrossValidator
 from moxie.model_selection._split import BaseShuffleSplit

@@ -77,6 +77,8 @@ def run_case[flavor: Int, dtype: DType](f: List[String]) raises:
     )
     var X = array[dtype](f[9])
     var y = array[dtype](f[10])
+    if f[13] != "none":
+        _ = estimator.set_score_request(sample_weight=String("weights"))
     try:
         estimator.fit(X, y)
     except e:
@@ -113,7 +115,12 @@ def run_case[flavor: Int, dtype: DType](f: List[String]) raises:
         if f[13] == "none":
             score = estimator.score(Xt, yt)
         else:
-            score = estimator.score(Xt, yt, array[DType.float64](f[13]))
+            var metadata = {"weights": array[DType.float64](f[13])}
+            var request = estimator.get_metadata_routing()
+            var weights = request.score.route(metadata)
+            if not weights:
+                raise Error("Missing requested score weights")
+            score = estimator.score(Xt, yt, weights^)
         print(case_id + "|score|1:0:" + String(score))
         var names = estimator.get_feature_names_out()
         var joined = String("")

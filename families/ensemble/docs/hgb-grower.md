@@ -22,6 +22,25 @@ choose a different feature when scikit-learn's integer set iteration has a
 different order. The private grower accepts a leaf cap of one for an explicit
 stump.
 
+For per-node subsampling, pass `feature_fraction_per_split` in `(0, 1]` and
+borrow a mutable `_FeatureSampler(seed: UInt32)` via `feature_sampler`. Reuse
+it across trees to continue the stream and copy it to take an independent
+snapshot. The seed is the UInt32 supplied to NumPy's `default_rng`, which
+scikit-learn obtains from the second legacy RandomState integer draw at the
+start of fitting. The grower selects `ceil(fraction * n_allowed)` positions
+with NumPy's boolean mask shuffle before each split search. A fraction of one
+bypasses sampling. A fraction below one still shuffles when rounding selects
+all positions. Both children keep their full interaction set for future
+searches and histogram subtraction. Positions follow Moxie's ascending
+feature order, so a different Python set order can also change the sampled
+feature IDs even when gains are distinct.
+
+The private sampler follows [NumPy 2.5.5's PCG64 and SeedSequence](https://github.com/numpy/numpy/tree/afcbc6d21a88a7b59c5bfe115198e24ed51b3dae/numpy/random).
+Numax's `numax.stats.Generator` and the standard library's `Random` use
+Philox. The shared `RandomState.shuffle` uses MT19937. These streams produce
+different masks for the same seed, so the sampler uses native UInt128 PCG64
+state and one boolean mask per sampled search.
+
 The returned training result holds the tree, a single partition of original
 row IDs, and the leaf node IDs. Each leaf's half-open `[start, stop)` range into
 the partition gives the rows for loss-specific leaf updates. After those
@@ -65,4 +84,7 @@ The driver compares tree structure, splits, gains, leaf values, row
 partitions, and binned and raw predictions bit for bit against scikit-learn
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Native contracts cover
 striding, independent leaf snapshots, invalid feature counts, and routing
-the sole known category separately from missing and unknown categories.
+the sole known category separately from missing and unknown categories. The
+subsampling cases compare whole trees and subsequent masks after repeated
+trees on the same stream, including when a search is skipped or shuffling is
+bypassed.

@@ -1,6 +1,7 @@
 """Tophat draws using sklearn's Gaussian-radius CDF transformation."""
 import numojo as nm
-from std.math import sqrt, pow
+from std.math import sqrt
+from numax.core.libm import exp, log
 from moxie._dense import row_squared_norms
 from moxie._random import RandomState
 from moxie._special import gammainc
@@ -19,11 +20,12 @@ def sample_tophat[dtype: DType](
     var squared = row_squared_norms(samples)
     for i in range(len(indices)):
         var radius_squared = squared.unsafe_get(i)
-        # Preserve the reference expression, including its zero-radius NaN.
-        var correction = (
-            pow(gammainc(Float64(dim) / 2, radius_squared / 2), Float64(1) / Float64(dim))
-            * bandwidth / sqrt(radius_squared)
+        var probability = gammainc(Float64(dim) / 2, radius_squared / 2)
+        var unit_radius = (
+            probability if dim == 1 else exp(log(probability) / Float64(dim))
         )
+        # Preserve the reference expression, including its zero-radius NaN.
+        var correction = unit_radius * bandwidth / sqrt(radius_squared)
         for j in range(dim):
             samples.unsafe_set(
                 i * dim + j,

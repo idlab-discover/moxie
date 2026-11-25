@@ -1,6 +1,7 @@
 """Native state schema for dense IsotonicRegression."""
 
 from std.math import isfinite
+from moxie.metadata_routing import SampleWeightRequest, SampleWeightUpdate
 from moxie.isotonic import Increasing, IsotonicRegression
 from moxie.serialization import (
     BinaryReader,
@@ -21,6 +22,41 @@ def _read_bound(mut reader: BinaryReader[_]) raises -> Optional[Float64]:
     if reader.boolean():
         return reader.scalar[DType.float64]()
     return None
+
+
+def _write_request(mut writer: BinaryWriter, request: SampleWeightRequest) raises:
+    var value = request.value()
+    if value.isa[NoneType]():
+        writer.uint(0)
+    elif value.isa[Bool]():
+        writer.uint(UInt64(2 if value[Bool] else 1))
+    else:
+        writer.uint(3)
+        writer.string(value[String])
+
+
+def _read_request(mut reader: BinaryReader[_]) raises -> SampleWeightUpdate:
+    var tag = reader.uint()
+    if tag == 0:
+        return SampleWeightUpdate(None)
+    if tag == 1 or tag == 2:
+        return SampleWeightUpdate(tag == 2)
+    if tag != 3:
+        raise Error("ModelSchemaError: unknown isotonic sample-weight request")
+
+    var name = reader.string(reader.remaining())
+    var update = SampleWeightUpdate(name.copy())
+    var request = SampleWeightRequest()
+    try:
+        request.set(update)
+    except:
+        raise Error("ModelSchemaError: invalid isotonic sample-weight alias")
+    # The setter accepts the unchanged sentinel and normalizes the standard
+    # name to True. Neither represents a stored alias.
+    var value = request.value()
+    if not value.isa[String]():
+        raise Error("ModelSchemaError: invalid isotonic sample-weight alias")
+    return update^
 
 
 def _read_thresholds[dtype: DType](
@@ -70,11 +106,11 @@ def _validate_state[dtype: DType](model: IsotonicRegression[dtype]) raises:
 
 
 struct IsotonicRegressionSchema[dtype: DType = DType.float64](ModelSchema):
-    """Version 1 state for fitted and unfitted Float32 or Float64 models."""
+    """Version 2 state for fitted and unfitted Float32 or Float64 models."""
 
     comptime Model = IsotonicRegression[Self.dtype]
     comptime TypeId = "moxie.isotonic.IsotonicRegression"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -99,12 +135,16 @@ struct IsotonicRegressionSchema[dtype: DType = DType.float64](ModelSchema):
             var shape: List[Int] = [len(model.X_thresholds_)]
             archive.add_array[Self.dtype]("X_thresholds_", shape, model.X_thresholds_)
             archive.add_array[Self.dtype]("y_thresholds_", shape, model.y_thresholds_)
+        var routing = model.get_metadata_routing()
+        _write_request(writer, routing.fit)
+        _write_request(writer, routing.score)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        var legacy = archive.schema_version == 1
+        archive.expect(Self.TypeId, 1 if legacy else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != UInt64(dtype_code[Self.dtype]()):
@@ -129,6 +169,12 @@ struct IsotonicRegressionSchema[dtype: DType = DType.float64](ModelSchema):
             model.X_min_ = reader.scalar[Self.dtype]()
             model.X_max_ = reader.scalar[Self.dtype]()
             model.increasing_ = reader.boolean()
+        if not legacy:
+            var fit_request = _read_request(reader)
+            var score_request = _read_request(reader)
+            _ = model.set_fit_request(sample_weight=fit_request).set_score_request(
+                sample_weight=score_request
+            )
         reader.finish()
         if fitted:
             model.X_thresholds_ = _read_thresholds[Self.dtype](archive, "X_thresholds_")

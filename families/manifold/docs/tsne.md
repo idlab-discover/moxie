@@ -52,6 +52,13 @@ Hamming distance. This metric compares feature values for equality, including
 distinct nonzero values. Barnes–Hut rejects the alias, as sklearn's
 `NearestNeighbors` does. Use `metric="hamming"` with either method.
 
+With `method="exact"`, both names accept a feature-weight vector through
+`TSNEMetricParams[dtype](w=weights)`. It uses the input dtype and must have one
+finite, nonnegative weight per feature and a finite positive sum. Features
+with weight zero contribute nothing. Exact t-SNE normalizes the weights once
+and sums the weights of unequal values in Float64. It squares the resulting
+distances and stores them as Float32. Barnes–Hut rejects this option.
+
 Both methods accept `metric="braycurtis"`. Exact t-SNE follows SciPy and
 divides the sum of absolute differences by `sum(abs(x + y))`. An undefined
 distance between distinct rows raises `ValueError`. Barnes–Hut uses
@@ -139,6 +146,9 @@ rounding across iterations. Callable and Bray–Curtis comparisons cover both
 input dtypes and both optimization methods. The signed Bray–Curtis fixtures
 exercise sklearn's BallTree and optimized brute-force neighbor paths and allow
 `5e-6` absolute error in KL and `2e-5` in coordinates for accumulated rounding.
+Weighted Hamming and matching fixtures compare Float32 squared distance
+matrices exactly for both input dtypes, with the same fit tolerances for
+accumulated optimizer rounding.
 SciPy, NumPy and scikit-learn are used in validation only.
 The estimator and perplexity oracle sources come from sklearn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.

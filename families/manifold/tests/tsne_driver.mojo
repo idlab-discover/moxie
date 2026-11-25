@@ -27,6 +27,11 @@ def callback_params[dtype: DType](metric: String) -> Optional[TSNEMetricParams[d
     return None
 
 
+def weight_params[dtype: DType](path: String) raises -> TSNEMetricParams[dtype]:
+    var row = read_matrix[dtype](path)
+    return TSNEMetricParams[dtype](w=row.reshape(Shape(row.size)))
+
+
 def write_array[dtype: DType](array: NDArray[dtype]):
     for i in range(array.size):
         print(Float64(array.unsafe_get(i)))
@@ -45,9 +50,12 @@ def fit[input_dtype: DType, output_dtype: DType]() raises:
     if len(args) > 16:
         method = String(args[15])
         angle = Float64(String(args[16]))
+    var params = callback_params[input_dtype](metric)
+    if len(args) > 17:
+        params = weight_params[input_dtype](String(args[17]))
     var model = TSNE[input_dtype, output_dtype](
         components, method=method, angle=angle, perplexity=perplexity, metric=metric,
-        metric_params=callback_params[input_dtype](metric),
+        metric_params=params^,
         max_iter=Int(String(args[8])), early_exaggeration=Float64(String(args[9])),
         min_grad_norm=minimum_gradient, n_iter_without_progress=Int(String(args[12])),
         random_state=Int(String(args[13])),
@@ -73,7 +81,10 @@ def pairwise[input_dtype: DType]() raises:
     var metric = String(args[4])
     var params = callback_params[input_dtype](metric)
     if len(args) > 5:
-        params = TSNEMetricParams[input_dtype](p=Float64(String(args[5])))
+        if metric == "minkowski":
+            params = TSNEMetricParams[input_dtype](p=Float64(String(args[5])))
+        else:
+            params = weight_params[input_dtype](String(args[5]))
     write_array(_squared_distances(X, metric, params))
 
 

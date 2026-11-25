@@ -4,6 +4,7 @@ from numojo import NDArray, NDArrayStrides, Shape, zeros
 from moxie._random import seed_global_random_state
 from moxie.base import clone
 from moxie.manifold import TSNE, TSNEMetricParams
+from moxie.manifold._t_sne import _squared_distances
 from moxie.neighbors._distance import at
 
 
@@ -266,6 +267,63 @@ def matching_contract[dtype: DType]() raises:
         assert_equal(matching.unsafe_get(i), hamming.unsafe_get(i))
 
 
+def weighted_hamming_contract[dtype: DType]() raises:
+    var X = points[dtype]()
+    var backing = zeros[dtype](Shape(5))
+    backing.unsafe_set(0, 3)
+    backing.unsafe_set(2, 1)
+    var weights = backing.view_with_layout(Shape(3), NDArrayStrides(-2), 4)
+    var options = TSNEMetricParams[dtype](w=weights.copy())
+    var model = TSNE[dtype](
+        method="exact", metric="hamming", metric_params=options.copy(), init="random",
+        perplexity=2, random_state=17, max_iter=260, learning_rate=2.0,
+    )
+    var distances = _squared_distances(X, "hamming", model.metric_params)
+    assert_equal(at(distances, 0, 3), Float64(0.5625))
+    assert_equal(at(distances, 0, 4), Float64(0.0625))
+    var hamming = model.fit_transform(X)
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    var matching = fresh.set_params(metric="matching").fit_transform(X)
+    for i in range(hamming.size):
+        assert_equal(hamming.unsafe_get(i), matching.unsafe_get(i))
+
+    var bad_shape = TSNEMetricParams[dtype](w=zeros[dtype](Shape(1, 3)))
+    var short_weights = zeros[dtype](Shape(2))
+    short_weights.unsafe_set(0, 1)
+    var wrong_length = TSNEMetricParams[dtype](w=short_weights^)
+    var zero_sum = TSNEMetricParams[dtype](w=zeros[dtype](Shape(3)))
+    var invalid = zeros[dtype](Shape(3))
+    invalid.unsafe_set(0, -1)
+    var negative = TSNEMetricParams[dtype](w=invalid.copy())
+    invalid.unsafe_set(0, nan[dtype]())
+    var nonfinite = TSNEMetricParams[dtype](w=invalid^)
+    var extra = TSNEMetricParams[dtype](w=weights^, p=2.0)
+    var params = model.get_params()
+    with assert_raises(contains="must be a vector"):
+        params.metric_params = bad_shape^
+        _ = model.set_params(params).fit(X)
+    with assert_raises(contains="must match features"):
+        params.metric_params = wrong_length^
+        _ = model.set_params(params).fit(X)
+    with assert_raises(contains="finite positive sum"):
+        params.metric_params = zero_sum^
+        _ = model.set_params(params).fit(X)
+    for bad in [negative^, nonfinite^]:
+        with assert_raises(contains="finite and nonnegative"):
+            params.metric_params = bad.copy()
+            _ = model.set_params(params).fit(X)
+    with assert_raises(contains="metric_params do not match"):
+        params.metric_params = extra^
+        _ = model.set_params(params).fit(X)
+    params.method = "barnes_hut"
+    params.metric_params = options^
+    with assert_raises(contains="metric_params do not match"):
+        _ = model.set_params(params).fit(X)
+    for i in range(hamming.size):
+        assert_equal(model.embedding_.value().unsafe_get(i), hamming.unsafe_get(i))
+
+
 def main() raises:
     for method in ["exact", "barnes_hut"]:
         repeat_and_clone[DType.float64](method)
@@ -275,6 +333,8 @@ def main() raises:
     bray_curtis_contract[DType.float64]()
     matching_contract[DType.float32]()
     matching_contract[DType.float64]()
+    weighted_hamming_contract[DType.float32]()
+    weighted_hamming_contract[DType.float64]()
     explicit_configuration()
     fit_validation()
     barnes_hut_bounds()

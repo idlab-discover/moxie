@@ -70,6 +70,44 @@ def test_set_params_typed_and_keyword() raises:
     assert_false(Bool(lda.scalings_))
 
 
+def check_transform_solver_lifecycle[dtype: DType]() raises:
+    var X = toy6().astype[dtype]()
+    var y = y6()
+    var lda = LinearDiscriminantAnalysis[dtype]()
+    _ = lda.fit(X, y)
+    var centered = lda.transform(X).astype[F64]()
+
+    _ = lda.set_params(solver="eigen")
+    assert_close(lda.transform(X), centered, 0.0, "SVD centering survives a solver update")
+
+    var eigen = LinearDiscriminantAnalysis[dtype](solver="eigen")
+    _ = eigen.fit(X, y)
+    var uncentered = eigen.transform(X).astype[F64]()
+    _ = lda.fit(X, y)
+    assert_close(lda.transform(X), uncentered, 0.0, "refit replaces the SVD projection")
+
+    _ = lda.set_params(solver="svd")
+    assert_close(lda.transform(X), uncentered, 0.0, "eigen projection needs no xbar_")
+
+    _ = lda.set_params(solver="lsqr")
+    with assert_raises(contains="transform not implemented for 'lsqr' solver"):
+        _ = lda.transform(X)
+    _ = lda.set_params(solver="eigen")
+    assert_close(lda.transform(X), uncentered, 0.0, "solver update preserves fitted projection")
+
+    _ = lda.set_params(solver="lsqr").fit(X, y)
+    _ = lda.set_params(solver="eigen")
+    with assert_raises(contains="refit with 'svd' or 'eigen'"):
+        _ = lda.transform(X)
+    _ = lda.fit(X, y)
+    assert_close(lda.transform(X), uncentered, 0.0, "refit restores projection support")
+
+
+def test_transform_solver_lifecycle() raises:
+    check_transform_solver_lifecycle[DType.float32]()
+    check_transform_solver_lifecycle[F64]()
+
+
 def test_clone_is_unfitted_and_independent() raises:
     var priors: List[Float64] = [0.3, 0.7]
     var lda = LinearDiscriminantAnalysis(solver="lsqr", shrinkage=0.2, priors=priors^)

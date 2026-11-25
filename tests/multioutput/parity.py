@@ -24,6 +24,7 @@ def oracle():
     from sklearn.dummy import DummyRegressor, __file__ as dummy_source
     from sklearn.discriminant_analysis import __file__ as lda_source
     from sklearn.svm import _classes as svm_classes
+    from sklearn.utils import validation as utils_validation
     path = REFERENCE / 'sklearn/multioutput.py'
     for relative, source in [
         ('sklearn/multioutput.py', path),
@@ -36,6 +37,7 @@ def oracle():
         ('sklearn/neighbors/_classification.py', Path(_classification.__file__)),
         ('sklearn/tree/_classes.py', Path(_classes.__file__)),
         ('sklearn/svm/_classes.py', Path(svm_classes.__file__)),
+        ('sklearn/utils/validation.py', Path(utils_validation.__file__)),
     ]:
         expected = subprocess.check_output(['git', '-C', str(REFERENCE), 'show', f'{REVISION}:{relative}'])
         if source.read_bytes() != expected:
@@ -109,7 +111,7 @@ def components(module, np):
     multiclass = np.column_stack([binary[:, 0], i % 2, i % 3]).astype(np.int64)
     w = (i % 4 + 1).astype(float)
     out = {}
-    regressor = module.MultiOutputRegressor(Ridge(alpha=0.5)).fit(X, Y)
+    regressor = module.MultiOutputRegressor(Ridge(alpha=0.5), n_jobs=2).fit(X, Y)
     out['ComponentsRidge'] = regressor.predict(X).ravel().tolist()
     out['ComponentsRidgeScore'] = [regressor.score(X, Y)]
     regressor.fit(X, Y, sample_weight=w)
@@ -117,7 +119,7 @@ def components(module, np):
     out['ComponentsRidgeWeightedScore'] = [regressor.score(X, Y, sample_weight=w)]
     out['ComponentsRidgeAlpha10'] = module.MultiOutputRegressor(Ridge(alpha=10.0)).fit(X, Y).predict(X).ravel().tolist()
     X32, Y32 = X.astype(np.float32), Y.astype(np.float32)
-    narrow = module.MultiOutputRegressor(Ridge(alpha=0.5)).fit(X32, Y32, sample_weight=w)
+    narrow = module.MultiOutputRegressor(Ridge(alpha=0.5), n_jobs=2).fit(X32, Y32, sample_weight=w)
     out['ComponentsRidge32Weighted'] = narrow.predict(X32).ravel().tolist()
     chain32 = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1]).fit(X32, Y32, sample_weight=w)
     out['ComponentsRegressorChain32Weighted'] = chain32.predict(X32).ravel().tolist()
@@ -177,10 +179,17 @@ def components(module, np):
     out['ComponentsRegressorChainCustomCV'] = custom_regression.fit(X, Y).predict(X).ravel().tolist()
     custom_classification = module.ClassifierChain(
         LogisticRegression(tol=1e-10, max_iter=1000),
-        chain_method='predict_proba', cv=PerLinkKFold(0.5),
+        chain_method=['predict_proba', 'decision_function', 'predict'], cv=PerLinkKFold(0.5),
     ).fit(X, uneven)
+    assert custom_classification.chain_method_ == 'predict_proba'
     out['ComponentsLogisticChainCustomCVProba'] = custom_classification.predict_proba(X).ravel().tolist()
     out['ComponentsLogisticChainCustomCVLabels'] = custom_classification.predict(X).ravel().tolist()
+    preferred = module.ClassifierChain(
+        RidgeClassifier(), order=[0, 2, 1], cv=3,
+        chain_method=['predict_proba', 'decision_function', 'predict'],
+    ).fit(X, uneven)
+    assert preferred.chain_method_ == 'decision_function'
+    out['ComponentsDecisionChainPreferenceCV'] = preferred.decision_function(X).ravel().tolist()
     shuffled_cv = module.ClassifierChain(
         RidgeClassifier(), order=[0, 2, 1], chain_method='decision_function',
         cv=StratifiedKFold(3, shuffle=True, random_state=7),
@@ -250,8 +259,8 @@ def classifier_components(module, np):
             GaussianNB().set_fit_request(sample_weight=True), chain_method='predict_proba',
         ).fit(X, binary, sample_weight=weights)
     integer_targets = multiclass.astype(np.int64)
-    list_bayes = module.MultiOutputClassifier(GaussianNB()).fit(X, integer_targets, sample_weight=weights)
-    incremental = module.MultiOutputClassifier(GaussianNB())
+    list_bayes = module.MultiOutputClassifier(GaussianNB(), n_jobs=2).fit(X, integer_targets, sample_weight=weights)
+    incremental = module.MultiOutputClassifier(GaussianNB(), n_jobs=2)
     incremental.partial_fit(X[:6], integer_targets[:6], classes=list_bayes.classes_)
     incremental.partial_fit(X[6:], integer_targets[6:])
     list_chain = module.ClassifierChain(GaussianNB(), chain_method='predict_proba', cv=3).fit(

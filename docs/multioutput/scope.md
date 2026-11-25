@@ -15,7 +15,8 @@ Chains support natural, explicit and integer-seeded random orders, teacher
 forcing during ordinary fit, and predicted feature augmentation at inference.
 Classifier chains support `predict`, `predict_proba`, `predict_log_proba`, and
 `decision_function` feature responses when the component exposes the matching
-trait. Probability and decision outputs are restored to original target order.
+trait. A preference list selects the first supported response. Probability
+and decision outputs are restored to original target order.
 `predict_log_proba` computes the logarithm of the final positive probabilities.
 Chain CV configuration accepts an integer fold count, a native `KFold` or
 `StratifiedKFold`, fixed `ChainFolds`, a typed `ChainSplitter`, or `None`.
@@ -29,13 +30,11 @@ original sample order.
   Float32 or Float64 parameter. Targets are numeric NDArray matrices; numeric
   classification labels retain their dtype. String/object labels are not yet
   supported and are not converted to floats.
-- Independent execution is serial. `n_jobs` follows joblib: `0` raises
-  `n_jobs == 0 in Parallel has no meaning`; every other value fits the
-  components one after another, which gives the same model as sklearn's
-  parallel fit. Sparse inputs remain deferred.
+- Independent fits use native CPU threads. The [API](api-surface.md)
+  describes worker counts, ordering and failure behavior. Sparse inputs
+  remain deferred.
 - Random chain order uses `random_order=True`, with an optional integer
-  `random_state`. Mutable RNG objects and response-method preference lists
-  are not supported.
+  `random_state`. Mutable RNG objects are unsupported.
 - The default `cv=None` uses true preceding targets. Native splitter and
   class-response diagnostics use Mojo errors for invalid folds and handle
   undersized classes silently.
@@ -72,10 +71,10 @@ reused layout helpers.
 
 ## Validation
 
-Moxie root `pixi run build` compiles the assembled package, contract tests, estimator tests,
-examples and two isolated consumers. `pixi run test` executes them and checks
-namespace conflicts, live-source provenance and missing required capabilities.
-`pixi run parity` compares predictions with the recorded local sklearn module,
+The [multioutput test guide](README.md) lists scoped contract and parity
+commands. The contract checks include isolated consumers, live-source
+provenance and missing required capabilities. The parity runner compares
+predictions with the recorded local sklearn module,
 including chains with two-fold out-of-fold responses. It also compares
 independent and chain probabilities, chain log probabilities and probability
 feature responses, seeded chain order, subset accuracy, weighted accuracy,

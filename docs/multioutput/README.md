@@ -25,7 +25,9 @@ Float64 scores and Ridge outputs use 1e-12 and Float32 Ridge outputs 2e-5. Logis
 probabilities use a 2e-6 absolute tolerance for differences in L-BFGS iterates.
 Weighted GaussianNB uses 1e-12 for differences in accumulation order and
 log-probability normalization. The same bound covers incremental GaussianNB
-and GaussianNB chain CV with native List labels. Float64 LDA probabilities use
+and GaussianNB chain CV with native List labels. Parallel parity covers weighted
+Ridge in both dtypes and weighted and incremental GaussianNB with native List
+labels, all with `n_jobs=2`. Float64 LDA probabilities use
 1e-12 for differences in the SVD and probability normalization.
 Chain CV parity exercises native KFold and integer CV for both chain types,
 including stratified classifier responses and missing classes in forest and

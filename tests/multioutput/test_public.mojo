@@ -4,7 +4,7 @@ from moxie.base import BaseEstimator, SupervisedEstimator, Predictor, clone
 from moxie.dummy import DummyRegressor
 from moxie.multioutput import (
     MultiOutputRegressor, MultiOutputClassifier, RegressorChain, ClassifierChain,
-    IndependentParams, ChainParams, ChainResponses,
+    IndependentParams, ChainCV, ChainMethod, ChainParams, ChainResponses,
     MultiOutputClassifierAPI, MultiOutputRegressorAPI, MultiOutputProbability,
 )
 from test_estimators import Nearest, Params
@@ -49,7 +49,7 @@ def main() raises:
     var cc = ClassifierChain(Nearest[DType.int64]())
     _ = fluent(cc, X, labels, cc.get_params())
     var independent: IndependentParams[Params] = clf.get_params()
-    var chain: ChainParams[Params] = cc.get_params()
+    var chain: ChainParams[Params, ChainCV, ChainMethod] = cc.get_params()
     assert_equal(independent.estimator.dummy, 0)
-    assert_equal(chain.chain_method, "predict")
+    assert_equal(chain.chain_method[String], "predict")
     print("PASS: public records, generic fluent composition and independent fitted copies")

@@ -3,6 +3,7 @@
 Run with builds/naive-bayes-reference-env/bin/python tests/naive_bayes/gaussian/parity.py.
 Float64: 1e-7; Float32 oracle: 3e-5 (same-dtype reductions; no bitwise SIMD/libm claim).
 """
+import argparse
 from pathlib import Path
 import inspect
 import json
@@ -13,12 +14,19 @@ import warnings
 import numpy as np
 from sklearn.naive_bayes import GaussianNB
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--round-trip', action='store_true',
+                    help='restore a native archive after every fit and update')
+parser.add_argument('--start', type=int, default=0, help='first case index')
+parser.add_argument('--stop', type=int, help='exclusive final case index')
+args = parser.parse_args()
+
 ROOT = Path(__file__).resolve().parents[3]
 REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 REFERENCE = ROOT.parent / 'scikit-learn'
 assert subprocess.check_output(['git', '-C', str(REFERENCE), 'rev-parse', 'HEAD'], text=True).strip() == REVISION
 assert Path(inspect.getfile(GaussianNB)).read_bytes() == (REFERENCE / 'sklearn/naive_bayes.py').read_bytes()
-OUT = ROOT / 'builds/gaussian-parity'
+OUT = ROOT / ('builds/gaussian-persistence-parity' if args.round_trip else 'builds/gaussian-parity')
 OUT.mkdir(parents=True, exist_ok=True)
 
 
@@ -75,9 +83,9 @@ def check_matrix[dtype: DType](actual: nm.NDArray[dtype], expected: List[List[Fl
 def train[dtype: DType, D: ClassDomain](mut model: GaussianNB[D, dtype], X: nm.NDArray[dtype], y: D.Target,
     classes: Optional[D.Target], weights: Optional[List[Float64]], incremental: Bool) raises:
     if incremental:
-        model.partial_fit(X, y, classes=classes, sample_weight=weights)
+        _ = model.partial_fit(X, y, classes=classes, sample_weight=weights)
     else:
-        model.fit(X, y, sample_weight=weights)
+        _ = model.fit(X, y, sample_weight=weights)
 
 @no_inline
 def call_predict_joint_log_proba[dtype: DType, D: ClassDomain](model: GaussianNB[D, dtype], X: nm.NDArray[dtype]) raises -> nm.NDArray[dtype]:
@@ -100,6 +108,19 @@ def call_score[dtype: DType, D: ClassDomain](model: GaussianNB[D, dtype], X: nm.
     weights: List[Float64]) raises -> Float64:
     return model.score(X, y, sample_weight=weights.copy())
 ''']
+if args.round_trip:
+    lines.append('''
+from moxie.naive_bayes_serialization import GaussianNBSchema
+from moxie.serialization import dumps, loads
+
+@no_inline
+def round_trip[dtype: DType, D: ClassDomain](model: GaussianNB[D, dtype]) raises -> GaussianNB[D, dtype]:
+    comptime Schema = GaussianNBSchema[D, dtype]
+    var bytes = dumps(Schema.encode(model))
+    var restored = Schema.decode(loads(bytes))
+    assert_equal(dumps(Schema.encode(restored)), bytes)
+    return restored^
+''')
 names = []
 
 
@@ -177,6 +198,8 @@ def case(X, y, Q, *, dtype='float64', strings=False, chunks=None, weights=None,
                                   sample_weight=None if weights is None else np.asarray(weights)[sl])
                 cls = 'classes.copy()' if k == 0 else 'None'
                 lines.append(f'    train(model, X{k}, y{k}, {cls}, {kw}, True)')
+        if args.round_trip:
+            lines.append('    model = round_trip(model)')
         for attr in ['theta_', 'var_', 'class_count_', 'class_prior_', 'epsilon_']:
             assert np.asarray(getattr(model, attr)).dtype == np.dtype(dtype), attr
             compare('model.' + attr, getattr(model, attr), tolerance)
@@ -240,9 +263,12 @@ text = '\n'.join(lines) + '\n'
 starts = list(re.finditer(r'@no_inline\ndef case_\d+\(\) raises:', text))
 assert len(starts) == len(names)
 prefix = text[:starts[0].start()]
+stop = len(names) if args.stop is None else args.stop
+if not 0 <= args.start < stop <= len(names):
+    parser.error(f'expected 0 <= start < stop <= {len(names)}')
 executed = []
-for first in range(0, len(names), 16):
-    last = min(first + 16, len(names))
+for first in range(args.start, stop, 16):
+    last = min(first + 16, stop)
     end = starts[last].start() if last < len(starts) else len(text)
     batch = prefix + text[starts[first].start():end] + '\ndef main() raises:\n'
     batch += ''.join(f'    {name}()\n' for name in names[first:last])
@@ -253,5 +279,5 @@ for first in range(0, len(names), 16):
                     '-I', str(ROOT / 'builds/deps'), str(source), '-o', str(binary)], cwd=ROOT, check=True)
     subprocess.run([str(binary)], check=True)
     executed.extend(names[first:last])
-assert executed == names
+assert executed == names[args.start:stop]
 print(f'PASS: {len(executed)} Gaussian sklearn differential cases', flush=True)

@@ -10,12 +10,14 @@ zero-based and defaults to the end. The name must be unique and the row
 count must match the numeric block. `add_strings(name, column, position=None)`
 accepts a `List[String]` with the same row count and insertion rules. A matrix
 with shape `(rows, 0)` can seed a table whose columns are all added individually.
-`add_numeric(name, column, position=None)` takes a rank-one Float32 or Float64
-NuMojo array with the same row count and insertion rules. It copies the logical
-values from strided inputs into compact storage of the original column dtype.
+`add_numeric(name, column, position=None)` takes a rank-one Float32, Float64,
+or Int64 NuMojo array with the same row count and insertion rules. It copies
+the logical values from strided inputs into compact storage of the original
+column dtype.
 
 Copying a table creates an independent snapshot. `schema()` returns its own
-`ColumnSchema` with actual storage kinds (`float32`, `float64`, `category`, `string`).
+`ColumnSchema` with actual storage kinds
+(`float32`, `float64`, `int64`, `category`, `string`).
 `values()` borrows the original matrix when it represents the entire table.
 It raises once any column has been added individually.
 `categorical_columns[Domain](indices)` copies categorical
@@ -56,9 +58,10 @@ state. Supplied `get_feature_names_out(input_features)` must match fitted names.
 `make_column_selector(dtype_include=..., dtype_exclude=...)` returns a named
 key from a table or schema. Use `["number"]` for all numeric columns or
 `["category"]` for categorical columns of any domain and `["string"]` for
-raw text. `"floating"`, `"float32"`
-and `"float64"` also match their respective numeric storage. Typed selectors
-take lists of dtype names. Regex `pattern` raises an unsupported-capability error.
+raw text. `"floating"` matches both float dtypes. `"integer"`,
+`"signedinteger"`, and `"int"` match Int64 storage. `"float32"`, `"float64"`,
+and `"int64"` select exact dtypes. Typed selectors take lists of dtype names.
+Regex `pattern` raises an unsupported-capability error.
 
 ## Mixed numeric and categorical preprocessing
 
@@ -95,11 +98,13 @@ Each branch must select a single domain. Use explicit column lists to route
 different domains to different branches in the same table. A list, mask,
 slice, or dtype selector supplies a collection of features. The component's
 target and dense result dtype must match the table dtype. Numeric components,
-including `"passthrough"`, gather selected Float32 and Float64 columns into an
-array of the table dtype in key order. The constructor matrix sets that dtype.
-For a Float32 table this conversion can round added Float64 values. Fitted
-numeric branches accept either storage dtype for a fitted name. A change from
-numeric to categorical or text storage raises. Use `"drop"` for unused
+including `"passthrough"`, gather selected numeric columns into an array of
+the table dtype in key order. The constructor matrix sets that dtype.
+This conversion can round added Float64 values in a Float32 table and Int64
+values outside the exact integer range of either float dtype. Use an Int64
+categorical column when category identity must survive dense encoding. Fitted
+numeric branches accept any supported numeric storage dtype for a fitted name.
+A change from numeric to categorical or text storage raises. Use `"drop"` for unused
 categorical columns. An NDArray selector callable requires a table backed
 entirely by its constructor matrix.
 
@@ -159,6 +164,9 @@ It also checks two categorical columns imputed before encoding and an all-missin
 training column dropped by the imputer. Another case checks float dtype
 selection and the same numeric pipeline on a Float64 matrix column and a
 negative-strided Float32 column, with Float64 output.
+The integer case runs the same pipeline over an Int64 column and a Float64
+column, and compares dtype selection, reordered inference, conversion beyond
+Float64's exact integer range, and output metadata.
 The mixed encoders parity case also compares ordinal codes and multiclass
 target encodings with exact equality, including cross-fitted training output.
 The mixed text comparison checks scalar name and position routing with

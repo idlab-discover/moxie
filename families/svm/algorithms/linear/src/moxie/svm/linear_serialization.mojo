@@ -5,7 +5,7 @@ from std.math import floor, isfinite
 from moxie._random import RandomState
 from moxie.serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema
 from moxie.svm._contracts import Dense
-from moxie.svm._linear import ClassWeight, Dual, LinearSVC, LinearSVR
+from moxie.svm._linear import ClassWeight, Dual, LinearSVC, LinearSVR, _linear_fit_warnings
 
 
 def _label_type[Label: Copyable & Comparable & Deinitable]() -> String:
@@ -265,6 +265,7 @@ struct LinearSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](Mode
         model.n_features_in_ = state.features
         model.n_iter_ = state.iterations
         model.fit_status_ = state.status
+        model.fit_warnings = _linear_fit_warnings(state.status)
         return model^
 
 
@@ -325,4 +326,5 @@ struct LinearSVRSchema(ModelSchema):
         model.n_features_in_ = state.features
         model.n_iter_ = state.iterations
         model.fit_status_ = state.status
+        model.fit_warnings = _linear_fit_warnings(state.status)
         return model^

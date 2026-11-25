@@ -38,6 +38,7 @@ def _check_classifier(X: Dense) raises:
     save_model[Schema](model, path)
     var unfitted = load_model[Schema](path)
     assert_true(not unfitted.__sklearn_is_fitted__())
+    assert_equal(len(unfitted.fit_warnings), 0)
     assert_true(unfitted.class_weight.labels == weight_labels)
     assert_true(unfitted.class_weight.values == weights)
     assert_equal(unfitted.C, 0.5)
@@ -61,6 +62,7 @@ def _check_classifier(X: Dense) raises:
     assert_equal(restored.n_features_in_, 2)
     assert_equal(restored.n_iter_, model.n_iter_)
     assert_equal(restored.fit_status_, model.fit_status_)
+    assert_equal(len(restored.fit_warnings), 0)
     var expected_classes: List[String] = ["a", "z", "β\x00"]
     assert_true(restored.classes_ == expected_classes)
     assert_true(restored.predict(X) == model.predict(X))
@@ -76,6 +78,12 @@ def _check_classifier(X: Dense) raises:
     _ = restored.fit(X, y)
     _ = model.fit(X, y)
     assert_true(dumps(Schema.encode(restored)) == dumps(Schema.encode(model)))
+    assert_equal(len(model.fit_warnings), 1)
+    assert_equal(len(restored.fit_warnings), 1)
+    assert_equal(restored.fit_warnings[0].category, "ConvergenceWarning")
+    var fitted_copy = model.copy()
+    fitted_copy.fit_warnings.clear()
+    assert_equal(len(model.fit_warnings), 1)
     var archive = Schema.encode(model)
     with assert_raises():
         _ = LinearSVCSchema[Float64].decode(archive)
@@ -89,10 +97,33 @@ def _check_classifier(X: Dense) raises:
         _ = Schema.encode(model)
 
 
+def _check_regressor_warnings(X: Dense, y: Dense) raises:
+    var model = LinearSVR(max_iter=1, random_state=9)
+    assert_equal(len(model.fit_warnings), 0)
+    _ = model.fit(X, y)
+    assert_equal(len(model.fit_warnings), 1)
+    assert_equal(model.fit_warnings[0].category, "ConvergenceWarning")
+    assert_equal(len(clone(model).fit_warnings), 0)
+
+    _ = model.set_params(max_iter=10000, C=-1.0)
+    with assert_raises():
+        _ = model.fit(X, y)
+    assert_equal(len(model.fit_warnings), 1)
+    _ = model.set_params(C=1.0)
+    var restored = LinearSVRSchema.decode(loads(dumps(LinearSVRSchema.encode(model))))
+    assert_equal(restored.max_iter, 10000)
+    assert_equal(len(restored.fit_warnings), 1)
+    assert_equal(restored.fit_warnings[0].message, model.fit_warnings[0].message)
+    _ = model.fit(X, y)
+    assert_equal(len(model.fit_warnings), 0)
+    assert_equal(len(restored.fit_warnings), 1)
+
+
 def _check_regressor(X: Dense) raises:
     var y = nm.zeros[DType.float64](nm.Shape(6))
     for i in range(6):
         y.unsafe_set(i, Float64(i) / 3 - 1)
+    _check_regressor_warnings(X, y)
     var model = LinearSVR(epsilon=0.05, random_state=9, intercept_scaling=2.0)
     var path = "builds/linear-svr.moxie"
     save_model[LinearSVRSchema](model, path)

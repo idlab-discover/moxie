@@ -191,10 +191,32 @@ def adapt_classifier(
     return ClassifierCalibrationAdapter(estimator^, classes, "LogisticRegression")
 
 
-def adapt_classifier(
-    var estimator: LinearSVC[],
-) -> ClassifierCalibrationAdapter[LinearSVC[]]:
+def adapt_classifier[Label: Copyable & Comparable & Deinitable](
+    var estimator: LinearSVC[Label],
+) -> ClassifierCalibrationAdapter[LinearSVC[Label]]:
     return _adapt_linear_svc(estimator^)
+
+
+def _svc_classes(labels: List[Float64]) raises -> Array:
+    var result = Array(nm.Shape(len(labels)))
+    for i in range(result.size):
+        result[nm.Item(i)] = labels[i]
+    validate_integral_labels(result)
+    return result^
+
+
+def adapt_classifier(var estimator: SVC[]) -> ClassifierCalibrationAdapter[SVC[]]:
+    """Calibrate decision scores from an SVC with a built-in feature kernel."""
+    def classes(model: SVC[]) raises -> Array:
+        if model.kernel == "precomputed":
+            raise Error("ValueError: calibration requires SVC feature input")
+        if len(model.classes_) > 2 and model.decision_function_shape == "ovo":
+            raise Error("ValueError: multiclass SVC calibration requires ovr scores")
+        return _svc_classes(model.classes_)
+
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "SVC")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier[P: TransformerMixin & Deinitable](
@@ -202,11 +224,6 @@ def adapt_classifier[P: TransformerMixin & Deinitable](
 ) -> ClassifierCalibrationAdapter[Pipeline[P, SVC[]]]:
     """Calibrate the decision scores of a whole dense SVC pipeline."""
     def classes(model: Pipeline[P, SVC[]]) raises -> Array:
-        ref labels = model.estimator.classes_
-        var result = Array(nm.Shape(len(labels)))
-        for i in range(result.size):
-            result[nm.Item(i)] = labels[i]
-        validate_integral_labels(result)
-        return result^
+        return _svc_classes(model.estimator.classes_)
 
     return ClassifierCalibrationAdapter(estimator^, classes, "Pipeline")

@@ -188,6 +188,9 @@
         "moxie.kernel_approximation": {
           "file": "src/moxie/kernel_approximation.mojo"
         },
+        "moxie.discriminant_analysis_serialization": {
+          "file": "src/moxie/discriminant_analysis_serialization.mojo"
+        },
         "moxie.discriminant_analysis": {
           "file": "src/moxie/discriminant_analysis.mojo"
         },
@@ -254,6 +257,9 @@
         "moxie.naive_bayes": {
           "file": "src/moxie/naive_bayes.mojo"
         },
+        "moxie.naive_bayes_serialization": {
+          "file": "src/moxie/naive_bayes_serialization.mojo"
+        },
         "moxie._naive_bayes_common": {
           "file": "src/moxie/_naive_bayes_common.mojo"
         },
@@ -262,6 +268,9 @@
         },
         "moxie._classifier_binary_adapter": {
           "file": "src/moxie/_classifier_binary_adapter.mojo"
+        },
+        "moxie._classifier_targets": {
+          "file": "src/moxie/_classifier_targets.mojo"
         },
         "moxie._multiclass_binary": {
           "file": "src/moxie/_multiclass_binary.mojo"
@@ -1643,6 +1652,8 @@
             "validate_indices": "moxie.model_selection._indices",
             "EstimatorScore": "moxie.model_selection._evaluation",
             "NegMeanSquaredError": "moxie.model_selection._evaluation",
+            "NegMeanAbsoluteError": "moxie.model_selection._evaluation",
+            "NegRootMeanSquaredError": "moxie.model_selection._evaluation",
             "TypedScorer": "moxie.model_selection._evaluation",
             "FitAdapter": "moxie.model_selection._evaluation",
             "clone_fit_score": "moxie.model_selection._evaluation",

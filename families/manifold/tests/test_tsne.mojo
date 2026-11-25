@@ -4,6 +4,7 @@ from numojo import NDArray, NDArrayStrides, Shape, zeros
 from moxie._random import seed_global_random_state
 from moxie.base import clone
 from moxie.manifold import TSNE, TSNEMetricParams
+from moxie.neighbors._distance import at
 
 
 def points[dtype: DType]() raises -> NDArray[dtype]:
@@ -178,10 +179,50 @@ def global_stream() raises:
         default_stream.get_metadata_routing()
 
 
+def first_feature_distance(
+    X: NDArray[DType.float64], i: Int, Y: NDArray[DType.float64], j: Int,
+) raises -> Float64:
+    return abs(at(X, i, 0) - at(Y, j, 0))
+
+
+def invalid_distance(
+    X: NDArray[DType.float64], i: Int, Y: NDArray[DType.float64], j: Int,
+) raises -> Float64:
+    return -1
+
+
+def callable_metric_contract(method: String) raises:
+    var X = points[DType.float64]()
+    var view = X.view_with_layout(Shape(6, 1), NDArrayStrides(3, 1), 0)
+    var model = TSNE(
+        method=method, metric="callable", init="random", perplexity=2,
+        random_state=17, max_iter=260, learning_rate=2.0,
+    )
+    with assert_raises(contains="requires metric_params.distance"):
+        _ = model.fit(X)
+    var params = model.get_params()
+    params.metric_params = TSNEMetricParams[DType.float64](distance=first_feature_distance)
+    var expected = model.set_params(params).fit_transform(X)
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    var viewed = fresh.fit_transform(view)
+    for i in range(expected.size):
+        assert_equal(viewed.unsafe_get(i), expected.unsafe_get(i))
+    _ = model.set_params(metric="euclidean")
+    with assert_raises(contains="metric_params do not match"):
+        _ = model.fit(X)
+    params.metric_params = TSNEMetricParams[DType.float64](distance=invalid_distance)
+    _ = model.set_params(params)
+    with assert_raises(contains="finite nonnegative distance"):
+        _ = model.fit(X)
+    assert_equal(model.embedding_.value().unsafe_get(0), expected.unsafe_get(0))
+
+
 def main() raises:
     for method in ["exact", "barnes_hut"]:
         repeat_and_clone[DType.float64](method)
         repeat_and_clone[DType.float32](method)
+        callable_metric_contract(method)
     explicit_configuration()
     fit_validation()
     barnes_hut_bounds()

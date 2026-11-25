@@ -31,6 +31,8 @@ def test(run, executable):
         ('proba', "invalid call to 'predict_proba': violated constraint"),
         ('transform', "invalid call to 'transform': violated constraint"),
         ('partial_fit', "no matching method in call to 'partial_fit'"),
+        ('step_bounds', "no matching method in call to 'step'"),
+        ('step_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
     ]:
         result = subprocess.run(
             ['mojo', 'build', '-I', str(DEPS), '-I', str(TESTS), '-I', str(EXAMPLES),
@@ -40,7 +42,7 @@ def test(run, executable):
         (ROOT / f'builds/frozen-{name}.log').write_text(result.stderr)
         if result.returncode == 0 or diagnostic not in result.stderr:
             raise RuntimeError(f'Unexpected negative compilation result for {name}: {result.stderr}')
-    print('PASS: Frozen contracts, shared ownership and nine capability restrictions')
+    print('PASS: Frozen contracts, shared ownership and capability restrictions')
 
 
 def parity(run):

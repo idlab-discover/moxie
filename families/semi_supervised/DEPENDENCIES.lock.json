@@ -44,6 +44,9 @@
       },
       "id": "moxie",
       "modules": {
+        "moxie.warnings": {
+          "file": "src/moxie/warnings.mojo"
+        },
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },

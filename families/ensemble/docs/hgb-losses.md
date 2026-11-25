@@ -1,4 +1,4 @@
-# Histogram gradient boosting regression losses
+# Histogram gradient boosting losses
 
 The private `moxie.ensemble._hist_gradient_boosting.losses` module implements
 half squared error, absolute error, half Poisson deviance, half Gamma deviance,
@@ -50,3 +50,45 @@ requires bitwise equality of the Float32 derivatives and uses absolute and
 relative tolerances of 1e-12 for Float64 comparisons to account for
 platform library rounding. Test cases include nonuniform and zero weights,
 missing features, quantile interpolation and subgradients at ties.
+
+## Classification
+
+`_ClassificationLoss` implements binary and multinomial log loss. Pass a
+Float64 vector of integral class codes in fitted class order and an optional
+Float64 weight vector. `fit_intercept` validates finite nonnegative weights
+and returns clipped, linked class priors as a vector with one element per
+tree in a stage. A single class uses the binomial path with class code 0,
+following the pinned classifier. Use the same validated weights when
+computing derivatives or training loss.
+
+Raw predictions use a rank-two Float64 NuMojo array with one column for
+binomial loss or one column per class for multinomial loss. This makes the
+internal stage layout uniform. The binomial link returns two probability
+columns, including for a single encoded class, matching the pinned loss.
+Multinomial probabilities use the same class order as the raw predictions.
+The Float32 gradient and diagonal Hessian buffers store one contiguous span
+of training rows per tree. Refill both buffers once per stage before
+growing any trees for that stage. Newton values need no residual leaf update
+for these two losses.
+
+Multinomial derivatives and training loss reuse a row-sized workspace for
+shifted exponentials. Numax `special.softmax` expects TileTensor inputs and
+produces normalized probabilities. Here the grower consumes Float32
+derivatives and the objective needs the unnormalized sum in class order,
+so the native loop avoids a full probability matrix and preserves the reference
+reduction order on strided NuMojo inputs. The binomial implementation uses
+the same scalar exponential and logarithm as the regression links. The
+low-logit loss branch compensates for rounding when adding the exponential
+to one. The pinned `std.math.log1p` exceeded the loss tolerance in the
+weighted binary parity case at raw logit -2.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python families/ensemble/tools/check.py hgb-classification
+```
+
+The classification check compares intercepts, losses, probabilities, and
+Float32 derivatives against the pinned loss objects. It also grows native
+trees and compares staged raw predictions, probabilities, and training
+objectives against the pinned public classifier. The Float64 checks use
+absolute and relative tolerances of 1e-12 for platform math and reduction
+rounding. Native contracts cover strided raw predictions and invalid inputs.

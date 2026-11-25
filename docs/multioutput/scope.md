@@ -41,9 +41,13 @@ original sample order.
   undersized classes silently.
 - Incremental sample weights, arbitrary fit metadata, Python reflection,
   metadata routing and feature-name propagation are not implemented.
-- Component inputs, targets and predictions must match the wrapper's declared
-  array types. Component probabilities and log probabilities can be Float32
-  or Float64 NDArrays, or a one-element list containing a Float64 NDArray.
+- Component inputs must match the wrapper's feature array type. Regressor
+  component targets and predictions use the declared NDArray type. Classifier
+  components also accept a list of scalars of the declared label dtype, or
+  `List[Int]` for Int64 wrapper labels. Incremental classifier components
+  use the same type for their targets and class declarations. Component
+  probabilities and log probabilities can be Float32 or Float64 NDArrays,
+  or a one-element list containing a Float64 NDArray.
   Component decisions use Float32 or Float64 NDArrays. Wrapper probabilities,
   log probabilities and decisions are Float64:
   sklearn's chains return Float64 matrices, and `MultiOutputClassifier` keeps
@@ -59,7 +63,7 @@ original sample order.
   Class ordering follows sorted observed labels, or the complete class vectors
   passed to first `partial_fit`.
   Components retaining additional classes or a different probability-column
-  order are unsupported because their traits do not expose fitted class metadata.
+  order are unsupported because the wrappers derive class order from the targets.
 
 These limits mean this is not full scikit-learn parity. See
 [API usage](api-surface.md) for native calls and [plumbing](plumbing.md) for the

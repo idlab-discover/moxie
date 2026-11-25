@@ -62,6 +62,8 @@ def main() raises:
         else:
             model.fit(x, y, sw.copy())
         model = LinearSVRSchema.decode(loads(dumps(LinearSVRSchema.encode(model))))
+        for warning in model.fit_warnings:
+            print("WARNING", warning.category, warning.message)
         print("RESULT", 1, p, model.n_iter_, model.fit_status_)
         emit(model.coef_)
         emit(model.intercept_)
@@ -74,6 +76,8 @@ def main() raises:
         else:
             model.fit(x, labels, sw.copy())
         model = LinearSVCSchema[Float64].decode(loads(dumps(LinearSVCSchema[Float64].encode(model))))
+        for warning in model.fit_warnings:
+            print("WARNING", warning.category, warning.message)
         print("RESULT", model.coef_.shape[0], p, model.n_iter_, model.fit_status_)
         emit(model.coef_)
         emit(model.intercept_)

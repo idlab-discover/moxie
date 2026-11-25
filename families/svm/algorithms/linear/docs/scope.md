@@ -22,7 +22,7 @@ weights using weighted label frequencies. Accuracy and R2 accept score weights.
 `LinearSVC` supports independent fitted copies and can be used with the
 [multiclass binary adapter](../../../../../docs/multiclass/family.md#binary-adapter-for-numeric-list-labels).
 `n_iter_` reports actual maximum iterations; `fit_status_` supplements it with
-0/1 convergence status. A limited fit emits a ConvergenceWarning message.
+0/1 convergence status. A limited fit records a `ConvergenceWarning`.
 
 `l1_min_c` supports squared-hinge and log losses, binary/multiclass/single-class
 labels, optional scaled intercepts, and ill-posed zero-denominator errors.
@@ -62,7 +62,8 @@ The installed sklearn package supplies supporting validation and inheritance,
 not the fitting or optimization oracle. The reference never runs in library code.
 
 The suite includes 174 mode/weight/dtype comparisons, 32 numerical/iteration
-edge cases, and 36 l1_min_c comparisons. Coefficients use rtol 5e-5/atol 3e-6;
+edge cases, and 36 l1_min_c comparisons. The edge cases compare warning
+presence, category, and message exactly. Coefficients use rtol 5e-5/atol 3e-6;
 decisions use rtol 7e-5/atol 2e-5; objectives use rtol 1e-7/atol 1e-8.
 Reduction order and finite solver termination can move predictions at a tied
 boundary: prediction equality is mandatory outside a reference score gap of

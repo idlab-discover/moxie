@@ -95,8 +95,8 @@ Independent class vectors are in original output order.
 
 Classifier components must use the sorted unique training labels as their class
 vocabulary and probability-column order. For incremental fitting, they must use
-the complete class vectors supplied to the wrapper. The current component
-traits do not expose fitted class metadata. Frozen or fixed-vocabulary
+the complete class vectors supplied to the wrapper. The wrappers derive
+these vocabularies from the supplied labels. Frozen or fixed-vocabulary
 classifiers whose classes differ from these vectors are unsupported, as are
 components with a different probability-column order.
 
@@ -123,10 +123,14 @@ The wrappers also accept `DecisionTreeClassifier` and
 `KNeighborsClassifier` with numeric NDArray targets. Each fitted link has one
 target, so the wrapper takes the sole matrix from the component's probability
 list. Use Float32 features for trees and the chosen component dtype for
-neighbors. Use `GaussianNB[NumericDomain[DType.int64]]` for the default
-Int64 wrapper labels. The classifier wrappers convert Float64 NDArray weights
-to the `List[Float64]` that GaussianNB consumes. List-target classifiers still
-require an adapter for the wrapper's numeric target vector.
+neighbors. Both classifier wrappers accept single-target components whose targets
+and predictions use numeric lists. The default Int64 wrapper labels work with
+`GaussianNB()` and `LinearDiscriminantAnalysis()`, which use `List[Int]`.
+A component using `List[Float64]` labels requires the explicit wrapper label
+dtype `DType.float64`. Fits, native CV folds, and incremental class declarations
+use the component's native representation. Wrapper targets, predictions and
+`classes_` remain NDArrays. The wrappers convert Float64 NDArray weights to the
+`List[Float64]` that GaussianNB consumes.
 
 The independent wrappers share their field layout with the chains: they also
 carry `order`, `random_state`, `random_order`, `verbose`, `chain_method`,

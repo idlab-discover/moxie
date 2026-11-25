@@ -22,7 +22,11 @@ lexicographic order. Predictions preserve target storage and dtype. Probabilitie
 are Float64. Regression accumulates in Float64.
 
 `fit(X, y)` snapshots inputs; failed validation preserves the preceding fit.
-`clone(model)` returns an unfitted independent configuration. `get_params()` returns
+`clone(model)` returns an unfitted independent configuration. For
+`KNeighborsRegressor`, `model.copy()` also preserves the fitted query state
+and target snapshot for use in compositions such as
+[IterativeImputer](../../impute/algorithms/iterative/docs/api.md).
+`get_params()` returns
 a typed record. Supervised records contain `neighbors: NeighborParams`, `weights`,
 and the native callable `weighting` option.
 Modify the record and call `set_params(params)`, then refit when changing fit-time
@@ -61,8 +65,9 @@ compact. The pinned scikit-learn estimators return Float64 distances.
 inputs; other cases use streaming brute force. Explicit `"brute"`, `"kd_tree"`
 and `"ball_tree"` are supported. See [KDTree](kdtree.md) and
 [BallTree](balltree.md) for selection, metrics and tree contracts.
-`n_jobs` remains a scheduling hint; execution is serial. `leaf_size` controls
-tree partitioning and has no brute-force effect.
+`n_jobs` is stored as a scheduling hint. Queries run serially. See the
+[tree query benchmark](#tree-query-scheduling-benchmark) for a reproducible
+comparison. `leaf_size` controls tree partitioning and has no brute-force effect.
 
 Metrics use the shared engine. The default Minkowski p=2 resolves to Euclidean.
 Dense `metric="precomputed"` accepts a square training distance matrix and
@@ -258,3 +263,39 @@ Tophat sampling contracts and validation: [KDE sampling](kde-sampling.md).
 NeighborhoodComponentsAnalysis provides a dense supervised embedding with all
 initialization modes, warm starts, native callbacks, and feature names. See
 [NCA API and numerical limits](nca.md).
+
+### Tree query scheduling benchmark
+
+The benchmark times the public `NearestNeighbors.kneighbors(X)` path with
+`n_jobs=1` and `n_jobs=2` on KDTree and BallTree. It uses 8,192 training
+rows and 512 query rows with five Float64 features, ten Euclidean neighbors and
+`leaf_size=30`. The deterministic fixture uses seeds 42 and 43. Before
+timing, all four configurations compare indices exactly and distances within
+`1e-14` absolute tolerance against compiled pinned scikit-learn. The tolerance
+allows rounding during Float64 distance arithmetic and text conversion.
+Timing starts after fitting and a warm-up query and includes result allocation.
+
+From the repository root, activate the locked Mojo 1.0.0 / MAX 26.5.0
+toolchain. Use the compiled neighbors oracle environment with pyperf 2.10.0
+available on its Python path, and pick two available physical cores for
+`--affinity`.
+
+```sh
+(
+    cd families/neighbors
+    python -c 'import tools.check as check; check.assemble(check.ROOT)'
+    mojo build -O3 --fp-mode=contract=off -I builds/deps \
+        tools/benchmark_tree_jobs.mojo -o builds/benchmark_tree_jobs
+)
+export PYTHONPATH="$PWD/builds/neighbors/oracle-deps${PYTHONPATH:+:$PYTHONPATH}"
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+mkdir -p benchmarks/neighbors
+builds/neighbors/oracle-env/bin/python families/neighbors/tools/benchmark_tree_jobs.py \
+    --inherit-environ=PYTHONPATH,OMP_NUM_THREADS,OPENBLAS_NUM_THREADS \
+    --affinity=2,6 --processes 6 --values 5 --warmups 2 --loops 8 \
+    -o benchmarks/neighbors/tree-jobs.json
+builds/neighbors/oracle-env/bin/python -m pyperf stats benchmarks/neighbors/tree-jobs.json
+```
+
+Use `--check-only` with the same script to run the fixture's parity checks
+without timing.

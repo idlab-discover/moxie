@@ -12,7 +12,7 @@ import compose_parity_io as io
 from overlay import activate
 
 activate()
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import LeaveOneOut, StratifiedKFold
 from sklearn.preprocessing import OrdinalEncoder, TargetEncoder
 
 COMPOSE = "sklearn/compose/_column_transformer.py"
@@ -37,6 +37,7 @@ def main():
         ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), ["color"]),
         ("target", TargetEncoder(smooth=0., cv=list(StratifiedKFold(2).split(train, y))), ["color"]),
         ("automatic", TargetEncoder(target_type="continuous", cv=None, shuffle=False), ["color"]),
+        ("leave_one_out", TargetEncoder(cv=LeaveOneOut()), ["color"]),
         ("numeric", "passthrough", ["age"]),
     ])
     expected_fit = model.fit_transform(train, y)

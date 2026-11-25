@@ -5,7 +5,9 @@ from pathlib import Path
 import platform
 import os
 import subprocess
+import sys
 import warnings
+from unittest.mock import patch
 
 import numpy as np
 import scipy
@@ -77,12 +79,16 @@ def production_reference():
     logistic.LinearModelLoss = load(
         'linear_model/_linear_loss', 'sklearn.linear_model'
     ).LinearModelLoss
+    svm_base = load('svm/_base', 'sklearn.svm')
+    with patch.dict(sys.modules, {'sklearn.svm._base': svm_base}):
+        svm = load('svm/_classes', 'sklearn.svm')
     return (
         load('naive_bayes').GaussianNB,
         da.LinearDiscriminantAnalysis,
         da.QuadraticDiscriminantAnalysis,
         logistic.LogisticRegression,
-        load('svm/_classes', 'sklearn.svm').LinearSVC,
+        svm.LinearSVC,
+        svm.SVC,
     )
 
 
@@ -308,7 +314,7 @@ def main():
                     False, False, model.predict(q))
     # Cover both response protocols, weighted fitting and class-column ordering
     # with production classifiers rather than a shared test double.
-    gaussian, lda, qda, logistic, ref.LinearSVC = production_reference()
+    gaussian, lda, qda, logistic, ref.LinearSVC, svc = production_reference()
     production = [
         ('gaussian', gaussian(), True),
         ('lda', lda(), False),
@@ -320,6 +326,14 @@ def main():
         X = rng.normal(size=(len(codes), 3)) + codes[:, None] * np.array([0.8, -0.3, 0.5])
         q = rng.normal(size=(17, 3))
         w = rng.uniform(0.25, 2, size=len(codes))
+        for method in ('sigmoid', 'isotonic', 'temperature'):
+            y = codes if method == 'temperature' else 5 * codes - 7
+            for ensemble in (False, True):
+                model = ref.CalibratedClassifierCV(
+                    svc(tol=1e-8), method=method, cv=3, ensemble=ensemble,
+                ).fit(X, y)
+                add('serialized_svc', X, y, None, q, model.predict_proba(q),
+                    method, ensemble, model.predict(q), model.classes_)
         for name, estimator, weighted in production:
             for method in ('sigmoid', 'isotonic', 'temperature'):
                 y = codes if method == 'temperature' else 5 * codes - 7
@@ -373,6 +387,24 @@ def main():
                     add(f'float32_{name}', X32, y, w, q32, model.predict_proba(q_ref),
                         method, ensemble, model.predict(q_ref), model.classes_,
                         [model.score(X_ref, y, sample_weight=w)])
+    for n_classes in (2, 3):
+        codes = np.arange(96) % n_classes
+        X = rng.normal(size=(len(codes), 3)) + codes[:, None] * np.array([0.8, -0.3, 0.5])
+        q = rng.normal(size=(19, 3))
+        w = rng.uniform(0.25, 2, size=len(codes))
+        for kind, offset, spacing in [
+            ('list_int64', 2**40, 3),
+            ('list_float32', 2**24, 2),
+        ]:
+            for method in ('sigmoid', 'isotonic', 'temperature'):
+                y = codes if method == 'temperature' else offset + spacing * codes
+                for ensemble in (False, True):
+                    model = ref.CalibratedClassifierCV(
+                        ref.LinearSVC(dual=False, random_state=0, tol=1e-10),
+                        method=method, cv=3, ensemble=ensemble,
+                    ).fit(X, y, sample_weight=w)
+                    add(kind, X, y, w, q, model.predict_proba(q),
+                        method, ensemble, model.predict(q), model.classes_)
     fixtures = out / 'cases.txt'
     fixtures.write_text('\n'.join(records) + '\n')
     command = ['mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', 'builds/deps', '-I', 'examples/calibration_support', 'tests/calibration/parity_runner.mojo', '-o', str(out / 'runner')]

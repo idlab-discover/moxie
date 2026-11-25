@@ -117,6 +117,11 @@ def native_fit(X, init, *, operation="fit", components=2, metric="euclidean", ma
     return int(iteration), float(kl), float(rate), int(features), np.asarray(lines[2:], dtype=dtype).reshape(len(X), components)
 
 
+def weighted_distance(x, y):
+    delta = np.abs(np.asarray(x, dtype=np.float64) - np.asarray(y, dtype=np.float64))
+    return sum(weight * value for weight, value in enumerate(delta, start=1))
+
+
 def objective_checks(reference):
     rng = np.random.RandomState(2)
     count = 0
@@ -164,7 +169,7 @@ def distance_checks():
         for metric in (
             "euclidean", "l2", "manhattan", "l1", "cityblock", "cosine", "sqeuclidean",
             "minkowski", "chebyshev", "correlation", "mahalanobis", "seuclidean",
-            "canberra", "precomputed", "hamming", "haversine", "nan_euclidean",
+            "canberra", "precomputed", "hamming", "haversine", "nan_euclidean", "callable",
             *boolean_metrics,
         ):
             data = X
@@ -182,6 +187,8 @@ def distance_checks():
             elif metric == "haversine":
                 data = X[:, :2]
                 distances = pairwise_distances(data, metric=metric)
+            elif metric == "callable":
+                distances = pairwise_distances(X, metric=weighted_distance)
             elif metric in boolean_metrics:
                 mask = X > 0
                 mask[:, 0] = True  # Keep every row out of the all-zero case.
@@ -227,6 +234,32 @@ def fit_checks(reference):
             np.testing.assert_allclose(kl, fitted.kl_divergence_, atol=2e-12, rtol=2e-12)
             np.testing.assert_allclose(got, wanted, atol=3e-9, rtol=3e-9)
     return len(cases)
+
+
+def callable_fit_checks(reference):
+    rng = np.random.RandomState(74)
+    X = rng.normal(size=(36, 5))
+    initial = rng.normal(scale=0.1, size=(len(X), 2))
+    count = 0
+    for dtype in (np.float32, np.float64):
+        for method, angle in (("exact", 0.0), ("barnes_hut", 0.5)):
+            data = X.astype(dtype)
+            init = initial.astype(np.float32)
+            model = reference.TSNE(
+                method=method, angle=angle, metric=weighted_distance, init=init.copy(),
+                perplexity=4, max_iter=275, early_exaggeration=1, learning_rate=0.5,
+                min_grad_norm=0, random_state=0,
+            )
+            expected = model.fit_transform(data)
+            iteration, kl, rate, features, got = native_fit(
+                data, init, method=method, angle=angle, metric="callable", max_iter=275, lr=0.5,
+            )
+            assert (iteration, rate, features) == (model.n_iter_, model.learning_rate_, model.n_features_in_)
+            # Native and sklearn accumulate gradients in different orders.
+            np.testing.assert_allclose(kl, model.kl_divergence_, atol=5e-6, rtol=0)
+            np.testing.assert_allclose(got, expected, atol=2e-5, rtol=0)
+            count += 1
+    return count
 
 
 def initialization_checks(reference):
@@ -348,6 +381,7 @@ def main():
     print(f"PASS: {objective_checks(reference)} exact P, KL and gradient comparisons")
     print(f"PASS: {distance_checks()} dense distance comparisons")
     print(f"PASS: {fit_checks(reference)} explicit-initialization fits, including stopping edges")
+    print(f"PASS: {callable_fit_checks(reference)} exact and Barnes–Hut callable metric fits")
     patience_check(reference)
     print("PASS: no-progress stopping against pinned sklearn gradient descent")
     draws, seeds = initialization_checks(reference)

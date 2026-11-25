@@ -44,8 +44,21 @@ input before metric evaluation. When `metric="precomputed"`, pass
 a square nonnegative distance matrix. The algorithm squares it internally,
 excludes the diagonal, and uses both input triangles when building the
 conditional distributions. The input is borrowed and remains intact. Precomputed
-distances require random or explicit array initialization. Other metrics
-raise `ValueError`, and metric callables are outside the typed interface.
+distances require random or explicit array initialization. Unsupported metric
+names raise `ValueError`.
+
+Both methods accept a native metric through
+`metric="callable", metric_params=TSNEMetricParams[dtype](distance=my_distance)`.
+The callback type is
+`def(NDArray[dtype], Int, NDArray[dtype], Int) thin raises -> Float64`.
+The two integers select rows in the corresponding borrowed arrays. The
+callback can use their strides to read features without making row copies.
+Supply a pure, symmetric distance that returns finite nonnegative values.
+Exact t-SNE mirrors the upper triangle and evaluates the diagonal. Barnes–Hut
+queries only distinct rows through the bounded neighbor search and stores the
+selected distances in the input dtype before squaring. Native callbacks have
+a fixed signature and use the typed parameter record in place of Python
+callables and keyword dictionaries.
 
 Fitting records `embedding_`, `kl_divergence_`, `n_iter_`,
 `learning_rate_` and `n_features_in_` after success. `n_iter_` is the
@@ -107,9 +120,10 @@ gradient rounding in every update. The random initializer is checked
 bit for bit, and seeded fits compare KL and neighborhood preservation
 across seeds. Barnes–Hut comparisons cover fixed-k probabilities, KL, and
 forces for one, two and three dimensions, angles from zero to 0.85, and
-coincident points. Its Float32 summation order differs from sklearn's CSR
-row reductions. Explicit-initialization fit tolerances account for that
-rounding across iterations. SciPy, NumPy and scikit-learn are used in
-validation only.
+coincident points. Barnes–Hut's Float32 summation order differs from sklearn's
+CSR row reductions. Explicit-initialization fit tolerances account for that
+rounding across iterations. Callable-distance comparisons cover both input
+dtypes and both optimization methods. SciPy, NumPy and scikit-learn are used
+in validation only.
 The estimator and perplexity oracle sources come from sklearn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.

@@ -54,6 +54,47 @@ small well-conditioned fixture. It also checks clone independence, unsupported
 final feature names, and unfitted metadata. Raw comparisons and source hashes
 remain under ignored `builds/tests/pipeline/compose-parity`.
 
+## Dense classifier composition checks
+
+The focused heterogeneous checks cover four compositions:
+
+- `SelectKBest(BuiltinScorer[target_type=List[Float64]](), k=1) → SVC`
+  uses list targets in `DenseSupervisedAdapter`. The score function receives
+  a rank-one array of the same dtype. The test checks selected columns, row
+  indices, predictions and scores across five held-out folds.
+- `CalibratedClassifierCV(adapt_classifier(make_pipeline(StandardScaler(), SVC())))`
+  fits the scaler inside each calibration fold. The binary sigmoid checks cover
+  both pooled and ensemble calibration, including class order after refitting.
+- `StandardScaler[DType.float32]() → DecisionTreeClassifier[DType.int64]()`
+  shares Float32 feature storage and uses Int64 labels. The tree exposes one
+  probability matrix and class array per output, including single-output fit.
+- `StandardScaler() → GaussianNB[NumericDomain[DType.int64]]()` shares
+  Float64 feature storage. The numeric domain uses an Int64 array target and
+  the final step returns one rank-two probability array.
+
+The tree and Gaussian checks use held-out rows and verify class order, exact
+predictions and accuracy before refitting with updated configuration and
+labels. Tree probabilities match exactly on this fixture. Gaussian probabilities
+use absolute tolerance `1e-12` for floating-point rounding. The compiled checks
+also cover clone configuration, unfitted prediction and wrong feature counts.
+
+With the locked Mojo toolchain active, compile just these three drivers:
+
+```sh
+python shared/assembly/tools/assemble_family.py --consumer "$PWD" \
+  --lock "$PWD/DEPENDENCIES.json" --output "$PWD/builds/deps"
+mkdir -p builds/tests/pipeline
+for name in test_heterogeneous_compositions test_select_k_best_cv test_calibrated_pipeline
+do
+  mojo build -O3 --fp-mode=contract=off -I builds/deps -I tests/pipeline \
+    -I tests/compose/support "tests/pipeline/$name.mojo" -o "builds/tests/pipeline/$name"
+done
+```
+
+Run `tests/pipeline/heterogeneous_compositions_parity.py` with Python from a
+[pinned scikit-learn oracle](../tree/README.md). The script invokes just these
+three drivers and their four compositions.
+
 Variadic factories beyond two/three steps, unsupervised-final pipelines, sparse
 execution, prefix fit-weight routing, persistence schemas, and metadata routing remain
 unfinished. See [Pipeline](sequential.md) and [FeatureUnion](feature-union.md)

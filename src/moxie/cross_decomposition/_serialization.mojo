@@ -1,4 +1,6 @@
 """Native state schemas for the dense cross-decomposition estimators."""
+from std.collections import Set
+
 from moxie.serialization import (
     BinaryReader,
     BinaryWriter,
@@ -27,6 +29,8 @@ from ._plssvd import PLSSVD, PLSSVDParams
 
 comptime _VERSION = 1
 comptime _PLS_REQUEST_VERSION = 2
+comptime _PLS_NAMED_VERSION = 3
+comptime _PLSSVD_NAMED_VERSION = 2
 comptime _PREFIX = "moxie.cross_decomposition."
 
 
@@ -104,6 +108,35 @@ def _check_dimensions(features: Int, targets: Int, components: Int, bound: Int) 
 def _check_weight_ranks(x_weights: Matrix, y_weights: Matrix) raises:
     if x_weights.ndim != 2 or y_weights.ndim != 2:
         raise Error("ModelSchemaError: invalid weight ranks")
+
+
+def _validate_feature_names(names: List[String], width: Int) raises:
+    if len(names) != width:
+        raise Error("ModelSchemaError: feature names must match the fitted width")
+    var seen = Set[String]()
+    for name in names:
+        if name in seen:
+            raise Error("ModelSchemaError: fitted feature names must be unique")
+        seen.add(name.copy())
+
+
+def _write_feature_names(
+    mut writer: BinaryWriter, names: List[String], width: Int
+) raises:
+    _validate_feature_names(names, width)
+    for name in names:
+        writer.string(name)
+
+
+def _read_feature_names(mut reader: BinaryReader, width: Int) raises -> List[String]:
+    # Each name costs at least its eight-byte length prefix.
+    if width > reader.remaining() // 8:
+        raise Error("ModelSchemaError: truncated fitted feature names")
+    var names = List[String](capacity=width)
+    for _ in range(width):
+        names.append(reader.string(reader.remaining()))
+    _validate_feature_names(names, width)
+    return names^
 
 
 def _read_score_request(mut reader: BinaryReader) raises -> SampleWeightRequest:
@@ -184,8 +217,16 @@ struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
             _write_array(archive, "_x_std", model._x_std, p, positive=True)
             _write_array(archive, "_y_std", model._y_std, q, positive=True)
         var request = model._score_request.value()
-        if not request.isa[NoneType]():
+        var has_request = not request.isa[NoneType]()
+        if model.feature_names_in_:
+            if not fitted:
+                raise Error("ModelSchemaError: unfitted estimator has fitted feature names")
+            archive.schema_version = _PLS_NAMED_VERSION
+            _write_feature_names(writer, model.feature_names_in_.value(), model.n_features_in_)
+            writer.boolean(has_request)
+        elif has_request:
             archive.schema_version = _PLS_REQUEST_VERSION
+        if has_request:
             var is_alias = request.isa[String]()
             writer.boolean(is_alias)
             if is_alias:
@@ -199,10 +240,9 @@ struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
         var has_request = archive.schema_version == _PLS_REQUEST_VERSION
-        archive.expect(
-            _PREFIX + Self.Model.name(),
-            _PLS_REQUEST_VERSION if has_request else _VERSION,
-        )
+        var has_names = archive.schema_version == _PLS_NAMED_VERSION
+        var version = _PLS_REQUEST_VERSION if has_request else _VERSION
+        archive.expect(_PREFIX + Self.Model.name(), _PLS_NAMED_VERSION if has_names else version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         _check_input_dtype[Self.dtype](reader)
@@ -212,6 +252,8 @@ struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
         )
         var model = Self.Model(params=params)
         if not reader.boolean():
+            if has_names:
+                raise Error("ModelSchemaError: unfitted estimator has fitted feature names")
             if has_request:
                 model._score_request = _read_score_request(reader)
             reader.finish()
@@ -246,6 +288,9 @@ struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
                     )
                     break
             model.diagnostics_.append(diagnostic^)
+        if has_names:
+            model.feature_names_in_ = _read_feature_names(reader, p)
+            has_request = reader.boolean()
         if has_request:
             model._score_request = _read_score_request(reader)
         reader.finish()
@@ -314,19 +359,29 @@ struct PLSSVDSchema[dtype: DType = DType.float64](ModelSchema):
             _write_array(archive, "_y_mean", model._y_mean, q)
             _write_array(archive, "_x_std", model._x_std, p, positive=True)
             _write_array(archive, "_y_std", model._y_std, q, positive=True)
+        if model.feature_names_in_:
+            if not fitted:
+                raise Error("ModelSchemaError: unfitted estimator has fitted feature names")
+            archive.schema_version = _PLSSVD_NAMED_VERSION
+            _write_feature_names(writer, model.feature_names_in_.value(), model.n_features_in_)
         archive.manifest = writer^.finish()
         archive.validate()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(_PREFIX + Self.Model.name(), _VERSION)
+        var has_names = archive.schema_version == _PLSSVD_NAMED_VERSION
+        archive.expect(
+            _PREFIX + Self.Model.name(), _PLSSVD_NAMED_VERSION if has_names else _VERSION
+        )
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         _check_input_dtype[Self.dtype](reader)
         var params = PLSSVDParams(reader.integer(), reader.boolean(), reader.boolean())
         var model = Self.Model(params=params)
         if not reader.boolean():
+            if has_names:
+                raise Error("ModelSchemaError: unfitted estimator has fitted feature names")
             reader.finish()
             _expect_arrays(archive, 0)
             return model^
@@ -335,8 +390,10 @@ struct PLSSVDSchema[dtype: DType = DType.float64](ModelSchema):
         var p = reader.integer()
         var q = reader.integer()
         var k = reader.integer()
-        reader.finish()
         _check_dimensions(p, q, k, min(p, q))
+        if has_names:
+            model.feature_names_in_ = _read_feature_names(reader, p)
+        reader.finish()
         model.x_weights_ = _read_array(archive, "x_weights_", p, k)
         model.y_weights_ = _read_array(archive, "y_weights_", q, k)
         model._x_mean = _read_array(archive, "_x_mean", p)

@@ -490,16 +490,50 @@ struct TSNE[dtype: DType = DType.float64, embedding_dtype: DType = DType.float32
         return coordinates^
 
 
-def _scipy_bray_curtis[dtype: DType](X: NDArray[dtype], i: Int, j: Int) raises -> Float64:
-    # The neighbors convention uses |x| + |y|. SciPy uses |x + y|.
-    var numerator: Float64 = 0
-    var denominator: Float64 = 0
-    for c in range(X.shape[1]):
-        var left = at(X, i, c)
-        var right = at(X, j, c)
-        numerator += abs(left - right)
-        denominator += abs(left + right)
-    return numerator / denominator
+struct _ExactRatioDistance[input_dtype: DType](DenseMetric):
+    comptime dtype = Self.input_dtype
+    var _canberra: Bool
+    var _weights: Optional[List[Float64]]
+
+    def __init__(
+        out self, name: String, weights: Optional[NDArray[Self.dtype]],
+    ) raises:
+        self._canberra = name == "canberra"
+        self._weights = None
+        if weights:
+            ref source = weights.value()
+            if source.ndim != 1:
+                raise Error("ValueError: TSNE feature weights must be a vector")
+            var values = List[Float64](capacity=source.shape[0])
+            for feature in range(source.shape[0]):
+                var weight = Float64(source.unsafe_get(feature * Int(source.strides[0])))
+                if not isfinite(weight) or weight < 0:
+                    raise Error("ValueError: TSNE feature weights must be finite and nonnegative")
+                values.append(weight)
+            self._weights = values^
+
+    def validate_features(self, n_features: Int) raises:
+        if self._weights and len(self._weights.value()) != n_features:
+            raise Error("ValueError: TSNE weights must match features")
+
+    def distance(
+        self, x: NDArray[Self.dtype], i: Int, y: NDArray[Self.dtype], j: Int,
+    ) raises -> Float64:
+        var total: Float64 = 0
+        var denominator: Float64 = 0
+        for feature in range(x.shape[1]):
+            var weight = self._weights.value()[feature] if self._weights else Float64(1)
+            var left = at(x, i, feature)
+            var right = at(y, j, feature)
+            if self._canberra:
+                var divisor = abs(left) + abs(right)
+                if divisor != 0:
+                    total += weight * (abs(left - right) / divisor)
+            else:
+                total += weight * abs(left - right)
+                # SciPy uses |x + y|, while the neighbors kernel uses |x| + |y|.
+                denominator += weight * abs(left + right)
+        return total if self._canberra else total / denominator
 
 
 def _metric[dtype: DType](
@@ -563,6 +597,18 @@ def _squared_distances[dtype: DType](
                     squared.unsafe_set(i * n + j, converted)
         return squared^
 
+    if name == "braycurtis" or (name == "canberra" and options and options.value().w):
+        var ratio: _ExactRatioDistance[dtype]
+        if options:
+            ref params = options.value()
+            if params.p or params.V or params.VI or params.missing_values:
+                raise Error("ValueError: metric_params do not match the selected metric")
+            ratio = _ExactRatioDistance[dtype](name, params.w)
+        else:
+            ratio = _ExactRatioDistance[dtype](name, None)
+        ratio.validate_features(X.shape[1])
+        return _symmetric_squared_distances(ratio, X, name)
+
     # SciPy's exact pairwise path accepts "matching" as an alias for Hamming.
     # NearestNeighbors does not accept the alias in the Barnes–Hut path.
     if (name == "hamming" or name == "matching") and options:
@@ -585,13 +631,10 @@ def _symmetric_squared_distances[M: DenseMetric](
     var n = X.shape[0]
     var squared = zeros[DType.float32](Shape(n, n))
     var callable_metric = name == "callable"
-    var scipy_bray_curtis = name == "braycurtis"
     var round_before_squaring = callable_metric or name == "l2" or name == "cosine" or name == "nan_euclidean"
     for i in range(n):
         for j in range(i if callable_metric else i + 1, n):
-            var distance = (
-                _scipy_bray_curtis(X, i, j) if scipy_bray_curtis else kernel.distance(X, i, X, j)
-            )
+            var distance = kernel.distance(X, i, X, j)
             var value = Float32(distance)
             if round_before_squaring:
                 # These sklearn kernels return Float32 for Float32 inputs.

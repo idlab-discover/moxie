@@ -15,6 +15,9 @@ from moxie.base import (
     ProbabilityPredictor,
     LogProbabilityPredictor,
     DecisionFunction,
+    EstimatorTags,
+    EstimatorTagsProvider,
+    get_tags,
     SampleScorer,
     DensityMixin,
     OutlierMixin,
@@ -52,6 +55,7 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     Copyable,
     DecisionFunction where conforms_to(E, DecisionFunction),
     DensityMixin where conforms_to(E, DensityMixin),
+    EstimatorTagsProvider where conforms_to(E, EstimatorTagsProvider),
     FeatureNamesOut where conforms_to(E, FeatureNamesOut),
     FrozenEstimatorAPI,
     _FrozenIdentity,
@@ -224,6 +228,14 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._estimator[].__sklearn_is_fitted__()
+
+    def __sklearn_tags__(self) -> EstimatorTags where conforms_to(
+        Self.E, EstimatorTagsProvider
+    ):
+        """Preserve the child's tags and opt the wrapper out of estimator checks."""
+        var tags = get_tags(self._estimator[])
+        tags._skip_test = True
+        return tags
 
     def get_classes(self) raises -> Self.Target where conforms_to(
         Self.E, NumericClassifierClasses

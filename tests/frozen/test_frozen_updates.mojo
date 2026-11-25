@@ -1,8 +1,9 @@
-"""Synthetic stateful probes for incremental delegation and cluster identity."""
+"""Synthetic probes for incremental delegation, cluster identity, and tags."""
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import (
     clone, IncrementalRegressor, IncrementalClassifier, IncrementalTransformer,
     ClusterMixin, FitTransformer,
+    EstimatorTags, EstimatorTagsProvider, InputTags, get_tags,
 )
 from moxie.frozen import FrozenEstimator, is_clusterer
 from moxie.utils.validation import check_is_fitted
@@ -140,7 +141,7 @@ struct ClassifierProbe(IncrementalClassifier):
         raise Error("scoring outside probe scope")
 
 
-struct ClusterProbe(IncrementalTransformer, ClusterMixin):
+struct ClusterProbe(IncrementalTransformer, ClusterMixin, EstimatorTagsProvider):
     comptime Params = Int
     comptime Input = Int
     comptime Target = Int
@@ -168,6 +169,9 @@ struct ClusterProbe(IncrementalTransformer, ClusterMixin):
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self.state != 0
+
+    def __sklearn_tags__(self) -> EstimatorTags:
+        return EstimatorTags(InputTags(one_d_array=True, two_d_array=False))
 
     def fit[
         origin: MutOrigin,
@@ -212,6 +216,9 @@ def main() raises:
     comptime assert conforms_to(FrozenEstimator[ClusterProbe], IncrementalTransformer)
     comptime assert not conforms_to(FrozenEstimator[ClusterProbe], ClusterMixin)
     comptime assert not conforms_to(FrozenEstimator[ClusterProbe], FitTransformer)
+    comptime assert not conforms_to(
+        FrozenEstimator[RegressorProbe], EstimatorTagsProvider
+    )
 
     var regression = FrozenEstimator(RegressorProbe())
     var shared = clone(regression)
@@ -265,6 +272,23 @@ def main() raises:
     assert_false(is_clusterer(RegressorProbe()))
     assert_false(is_clusterer(regression))
     var nested_cluster = FrozenEstimator(cluster.copy())
+    var tags = get_tags(cluster)
+    assert_true(tags.input_tags.one_d_array)
+    assert_false(tags.input_tags.two_d_array)
+    assert_true(tags._skip_test)
+    assert_false(get_tags(cluster.estimator())._skip_test)
+    print("tags_one_d_array", Int(tags.input_tags.one_d_array))
+    print("tags_two_d_array", Int(tags.input_tags.two_d_array))
+    print("tags_skip_test", Int(tags._skip_test))
+    print("tags_child_skip_test", Int(get_tags(cluster.estimator())._skip_test))
+    tags.input_tags.one_d_array = False
+    tags._skip_test = False
+    assert_true(get_tags(cluster).input_tags.one_d_array)
+    assert_true(get_tags(cluster)._skip_test)
+    assert_true(get_tags(nested_cluster).input_tags.one_d_array)
+    assert_false(get_tags(nested_cluster).input_tags.two_d_array)
+    assert_true(get_tags(clone(cluster))._skip_test)
+    print("tags_nested_skip_test", Int(get_tags(nested_cluster)._skip_test))
     assert_true(is_clusterer(nested_cluster))
     assert_false(is_clusterer(nested))
     _ = cluster.partial_fit(3)

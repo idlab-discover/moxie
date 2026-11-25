@@ -2442,6 +2442,22 @@
       }
     },
     {
+      "id": "hdbscan",
+      "path": "families/cluster/algorithms/hdbscan",
+      "modules": {
+        "moxie.cluster._hdbscan_linkage": {
+          "file": "src/moxie/cluster/_hdbscan_linkage.mojo"
+        }
+      },
+      "assets": {
+        "licenses/hdbscan-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    },
+    {
       "id": "agglomerative",
       "path": "families/cluster/algorithms/agglomerative",
       "modules": {

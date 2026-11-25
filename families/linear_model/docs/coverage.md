@@ -31,9 +31,12 @@ from the assembled package.
 | SGDClassifier, SGDRegressor, SGDOneClassSVM | Missing |
 | Perceptron, PassiveAggressiveClassifier, PassiveAggressiveRegressor | Missing |
 
-The feature_selection, calibration, frozen, compose and naive_bayes notebooks
-still use substitute estimators where their references use LogisticRegression. No linear model
-implements `ModelSchema` persistence (see `docs/serialization.md`). The
+The [multinomial notebook](../../../notebooks/linear_model/plot_logistic_multinomial.ipynb)
+compares default L-BFGS and one-vs-rest classification against the pinned
+reference. The [calibration curve notebook](../../../notebooks/naive_bayes/plot_calibration_curve.ipynb)
+uses LogisticRegression as a baseline. The digits pipeline and breast-cancer
+feature-selection notebook migrations remain open. No linear model implements
+`ModelSchema` persistence (see `docs/serialization.md`). The
 `algorithms/ridge_cv` directory is an unbuilt placeholder: its check exits
 with `UNIMPLEMENTED`, and its `EXPORTS.json` is not assembled.
 

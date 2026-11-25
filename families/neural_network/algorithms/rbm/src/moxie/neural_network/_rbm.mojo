@@ -310,6 +310,25 @@ struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, F
         self.random_state = params.random_state.copy()
         return self
 
+    def set_params[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        n_components: Optional[Int] = None,
+        learning_rate: Optional[Float64] = None,
+        batch_size: Optional[Int] = None,
+        n_iter: Optional[Int] = None,
+        verbose: Optional[Int] = None,
+        random_state: Optional[Optional[Int]] = None,
+    ) -> ref[self] Self:
+        """Update the supplied constructor settings and return this estimator."""
+        self.n_components = n_components.or_else(self.n_components)
+        self.learning_rate = learning_rate.or_else(self.learning_rate)
+        self.batch_size = batch_size.or_else(self.batch_size)
+        self.n_iter = n_iter.or_else(self.n_iter)
+        self.verbose = verbose.or_else(self.verbose)
+        self.random_state = random_state.or_else(self.random_state)
+        return self
+
     def __sklearn_clone__(self) raises -> Self:
         return Self(self.n_components, learning_rate=self.learning_rate, batch_size=self.batch_size, n_iter=self.n_iter, verbose=self.verbose, random_state=self.random_state.copy())
 

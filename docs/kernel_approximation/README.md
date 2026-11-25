@@ -65,11 +65,10 @@ Sequential Float32 Laplacian Nystroem
 requires explicit Float64 output. See each API page for numerical adaptations,
 parameter updates, feature names and conditioning limits.
 
-Nystroem reuses Moxie's integrated `_kernel_ridge` engine and its existing
-mojo-linalg SVD. Polynomial uses the main `../mojo-linalg` FFT through the
-`kernel-fft` manifest project. Existing shared array, RNG and numerical owners
-remain unchanged. The scikit-learn notice is retained in `LICENSES/scikit-learn.txt`
-and distributed by the assembly manifest.
+Nystroem reuses Moxie's integrated `_kernel_ridge` engine and mojo-linalg's
+symmetric eigensolver and SVD. Polynomial uses the main `../mojo-linalg` FFT
+through the `kernel-fft` manifest project. The assembly manifest distributes
+the scikit-learn notice in `LICENSES/scikit-learn.txt`.
 
 ## Validation
 

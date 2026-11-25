@@ -31,7 +31,7 @@ def test(run, executable):
         ('proba', "invalid call to 'predict_proba': violated constraint"),
         ('transform', "invalid call to 'transform': violated constraint"),
         ('partial_fit', "no matching method in call to 'partial_fit'"),
-        ('step_bounds', "no matching method in call to 'step'"),
+        ('step_bounds', "pipeline step index out of range"),
         ('step_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
         ('named_step_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
     ]:

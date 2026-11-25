@@ -1,0 +1,65 @@
+"""Inspect the owned children of supervised and unsupervised pipelines."""
+from moxie.base import clone
+from moxie.dummy import DummyRegressor
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
+from numojo import Shape, zeros
+from std.testing import assert_equal, assert_false, assert_true
+
+
+def main() raises:
+    var X = zeros[DType.float64](Shape(2, 1))
+    X.itemset(1, 2)
+    var y = zeros[DType.float64](Shape(2))
+    y.itemset(1, 8)
+    var pipe = make_pipeline(StandardScaler(), DummyRegressor())
+    assert_equal(len(pipe), 2)
+    assert_false(pipe.step[0]().__sklearn_is_fitted__())
+    assert_false(pipe.step[-1]().__sklearn_is_fitted__())
+    _ = pipe.fit(X, y)
+    assert_true(Pointer(to=pipe.step[0]()) == Pointer(to=pipe.step[-2]()))
+    assert_true(Pointer(to=pipe.step[1]()) == Pointer(to=pipe.step[-1]()))
+    assert_true(Pointer(to=pipe.step[0]()) == Pointer(to=pipe.transformer))
+    assert_true(Pointer(to=pipe.step[1]()) == Pointer(to=pipe.estimator))
+
+    var name = String("dummy") + "regressor"
+    ref last = pipe.named_step[DummyRegressor[]](name)
+    assert_true(Pointer(to=last) == Pointer(to=pipe.step[-1]()))
+    var transformed = pipe.step[0]().transform(X)
+    var prediction = last.predict(transformed)
+    print("supervised", len(pipe), transformed.item(0), prediction.item(0))
+
+    var fresh = clone(pipe)
+    assert_false(fresh.named_step[DummyRegressor[]](name).__sklearn_is_fitted__())
+    var params = fresh.get_params()
+    params.estimator_name = "regression"
+    _ = fresh.set_params(params)
+    try:
+        _ = fresh.named_step[DummyRegressor[]](name)
+        raise Error("expected missing name")
+    except error:
+        assert_equal(String(error), "KeyError: no pipeline step named 'dummyregressor'")
+    try:
+        _ = fresh.named_step[StandardScaler[]]("regression")
+        raise Error("expected incorrect type")
+    except error:
+        assert_equal(String(error), "TypeError: pipeline step 'regression' has a different type")
+    assert_true(
+        Pointer(to=fresh.named_step[DummyRegressor[]]("regression"))
+        == Pointer(to=fresh.step[1]())
+    )
+
+    var nested = make_pipeline(StandardScaler(), pipe^)
+    assert_equal(len(nested), 2)
+    print("nested", len(nested), len(nested.step[-1]()))
+
+    var scalers = make_pipeline(StandardScaler(), StandardScaler())
+    _ = scalers.fit(X)
+    assert_true(
+        Pointer(to=scalers.named_step[StandardScaler[]]("standardscaler-1"))
+        == Pointer(to=scalers.step[0]())
+    )
+    ref final_scaler = scalers.named_step[StandardScaler[]]("standardscaler-2")
+    assert_true(Pointer(to=final_scaler) == Pointer(to=scalers.step[-1]()))
+    var both = final_scaler.transform(scalers.step[0]().transform(X))
+    print("transformers", len(scalers), both.item(0))

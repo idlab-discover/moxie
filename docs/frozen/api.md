@@ -173,6 +173,7 @@ for the prefix and `frozen.step[1]()` for the final step. Negative indices
 `-2` and `-1` select the same steps from the end. Mojo resolves the index at
 compile time because the two steps can have different types. Invalid indices
 and calls on wrappers without the pipeline step capability fail compilation.
+`len(frozen)` counts the two immediate steps of a wrapped sequential pipeline.
 
 The result is an immutable borrow of the actual child, including its learned
 state. Access also works before fitting, and the child still applies its own

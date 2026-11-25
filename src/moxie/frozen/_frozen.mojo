@@ -140,43 +140,15 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     ) -> ref[origin] Self.Prefix where conforms_to(Self.E, PipelineSteps):
         return Pointer(to=self._estimator[]._prefix_step()).unsafe_origin_cast[origin]()[]
 
-    def step[origin: ImmOrigin, //, index: Int](
-        ref[origin] self,
-    ) -> ref[origin] Self.Prefix where conforms_to(Self.E, PipelineSteps) and (index == 0 or index == -2):
-        return self._prefix_step()
-
     def _final_step[origin: ImmOrigin](
         ref[origin] self,
     ) -> ref[origin] Self.Final where conforms_to(Self.E, PipelineSteps):
         return Pointer(to=self._estimator[]._final_step()).unsafe_origin_cast[origin]()[]
 
-    def step[origin: ImmOrigin, //, index: Int](
-        ref[origin] self,
-    ) -> ref[origin] Self.Final where conforms_to(Self.E, PipelineSteps) and (index == 1 or index == -1):
-        return self._final_step()
-
     def _step_index(self, name: StringSpan) raises -> Int where conforms_to(
         Self.E, PipelineSteps
     ):
         return self._estimator[]._step_index(name)
-
-    def named_step[origin: ImmOrigin, //, Step: BaseEstimator](
-        ref[origin] self,
-        name: StringSpan,
-    ) raises -> ref[origin] Step where conforms_to(Self.E, PipelineSteps):
-        """Borrow the step with the given name and concrete type."""
-        var index = self._step_index(name)
-        comptime if type_of(self._prefix_step()) == Step:
-            if index == 0:
-                return rebind[Pointer[Step, origin=origin]](
-                    Pointer(to=self._prefix_step())
-                )[]
-        comptime if type_of(self._final_step()) == Step:
-            if index == 1:
-                return rebind[Pointer[Step, origin=origin]](
-                    Pointer(to=self._final_step())
-                )[]
-        raise Error(t"TypeError: pipeline step '{name}' has a different type")
 
     def named_transformers_[T: TransformerMixin & Copyable & Deinitable](
         self, name: String,

@@ -106,7 +106,6 @@ remaining imports from tracking PR #10 part 5:
 | Cluster | K-means++ local-trial count. |
 | Linear model | Bayesian regression scores. |
 | Multioutput | Classifier-chain log probabilities. |
-| Neural network | RBM sigmoid and free energy. |
 | Preprocessing | Unused scaler `log` import. |
 | SVM | libsvm probability calibration, liblinear logistic optimization, and C/nu-SVC log probabilities. One-class SVM also has an unused `log` import. |
 

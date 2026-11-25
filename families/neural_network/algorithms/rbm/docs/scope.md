@@ -15,6 +15,11 @@ updates after fit in both dtypes, fresh Float32 batches on a Float64 model,
 strided and offset views, exact particles and Gibbs samples, and explicit RNG
 continuation.
 
+The sigmoid and free-energy softplus use Numax's CPU Float64 exponential.
+The kernel comparison checks both functions on logits from −500 to 500 with
+relative tolerance `2e-14` and zero absolute tolerance to catch loss of
+precision in small positive probabilities and small-magnitude free energies.
+
 CSR/CSC/LIL and all sparse branches are deferred by the session dense-only
 policy. Reference sklearn/neural_network/_rbm.py accepts CSR in fit, partial_fit,
 transform and score_samples. Native methods accept dense NDArray only; no sparse

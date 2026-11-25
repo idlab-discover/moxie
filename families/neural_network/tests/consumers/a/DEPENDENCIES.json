@@ -2,6 +2,16 @@
   "schema": 1,
   "projects": [
     {
+      "assets": {
+        "numax/core/libm.mojo": "numax/core/libm.mojo",
+        "licenses/numax.txt": "LICENSE"
+      },
+      "exports": null,
+      "id": "numax",
+      "modules": {},
+      "path": "../../../../../../numax"
+    },
+    {
       "id": "model_selection",
       "path": "../../../../model_selection",
       "modules": {

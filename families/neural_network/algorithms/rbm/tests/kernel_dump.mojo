@@ -1,6 +1,6 @@
-from numojo import NDArray, Shape, zeros
+from numojo import NDArray, Shape, array, zeros
 from moxie._random import RandomState
-from moxie.neural_network._rbm import BernoulliRBM, _sigmoid, _softplus
+from moxie.neural_network._rbm import BernoulliRBM
 
 
 def emit[dtype: DType](name: String, X: NDArray[dtype]):
@@ -32,6 +32,19 @@ def check[dtype: DType](n: Int, d: Int, h: Int, batch: Int, steps: Int) raises:
         print("word", rng.state_word(i))
 
 
+def activation_tails() raises:
+    var rng = RandomState(42)
+    var state = BernoulliRBM[DType.float64](1, batch_size=1)
+    state.initialize(1, 1, 1, rng)
+    state.components_.unsafe_set(0, 1.0)
+    var X = array[DType.float64](
+        [-500.0, -60.0, -30.0, -3.0, -0.3, 0.0, 0.3, 3.0, 30.0, 60.0, 500.0],
+        [11, 1],
+    )
+    emit("tail_probabilities", state.mean_hiddens(X))
+    emit("tail_energy", state.free_energy(X))
+
+
 def main() raises:
     check[DType.float64](1, 1, 1, 1, 0)
     check[DType.float64](7, 3, 2, 4, 5)
@@ -39,3 +52,4 @@ def main() raises:
     check[DType.float32](1, 1, 1, 1, 0)
     check[DType.float32](7, 3, 2, 4, 5)
     check[DType.float32](2, 10, 5, 8, 3)
+    activation_tails()

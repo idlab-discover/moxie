@@ -41,8 +41,14 @@ def main():
         frozen_pipe[2]
     assert frozen_pipe[0] is clone(frozen_pipe)[-2]
     assert frozen_pipe[1] is FrozenEstimator(frozen_pipe)[-1]
-    expected_scaled = clone(frozen_pipe)[0].transform(X)
-    expected_predictions = FrozenEstimator(frozen_pipe)[-1].predict(expected_scaled)
+    with np.testing.assert_raises(KeyError):
+        frozen_pipe["missing"]
+    named_prefix = clone(frozen_pipe)["standardscaler"]
+    named_final = FrozenEstimator(frozen_pipe)["lineardiscriminantanalysis"]
+    assert named_prefix is frozen_pipe[0]
+    assert named_final is frozen_pipe[1]
+    expected_scaled = named_prefix.transform(X)
+    expected_predictions = named_final.predict(expected_scaled)
 
     native = subprocess.check_output([ROOT / "builds/tests/frozen/test_frozen_composition"], text=True)
     [widths] = [line.split()[1:] for line in native.splitlines() if line.startswith("composition_width ")]

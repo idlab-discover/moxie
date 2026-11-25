@@ -1,19 +1,35 @@
-"""Compare the named cases in serialization.mojo with the pinned estimators."""
+"""Compare native named inputs and table projections with the pinned estimators."""
 
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
 
 sys.dont_write_bytecode = True
-from pls.parity import load_reference, verify_reference
+from pls.parity import REFERENCE, load_reference, verify_reference
+
+
+def load_reference_with_output():
+    source = "sklearn/utils/_set_output.py"
+    assert not subprocess.check_output(
+        ["git", "-C", REFERENCE, "status", "--porcelain", "--", source], text=True
+    ).strip()
+    spec = importlib.util.spec_from_file_location("pinned_set_output", REFERENCE / source)
+    output = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(output)
+    # The installed wheel supplies sklearn.base; use the pinned wrapping code
+    # when its subclass hook decorates the pinned estimator methods.
+    with patch("sklearn.utils._set_output._wrap_method_output", output._wrap_method_output):
+        return load_reference()
 
 
 def main(runner):
     verify_reference()
-    reference = load_reference()
+    reference = load_reference_with_output()
     completed = subprocess.run([runner], stdout=subprocess.PIPE, text=True, check=True)
     seen = set()
     for line in completed.stdout.splitlines():
@@ -33,12 +49,21 @@ def main(runner):
         if name != "PLSRegression":
             y = y.reshape(6, 2)
         kwargs = {"algorithm": "svd"} if name == "PLSCanonical" else {}
-        model = getattr(reference, name)(n_components=2, **kwargs).fit(x, y)
+        model = getattr(reference, name)(n_components=2, **kwargs)
+        model.set_output(transform="pandas")
+        fit_x_scores, fit_y_scores = model.fit_transform(x, y)
         assert names.split(",") == model.feature_names_in_.tolist(), name
         assert components.split(",") == model.get_feature_names_out(columns).tolist(), name
-        for values, expected in zip((x_scores, y_scores), model.transform(x, y), strict=True):
-            # Float32 PLS inference normalizes in the input dtype.
-            tol = 1e-7 if dtype == np.float32 else 1e-10
+        projected_x, projected_y = model.transform(x, y)
+        assert isinstance(projected_x, pd.DataFrame), name
+        assert isinstance(projected_y, np.ndarray), name
+        pd.testing.assert_frame_equal(fit_x_scores, projected_x)
+        np.testing.assert_array_equal(fit_y_scores, projected_y)
+        assert projected_x.columns.tolist() == components.split(","), name
+        assert all(projected_x.dtypes == np.float64), name
+        # Float32 PLS inference normalizes in the input dtype.
+        tol = 1e-7 if dtype == np.float32 else 1e-10
+        for values, expected in zip((x_scores, y_scores), (projected_x, projected_y), strict=True):
             np.testing.assert_allclose(
                 np.fromstring(values, sep=",").reshape(expected.shape),
                 expected, atol=tol, rtol=tol, err_msg=name,
@@ -60,7 +85,7 @@ def main(runner):
         model.fit(x.to_numpy(), y)
         assert not hasattr(model, "feature_names_in_"), name
     assert seen == {"PLSRegression", "PLSCanonical", "CCA", "PLSSVD"}, seen
-    print("PASS: named input parity for all four cross-decomposition estimators")
+    print("PASS: named input and paired table output parity for all four estimators")
 
 
 if __name__ == "__main__":

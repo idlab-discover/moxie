@@ -65,8 +65,9 @@ Numerical failures that make SciPy raise (NaN reaching an SVD after a zero
 deflation denominator) raise `LinAlgError: ...` here; NaN in inputs is
 rejected with scikit-learn's first-line message (its imputation hint is
 omitted). For `ColumnTable` overloads and `feature_names_in_`, see
-[named dense inputs](../README.md#named-dense-inputs). Pandas output and
-pickling still require shared support.
+[named dense inputs](../README.md#named-dense-inputs). The native
+[`transform_table` methods](../README.md#labeled-projections) return labeled
+X scores. Pandas output and pickling still require shared support.
 
 `PLSEngine` also exposes `projection_weights` (PLSSVD) and `rotations`, and
 `moxie.cross_decomposition._pls.pinv(a, rtol, context)`.

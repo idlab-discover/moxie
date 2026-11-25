@@ -114,6 +114,28 @@ The `*_inplace` methods take NuMojo arrays. To use a mixed table, select a
 numeric block first. Generic compositions still use the estimator's
 NDArray-associated traits.
 
+## Labeled projections
+
+All four estimators accept an NDArray or a same-dtype named input in
+`transform_table(X)`, `transform_table(X, y)` and `fit_transform_table(X, y)`.
+The single-block call returns an owned Float64 `ColumnTable`. The paired
+calls return `PairedTableScores` with a Float64 `ColumnTable` in `x_scores`
+and a Float64 NDArray in `y_scores`. The X columns use the fitted component
+names from `get_feature_names_out()` and keep the input row order.
+
+```mojo
+var model = PLSRegression(n_components=2)
+var training = model.fit_transform_table(X, y)
+var validation = model.transform_table(X_validation)
+var component_names = validation.schema().names
+```
+
+Select the output type by calling the corresponding method. This keeps
+return types statically known and allows typed pipelines to use the dense
+`transform` method. Native tables carry column labels and implicit row
+positions. The table constructor copies the X score matrix into owned
+storage, and the paired result moves the Y score array.
+
 ## Cross-validation and search
 
 Use the shared [dense adapter](../../families/model_selection/algorithms/search/docs/search.md)
@@ -173,9 +195,10 @@ estimators and check Moxie ownership. Negative compilation rejects PLSSVD
 regression and inverse-transform methods; assembly tests reject conflicting
 module and export ownership. The serialization contract checks on-disk
 round trips, exact learned and inference values, and malformed archives.
-It also checks the lifecycle of fitted names and named inference. For the
-pandas-backed reference comparison, build the native contract and pass it to
-the focused oracle.
+It also checks the lifecycle of fitted names, named inference and the typed
+table return paths. The focused oracle compares the paired result with
+`set_output(transform="pandas")` on the pinned estimators, including component
+labels, Float64 dtype and both score matrices.
 
 ```sh
 mojo build -O3 --fp-mode=contract=off -I builds/deps tests/cross_decomposition/serialization.mojo -o builds/cross_decomposition_serialization

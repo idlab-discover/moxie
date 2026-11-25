@@ -12,6 +12,7 @@ from moxie.cross_decomposition import (
     PLSRegressionSchema,
     PLSSVD,
     PLSSVDSchema,
+    PairedTableScores,
 )
 from moxie.cross_decomposition._contracts import Matrix, PairedScores
 from moxie.cross_decomposition._pls import _PLS
@@ -271,12 +272,23 @@ def encode_values(array: Matrix) raises -> String:
 
 
 def emit_named_case(
-    estimator: String, names: List[String], output: List[String], scores: PairedScores
+    estimator: String, names: List[String], scores: PairedTableScores
 ) raises:
+    var schema = scores.x_scores.schema()
+    for dtype in schema.dtypes:
+        assert_equal(dtype, "float64")
     print(
-        "named|" + estimator + "|" + ",".join(names) + "|" + ",".join(output)
-        + "|" + encode_values(scores.x_scores) + "|" + encode_values(scores.y_scores)
+        "named|" + estimator + "|" + ",".join(names) + "|" + ",".join(schema.names)
+        + "|" + encode_values(scores.x_scores.values()) + "|" + encode_values(scores.y_scores)
     )
+
+
+def same_table_scores(
+    actual: PairedTableScores, expected: PairedScores, components: List[String]
+) raises:
+    assert_equal(actual.x_scores.schema().names, components)
+    same_array(actual.x_scores.values(), expected.x_scores)
+    same_array(actual.y_scores, expected.y_scores)
 
 
 @no_inline
@@ -290,7 +302,16 @@ def named_pls[flavor: Int, dtype: DType](var model: _PLS[flavor, dtype], single:
     var wrong = ColumnTable(x, reordered)
     with assert_raises(contains="NotFittedError"):
         _ = model.predict(table)
+    with assert_raises(contains="NotFittedError"):
+        _ = model.transform_table(x)
+    var positional = clone(model)
     var scores = model.fit_transform(table, y)
+    var components = model.get_feature_names_out(names.copy())
+    same_table_scores(positional.fit_transform_table(x, y), scores, components)
+    same_table_scores(model.fit_transform_table(table, y), scores, components)
+    same_table_scores(model.transform_table(x, y), scores, components)
+    assert_equal(model.transform_table(x).schema().names, components)
+    same_array(model.transform_table(table).values(), scores.x_scores)
     assert_equal(model.feature_names_in_.value(), names)
     same_scores(scores, model.transform(table, y))
     same_array(model.transform(table), scores.x_scores)
@@ -302,7 +323,7 @@ def named_pls[flavor: Int, dtype: DType](var model: _PLS[flavor, dtype], single:
     with assert_raises(contains="The feature names should match those that were passed during fit."):
         _ = model.predict(wrong)
     with assert_raises(contains="The feature names should match those that were passed during fit."):
-        _ = model.transform(wrong, y)
+        _ = model.transform_table(wrong, y)
     with assert_raises(contains="The feature names should match those that were passed during fit."):
         _ = model.score(wrong, y)
     with assert_raises(contains="input_features is not equal to feature_names_in_"):
@@ -328,7 +349,7 @@ def named_pls[flavor: Int, dtype: DType](var model: _PLS[flavor, dtype], single:
     assert_true(not clone(restored).feature_names_in_)
     emit_named_case(
         model.name(), restored.feature_names_in_.value(),
-        restored.get_feature_names_out(names.copy()), restored.transform(table, y),
+        restored.transform_table(table, y),
     )
 
     var snapshot = restored.copy()
@@ -351,12 +372,19 @@ def named_plssvd() raises:
     var model = PLSSVD[DType.float32](2)
     comptime Schema = PLSSVDSchema[DType.float32]
     with assert_raises(contains="NotFittedError"):
-        _ = model.transform(table)
+        _ = model.transform_table(table)
+    var positional = clone(model)
     var scores = model.fit_transform(table, y)
+    var components = model.get_feature_names_out(names.copy())
+    same_table_scores(positional.fit_transform_table(x, y), scores, components)
+    same_table_scores(model.fit_transform_table(table, y), scores, components)
+    same_table_scores(model.transform_table(x, y), scores, components)
+    assert_equal(model.transform_table(table).schema().names, components)
+    same_array(model.transform_table(x).values(), scores.x_scores)
     same_scores(scores, model.transform(table, y))
     same_scores(scores, model.transform(x, y))
     with assert_raises(contains="The feature names should match those that were passed during fit."):
-        _ = model.transform(wrong)
+        _ = model.transform_table(wrong)
     var mixed = table.copy()
     mixed.add_strings("text", ["a", "b", "c", "d", "e", "f"])
     with assert_raises(contains="mixed ColumnTable"):
@@ -370,7 +398,7 @@ def named_plssvd() raises:
     assert_true(not clone(restored).feature_names_in_)
     emit_named_case(
         model.name(), restored.feature_names_in_.value(),
-        restored.get_feature_names_out(names.copy()), restored.transform(table, y),
+        restored.transform_table(table, y),
     )
     var invalid = archive.copy()
     # All three names occupy 12 bytes each, including the length prefix.

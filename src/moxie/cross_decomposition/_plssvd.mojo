@@ -16,7 +16,11 @@ from moxie._feature_metadata import (
     InputFeatureCount,
 )
 from moxie.compose._table import ColumnTable
-from moxie.cross_decomposition._base import CrossDecompositionTransformer
+from moxie.cross_decomposition._base import (
+    CrossDecompositionTransformer,
+    PairedTableScores,
+    _as_table_scores,
+)
 from moxie.cross_decomposition._contracts import Matrix, PairedScores
 from moxie.cross_decomposition._pls import (
     PLSEngine,
@@ -221,6 +225,33 @@ struct PLSSVD[dtype: DType = DType.float64](
     def _check_named_input(self, X: ColumnTable[Self.dtype]) raises:
         _ = self.get_n_features_in()
         check_named_input(X, self.feature_names_in_)
+
+    def transform_table(self, X: Self.Input) raises -> ColumnTable[DType.float64]:
+        """Transform X and label the projected columns with component names."""
+        return ColumnTable(self.transform(X), self.get_feature_names_out())
+
+    def transform_table(self, X: ColumnTable[Self.dtype]) raises -> ColumnTable[DType.float64]:
+        self._check_named_input(X)
+        return self.transform_table(X.values())
+
+    def transform_table(self, X: Self.Input, y: Self.Target) raises -> PairedTableScores:
+        """Return labeled X scores and dense Y scores."""
+        return _as_table_scores(self.transform(X, y), self.get_feature_names_out())
+
+    def transform_table(
+        self, X: ColumnTable[Self.dtype], y: Self.Target
+    ) raises -> PairedTableScores:
+        self._check_named_input(X)
+        return self.transform_table(X.values(), y)
+
+    def fit_transform_table(mut self, X: Self.Input, y: Self.Target) raises -> PairedTableScores:
+        """Fit both blocks and return labeled X scores and dense Y scores."""
+        return _as_table_scores(self.fit_transform(X, y), self.get_feature_names_out())
+
+    def fit_transform_table(
+        mut self, X: ColumnTable[Self.dtype], y: Self.Target
+    ) raises -> PairedTableScores:
+        return _as_table_scores(self.fit_transform(X, y), self.get_feature_names_out())
 
     def transform(self, X: ColumnTable[Self.dtype]) raises -> Self.Transformed:
         self._check_named_input(X)

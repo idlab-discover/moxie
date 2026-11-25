@@ -153,6 +153,7 @@ if __name__=='__main__':
         for child in children:
             run(sys.executable, ROOT / child / 'tools/check.py', 'parity-only')
         run(sys.executable, ROOT / 'tests/public_kernel_parity.py')
+        run(sys.executable, ROOT / 'tests/metadata_composition_parity.py')
     if action == 'start':
         run(ROOT / 'builds/plumbing')
         run(ROOT / 'algorithms/linear/builds/linear')

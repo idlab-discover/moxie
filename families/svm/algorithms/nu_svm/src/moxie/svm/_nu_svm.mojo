@@ -2,6 +2,7 @@
 """Dense kernel estimators using the family LIBSVM engine."""
 import numojo as nm
 from std.math import log
+from moxie.base import WeightedSupervisedEstimator
 from moxie.svm._contracts import Dense, Indices, KernelModel, KernelSpec, KernelOptions, KernelProvider, TrainingSnapshot, validate_matrix, validate_vector
 from moxie.svm._contracts import (
     _check_feature_names, _check_feature_names_width, _kernel_float64,
@@ -13,7 +14,10 @@ from moxie.svm._base import ProbabilisticSVC, SupportVectorRegressor, OneClassSu
 from moxie._random import RandomState, entropy_state
 from moxie.warnings import FitWarning
 from moxie.metadata_routing import (
-    FitScoreMetadataRequest, SampleWeightRequest, SampleWeightUpdate,
+    FitScoreMetadataRequest,
+    FitScoreMetadataRequestProvider,
+    SampleWeightRequest,
+    SampleWeightUpdate,
 )
 
 @fieldwise_init
@@ -35,7 +39,9 @@ struct NuSVCParams[Label: Copyable & Comparable & Deinitable = Float64](Copyable
     var random_state: Int
 
 
-struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticSVC):
+struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](
+    ProbabilisticSVC, FitScoreMetadataRequestProvider, WeightedSupervisedEstimator,
+):
     comptime Params = NuSVCParams[Self.Label]
     comptime Input = Dense
     comptime SampleWeight = Dense
@@ -221,6 +227,20 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         if self.random_state == -1:
             self._rng = rng^
         return self
+
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Dense,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[weight_origin] sample_weight: Dense,
+    ) raises -> ref[self] Self:
+        return self.fit(X, y, Optional(sample_weight.copy()))
 
     def fit[
         dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
@@ -606,7 +626,9 @@ struct NuSVRParams(Copyable, Movable):
     var max_iter: Int
 
 
-struct NuSVR(SupportVectorRegressor):
+struct NuSVR(
+    SupportVectorRegressor, FitScoreMetadataRequestProvider, WeightedSupervisedEstimator,
+):
     comptime Params = NuSVRParams
     comptime Input = Dense
     comptime SampleWeight = Dense
@@ -759,6 +781,20 @@ struct NuSVR(SupportVectorRegressor):
         _ = self.fit_with_random_state(X, y, rng, sample_weight)
         self._rng = rng^
         return self
+
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Dense,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[weight_origin] sample_weight: Dense,
+    ) raises -> ref[self] Self:
+        return self.fit(X, y, Optional(sample_weight.copy()))
 
     def fit[
         dtype: DType, target_dtype: DType,

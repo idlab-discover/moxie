@@ -5,6 +5,7 @@ from std.math import isfinite, floor
 from moxie.base import WeightedSupervisedEstimator
 from moxie.metadata_routing import (
     FitScoreMetadataRequest,
+    FitScoreMetadataRequestProvider,
     SampleWeightRequest,
     SampleWeightUpdate,
 )
@@ -217,7 +218,8 @@ struct LinearSVCParams[Label: Copyable & Comparable & Deinitable = Float64](Copy
 
 
 struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
-    SupportVectorClassifier, Copyable, WeightedSupervisedEstimator
+    SupportVectorClassifier, Copyable,
+    FitScoreMetadataRequestProvider, WeightedSupervisedEstimator,
 ):
     comptime Params = LinearSVCParams[Self.Label]
     comptime Input = Dense
@@ -571,7 +573,9 @@ struct LinearSVRParams(Copyable, Movable):
     var max_iter: Int
 
 
-struct LinearSVR(SupportVectorRegressor):
+struct LinearSVR(
+    SupportVectorRegressor, FitScoreMetadataRequestProvider, WeightedSupervisedEstimator,
+):
     comptime Params = LinearSVRParams
     comptime Input = Dense
     comptime SampleWeight = Dense
@@ -680,6 +684,20 @@ struct LinearSVR(SupportVectorRegressor):
         if self.random_state == -1:
             self._rng = rng^
         return self
+
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Dense,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[weight_origin] sample_weight: Dense,
+    ) raises -> ref[self] Self:
+        return self.fit(X, y, Optional(sample_weight.copy()))
 
     def fit_with_random_state[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Dense, ref[y_origin] y: Self.Target, mut rng: RandomState, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
         validate_matrix(X)

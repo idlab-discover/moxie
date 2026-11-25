@@ -65,9 +65,10 @@ exported by this child. See [scope.md](scope.md) for restrictions and evidence.
 
 ## Sample-weight requests
 
-`LinearSVC` and `LinearSVR` use the shared
-[sample-weight request API](../../../../../docs/interfaces.md#sample-weight-requests).
-Configure fit and score independently through fluent setters:
+`LinearSVC` and `LinearSVR` implement the shared
+[`FitScoreMetadataRequestProvider`](../../../../../docs/interfaces.md#sample-weight-requests)
+and `WeightedSupervisedEstimator` traits. Configure fit and score
+independently through fluent setters.
 
 ```mojo
 _ = classifier.set_fit_request(sample_weight="training_weight").set_score_request(

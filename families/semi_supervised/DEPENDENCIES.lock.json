@@ -28,7 +28,13 @@
         "src/moxie/__init__.mojo": null,
         "src/moxie/base.mojo": null,
         "src/moxie/utils/__init__.mojo": null,
-        "src/moxie/utils/validation.mojo": null
+        "src/moxie/utils/validation.mojo": null,
+        "src/moxie/isotonic.mojo": null,
+        "src/moxie/_calibration_algorithms.mojo": null,
+        "src/moxie/_calibration_curve.mojo": null,
+        "src/moxie/_calibration_cv.mojo": null,
+        "src/moxie/_calibration_display.mojo": null,
+        "src/moxie/_calibration_splits.mojo": null
       },
       "id": "moxie",
       "modules": {
@@ -37,6 +43,24 @@
         },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
+        },
+        "moxie.isotonic": {
+          "file": "src/moxie/isotonic.mojo"
+        },
+        "moxie._calibration_algorithms": {
+          "file": "src/moxie/_calibration_algorithms.mojo"
+        },
+        "moxie._calibration_curve": {
+          "file": "src/moxie/_calibration_curve.mojo"
+        },
+        "moxie._calibration_cv": {
+          "file": "src/moxie/_calibration_cv.mojo"
+        },
+        "moxie._calibration_display": {
+          "file": "src/moxie/_calibration_display.mojo"
+        },
+        "moxie._calibration_splits": {
+          "file": "src/moxie/_calibration_splits.mojo"
         }
       },
       "path": "../..",
@@ -273,6 +297,9 @@
         "moxie.semi_supervised._base": {
           "file": "src/moxie/semi_supervised/_base.mojo"
         },
+        "moxie.semi_supervised._calibrated_adapter": {
+          "file": "src/moxie/semi_supervised/_calibrated_adapter.mojo"
+        },
         "moxie.semi_supervised._contracts": {
           "file": "src/moxie/semi_supervised/_contracts.mojo"
         },
@@ -306,7 +333,8 @@
             "SelfTrainingClassifier": "moxie.semi_supervised._self_training",
             "GraphClassifierAdapter": "moxie.semi_supervised._self_training",
             "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter",
-            "LogisticRegressionAdapter": "moxie.semi_supervised._logistic_adapter"
+            "LogisticRegressionAdapter": "moxie.semi_supervised._logistic_adapter",
+            "CalibratedClassifierAdapter": "moxie.semi_supervised._calibrated_adapter"
           }
         }
       }
@@ -692,6 +720,102 @@
       "exports": null,
       "revision": "HEAD",
       "files": {}
+    },
+    {
+      "id": "model_selection",
+      "path": "../model_selection",
+      "modules": {
+        "moxie.model_selection._base": {
+          "file": "src/moxie/model_selection/_base.mojo"
+        },
+        "moxie.model_selection._indices": {
+          "file": "src/moxie/model_selection/_indices.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "IndexArray": "moxie.model_selection._indices",
+            "SplitCursor": "moxie.model_selection._indices"
+          }
+        }
+      },
+      "files": {},
+      "revision": "HEAD"
+    },
+    {
+      "id": "splitters",
+      "path": "../model_selection/algorithms/splitters",
+      "modules": {
+        "moxie.model_selection._split": {
+          "file": "src/moxie/model_selection/_split.mojo"
+        }
+      },
+      "assets": {
+        "licenses/model_selection-splitters-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "KFold": "moxie.model_selection._split",
+            "LeaveOneOut": "moxie.model_selection._split",
+            "StratifiedKFold": "moxie.model_selection._split"
+          }
+        }
+      },
+      "files": {},
+      "revision": "HEAD"
+    },
+    {
+      "assets": {
+        "licenses/random-MT19937.txt": "LICENSES/MT19937.txt",
+        "licenses/random-NumPy-distributions.md": "LICENSES/NumPy-distributions.md",
+        "licenses/random-NumPy-random.md": "LICENSES/NumPy-random.md",
+        "licenses/random-NumPy.txt": "LICENSES/NumPy.txt",
+        "licenses/random-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "random",
+      "modules": {
+        "moxie._random": {
+          "file": "src/moxie/_random.mojo"
+        }
+      },
+      "path": "../../shared/random",
+      "files": {},
+      "revision": "HEAD"
+    },
+    {
+      "assets": {
+        "mojo_linalg/__init__.mojo": "src/mojo_linalg/__init__.mojo",
+        "mojo_linalg/_determinant.mojo": "src/mojo_linalg/_determinant.mojo",
+        "mojo_linalg/_spectral.mojo": "src/mojo_linalg/_spectral.mojo",
+        "mojo_linalg/_storage.mojo": "src/mojo_linalg/_storage.mojo",
+        "mojo_linalg/cholesky.mojo": "src/mojo_linalg/cholesky.mojo",
+        "mojo_linalg/indefinite.mojo": "src/mojo_linalg/indefinite.mojo",
+        "mojo_linalg/qr.mojo": "src/mojo_linalg/qr.mojo",
+        "mojo_linalg/svd.mojo": "src/mojo_linalg/svd.mojo",
+        "mojo_linalg/symmetric.mojo": "src/mojo_linalg/symmetric.mojo",
+        "mojo_linalg/triangular.mojo": "src/mojo_linalg/triangular.mojo",
+        "mojo_linalg/_math.mojo": "src/mojo_linalg/_math.mojo",
+        "mojo_linalg/incomplete_gamma.mojo": "src/mojo_linalg/incomplete_gamma.mojo"
+      },
+      "exports": null,
+      "id": "mojo-linalg",
+      "modules": {},
+      "path": "../../../.worktrees/mojo-linalg-covariance",
+      "files": {},
+      "revision": "HEAD"
     }
   ],
   "overrides": []

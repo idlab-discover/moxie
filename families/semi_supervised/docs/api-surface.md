@@ -127,6 +127,36 @@ multiclass decision matrix following the underlying classifier. For Float32
 features, construct `LogisticRegression[DType.float32]()` and specify
 `DType.float32` as the second type parameter of `SelfTrainingClassifier`.
 
+`CalibratedClassifierAdapter` accepts a native
+`CalibratedClassifierCV` whose base implements `CalibrationEstimator`. It
+delegates prediction, probabilities, and scoring, and accepts Float64 features and
+`List[Int]` targets, preserving the calibrated classifier's class order.
+Labels must be in the closed interval `[-(2^53 - 1), 2^53 - 1]` because
+calibration represents labels as Float64. As with other integer adapters,
+`-1` in a self-training target list means unlabeled.
+
+SVC uses calibration's explicit fitted-class reader:
+
+```mojo
+from numojo import NDArray, Shape
+from moxie.calibration import CalibratedClassifierCV, ClassifierCalibrationAdapter
+from moxie.semi_supervised import CalibratedClassifierAdapter, SelfTrainingClassifier
+from moxie.svm import SVC
+
+def svc_classes(model: SVC[Int]) raises -> NDArray[DType.float64]:
+    var classes = NDArray[DType.float64](Shape(len(model.classes_)))
+    for i in range(len(model.classes_)):
+        classes.unsafe_set(i, Float64(model.classes_[i]))
+    return classes^
+
+# In a raising function with Float64 X and List[Int] labels:
+var svc = SVC[Int](gamma=0.5, random_state=42)
+var calibrated = CalibratedClassifierCV(ClassifierCalibrationAdapter(svc^, svc_classes, "SVC"))
+var adapter = CalibratedClassifierAdapter(calibrated^)
+var model = SelfTrainingClassifier[type_of(adapter)](adapter^)
+_ = model.fit(X, labels)
+```
+
 `get_params` recursively clones estimator configuration into a typed record;
 modify that record and pass it to `set_params`. Dynamic `estimator__parameter`
 routing is not implemented.
@@ -140,9 +170,9 @@ LabelSpreading())`), be cloned with `moxie.base.clone`, and be evaluated by
 `SelfTrainingClassifier` conforms only to `BaseEstimator`, because `predict` and
 `score` exist only for adapters that provide them. It therefore cannot be a
 pipeline step or a generic `SupervisedEstimator`. The shipped adapters are
-`GaussianNBAdapter`, `GraphClassifierAdapter`, and `LogisticRegressionAdapter`.
-Other Moxie classifiers, including `CalibratedClassifierCV` over `SVC` as used
-by the gallery examples, need a hand-written `ProbabilisticEstimatorAdapter`.
+`GaussianNBAdapter`, `GraphClassifierAdapter`, `LogisticRegressionAdapter`,
+and `CalibratedClassifierAdapter`. Other classifiers can implement the
+`ProbabilisticEstimatorAdapter` contract.
 
 ## Exclusions
 
@@ -170,3 +200,11 @@ values with Float64 features. The corresponding Float32 bounds are 9e-4 and
 3e-3, as in the logistic regression owner's Float32 oracle. These bounds
 account for optimizer and rounding differences between native L-BFGS and the
 pinned sklearn reference.
+
+The calibrated SVC composition checks probabilities to an absolute tolerance
+of 3e-5 for the binary and multiclass Float64 fixtures, allowing for
+differences in LIBSVM kernel arithmetic and sigmoid optimization. Class order,
+predictions, score, pseudo-label iterations, and termination match exactly on
+these fixtures. The oracle executes pinned self-training and calibration
+sources and requires the installed SVC wrapper and packaged LIBSVM sources to
+match the same revision byte for byte.

@@ -36,6 +36,7 @@ Compile-time training shapes can additionally use the opt-in Numax backend
 - [Family interfaces and reference sources](docs/family.md)
 - [Dense plumbing, ownership and dependency assembly](docs/plumbing.md)
 - [Supported dense scope and sparse exclusions](docs/scope.md)
+- [PCA and IncrementalPCA persistence](docs/serialization.md)
 - [Shared estimator contract and Mojo differences](docs/interfaces.md)
 - [Contribution rules](AGENTS.md)
 

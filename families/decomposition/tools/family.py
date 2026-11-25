@@ -1,6 +1,6 @@
 """Assemble, build, test and validate the dense decomposition estimators.
 
-Usage: python tools/family.py {build,test,parity,start}
+Usage: python tools/family.py {build,test,parity,start,serialization-check}
 
 Builds use the current Moxie dependency manifest and materialize its public
 namespace in the ignored `builds/deps` directory.
@@ -174,11 +174,25 @@ def parity():
     engine("parity-only")
 
 
+def serialization_check():
+    assemble()
+    ownership()
+    work = ROOT / "builds"
+    run("mojo", "build", *FLAGS, ROOT / "tests/test_serialization.mojo",
+        "-o", work / "serialization")
+    run(work / "serialization", work / "pca-round-trip.moxie")
+    for estimator, source in (("pca", "evaluate"), ("incremental_pca", "driver")):
+        run("mojo", "build", *FLAGS, f"tests/{estimator}/{source}.mojo",
+            "-o", work / f"{estimator}_{source}")
+        run(sys.executable, ROOT / ESTIMATORS[estimator][2])
+
+
 if __name__ == "__main__":
     action = sys.argv[1] if len(sys.argv) > 1 else "build"
-    if action not in ("test-only", "parity-only"):
+    if action not in ("test-only", "parity-only", "serialization-check"):
         build()
     if action in ("test", "test-only"): test()
     elif action in ("parity", "parity-only"): parity()
+    elif action == "serialization-check": serialization_check()
     elif action == "start": run(ROOT / "builds/pca_example")
     elif action != "build": raise ValueError(action)

@@ -2,8 +2,9 @@
 from std.sys import argv
 from numojo import NDArray, Shape, zeros
 from moxie.decomposition import PCA
-from moxie.decomposition._pca_backend import PCABackend, RuntimePCABackend
 from moxie.decomposition._pca import ComponentCount, IteratedPower
+from moxie.decomposition_serialization import PCASchema
+from moxie.serialization import dumps, loads
 
 
 def emit[dtype: DType](name: String, x: NDArray[dtype]) raises:
@@ -13,7 +14,7 @@ def emit[dtype: DType](name: String, x: NDArray[dtype]) raises:
     for i in range(flat.size): print(name, Float64(flat.unsafe_get(i)))
 
 
-def evaluate[dtype: DType, Backend: PCABackend = RuntimePCABackend]() raises:
+def evaluate[dtype: DType]() raises:
     var args = argv()
     var m = Int(args[2])
     var p = Int(args[3])
@@ -23,7 +24,7 @@ def evaluate[dtype: DType, Backend: PCABackend = RuntimePCABackend]() raises:
     elif args[4] == "mle": components = String("mle")
     var power = IteratedPower(String("auto"))
     if Int(args[10]) >= 0: power = Int(args[10])
-    var model = PCA[dtype, Backend](components, svd_solver=args[6], whiten=Bool(Int(args[7])),
+    var model = PCA[dtype](components, svd_solver=args[6], whiten=Bool(Int(args[7])),
         copy=Bool(Int(args[8])), iterated_power=power, n_oversamples=Int(args[11]),
         power_iteration_normalizer=args[12], random_state=Int(args[13]))
     var x = zeros[dtype](Shape(m, p))
@@ -38,6 +39,7 @@ def evaluate[dtype: DType, Backend: PCABackend = RuntimePCABackend]() raises:
         emit("fit_transform", model.fit_transform_inplace(x))
     else:
         raise Error("Unrecognized PCA fit mode")
+    model = PCASchema[dtype].decode(loads(dumps(PCASchema[dtype].encode(model))))
     print("k", model.n_components_)
     print("solver", model._fit_svd_solver)
     print("noise", model.noise_variance_)

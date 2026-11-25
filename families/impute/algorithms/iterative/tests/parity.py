@@ -122,6 +122,20 @@ def cases():
     yield "default-stream", X, Z, dict(random_state=None, n_nearest_features=3, imputation_order="random")
     yield "scaled-tol", X, Z, dict(max_iter=20, tol=0.02)
     yield "zero-tol", X, Z, dict(max_iter=4, tol=0.0)
+    # With orthogonal predictors and no intercept, the first prediction is
+    # exactly zero. Float32 rounds the scaled tolerance back to the change.
+    boundary = np.array([[0, 2], [0, 2], [0, np.nan]])
+    yield "tol-dtype-boundary", boundary, boundary, dict(
+        estimator=dict(fit_intercept=False), skip_complete=True,
+        max_iter=2, tol=1.0000000000000002,
+    )
+    # Three half-ULP terms are lost when added to 2 in Float32 row order.
+    # The widened sum exceeds the next Float32 value above 2.
+    boundary = np.vstack([np.diag([8, 2**-21, 2**-21, 2**-21]), [np.nan] * 4])
+    yield "row-sum-dtype-boundary", boundary, boundary, dict(
+        estimator=dict(fit_intercept=False), skip_complete=True,
+        max_iter=2, tol=(2 + 2**-22) / 8,
+    )
     yield "scalar-bounds", X, Z, dict(min_value=-0.1, max_value=0.2)
     yield "all-missing-transform", X, np.full_like(Z, np.nan), {}
     yield "one-feature", X[:, :1], Z[:, :1], {}

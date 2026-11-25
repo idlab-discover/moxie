@@ -44,8 +44,10 @@ restart it.
 
 Deterministic imputation stops once the largest absolute row sum of the change
 falls strictly below `tol * max(abs(observed_training_values))`, or after
-`max_iter` rounds. A zero iteration limit or one retained feature uses the
-initial fill. Bounds apply to regression predictions. Pass scalar or
+`max_iter` rounds. The row sums and scaled tolerance use the input's floating
+dtype. Rounding at the stopping boundary can change the number of rounds
+between Float32 and Float64. A zero iteration limit or one retained feature
+uses the initial fill. Bounds apply to regression predictions. Pass scalar or
 original-feature-order vector bounds using `IterativeBound(Float64(...))` or
 `IterativeBound(bounds^)` for a `List[Float64]`. Omitting either argument uses
 its corresponding infinity. Pass `verbose` for diagnostics on fit.
@@ -143,8 +145,10 @@ MissingIndicator and shared RandomState. Numax `stats.corrcoef` takes a
 Numax Tensor. With NuMojo storage, an adapter would require materializing and
 converting the training array for that operation. Correlation uses the approved
 NuMojo rank-two product over a centered Float64 workspace, followed by
-normalization in the Gram buffer. The convergence loop combines the row
-reduction and the snapshot update in one pass. Integer promotion uses NuMojo
+normalization in the Gram buffer. The convergence loop combines ordered
+row sums and the snapshot update in one pass. Numax `core.rowwise.sum_axis`
+reassociates sums, and Moxie's `sum_axis2d` widens Float32 sums. Both can
+change the stopping decision at a rounding boundary. Integer promotion uses NuMojo
 `astype` for contiguous inputs and `contiguous` followed by `astype` for
 strided inputs because the cast traverses physical storage.
 Posterior sampling composes Moxie's existing Cephes normal CDF and quantile
@@ -164,6 +168,8 @@ python families/impute/algorithms/iterative/tests/parity.py
 Parity compares training fills, held-out replay, initial statistics, round
 counts, estimator ordering, sampled predictor indices, RNG draws and feature names
 against the pinned iterative, simple and Bayesian regression sources.
+The stopping cases compare exact round counts where dtype rounding affects
+the scaled tolerance or the sum of changes within a row.
 Integer cases compare signed and unsigned input layouts, mixed integer and
 Float64 fit and replay, and missing-mask equality after Float64 rounding.
 Float64 comparisons use absolute and relative tolerances of `5e-8`. Float32

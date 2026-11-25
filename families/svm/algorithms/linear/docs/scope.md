@@ -19,6 +19,8 @@ RNG fitting. Float32 matrices convert to Float64; Float64 positive/negative
 strides and offsets are supported. Classification labels are sorted, numeric or
 native strings. Class weights support explicit label/value mappings or balanced
 weights using weighted label frequencies. Accuracy and R2 accept score weights.
+`LinearSVC` supports independent fitted copies and can be used with the
+[multiclass binary adapter](../../../../../docs/multiclass/family.md#binary-adapter-for-numeric-list-labels).
 `n_iter_` reports actual maximum iterations; `fit_status_` supplements it with
 0/1 convergence status. A limited fit emits a ConvergenceWarning message.
 

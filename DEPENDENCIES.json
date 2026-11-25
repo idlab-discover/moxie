@@ -230,6 +230,9 @@
         "moxie._naive_bayes_dense": {
           "file": "src/moxie/_naive_bayes_dense.mojo"
         },
+        "moxie._classifier_binary_adapter": {
+          "file": "src/moxie/_classifier_binary_adapter.mojo"
+        },
         "moxie._multiclass_binary": {
           "file": "src/moxie/_multiclass_binary.mojo"
         },

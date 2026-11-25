@@ -199,7 +199,9 @@ struct LinearSVCParams[Label: Copyable & Comparable & Deinitable = Float64](Copy
     var max_iter: Int
 
 
-struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64] (SupportVectorClassifier):
+struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
+    SupportVectorClassifier, Copyable
+):
     comptime Params = LinearSVCParams[Self.Label]
     comptime Input = Dense
     comptime SampleWeight = Dense

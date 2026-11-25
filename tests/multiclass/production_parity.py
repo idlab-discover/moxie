@@ -3,10 +3,11 @@
 The other runners use paired test doubles to isolate wrapper logic. This one
 wraps real Moxie estimators and their sklearn counterparts:
 
-- `moxie.linear_model.RidgeClassifier` (decision_function component), and
+- `moxie.linear_model.RidgeClassifier` (decision_function component),
 - `moxie.tree.DecisionTreeClassifier` through the dense
   `moxie.feature_selection.DecisionTreeClassifierImportance` adapter
-  (predict_proba component; the tree's own API returns List probabilities).
+  (predict_proba component; the tree's own API returns List probabilities), and
+- `moxie.svm.LinearSVC` through `BinaryAdapter` for the native List targets.
 
 Cases cover OvR, OvO and OutputCode; 2, 3 and 5 classes; int64, float64 and
 string labels; Float32 and Float64 features; seeded OutputCode codebooks.
@@ -23,25 +24,32 @@ Tolerances:
   (1.2e-7) amplified by the conditioning of the centered normal equations;
 - tree probabilities are leaf class frequencies (exact ratios of small
   integers) and must agree within 1e-15; OvO tree decisions combine them with
-  votes through one division, allowed 1e-14 relative.
+  votes through one division, allowed 1e-14 relative;
+- LinearSVC uses the primal solver with tol=1e-9. Allow 1e-7 relative / 1e-8
+  absolute for decision values because of reduction order and stopping.
 """
+import argparse
+import inspect
 import json
 import subprocess
 import sys
 from fractions import Fraction
+from pathlib import Path
 
 import numpy as np
 import sklearn
 from sklearn.linear_model import RidgeClassifier
 from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier, OutputCodeClassifier, _predict_binary
+from sklearn.svm import LinearSVC, _classes as svm_classes
 from sklearn.tree import DecisionTreeClassifier
 
-from ovr_parity import OUT, REVISION, ROOT, driver, lit, matrix, parse
+from ovr_parity import OUT, REFERENCE, REVISION, ROOT, driver, lit, matrix, parse
 
 TOLERANCE = {
     "ridge64": (1e-9, 1e-11),
     "ridge32": (2e-4, 1e-5),
     "tree": (1e-14, 1e-15),
+    "linear-svc": (1e-7, 1e-8),
 }
 
 COMPONENTS = {
@@ -53,22 +61,27 @@ COMPONENTS = {
              "DecisionTreeClassifierImportance[{dtype}](DecisionTreeClassifier[DType.int64](random_state=0))"),
     "tree-depth2": (lambda: DecisionTreeClassifier(max_depth=2, random_state=0),
                     "DecisionTreeClassifierImportance[{dtype}](DecisionTreeClassifier[DType.int64](max_depth=2, random_state=0))"),
+    "linear-svc": (lambda: LinearSVC(dual=False, tol=1e-9, random_state=0),
+                   "BinaryAdapter(LinearSVC(dual=False, tol=1e-9, random_state=0))"),
 }
 COMPONENT_TYPE = {
     "ridge": "RidgeClassifier[{dtype}]", "ridge-noint": "RidgeClassifier[{dtype}]",
     "tree": "DecisionTreeClassifierImportance[{dtype}]",
     "tree-depth2": "DecisionTreeClassifierImportance[{dtype}]",
+    "linear-svc": "BinaryAdapter[LinearSVC[]]",
 }
 STRINGS = ["setosa", "versicolor", "virginica", "", "zeta"]
 
 
-def cases():
+def cases(components):
     rng = np.random.default_rng(20261021)
     result = []
     for wrapper in ("ovr", "ovo", "oc"):
-        for component in COMPONENTS:
+        for component in components:
             for k in (2, 3, 5):
                 for labels in ("int64", "float64", "string", "float32-features"):
+                    if labels == "float32-features" and component == "linear-svc":
+                        continue
                     if labels != "int64" and k != 3:
                         continue
                     n = 12 * k
@@ -127,8 +140,9 @@ def exact_tie(ref, row, a, b):
 def native_source(all_cases, expected):
     header = driver([]).split("def main() raises:")[0]
     header += '''
-from moxie.multiclass import OneVsOneClassifier, OutputCodeClassifier, StringLabels, StringTarget
+from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OutputCodeClassifier, StringLabels, StringTarget
 from moxie.linear_model import RidgeClassifier
+from moxie.svm import LinearSVC
 from moxie.tree import DecisionTreeClassifier
 from moxie.feature_selection import DecisionTreeClassifierImportance
 
@@ -184,21 +198,45 @@ def emit(name: String, y: StringTarget) raises:
 
 
 def tolerance(c, key):
+    if c["component"] == "linear-svc":
+        return TOLERANCE["linear-svc"]
     if c["component"].startswith("tree"):
         return (1e-14, 1e-15) if key == "decision" else TOLERANCE["tree"]
     return TOLERANCE["ridge32" if c["dtype"] == "float32" else "ridge64"]
 
 
-def main():
-    all_cases = cases()
-    expected = [reference(c) for c in all_cases]
-    source = OUT / "production_driver.mojo"
+def run_native(group, all_cases, expected):
+    source = OUT / f"production_{group}_driver.mojo"
     source.write_text(native_source(all_cases, expected))
-    binary = OUT / "production_driver"
+    binary = OUT / f"production_{group}_driver"
     subprocess.run(["mojo", "build", "-O3", "--fp-mode=contract=off", "-I", ROOT / "builds/deps",
                     "-I", ROOT / "tests/multiclass", source, "-o", binary], check=True)
     got = parse(subprocess.run([binary], check=True, capture_output=True, text=True).stdout)
     assert len(got) == len(all_cases), (len(got), len(all_cases))
+    return got
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--group", choices=("all", "ridge-tree", "linear-svc"), default="all")
+    selection = parser.parse_args().group
+    groups = {
+        "ridge-tree": ("ridge", "ridge-noint", "tree", "tree-depth2"),
+        "linear-svc": ("linear-svc",),
+    }
+    all_cases, expected, got = [], [], []
+    for group, components in groups.items():
+        if selection not in ("all", group):
+            continue
+        if group == "linear-svc":
+            assert Path(inspect.getfile(svm_classes)).read_bytes() == (
+                REFERENCE / "sklearn/svm/_classes.py"
+            ).read_bytes(), "install the pinned local scikit-learn checkout"
+        batch = cases(components)
+        ref = [reference(c) for c in batch]
+        got.extend(run_native(group, batch, ref))
+        all_cases.extend(batch)
+        expected.extend(ref)
     failures, worst, tied_rows = [], {}, []
     for c, ref, out in zip(all_cases, expected, got):
         checks = {key: ref[key] == out[key] for key in ("classes", "n_estimators", "predict", "score")}
@@ -216,7 +254,8 @@ def main():
                 rtol, atol = tolerance(c, key)
                 checks[key] = a.shape == b.shape and np.allclose(b, a, rtol=rtol, atol=atol)
                 if a.shape == b.shape:
-                    group = f"{key}-{c['component'].split('-')[0]}-{c['dtype']}"
+                    component = c["component"].removesuffix("-noint").removesuffix("-depth2")
+                    group = f"{key}-{component}-{c['dtype']}"
                     worst[group] = max(worst.get(group, 0.0), float(np.max(np.abs(a - b))))
         bad = [k for k, ok in checks.items() if not ok]
         if bad:
@@ -224,12 +263,13 @@ def main():
     report = dict(sklearn=sklearn.__version__, revision=REVISION, cases=len(all_cases),
                   tolerance=TOLERANCE, max_absolute_error=worst, exact_ties=tied_rows,
                   failures=failures)
-    (OUT / "production-parity-report.json").write_text(json.dumps(report, indent=2))
+    report_name = "production-parity-report.json" if selection == "all" else f"production-{selection}-report.json"
+    (OUT / report_name).write_text(json.dumps(report, indent=2))
     if failures:
         for name, bad in failures:
             print("FAIL", name, bad)
         sys.exit(1)
-    print(f"PASS: {len(all_cases)} production-component cases (RidgeClassifier, DecisionTreeClassifier) "
+    print(f"PASS: {len(all_cases)} production-component cases ({selection}) "
           f"match scikit-learn {sklearn.__version__}; max absolute error {worst}; "
           f"OutputCode rows resolved differently at exact codeword ties: {tied_rows}")
 

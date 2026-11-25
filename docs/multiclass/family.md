@@ -17,6 +17,34 @@ in-place fit, associated array types, and other Mojo-specific differences.
 | `MulticlassDecision` | `MulticlassClassifier, DecisionFunction` | Inherited only |
 | `MulticlassProbability` | `MulticlassClassifier, ProbabilityPredictor` | Inherited only |
 
+## Binary adapter for numeric List labels
+
+```mojo
+from moxie.multiclass import BinaryAdapter, OneVsRestClassifier
+from moxie.svm import LinearSVC
+
+var model = OneVsRestClassifier(BinaryAdapter(LinearSVC(random_state=0)))
+_ = model.fit(X, y)
+```
+
+Moxie uses an explicit adapter where sklearn accepts a classifier's numeric
+targets directly. `BinaryAdapter` infers the component's `List[Int64]`,
+`List[Float32]`, or `List[Float64]` target type. It converts each rank-one
+Int64 component target to an owned List and converts the component's List
+predictions back to a rank-one Int64 array. It accepts 0/1 codes for class
+indicators and -1/+1 codes for signed output codes. The outer wrapper still
+encodes and restores arbitrary supported labels, including strings. Any class
+weights configured on the underlying estimator refer to the binary codes.
+
+The adapter borrows features, keeps the native score weight type and forwards
+decisions, probabilities and log probabilities when the component provides
+those capabilities. It preserves response shape, precision and class order.
+The multiclass wrappers still require the corresponding dense input and
+response types. `LinearSVC` declares Float64 inputs for generic composition.
+Use `adapter.estimator` to inspect the underlying model, and use the adapter's
+typed `get_params` and `set_params` to configure it. A fitted copy owns its
+state independently, while `clone` returns an unfitted adapter.
+
 ## Behavioral distinctions
 
 One-vs-rest, one-vs-one and output-code wrappers clone component estimators. Available methods depend on wrapped estimator capabilities; probability and partial_fit are not universal.

@@ -51,15 +51,13 @@ Production components: `moxie.linear_model.RidgeClassifier` satisfies the
 binary component contract directly (decision values; Float32 or Float64
 features). `moxie.tree.DecisionTreeClassifier` does through the dense
 `moxie.feature_selection.DecisionTreeClassifierImportance` adapter, which
-exposes `NDArray` probabilities. `tests/multiclass/production_parity.py`
-compares all three wrappers around both against sklearn's `RidgeClassifier` and
-`DecisionTreeClassifier`, and `tests/multiclass/test_composition.mojo` checks
-them under clone, `Pipeline` and `cross_val_score`. Other production
-classifiers do not yet fit: SVC, LinearSVC, discriminant analysis and
-DummyClassifier take `List` targets, Naive Bayes declares `List` feature
-inputs, KNeighborsClassifier and the bare tree return `List` probabilities,
-and KernelRidge declares floating targets. Adapter or component-contract work
-remains separate.
+exposes `NDArray` probabilities. `moxie.svm.LinearSVC` works through
+[`BinaryAdapter`](family.md#binary-adapter-for-numeric-list-labels), which
+converts its binary labels between `NDArray` and numeric `List` values.
+`tests/multiclass/production_parity.py` compares all three wrappers around
+these production components against pinned sklearn. Pass `--group linear-svc`
+to the runner to check the LinearSVC composition on its own after assembly.
+
 Composition: the wrappers work as `Pipeline` final steps and under `clone`,
 `cross_val_score` and `GridSearchCV` (nested `estimator__alpha` through the
 typed deep `Params` record). Adapters and scorers may name a concrete wrapper

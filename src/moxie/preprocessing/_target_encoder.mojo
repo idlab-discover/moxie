@@ -31,7 +31,7 @@ from moxie._random import RandomState, check_random_state
 from moxie.base import FitTransformer
 from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
 from moxie.model_selection._split import (
-    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, SplitLabels, StratifiedGroupKFold, StratifiedKFold,
+    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, SplitLabels, StratifiedGroupKFold, StratifiedKFold,
 )
 from moxie.preprocessing._base import TargetPreprocessor
 from moxie.preprocessing._common import (
@@ -296,6 +296,9 @@ def _fit_encoding(
 # TargetEncoder
 
 
+comptime _COVERAGE_ERROR = "ValueError: Validation indices from `cv` must cover each sample index exactly once"
+
+
 def _split_rows(indices: IndexArray) raises -> List[Int]:
     if indices.ndim != 1:
         raise Error("ValueError: TargetEncoder split indices must be rank one")
@@ -336,7 +339,6 @@ struct TargetEncoderSplits(Copyable, Sized):
         return len(self._pairs)
 
     def _test_folds(self, n: Int) raises -> List[Int]:
-        comptime coverage_error = "ValueError: Validation indices from `cv` must cover each sample index exactly once"
         var folds = List[Int](length=n, fill=-1)
         for f in range(len(self)):
             ref split = self._pairs[f]
@@ -347,21 +349,21 @@ struct TargetEncoderSplits(Copyable, Sized):
                 if row < 0 or row >= n:
                     raise Error("ValueError: TargetEncoder validation index out of bounds")
                 if folds[row] != -1:
-                    raise Error(coverage_error)
+                    raise Error(_COVERAGE_ERROR)
                 folds[row] = f
         for fold in folds:
             if fold == -1:
-                raise Error(coverage_error)
+                raise Error(_COVERAGE_ERROR)
         return folds^
 
 
 comptime TargetEncoderCV = Variant[
     Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), GroupKFold, StratifiedGroupKFold,
-    LeaveOneOut, LeaveOneGroupOut,
+    LeaveOneOut, LeaveOneGroupOut, PredefinedSplit,
 ]
 comptime _CVUpdate = Variant[
     Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), NoneType, GroupKFold, StratifiedGroupKFold,
-    LeaveOneOut, LeaveOneGroupOut,
+    LeaveOneOut, LeaveOneGroupOut, PredefinedSplit,
 ]
 
 
@@ -496,6 +498,8 @@ struct TargetEncoder[
             self.cv = TargetEncoderCV(cv[LeaveOneOut].copy())
         elif cv.isa[LeaveOneGroupOut]():
             self.cv = TargetEncoderCV(cv[LeaveOneGroupOut].copy())
+        elif cv.isa[PredefinedSplit]():
+            self.cv = TargetEncoderCV(cv[PredefinedSplit].copy())
         if shuffle:
             self.shuffle = shuffle.value()
         if random_state:
@@ -623,7 +627,7 @@ struct TargetEncoder[
             labels.append(Int(encoded.unsafe_get(i)))
         return labels^
 
-    def _n_splits(self) -> Int:
+    def _n_splits(self) raises -> Int:
         if self.cv.isa[KFold]():
             return self.cv[KFold].n_splits
         if self.cv.isa[StratifiedKFold]():
@@ -632,6 +636,8 @@ struct TargetEncoder[
             return self.cv[GroupKFold].n_splits
         if self.cv.isa[StratifiedGroupKFold]():
             return self.cv[StratifiedGroupKFold].n_splits
+        if self.cv.isa[PredefinedSplit]():
+            return self.cv[PredefinedSplit].get_n_splits()
         if self.cv.isa[TargetEncoderSplits]():
             return len(self.cv[TargetEncoderSplits])
         if self.cv.isa[Int]():
@@ -728,6 +734,15 @@ struct TargetEncoder[
             raise Error("ValueError: groups require GroupKFold, StratifiedGroupKFold, or LeaveOneGroupOut for TargetEncoder")
         if self.cv.isa[LeaveOneOut]():
             return _test_fold_assignments(self.cv[LeaveOneOut].split(n), n)
+        if self.cv.isa[PredefinedSplit]():
+            ref splitter = self.cv[PredefinedSplit]
+            if splitter.test_fold.size != n:
+                raise Error("ValueError: PredefinedSplit must supply one test_fold entry per input row")
+            var folds = _test_fold_assignments(splitter.split(), n)
+            for fold in folds:
+                if fold == -1:
+                    raise Error(_COVERAGE_ERROR)
+            return folds^
         if self.cv.isa[TargetEncoderSplits]():
             return self.cv[TargetEncoderSplits]._test_folds(n)
         if self.cv.isa[KFold]():

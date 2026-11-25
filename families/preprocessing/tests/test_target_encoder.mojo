@@ -4,7 +4,7 @@ from std.math import isnan, abs
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
 from moxie.model_selection import (
-    GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, SplitLabels, StratifiedGroupKFold, StratifiedKFold,
+    GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, SplitLabels, StratifiedGroupKFold, StratifiedKFold,
 )
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import RandomState, seed_global_random_state
@@ -411,6 +411,31 @@ def test_leave_one_cv() raises:
         _ = fresh.fit_transform(X, y, groups=groups)
 
 
+def test_predefined_cv() raises:
+    var X = table()
+    var y = target()
+    var splitter = PredefinedSplit(ints([8, -2, 8, 4, -2, 4, 8, 4, -2, 8]))
+    var explicit = TargetEncoder(cv=TargetEncoderSplits(splitter.split()))
+    var expected = explicit.fit_transform(X, y)
+    var model = TargetEncoder(cv=splitter.copy())
+    splitter.test_fold[Item(0)] = -1
+    assert_same(model.fit_transform(X, y), expected)
+
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_true(fresh.get_params().cv.isa[PredefinedSplit]())
+    _ = model.set_params(cv=splitter^)
+    with assert_raises(contains="must cover each sample index exactly once"):
+        _ = model.fit_transform(X, y)
+    _ = model.fit(X, y)
+    assert_same(model.transform(X), explicit.transform(X))
+
+    _ = model.set_params(fresh.get_params())
+    var names: List[String] = ["color", "size"]
+    assert_same(model.fit_transform_named(X, names, y), expected)
+    assert_true(model.get_feature_names_out() == names)
+
+
 def main() raises:
     test_lifecycle()
     test_params()
@@ -421,4 +446,5 @@ def main() raises:
     test_cv_none()
     test_grouped_cv()
     test_leave_one_cv()
+    test_predefined_cv()
     print("PASS target encoder lifecycle contracts")

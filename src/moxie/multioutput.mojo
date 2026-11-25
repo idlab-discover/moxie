@@ -18,7 +18,7 @@ from moxie._multioutput import (
     augment_features, ChainOrder, ChainResponses, output_workers, fit_outputs,
     partial_fit_outputs,
 )
-from moxie._random import RandomState, entropy_state
+from moxie._random import RandomState, check_random_state
 from moxie.model_selection import IndexSplit, KFold, StratifiedKFold
 from moxie.model_selection._indices import IndexArray, SplitCursor
 from moxie.model_selection._split import SplitLabels, check_cv, _rows
@@ -1009,6 +1009,34 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         _check_column_names(X, self.feature_names_in_)
         return self.predict_proba(X.values())
 
+
+def _chain_order[rng_origin: MutOrigin](
+    outputs: Int, explicit: Optional[List[Int]], random_order: Bool,
+    seed: Optional[Int], stream: Optional[Pointer[RandomState, rng_origin]],
+) raises -> List[Int]:
+    if explicit:
+        if random_order:
+            raise Error("ValueError: explicit and random order are mutually exclusive")
+        return explicit.value().copy()
+
+    var order = List[Int](capacity=outputs)
+    if not random_order:
+        for j in range(outputs):
+            order.append(j)
+        return order^
+
+    var permutation: NDArray[DType.int64]
+    if stream:
+        permutation = stream.value()[].permutation(outputs)
+    else:
+        # Release the default-stream lease before fitting any component.
+        var rng = check_random_state(seed)
+        permutation = rng[].permutation(outputs)
+    for j in range(outputs):
+        order.append(Int(permutation.unsafe_get(j)))
+    return order^
+
+
 struct RegressorChain[
     E: SupervisedEstimator & Predictor & Deinitable,
     dtype: DType = DType.float64,
@@ -1164,18 +1192,39 @@ struct RegressorChain[
         self.feature_names_in_ = names^
         return self
 
-    def _fit_native_cv[C: Copyable & Deinitable](
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, mut random_state: RandomState, sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        """Borrow a mutable stream for this fit's random chain order."""
+        self._fit_native_cv[Self.Splitter, origin_of(random_state)](
+            X, y, sample_weight, self.cv.copy(), stream=Pointer(to=random_state),
+        )
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target,
+        *, mut random_state: RandomState, sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, random_state=random_state, sample_weight=sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
+    def _fit_native_cv[C: Copyable & Deinitable, rng_origin: MutOrigin = MutUntrackedOrigin](
         mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], var cv: C,
+        *, stream: Optional[Pointer[RandomState, rng_origin]] = Optional[Pointer[RandomState, rng_origin]](),
     ) raises:
         var use_cv = True
         comptime if C == ChainCV:
             use_cv = not rebind[ChainCV](cv).isa[type_of(None)]()
         var provider = _SplitterResponses[Self.E, Self.feature_dtype, Self.label, C](cv^)
-        self._fit(X, y, sample_weight, provider, use_cv=use_cv)
+        self._fit[type_of(provider), rng_origin](X, y, sample_weight, provider, use_cv=use_cv, stream=stream)
 
-    def _fit[CV: ChainResponses](
+    def _fit[CV: ChainResponses, rng_origin: MutOrigin = MutUntrackedOrigin](
         mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], cv: CV,
         *, use_cv: Bool = True,
+        stream: Optional[Pointer[RandomState, rng_origin]] = Optional[Pointer[RandomState, rng_origin]](),
     ) raises:
         comptime assert CV.Estimator == Self.E, "CV provider estimator type mismatch"
         comptime assert CV.Input == Self._AugmentedInput, "CV provider input must match chain feature dtype"
@@ -1189,20 +1238,9 @@ struct RegressorChain[
             raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         if self.chain_method != "predict":
             raise Error("ValueError: this implementation supports chain_method='predict'")
-        var order = List[Int]()
-        for j in range(y.shape[1]):
-            order.append(j)
-        if self.order:
-            order = self.order.value().copy()
-        if self.random_order:
-            if self.order:
-                raise Error("ValueError: explicit and random order are mutually exclusive")
-            var rng = entropy_state()
-            if self.random_state:
-                rng = RandomState(self.random_state.value())
-            var permutation = rng.permutation(y.shape[1])
-            for j in range(y.shape[1]):
-                order[j] = Int(permutation.unsafe_get(j))
+        var order = _chain_order[rng_origin](
+            y.shape[1], self.order, self.random_order, self.random_state, stream,
+        )
         var checked = ChainOrder(order, y.shape[1])
         var models = clone_outputs(self.estimator, y.shape[1])
         var classes = List[NDArray[Self.label]]()
@@ -1470,18 +1508,39 @@ struct ClassifierChain[
         self.feature_names_in_ = names^
         return self
 
-    def _fit_native_cv[C: Copyable & Deinitable](
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, mut random_state: RandomState, sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        """Borrow a mutable stream for this fit's random chain order."""
+        self._fit_native_cv[Self.Splitter, origin_of(random_state)](
+            X, y, sample_weight, self.cv.copy(), stream=Pointer(to=random_state),
+        )
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target,
+        *, mut random_state: RandomState, sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, random_state=random_state, sample_weight=sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
+    def _fit_native_cv[C: Copyable & Deinitable, rng_origin: MutOrigin = MutUntrackedOrigin](
         mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], var cv: C,
+        *, stream: Optional[Pointer[RandomState, rng_origin]] = Optional[Pointer[RandomState, rng_origin]](),
     ) raises:
         var use_cv = True
         comptime if C == ChainCV:
             use_cv = not rebind[ChainCV](cv).isa[type_of(None)]()
         var provider = _SplitterResponses[Self.E, Self.feature_dtype, Self.label, C](cv^)
-        self._fit(X, y, sample_weight, provider, use_cv=use_cv)
+        self._fit[type_of(provider), rng_origin](X, y, sample_weight, provider, use_cv=use_cv, stream=stream)
 
-    def _fit[CV: ChainResponses](
+    def _fit[CV: ChainResponses, rng_origin: MutOrigin = MutUntrackedOrigin](
         mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], cv: CV,
         *, use_cv: Bool = True,
+        stream: Optional[Pointer[RandomState, rng_origin]] = Optional[Pointer[RandomState, rng_origin]](),
     ) raises:
         comptime assert CV.Estimator == Self.E, "CV provider estimator type mismatch"
         comptime assert CV.Input == Self._AugmentedInput, "CV provider input must match chain feature dtype"
@@ -1494,20 +1553,9 @@ struct ClassifierChain[
         if self.n_jobs and self.n_jobs.value() == 0:
             raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
         var method = _select_chain_method[Self.E](self.chain_method)
-        var order = List[Int]()
-        for j in range(y.shape[1]):
-            order.append(j)
-        if self.order:
-            order = self.order.value().copy()
-        if self.random_order:
-            if self.order:
-                raise Error("ValueError: explicit and random order are mutually exclusive")
-            var rng = entropy_state()
-            if self.random_state:
-                rng = RandomState(self.random_state.value())
-            var permutation = rng.permutation(y.shape[1])
-            for j in range(y.shape[1]):
-                order[j] = Int(permutation.unsafe_get(j))
+        var order = _chain_order[rng_origin](
+            y.shape[1], self.order, self.random_order, self.random_state, stream,
+        )
         var checked = ChainOrder(order, y.shape[1])
         var models = clone_outputs(self.estimator, y.shape[1])
         var classes = List[NDArray[Self.label]]()

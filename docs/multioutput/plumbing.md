@@ -59,7 +59,8 @@ in AGENTS.md. Use `sum_axis2d` / `row_squared_norms` for those operations, not t
 excluded general NuMojo axis sum/dot/solvers/variance/RNG. Shared random state
 provides `permutation(q)` as an Int64 NDArray; the chain owner converts its q
 indices to the owned `ChainOrder`. Integer seeds reset per reference operation;
-mutable states advance. Native `None` uses an application-owned entropy context.
+fit-time mutable states advance. Native `None` leases the shared default stream
+for the permutation and releases it before cloning or fitting components.
 
 ## Independent output fitting
 

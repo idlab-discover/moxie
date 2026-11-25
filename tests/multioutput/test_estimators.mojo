@@ -5,6 +5,7 @@ from std.math import isnan
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import SupervisedEstimator, Predictor, ProbabilityPredictor, SupervisedScorer, WeightedSupervisedEstimator, IncrementalClassifier, IncrementalRegressor, clone
 from moxie._multioutput import ChainResponses
+from moxie._random import RandomState, check_random_state, seed_global_random_state
 from moxie.compose import ColumnTable
 from moxie.metadata_routing import FitScoreMetadataRequest, FitScoreMetadataRequestProvider, SampleWeightRequest
 from moxie.multioutput import MultiOutputRegressor, MultiOutputClassifier, RegressorChain, ClassifierChain
@@ -186,6 +187,75 @@ def parity_matrix[dtype: DType](name: String, values: NDArray[dtype]) raises:
     print(line)
 
 
+def check_chain_random_streams(X: NDArray[DType.float64], table: ColumnTable[DType.float64]) raises:
+    var labels = nm.zeros[DType.int64](Shape(4, 4))
+    for row in range(4):
+        for column in range(4):
+            labels.unsafe_set(4 * row + column, Int64((row + column) % 2))
+    var y = labels.astype[DType.float64]()
+    var stream = RandomState(7)
+    var control = stream.copy()
+    var classifier = ClassifierChain(Nearest[DType.int64](), random_order=True, random_state=19, cv=2)
+    var regressor = RegressorChain(Nearest[DType.float64](), random_order=True, cv=2)
+
+    _ = classifier.fit(table, labels, random_state=stream)
+    assert_equal(classifier.feature_names_in_.value()[0], "time")
+    assert_equal(classifier.get_params().random_state.value(), 19)
+    var first = control.permutation(4)
+    for j in range(4):
+        assert_equal(classifier.order_[j], Int(first.unsafe_get(j)))
+    print("PARITY ClassifierChainStreamOrder", classifier.order_[0], classifier.order_[1],
+          classifier.order_[2], classifier.order_[3])
+    parity_matrix("ClassifierChainStreamLabels", classifier.predict(table))
+
+    _ = regressor.fit(X, y, random_state=stream)
+    var next = control.permutation(4)
+    for j in range(4):
+        assert_equal(regressor.order_[j], Int(next.unsafe_get(j)))
+    print("PARITY RegressorChainStreamOrder", regressor.order_[0], regressor.order_[1],
+          regressor.order_[2], regressor.order_[3])
+    parity_matrix("RegressorChainStreamPredictions", regressor.predict(X))
+
+    var weights = nm.arange[DType.float64](1, 5)
+    var weighted = RegressorChain(WeightedMean(), random_order=True)
+    _ = weighted.fit(table, y, random_state=stream, sample_weight=weights^)
+    _ = control.permutation(4)
+    parity_matrix("RegressorChainStreamWeighted", weighted.predict(table))
+
+    var natural = ClassifierChain(Nearest[DType.int64]())
+    _ = natural.fit(X, labels, random_state=stream)
+    var malformed = nm.zeros[DType.int64](Shape(3, 4))
+    with assert_raises(contains="targets must match sample count"):
+        _ = classifier.fit(X, malformed, random_state=stream)
+    var next_word = stream.next_uint32()
+    assert_equal(next_word, control.next_uint32())
+    print("PARITY ChainStreamNextWord", next_word)
+    assert_equal(classifier.feature_names_in_.value()[0], "time")
+
+    var cloned = clone(classifier)
+    assert_false(cloned.__sklearn_is_fitted__())
+    _ = cloned.fit(X, labels)
+    var seeded = RandomState(19)
+    var seeded_order = seeded.permutation(4)
+    for j in range(4):
+        assert_equal(cloned.order_[j], Int(seeded_order.unsafe_get(j)))
+
+    seed_global_random_state(7)
+    _ = regressor.fit(X, y)
+    for j in range(4):
+        assert_equal(regressor.order_[j], Int(first.unsafe_get(j)))
+    _ = regressor.fit(X, y)
+    print("PARITY RegressorChainDefaultStreamOrder", regressor.order_[0], regressor.order_[1],
+          regressor.order_[2], regressor.order_[3])
+    for j in range(4):
+        assert_equal(regressor.order_[j], Int(next.unsafe_get(j)))
+    var global_rng = check_random_state()
+    var global_control = RandomState(7)
+    _ = global_control.permutation(4)
+    _ = global_control.permutation(4)
+    assert_equal(global_rng[].next_uint32(), global_control.next_uint32())
+
+
 def main() raises:
     var X = nm.zeros[DType.float64](Shape(4, 1))
     var y = nm.zeros[DType.float64](Shape(4, 2))
@@ -200,6 +270,7 @@ def main() raises:
     var table = ColumnTable(X, names)
     names[0] = "wrong"
     var wrong_name = ColumnTable(X, names)
+    check_chain_random_streams(X, table)
     var reg = MultiOutputRegressor(Nearest[DType.float64]())
     with assert_raises():
         var unused = reg.predict(X)

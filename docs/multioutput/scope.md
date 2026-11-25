@@ -34,7 +34,7 @@ original sample order.
   describes worker counts, ordering and failure behavior. Sparse inputs
   remain deferred.
 - Random chain order uses `random_order=True`, with an optional integer
-  `random_state`. Mutable RNG objects are unsupported.
+  seed, the shared default stream, or a mutable stream borrowed at fit time.
 - The default `cv=None` uses true preceding targets. Native splitter and
   class-response diagnostics use Mojo errors for invalid folds and handle
   undersized classes silently.

@@ -113,9 +113,46 @@ def oracle(named=False):
         ]:
             model.fit(X, y, sample_weight=np.arange(1, 5))
             expected[name + 'RoutedFit'] = model.predict(query).ravel().tolist()
+    expected.update(chain_streams(module, np, X, train_features))
     expected.update(components(module, np))
     expected.update(classifier_components(module, np))
     print(json.dumps(expected))
+
+
+def chain_streams(module, np, X, named_X):
+    from sklearn.dummy import DummyRegressor
+    from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
+
+    y = (np.arange(4)[:, None] + np.arange(4)[None, :]) % 2
+    stream = np.random.RandomState(7)
+    classifier = module.ClassifierChain(
+        KNeighborsClassifier(n_neighbors=1), order='random', random_state=stream, cv=2,
+    ).fit(named_X, y)
+    regressor = module.RegressorChain(
+        KNeighborsRegressor(n_neighbors=1), order='random', random_state=stream, cv=2,
+    ).fit(X, y.astype(float))
+    weighted = module.RegressorChain(DummyRegressor(), order='random', random_state=stream)
+    weighted.fit(named_X, y.astype(float), sample_weight=np.arange(1, 5))
+    module.ClassifierChain(KNeighborsClassifier(n_neighbors=1), random_state=stream).fit(X, y)
+
+    state = np.random.get_state()
+    try:
+        np.random.seed(7)
+        default = module.RegressorChain(KNeighborsRegressor(n_neighbors=1), order='random', cv=2)
+        default.fit(X, y)
+        default.fit(X, y)
+    finally:
+        np.random.set_state(state)
+
+    return {
+        'ClassifierChainStreamOrder': classifier.order_.tolist(),
+        'ClassifierChainStreamLabels': classifier.predict(named_X).ravel().tolist(),
+        'RegressorChainStreamOrder': regressor.order_.tolist(),
+        'RegressorChainStreamPredictions': regressor.predict(X).ravel().tolist(),
+        'RegressorChainStreamWeighted': weighted.predict(named_X).ravel().tolist(),
+        'ChainStreamNextWord': [int(stream.randint(2**32, dtype=np.uint32))],
+        'RegressorChainDefaultStreamOrder': default.order_.tolist(),
+    }
 
 
 def verbose_lines(text):

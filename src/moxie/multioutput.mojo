@@ -535,15 +535,7 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
     comptime Params = IndependentParams[Self.E.Params]
     var estimator: Self.E
     var n_jobs: Optional[Int]
-    var order: Optional[List[Int]]
-    var random_state: Optional[Int]
-    var random_order: Bool
-    var verbose: Bool
-    var chain_method: String
-    var chain_method_: String
     var estimators_: List[Self.E]
-    var classes_: List[NDArray[Self.label]]
-    var order_: List[Int]
     var n_features_in_: Optional[Int]
 
     def __init__(out self, var estimator: Self.E, *, n_jobs: Optional[Int] = None) raises:
@@ -553,15 +545,7 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         comptime assert Self.E.Prediction == Self.Target, "component Prediction must match target dtype"
         self.estimator = estimator^
         self.n_jobs = n_jobs
-        self.order = None
-        self.random_state = None
-        self.random_order = False
-        self.verbose = False
-        self.chain_method = "predict"
-        self.chain_method_ = "predict"
         self.estimators_ = List[Self.E]()
-        self.classes_ = List[NDArray[Self.label]]()
-        self.order_ = List[Int]()
         self.n_features_in_ = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
@@ -606,17 +590,9 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         _finite(y)
         if self.n_jobs and self.n_jobs.value() == 0:
             raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
-        if self.chain_method != "predict":
-            raise Error("ValueError: this implementation supports chain_method='predict'")
-        var order = List[Int]()
-        for j in range(y.shape[1]):
-            order.append(j)
-        if self.order or self.random_order or self.random_state or self.verbose:
-            raise Error("ValueError: chain options are unavailable on independent estimators")
         var models = clone_outputs(self.estimator, y.shape[1])
-        var classes = List[NDArray[Self.label]]()
         for j in range(y.shape[1]):
-            var target = target_column(y, order[j])
+            var target = target_column(y, j)
             ref input = X
             if sample_weight:
                 comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
@@ -631,10 +607,7 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
             else:
                 _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target))
         self.estimators_ = models^
-        self.classes_ = classes^
-        self.order_ = order^
         self.n_features_in_ = X.shape[1]
-        self.chain_method_ = self.chain_method
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check(X)
@@ -683,15 +656,8 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
     comptime Params = IndependentParams[Self.E.Params]
     var estimator: Self.E
     var n_jobs: Optional[Int]
-    var order: Optional[List[Int]]
-    var random_state: Optional[Int]
-    var random_order: Bool
-    var verbose: Bool
-    var chain_method: String
-    var chain_method_: String
     var estimators_: List[Self.E]
     var classes_: List[NDArray[Self.label]]
-    var order_: List[Int]
     var n_features_in_: Optional[Int]
 
     def __init__(out self, var estimator: Self.E, *, n_jobs: Optional[Int] = None) raises:
@@ -705,15 +671,8 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         comptime assert Self.E.Prediction == Self.E.Target, "component prediction and target types must match"
         self.estimator = estimator^
         self.n_jobs = n_jobs
-        self.order = None
-        self.random_state = None
-        self.random_order = False
-        self.verbose = False
-        self.chain_method = "predict"
-        self.chain_method_ = "predict"
         self.estimators_ = List[Self.E]()
         self.classes_ = List[NDArray[Self.label]]()
-        self.order_ = List[Int]()
         self.n_features_in_ = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
@@ -758,25 +717,16 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         _finite(y)
         if self.n_jobs and self.n_jobs.value() == 0:
             raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
-        if self.chain_method != "predict":
-            raise Error("ValueError: this implementation supports chain_method='predict'")
-        var order = List[Int]()
-        for j in range(y.shape[1]):
-            order.append(j)
-        if self.order or self.random_order or self.random_state or self.verbose:
-            raise Error("ValueError: chain options are unavailable on independent estimators")
         var models = clone_outputs(self.estimator, y.shape[1])
         var classes = List[NDArray[Self.label]]()
         for j in range(y.shape[1]):
-            var target = target_column(y, order[j])
+            var target = target_column(y, j)
             classes.append(_classes(target))
             ref input = X
             _fit_component(models[j], input, target, sample_weight)
         self.estimators_ = models^
         self.classes_ = classes^
-        self.order_ = order^
         self.n_features_in_ = X.shape[1]
-        self.chain_method_ = self.chain_method
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check(X)

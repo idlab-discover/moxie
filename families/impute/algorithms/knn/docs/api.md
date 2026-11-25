@@ -101,4 +101,4 @@ count can differ from the output width.
 
 The implementation bounds receiver batches to 128 and reuses neighbor search,
 metric and builtin weighting code. It makes no benchmark-based performance
-claim. IterativeImputer remains a separate deferred implementation.
+claim. See the [IterativeImputer API](../../iterative/docs/api.md) for iterative imputation.

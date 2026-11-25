@@ -11,14 +11,10 @@ String imputation uses the family-local `StringMatrix` input and
 the integrated neighbors query engine. See its [API](../algorithms/knn/docs/api.md)
 for supported inputs, callbacks, numerical tolerances and native adaptations.
 
-`IterativeImputer` remains a declaration in `_api.mojo`.
-Its constructor and operations raise `NotImplementedError` through Mojo
-`Error`. Its name and parameter defaults mirror the pinned scikit-learn
-source, but it provides no numerical behavior. Opaque declaration fields use
-`APIValue`; these are not fitted model implementations. scikit-learn's
-`from sklearn.experimental import enable_iterative_imputer` opt-in has no
-Moxie counterpart: there is no `moxie.experimental` module, and the
-declaration is importable from `moxie.impute` without it.
+[`IterativeImputer`](../algorithms/iterative/docs/api.md) implements dense
+Float32 and Float64 round-robin imputation and replay with configurable native
+regressors. BayesianRidge is the default. Import it directly from
+`moxie.impute`; there is no experimental opt-in.
 
 `EXPORTS.json` defines the public exports. The family and algorithm dependency
 manifests declare the same concrete modules, with live family-owned source and
@@ -42,22 +38,8 @@ parameter records follow the [shared interface contract](interfaces.md).
 | MissingIndicator, dense numeric data | `MissingIndicator` | Sparse output and unsupported numeric dtypes |
 | MissingIndicator, string data | `StringMissingIndicator` | Heterogeneous categories; sparse output |
 | KNNImputer, dense floating data | `KNNImputer` using live neighbors query engine | See the KNN API for callback and dtype adaptations |
-| IterativeImputer | Deferred declaration only | Entire iterative algorithm and real-regressor integration |
+| IterativeImputer | Dense deterministic imputation with native regressors | Posterior sampling and integer array promotion |
 
-The integrated family retains these limits and preserves the simple, integer, string, and KNN
-parity runners, generic estimator checks, and both isolated consumer builds.
-Compilation of the IterativeImputer declaration is not algorithm evidence.
-
-IterativeImputer's default estimator requires a concrete native
-`moxie.linear_model.BayesianRidge[dtype]` from the linear-model owner.
-Moxie now owns a concrete dense BayesianRidge implementation.
-IterativeImputer has not yet been implemented against it. Required operations are
-configuration-only cloning, `fit(X, y)` for dense `(n, p)` predictors and `(n,)`
-targets, `predict(X)` returning `(n,)`, and a typed equivalent of
-`predict(X, return_std=True)` returning mean and standard-deviation vectors.
-Each fitted model must retain independent learned state for sequence replay.
-Acceptance must compare both prediction modes against the pinned sklearn
-BayesianRidge on constant, rank-deficient, and ordinary dense designs, then run
-an IterativeImputer round with that real model and replay it on new rows without
-refitting. Posterior sampling also requires the live shared RandomState owner.
-These requirements do not block the concrete simple, indicator, or KNN exports.
+The family validation includes separate pinned parity runners for simple,
+integer, string, KNN and iterative behavior, generic estimator checks, and
+two isolated consumer builds.

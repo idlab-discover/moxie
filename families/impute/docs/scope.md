@@ -7,8 +7,8 @@ The family also exports the partial dense SimpleImputer and MissingIndicator
 implementations described in [their API](../algorithms/simple/docs/api.md).
 Dense Float32/Float64 KNNImputer reuses the neighbors query engine; see its
 [API](../algorithms/knn/docs/api.md) for supported modes and differences.
-IterativeImputer remains an explicit deferred declaration. Existing
-Imputer trait contracts are retained.
+Dense Float32/Float64 IterativeImputer supports BayesianRidge and compatible
+native regressors. See its [API](../algorithms/iterative/docs/api.md).
 
 Sparse input/output, CSR/CSC/COO storage, sparse masks and sparse concatenation
 remain deferred.
@@ -23,8 +23,7 @@ No supported estimator default needs sparse machinery. MissingIndicator uses
 raise a clear unsupported-capability error. Other imputer defaults accept dense
 input. Numeric helpers accept NDArray; the String specialization uses owned
 StringMatrix text with explicit missing tags. Negative compilation verifies that a List cannot masquerade as matrix input.
-Public API tests verify concrete imputation and explicit errors from deferred
-constructors.
+Public API tests exercise the concrete imputation estimators.
 
 Executed acceptance commands: `pixi run build`, `pixi run test`.
 These include two independent consumer build trees composing contributions to
@@ -36,6 +35,5 @@ IntegerSimpleImputer supports signed/unsigned integer arrays with the documented
 typed-result and range adaptations. StringSimpleImputer supports most-frequent
 and constant strategies with the documented typed result and empty/inverse limits.
 Standalone string missing indicators use `StringMissingIndicator`. Broader
-heterogeneous categorical imputation and indicators remain unfinished, as does
-IterativeImputer.
+heterogeneous categorical imputation and indicators remain unfinished.
 Passing these checks is not full dense estimator parity.

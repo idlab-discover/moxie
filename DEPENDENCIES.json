@@ -2065,14 +2065,16 @@
           "moxie.impute": {
             "Imputer": "moxie.impute._base",
             "IntegerSimpleImputer": "moxie.impute._simple",
-            "IterativeImputer": "moxie.impute._api",
+            "IterativeImputer": "moxie.impute._iterative",
             "KNNImputer": "moxie.impute._knn",
             "MissingIndicator": "moxie.impute._indicator",
             "SimpleImputer": "moxie.impute._simple",
             "StringImputationResult": "moxie.impute._string",
             "StringMatrix": "moxie.impute._string",
             "StringSimpleImputer": "moxie.impute._string",
-            "StringMissingIndicator": "moxie.impute._string"
+            "StringMissingIndicator": "moxie.impute._string",
+            "IterativeBound": "moxie.impute._iterative",
+            "IterativeParams": "moxie.impute._iterative"
           },
           "moxie.utils": {}
         },
@@ -2080,12 +2082,6 @@
       },
       "id": "impute",
       "modules": {
-        "moxie.impute._api": {
-          "file": "src/moxie/impute/_api.mojo"
-        },
-        "moxie.impute._api_types": {
-          "file": "src/moxie/impute/_api_types.mojo"
-        },
         "moxie.impute._base": {
           "file": "src/moxie/impute/_base.mojo"
         },
@@ -2103,6 +2099,9 @@
         },
         "moxie.impute._string": {
           "file": "algorithms/simple/src/moxie/impute/_string.mojo"
+        },
+        "moxie.impute._iterative": {
+          "file": "algorithms/iterative/src/moxie/impute/_iterative.mojo"
         }
       },
       "path": "families/impute"

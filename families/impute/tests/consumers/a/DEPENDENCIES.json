@@ -2,7 +2,9 @@
   "overrides": [],
   "projects": [
     {
-      "assets": {},
+      "assets": {
+        "licenses/linear_model-scikit-learn.txt": "families/linear_model/LICENSES/scikit-learn.txt"
+      },
       "exports": {
         "packages": {
           "moxie": {
@@ -18,6 +20,9 @@
           "moxie.utils": {
             "FittedState": "moxie.utils.validation",
             "check_is_fitted": "moxie.utils.validation"
+          },
+          "moxie.linear_model": {
+            "BayesianRidge": "moxie.linear_model._bayes"
           }
         },
         "schema": 1
@@ -32,6 +37,18 @@
         },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
+        },
+        "moxie.linear_model._base": {
+          "file": "src/moxie/linear_model/_base.mojo"
+        },
+        "moxie.linear_model._bayes": {
+          "file": "src/moxie/linear_model/_bayes.mojo"
+        },
+        "moxie.linear_model._contracts": {
+          "file": "src/moxie/linear_model/_contracts.mojo"
+        },
+        "moxie.linear_model._linear_base": {
+          "file": "src/moxie/linear_model/_linear_base.mojo"
         }
       },
       "path": "../../../../.."
@@ -161,14 +178,16 @@
           "moxie.impute": {
             "Imputer": "moxie.impute._base",
             "IntegerSimpleImputer": "moxie.impute._simple",
-            "IterativeImputer": "moxie.impute._api",
+            "IterativeImputer": "moxie.impute._iterative",
             "KNNImputer": "moxie.impute._knn",
             "MissingIndicator": "moxie.impute._indicator",
             "SimpleImputer": "moxie.impute._simple",
             "StringImputationResult": "moxie.impute._string",
             "StringMatrix": "moxie.impute._string",
             "StringSimpleImputer": "moxie.impute._string",
-            "StringMissingIndicator": "moxie.impute._string"
+            "StringMissingIndicator": "moxie.impute._string",
+            "IterativeBound": "moxie.impute._iterative",
+            "IterativeParams": "moxie.impute._iterative"
           },
           "moxie.utils": {}
         },
@@ -176,12 +195,6 @@
       },
       "id": "impute",
       "modules": {
-        "moxie.impute._api": {
-          "file": "src/moxie/impute/_api.mojo"
-        },
-        "moxie.impute._api_types": {
-          "file": "src/moxie/impute/_api_types.mojo"
-        },
         "moxie.impute._base": {
           "file": "src/moxie/impute/_base.mojo"
         },
@@ -199,6 +212,9 @@
         },
         "moxie.impute._string": {
           "file": "algorithms/simple/src/moxie/impute/_string.mojo"
+        },
+        "moxie.impute._iterative": {
+          "file": "algorithms/iterative/src/moxie/impute/_iterative.mojo"
         }
       },
       "path": "../../.."
@@ -314,6 +330,53 @@
         }
       },
       "path": "../../../../neighbors/shared/query_engine"
+    },
+    {
+      "assets": {
+        "licenses/random-MT19937.txt": "LICENSES/MT19937.txt",
+        "licenses/random-NumPy-distributions.md": "LICENSES/NumPy-distributions.md",
+        "licenses/random-NumPy-random.md": "LICENSES/NumPy-random.md",
+        "licenses/random-NumPy.txt": "LICENSES/NumPy.txt",
+        "licenses/random-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie": {}
+        },
+        "schema": 1
+      },
+      "id": "random",
+      "modules": {
+        "moxie._random": {
+          "file": "src/moxie/_random.mojo"
+        }
+      },
+      "path": "../../../../../shared/random"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie._linear_linalg": {
+            "svd": "moxie._linear_linalg.svd"
+          }
+        }
+      },
+      "id": "linear-model-linalg",
+      "modules": {
+        "moxie._linear_linalg._spectral": {
+          "file": "src/mojo_linalg/_spectral.mojo"
+        },
+        "moxie._linear_linalg._storage": {
+          "file": "src/mojo_linalg/_storage.mojo"
+        },
+        "moxie._linear_linalg.svd": {
+          "file": "src/mojo_linalg/svd.mojo"
+        }
+      },
+      "path": "../../../../../../.worktrees/mojo-linalg-linear_model",
+      "revision": "a3c4f91ad4639eda64eb0214f74699e1dfa97a0f"
     }
   ],
   "schema": 1

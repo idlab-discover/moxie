@@ -11,6 +11,7 @@ CONSUMERS = [ROOT/'tests/consumers'/name for name in ('a', 'b')]
 FLAGS = ['-O3', '--fp-mode=contract=off']
 SIMPLE = ROOT/'algorithms/simple'
 KNN = ROOT/'algorithms/knn'
+ITERATIVE = ROOT/'algorithms/iterative'
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -58,7 +59,7 @@ def build():
         compile_source(source, ROOT/'builds'/source.stem)
     for source in sorted((ROOT/'examples').glob('*.mojo')):
         compile_source(source, ROOT/'builds'/source.stem)
-    for algorithm in (SIMPLE, KNN):
+    for algorithm in (SIMPLE, KNN, ITERATIVE):
         output = ROOT/'builds'/algorithm.name
         output.mkdir(exist_ok=True)
         for folder in ('tests', 'examples'):
@@ -87,6 +88,8 @@ def assembly_contracts():
         assert report['modules']['moxie.impute._string'] == ['impute']
         assert report['modules']['moxie.impute._indicator'] == ['impute']
         assert report['modules']['moxie.impute._knn'] == ['impute']
+        assert report['modules']['moxie.impute._iterative'] == ['impute']
+        assert report['modules']['moxie.linear_model._bayes'] == ['moxie']
         assert report['modules']['moxie.neighbors._query_engine'] == ['query_engine']
         assert report['modules']['moxie.neighbors._contracts'] == ['neighbors']
         assert report['modules']['moxie._dense'] == ['numerics']
@@ -126,7 +129,7 @@ def assembly_contracts():
 def test():
     for source in sorted((ROOT/'tests').glob('*.mojo')):
         run(ROOT/'builds'/source.stem)
-    for algorithm in (SIMPLE, KNN):
+    for algorithm in (SIMPLE, KNN, ITERATIVE):
         for source in sorted((algorithm/'tests').glob('test_*.mojo')):
             run(ROOT/'builds'/algorithm.name/source.stem)
     negative_compilation()
@@ -146,6 +149,7 @@ def main():
         run('pixi', 'run', '--manifest-path', ROOT.parents[1]/'pixi.toml', 'python', SIMPLE/'tests/integer_parity.py', '--build-dir', ROOT/'builds')
         run('pixi', 'run', '--manifest-path', ROOT.parents[1]/'pixi.toml', 'python', SIMPLE/'tests/string_parity.py', '--build-dir', ROOT/'builds')
         run('pixi', 'run', '--manifest-path', ROOT.parents[1]/'pixi.toml', 'python', KNN/'tests/parity.py')
+        run(sys.executable, ITERATIVE/'tests/parity.py')
     elif action != 'build':
         raise ValueError(action)
     print(f'PASS: {action}')

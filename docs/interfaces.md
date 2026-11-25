@@ -123,6 +123,17 @@ the standard name as an alias is equivalent to `True`.
 Isotonic regression exposes these requests directly. Composition forwarding
 depends on the parent and is tracked by the composition owners.
 
+## Estimator tags
+
+Estimators can opt into `EstimatorTagsProvider` from `moxie.base`. Call
+`get_tags(estimator)` to obtain a typed value snapshot from
+`estimator.__sklearn_tags__()`. Tags can describe configuration-dependent
+capabilities and can be queried before fit. The native record covers
+`input_tags.one_d_array`, `input_tags.two_d_array` and the `_skip_test` flag,
+which defaults to `False`. The two-dimensional tag describes general
+two-dimensional input support. Estimator-specific shape exceptions are
+documented by each family.
+
 ## Fluent implementation convention
 
 On Mojo 1.0.0, use an explicit mutable origin for the receiver and immutable

@@ -7,7 +7,10 @@ from std.math import isfinite, isnan, sqrt
 from std.sys import stderr
 from std.utils import Variant
 from moxie.base import (
+    EstimatorTags,
+    EstimatorTagsProvider,
     FitTransformer,
+    InputTags,
     RegressorMixin,
     TransformerMixin,
     WeightedSupervisedEstimator,
@@ -300,7 +303,7 @@ def isotonic_regression[dtype: DType](
 
 
 struct IsotonicRegression[dtype: DType = DType.float64](
-    Copyable, IsotonicRegressorAPI, WeightedSupervisedEstimator
+    Copyable, IsotonicRegressorAPI, WeightedSupervisedEstimator, EstimatorTagsProvider
 ):
     """Monotonic regression with weighted predictor ties and linear prediction.
 
@@ -406,6 +409,9 @@ struct IsotonicRegression[dtype: DType = DType.float64](
 
     def get_metadata_routing(self) -> FitScoreMetadataRequest:
         return self._metadata.copy()
+
+    def __sklearn_tags__(self) -> EstimatorTags:
+        return EstimatorTags(InputTags(one_d_array=True, two_d_array=False))
 
     def __sklearn_clone__(self) raises -> Self:
         var cloned = Self(

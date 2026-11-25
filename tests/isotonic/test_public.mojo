@@ -1,7 +1,7 @@
 """Public exports and fluent contracts, also compiled outside the repository."""
 from numojo import NDArrayStrides, Shape, array, zeros
 from std.testing import assert_equal, assert_false, assert_true, assert_raises
-from moxie.base import RegressorMixin, WeightedSupervisedEstimator, clone
+from moxie.base import RegressorMixin, WeightedSupervisedEstimator, clone, get_tags
 from moxie.isotonic import IsotonicRegression, isotonic_regression, check_increasing
 
 
@@ -16,6 +16,12 @@ def exercise[dtype: DType]() raises:
     var y: List[Scalar[dtype]] = [3, 1, 2]
     var weights: List[Scalar[dtype]] = [1, 1, 1]
     var model = IsotonicRegression[dtype]()
+    var tags = get_tags(model)
+    assert_true(tags.input_tags.one_d_array)
+    assert_false(tags.input_tags.two_d_array)
+    assert_false(tags._skip_test)
+    tags.input_tags.one_d_array = False
+    tags._skip_test = True
     var expected: List[Scalar[dtype]] = [2, 2, 2]
     var fitted: List[Scalar[dtype]] = isotonic_regression(y)
     assert_equal(fitted, expected)
@@ -33,6 +39,10 @@ def exercise[dtype: DType]() raises:
     var copied = model.copy()
     var fresh = clone(model)
     assert_false(fresh.__sklearn_is_fitted__())
+    assert_true(get_tags(model).input_tags.one_d_array)
+    assert_false(get_tags(model)._skip_test)
+    assert_true(get_tags(copied).input_tags.one_d_array)
+    assert_true(get_tags(fresh).input_tags.one_d_array)
     with assert_raises():
         _ = model.fit(x, List[Scalar[dtype]]())
     assert_equal(model.predict(x), expected)

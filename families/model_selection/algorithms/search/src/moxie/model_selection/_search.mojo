@@ -22,6 +22,7 @@ from moxie.model_selection._candidates import ParameterDistribution
 from moxie._dense import sum_axis2d
 from moxie._random import RandomState
 from numojo import NDArray, Shape, Item, array
+from std.iter import downcast
 from std.math import sqrt, isnan
 from std.memory import bitcast
 from std.time import perf_counter_ns
@@ -112,20 +113,29 @@ comptime _DenseListLabel[P: AnyType] = (
 )
 
 
+@fieldwise_init
+struct _InputRows[X: Movable](ImplicitlyCopyable):
+    var count: def(Self.X) thin raises -> Int
+    var take: def(Self.X, IndexArray) thin raises -> Self.X
+
+
 struct DenseSupervisedAdapter[
     E: SupervisedScorer & Deinitable,
     Y: Copyable & Deinitable = NDArray[DType.float64],
     dtype: DType = DType.float64,
     V: Copyable & Deinitable = Float64,
     weight_dtype: DType = dtype,
-    S: TypedScorer & Copyable = EstimatorScore[E, NDArray[dtype], Y, NDArray[weight_dtype]],
+    S: TypedScorer & Copyable = EstimatorScore[
+        E, downcast[E.Input, Movable & Deinitable], Y, NDArray[weight_dtype],
+    ],
 ](
     SearchAdapter,
     _NativePredictionAdapter where conforms_to(E, Predictor),
 ):
-    """Ordinary dense samples with array or list targets and optional weights."""
+    """Dense samples with array or list targets and optional weights."""
 
-    comptime X = NDArray[Self.dtype]
+    comptime X = Self.S.Input
+    comptime InputRows = _InputRows[Self.X]
     comptime Weight = NDArray[Self.weight_dtype]
     comptime Scorer = Self.S
     comptime Value = Self.V
@@ -138,6 +148,7 @@ struct DenseSupervisedAdapter[
     var _classifier: Bool
     var _n_splits: Int
     var _scoring: Self.Scorer
+    var _input_rows: Optional[Self.InputRows]
 
     def __init__(
         out self,
@@ -145,9 +156,11 @@ struct DenseSupervisedAdapter[
         *,
         classifier: Bool = conforms_to(Self.E, ClassifierMixin),
         n_splits: Int = 5,
+        input_rows: Optional[Self.InputRows] = None,
     ) where conforms_to(Self.Scorer, Defaultable):
         self = Self(
-            apply_params, classifier=classifier, n_splits=n_splits, scoring=Self.Scorer()
+            apply_params, classifier=classifier, n_splits=n_splits,
+            input_rows=input_rows, scoring=Self.Scorer(),
         )
 
     def __init__(
@@ -156,15 +169,15 @@ struct DenseSupervisedAdapter[
         *,
         classifier: Bool = conforms_to(Self.E, ClassifierMixin),
         n_splits: Int = 5,
+        input_rows: Optional[Self.InputRows] = None,
         var scoring: Self.Scorer,
     ):
         comptime assert Self.Scorer.Estimator == Self.E, "Scorer must match the estimator"
-        comptime assert Self.Scorer.Input == Self.X, "Scorer must match the dense input"
+        comptime assert Self.Scorer.Input == Self.E.Input, "Scorer must match the estimator input"
         comptime assert Self.Scorer.Target == Self.Y, "Scorer must match the target"
         comptime assert Self.Scorer.Metadata == Optional[Self.Weight], (
             "Scorer metadata must be an optional sample weight array"
         )
-        comptime assert Self.X == Self.E.Input, "Dense input must match the estimator"
         comptime assert Self.Y == Self.E.Target, "Target must match the estimator"
         comptime assert Self.Weight == Self.E.SampleWeight, "Weight must match the estimator"
         comptime assert Self._IsArray or Self._Label != NoneType, (
@@ -174,11 +187,20 @@ struct DenseSupervisedAdapter[
         self._classifier = classifier
         self._n_splits = n_splits
         self._scoring = scoring^
+        self._input_rows = input_rows
 
     def n_samples(self, X: Self.Scorer.Input, y: Self.Scorer.Target) raises -> Int:
-        ref features = rebind[Self.X](X)
-        if features.ndim != 2:
-            raise Error("ValueError: dense CV expects a rank-two feature matrix")
+        var feature_rows: Int
+        if self._input_rows:
+            feature_rows = self._input_rows.value().count(X)
+        else:
+            comptime if Self.X != NDArray[Self.dtype]:
+                raise Error("TypeError: non-array inputs require input_rows")
+            else:
+                ref features = rebind[NDArray[Self.dtype]](X)
+                if features.ndim != 2:
+                    raise Error("ValueError: dense CV expects a rank-two feature matrix")
+                feature_rows = features.shape[0]
         var n: Int
         comptime if Self._IsArray:
             ref target = rebind[NDArray[Self._ArrayDType]](y)
@@ -187,12 +209,17 @@ struct DenseSupervisedAdapter[
             n = target.shape[0]
         else:
             n = len(rebind[List[Self._Label]](y))
-        if features.shape[0] != n:
+        if feature_rows != n:
             raise Error("ValueError: inconsistent sample counts")
         return n
 
     def input_rows(self, X: Self.Scorer.Input, rows: IndexArray, train: IndexArray) raises -> Self.Scorer.Input:
-        return rebind_var[Self.Scorer.Input](select_rows(rebind[Self.X](X), rows))
+        if self._input_rows:
+            return self._input_rows.value().take(X, rows)
+        comptime if Self.X == NDArray[Self.dtype]:
+            return rebind_var[Self.Scorer.Input](select_rows(rebind[NDArray[Self.dtype]](X), rows))
+        else:
+            raise Error("TypeError: non-array inputs require input_rows")
 
     def target_rows(self, y: Self.Scorer.Target, rows: IndexArray) raises -> Self.Scorer.Target:
         comptime if Self._IsArray:

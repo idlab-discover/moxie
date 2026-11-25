@@ -150,7 +150,7 @@ def parity():
         'columns/parity.py', 'columns/named_parity.py', 'columns/mixed_parity.py', 'columns/mixed_encoders_parity.py',
         'columns/mixed_text_parity.py',
         'target/parity.py', 'models/parity.py', 'models/real_parity.py', 'pipeline/parity.py',
-        'pipeline/mixed_ridge_parity.py',
+        'pipeline/mixed_ridge_parity.py', 'pipeline/mixed_ridge_search_parity.py',
     ]:
         run(sys.executable, ROOT / 'tests/compose' / relative)
 

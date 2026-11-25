@@ -206,6 +206,17 @@ mojo build -O3 --fp-mode=contract=off -I builds/deps tests/cross_decomposition/c
 python tests/cross_decomposition/composition_parity.py builds/tests/cross_decomposition/composition
 ```
 
+The [multilabel classification notebook](../../notebooks/cross_decomposition/plot_multilabel.ipynb)
+replays the scikit-learn gallery example with native CCA, PCA and
+`OneVsRestClassifier(BinaryAdapter(SVC(kernel="linear")))`. It compares the
+signed projections, label indicators, decision values and fitted boundaries on
+both gallery datasets. Run this notebook on its own with the pinned
+scikit-learn checkout beside Moxie.
+
+```sh
+pixi run -e notebooks notebooks notebooks/cross_decomposition/plot_multilabel.ipynb
+```
+
 ## Numerical dependencies
 
 See [plumbing](plumbing.md). NuMojo remains at the external `../../NuMojo`

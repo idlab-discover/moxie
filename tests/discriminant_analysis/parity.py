@@ -24,12 +24,12 @@ DA = ORACLE['da']
 SEEDS = [int(s) for s in os.environ.get('MOXIE_PARITY_SEEDS', '0,1,2').split(',')]
 # Norm-wise tolerances relative to each compared array's largest magnitude.
 # Float64: both sides compute in double precision with backward-stable
-# factorizations (Jacobi vs LAPACK); 1e-8 covers the conditioning of these
+# factorizations (Jacobi vs LAPACK); 1e-10 covers the conditioning of these
 # datasets. Float32: sklearn computes several paths in single precision while
 # the native port accumulates in Float64 and rounds at the end, so the
 # difference is dominated by sklearn's float32 rounding (~1e-6 relative),
 # amplified by conditioning; 5e-4 is used.
-TOLERANCE = {np.float64: 1e-8, np.float32: 5e-4}
+TOLERANCE = {np.float64: 1e-10, np.float32: 5e-4}
 
 
 def enc(a):
@@ -279,7 +279,18 @@ def main():
     X, y, y3, X1, X6, y6, y7, X7, X2, y4 = toy()
     grid = [('svd', None), ('lsqr', None), ('eigen', None), ('lsqr', 'auto'), ('lsqr', 0),
             ('lsqr', 0.43), ('eigen', 'auto'), ('eigen', 0), ('eigen', 0.43)]
+    # Classes have different horizontal variances and a shared vertical variance.
+    # Far along the vertical axis, every unshifted score can exponentiate to zero
+    # while the normalized class probabilities still have several nonzero entries.
+    offsets = np.array([[-1, -2], [-1, 2], [1, -2], [1, 2]])
+    qda_train = np.vstack([offsets * [width, 1] + [center, 0]
+                           for center, width in [(-3, 1), (0, 1.5), (3, 2.5)]])
+    qda_labels = np.repeat([1, 2, 3], len(offsets))
+    axis = [-128, -32, -8, -4, -2, -1, 0, 1, 2, 4, 8, 32, 128]
+    qda_queries = np.stack(np.meshgrid(axis, axis), axis=-1).reshape(-1, 2)
     for dtype in [np.float64, np.float32]:
+        for solver in ['svd', 'eigen']:
+            add_case('qda', f'posterior-grid-{solver}', qda_train, qda_labels, qda_queries, dtype, solver=solver)
         # The plot_lda gallery example has one informative feature plus noise.
         # With 20 training rows and two classes, the covariance rank is at most 18.
         rng = np.random.RandomState(0)

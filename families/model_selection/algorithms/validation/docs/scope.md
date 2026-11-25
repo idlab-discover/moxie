@@ -417,6 +417,24 @@ p-values and subsequent RNG state for unrestricted, String-grouped, singleton,
 weighted and dynamically stratified cases. Lifecycle probes check one clone per
 dataset, fold refits, ties, NaNs and early index failures. Score tolerances are
 rtol=atol=1e-12 for bounded Float64 reduction rounding.
+
+The focused SVC permutation check runs the gallery's Iris and seeded Gaussian
+noise cases, with 1,000 label permutations each. A typed `PermutationCV`
+rebuilds shuffled stratified folds for each target. It converts the SVC's
+`List[Int]` labels to Int64 indices for `StratifiedKFold`. The oracle uses
+pinned validation and splitter code, the pinned Iris data, and the locked
+sklearn 1.9.1 SVC. Observed and null accuracies allow `atol=1e-15` and zero
+relative tolerance for Float64 averaging. P-values match exactly.
+
+Run the check from the Moxie root with the locked toolchain and assembled
+`builds/deps` sources. The Python entry point runs only these two cases.
+
+```sh
+validation=families/model_selection/algorithms/validation
+mojo build -O3 --fp-mode=contract=off -I builds/deps "$validation/tests/permutation_svc.mojo" -o builds/permutation_svc
+python "$validation/tests/parity.py" --svc-permutations-only builds/permutation_svc
+```
+
 Prediction parity adds real DummyClassifier String predictions, weighted
 probabilities/log-probabilities, multioutput class lists and missing-class binary
 folds. Capability-only probes compare Float32/Float64 multiclass decisions,

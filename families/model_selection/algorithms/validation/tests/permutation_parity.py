@@ -1,10 +1,56 @@
 """Pinned permutation-test body, including resplitting and refit lifecycle."""
 import subprocess
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 import numpy as np
 from sklearn import config_context
 from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.metrics import make_scorer, r2_score
 from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.svm import SVC
+
+
+def check_svc_permutations(ns, stratified_kfold, oracle, binary):
+    """Compare the Iris and noise scenarios from the pinned gallery."""
+    iris_path = "sklearn/datasets/data/iris.csv"
+    assert not subprocess.check_output(
+        ["git", "-C", str(oracle), "status", "--porcelain", "--", iris_path],
+        text=True,
+    )
+    iris = np.loadtxt(oracle / iris_path, skiprows=1, delimiter=",")
+    X, y = iris[:, :-1], iris[:, -1].astype(np.int64)
+    noise = np.random.RandomState(0).normal(size=(len(y), 20))
+    datasets = {"iris": X, "noise": noise}
+    n_permutations = 1000
+    with TemporaryDirectory() as directory:
+        paths = []
+        for name, features in datasets.items():
+            case = Path(directory) / name
+            paths.append(case)
+            with case.open("w") as fixture:
+                print(*features.shape, file=fixture)
+                # Pass Float64 feature bits as signed integers for exact input.
+                for label, row in zip(y, features.view(np.int64)):
+                    print(label, *row, file=fixture)
+        values = subprocess.check_output([str(binary), *paths], text=True)
+
+    actual = np.array([float(line) for line in values.splitlines()])
+    actual = actual.reshape(len(datasets), n_permutations + 2)
+    for native, (name, features) in zip(actual, datasets.items()):
+        model = SVC(kernel="linear", random_state=7)
+        cv = stratified_kfold(2, shuffle=True, random_state=0)
+        score, null_scores, pvalue = ns["permutation_test_score"](
+            model, features, y, scoring="accuracy", cv=cv,
+            n_permutations=n_permutations, random_state=0, n_jobs=1,
+        )
+        # Accuracies are ratios of counts. Allow Float64 rounding of fold means.
+        np.testing.assert_allclose(
+            native[:-1], np.r_[score, null_scores], rtol=0, atol=1e-15, err_msg=name,
+        )
+        assert native[-1] == pvalue, name
+        print(f"PASS pinned permutation_test_score with linear SVC ({name}): "
+              f"{n_permutations + 1} scores and exact p-value {pvalue}")
 
 
 def check_permutations(ns, dummy, root):

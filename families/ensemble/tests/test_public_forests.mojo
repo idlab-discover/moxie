@@ -103,7 +103,27 @@ def parameter_updates[classifier: Bool, extra: Bool]() raises:
         _ = model.fit(X, y)
 
 
+def absolute_error_missing[extra: Bool]() raises:
+    var X = nm.zeros[DType.float32](nm.Shape(5, 1))
+    var y = nm.zeros[DType.float64](nm.Shape(5))
+    for i in range(5):
+        X.unsafe_set(i, Float32(i) if i < 3 else Float32(Float64("nan")))
+        y.unsafe_set(i, Float64(i * 5 if i < 3 else 10))
+    var model = Forest[False, extra](
+        4, criterion="absolute_error", bootstrap=False, random_state=0,
+    )
+    _ = model.fit(X, y)
+    var predictions = model.predict(X)
+    assert_equal(predictions.unsafe_get(3), 10.0)
+    assert_equal(predictions.unsafe_get(4), 10.0)
+    var leaves = model.apply(X)
+    for member in range(4):
+        assert_equal(leaves.unsafe_get(3 * 4 + member), leaves.unsafe_get(4 * 4 + member))
+
+
 def main() raises:
+    absolute_error_missing[False]()
+    absolute_error_missing[True]()
     parameter_updates[True, False]()
     parameter_updates[False, False]()
     parameter_updates[True, True]()

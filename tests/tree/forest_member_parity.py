@@ -18,10 +18,10 @@ The mean of the native member predictions must equal forest.predict(_proba).
 from pathlib import Path
 import subprocess
 import numpy as np
-import sklearn
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier, ExtraTreesRegressor
 from sklearn.ensemble._forest import _generate_sample_indices
 from sklearn.utils.class_weight import compute_sample_weight
+from parity import check_reference
 ROOT = Path(__file__).resolve().parents[2]
 
 def case_list():
@@ -46,6 +46,8 @@ def case_list():
         (et_c, dict(criterion='gini'), dict(classes=[3], nan=True)),
         (et_c, dict(criterion='entropy', bootstrap=True, class_weight='balanced_subsample', max_depth=4), dict(classes=[2], weights=True)),
         (et_c, dict(criterion='log_loss', bootstrap=True, max_leaf_nodes=6), dict(classes=[2, 2], nan=True)),
+        (rf_r, dict(criterion='absolute_error', max_leaf_nodes=8), dict(nan=True, weights=True)),
+        (et_r, dict(criterion='absolute_error', bootstrap=True, max_depth=5), dict(outputs=2, nan=True, weights=True)),
     ]
 
 def make_data(index, spec):
@@ -87,7 +89,7 @@ def bits(values, dtype):
     return ' '.join(map(str, values.view(np.int32 if dtype == np.float32 else np.int64).ravel()))
 
 def main():
-    assert 'builds/tree/oracle-env' in sklearn.__file__
+    check_reference()
     lines, forests = [], []
     for index, (cls, params, spec) in enumerate(case_list()):
         X, y, w, Q = make_data(index, spec)

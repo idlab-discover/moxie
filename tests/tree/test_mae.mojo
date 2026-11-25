@@ -23,12 +23,22 @@ def lifecycle[extra: Bool]() raises:
     _ = model.fit(X, y)
     assert_equal(model.predict(X).unsafe_get(0), 7.0)
     X.unsafe_set(0, Float32(Float64("nan")))
-    with assert_raises():
+    var unseen_missing = model.predict(X)
+    assert_true(unseen_missing.unsafe_get(0) < Float64("inf"))
+    for i in range(4):
+        X.unsafe_set(i, Float32(Float64("nan")))
+    _ = model.fit(X, y)
+    assert_equal(model.get_n_leaves(), 1)
+    assert_equal(model.predict(X).unsafe_get(0), 2.5)
+    X.unsafe_set(0, Float32(Float64("inf")))
+    with assert_raises(contains="infinite features"):
         _ = model.fit(X, y)
-    with assert_raises():
+    with assert_raises(contains="infinite features"):
         _ = model.predict(X)
-    X.unsafe_set(0, 0)
-    assert_equal(model.predict(X).unsafe_get(0), 7.0)
+    X.unsafe_set(0, Float32(Float64("nan")))
+    assert_equal(model.predict(X).unsafe_get(0), 2.5)
+    for i in range(4):
+        X.unsafe_set(i, Float32(i))
     model.params.criterion = "squared_error"
     _ = model.fit(X, y)
     assert_equal(model.predict(X).unsafe_get(0), 7.0)

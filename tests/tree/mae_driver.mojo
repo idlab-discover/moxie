@@ -3,21 +3,23 @@ from moxie.tree._classes import BaseDecisionTree
 
 def run[classifier: Bool, extra: Bool = False](kind: Int) raises:
     var tag = kind + (4 if extra else 0)
-    for case_id in range(26):
+    for case_id in range(34):
         var n = 8 + case_id
         var p = 1 + case_id % 4
-        var outputs = 1 if case_id >= 18 else 1 + case_id % 3
+        var outputs = 1 if 18 <= case_id and case_id < 26 else 1 + case_id % 3
         var X = nm.zeros[DType.float32](nm.Shape(n, p))
         var y = nm.zeros[DType.float64](nm.Shape(n, outputs))
         var weights = nm.zeros[DType.float64](nm.Shape(n))
         for i in range(n):
             weights.unsafe_set(i, Float64(0 if i % 7 == 0 else 1 + i % 3))
-            if case_id >= 24 and i % 7 == 0:
+            if 24 <= case_id and case_id < 26 and i % 7 == 0:
                 weights.unsafe_set(i, -0.125)
             for j in range(p):
                 var x = Float32((i * (j + 3) + j * 5 + case_id) % 23) / 4
                 if case_id % 7 == 0 and j == 0:
                     x = 1
+                if case_id >= 26 and ((i + j) % 4 == 0 or (case_id == 32 and j == 0)):
+                    x = Float32(Float64("nan"))
                 X.unsafe_set(i * p + j, x)
             for k in range(outputs):
                 var v = Float64((i * 7 + k * 3 + case_id) % 17) / 4

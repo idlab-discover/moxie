@@ -50,12 +50,11 @@ uniform-average R2. Like sklearn, classification scoring rejects multiclass
 multi-output targets even though training and prediction support them. R2 returns
 NaN for a single sample and uses sklearn's finite constant-target convention.
 
-`criterion="absolute_error"` is supported by both regressors for finite numeric
-features, including multiple outputs and signed weights. Predictions are weighted
-medians. Categorical splits are rejected, as in the reference. Missing (NaN)
-features are also rejected: this is a Moxie deferral, since the pinned reference
-routes NaNs for absolute error like the other criteria. Nonpositive-weight split
-candidates are ignored.
+`criterion="absolute_error"` is supported by both regressors for numeric
+features, including NaNs, multiple outputs and signed weights. Predictions are
+weighted medians. Best search evaluates both missing directions, and random
+search draws one direction. Prediction follows the fitted route. Categorical
+splits and infinities are rejected. Nonpositive-weight split candidates are ignored.
 
 ## Configuration
 
@@ -263,7 +262,7 @@ var params = tree.get_params()
 params.random_state = seed
 tree.set_params(params)
 tree.fit_prepared(prepared, sample_weight=counts)  # e.g. bootstrap counts
-var encoded = prepared.encoder.encode(X_test, False, False)  # once per predict
+var encoded = prepared.encoder.encode(X_test, monotonic=False)  # once per predict
 var prediction = tree.predict_encoded(encoded)
 ```
 
@@ -286,10 +285,10 @@ averages three bootstrapped members this way.
   thresholds, `ccp_alpha`). A different `criterion`, `splitter`,
   `monotonic_cst`, `categorical_features` or `class_weight` raises.
 - Every member built from one prepared input shares its encoder.
-  `TreeInputEncoder.encode(X, reject_missing, monotonic)` performs predict-time
-  validation and category lookup; the flags mirror the estimator's current
-  `criterion == "absolute_error"` and `monotonic_cst` rules. `apply_encoded`,
-  `predict_encoded` and `predict_proba_encoded` then only check fitted state and
+  `TreeInputEncoder.encode(X, monotonic)` performs predict-time
+  validation and category lookup. Pass `monotonic=True` when the estimator
+  uses `monotonic_cst`. The former `reject_missing` argument has been removed.
+  `apply_encoded`, `predict_encoded` and `predict_proba_encoded` then only check fitted state and
   shape, like sklearn `check_input=False`. Passing unencoded categorical input to
   them is a caller error. `input_encoder()` returns a fitted tree's encoder.
 

@@ -10,6 +10,8 @@ Supported modes:
   Int64/Float32/Float64 classification labels with preserved identity and dtype;
   single and multiple outputs, strided features and numeric targets.
 - Gini, entropy/log-loss, squared error, deprecated friedman_mse alias, absolute error, and Poisson.
+- Absolute-error regression accepts numeric features with NaNs and signed weights.
+  Categorical splits are rejected as in the reference.
 - Best/random splitters, reference feature sampling and xorshift draws,
   constant-feature handling, missing-value routing, depth-first and best-first
   leaf limits, integer/fractional sample limits and feature selection.
@@ -31,9 +33,6 @@ regression targets and predictions remain Float64. Default numeric dense fitting
 
 Remaining dense limits:
 
-- Absolute-error regression supports finite numeric features and signed weights;
-  categorical splits are rejected as in the reference. Missing features are also
-  rejected, although the pinned reference routes them (deferred).
 - `decision_path` (CSR output in sklearn) is absent; see the sparse exclusions below.
 - Python dataframe/reflection/visualization bindings, arbitrary object labels,
   and numeric label dtypes beyond Int64/Float32/Float64.
@@ -81,9 +80,10 @@ builds/tree/oracle-env/bin/python tests/tree/parity.py --structure-only
 Current results: the root build, native contracts, example, negative capability
 checks, and two isolated consumers pass. The full source-built estimator oracle
 passes **21,115 estimator/export comparisons across 208 fitted cases**, including positive, zero,
-and signed weights. Storage parity passes. Absolute-error parity adds **4,583
-comparisons across 52 fits** for both regressors, including signed weights, multiple outputs, monotonic constraints,
-best-first construction and pruning.
+and signed weights. Storage parity passes. Absolute-error parity passes **7,091
+comparisons across 68 fits** for both regressors, including signed weights,
+multiple outputs, monotonic constraints, best-first construction and pruning.
+Weighted NaN fixtures cover both missing directions in best and random searches.
 
 Dense numeric categorical validation adds **50,608 comparisons across 160 fits**
 against the same source-built reference. It covers best/random search, binary and
@@ -127,8 +127,8 @@ combining categorical selectors, signed weights, pruning and leaf limits. Seeds
 and category words compare exactly, Float64 statistics within 2e-12. Run
 `tests/randomized_parity.py` with the oracle Python, or `pixi run parity`.
 
-Forest-member differential tests add **66,531 exact comparisons across 95 member
-trees** of 19 reference RandomForest and ExtraTrees classifiers and regressors
+Forest-member differential tests add **70,386 exact comparisons across 105 member
+trees** of 21 reference RandomForest and ExtraTrees classifiers and regressors
 (`tests/forest_member_parity.py`). The script recovers each member's seed and
 the exact weights sklearn passed to `tree._fit(check_input=False)`: bootstrap
 counts drawn with combined weights, balanced_subsample factors, or combined

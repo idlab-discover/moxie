@@ -1,6 +1,6 @@
 """Compare Pipeline search and nested SVC search with pinned sklearn.
 
-GridSearchCV/cross_val_score come from the pinned checkout's model_selection
+GridSearchCV and the validation functions come from the pinned checkout's model_selection
 sources (loaded over the locked wheel); estimators come from the locked wheel.
 """
 import ast
@@ -85,9 +85,15 @@ pca_search = GridSearchCV(Pipeline([('pca', PCA()), ('svc', SVC())]),
 scaled_pca = Pipeline([('standardscaler', StandardScaler()), ('pca', PCA()), ('svc', SVC())])
 scaled_pca_search = GridSearchCV(scaled_pca,
     {'pca__n_components': [1, 2], 'svc__C': [0.1, 10.0]}).fit(X, y)
-out['nested_pca_cv'] = cross_val_score(scaled_pca, X, y)
-out['nested_pca_test_index'] = [(fold, row) for fold, (_, test) in enumerate(
-    split.check_cv(None, y, classifier=True).split(X, y)) for row in test]
+validation = ns['cross_validate'](
+    scaled_pca, X, y, return_train_score=True, return_estimator=True, return_indices=True,
+)
+out['nested_pca_cv'] = validation['test_score']
+out['nested_pca_train'] = validation['train_score']
+out['nested_pca_fitted_score'] = [estimator.score(X, y) for estimator in validation['estimator']]
+out['nested_pca_test_index'] = [
+    (fold, row) for fold, test in enumerate(validation['indices']['test']) for row in test
+]
 inner = GridSearchCV(SVC(), {'C': [0.1, 1.0, 10.0]}, cv=KFold(3))
 out['nested_cv'] = cross_val_score(inner, X, y, cv=kf).tolist()
 nested_best = []
@@ -135,6 +141,8 @@ search_checks(scaled_native, 'pipeline', scaled_search)
 search_checks(scaled_native, 'pca', pca_search)
 nested_pca_native = records(binary_dir / 'nested_pca')
 compare(nested_pca_native, 'nested_pca_cv', out['nested_pca_cv'])
+compare(nested_pca_native, 'nested_pca_train', out['nested_pca_train'])
+compare(nested_pca_native, 'nested_pca_fitted_score', out['nested_pca_fitted_score'], atol=1e-15)
 compare(nested_pca_native, 'nested_pca_test_index', out['nested_pca_test_index'])
 search_checks(nested_pca_native, 'nested_pca', scaled_pca_search)
 compare(nested_pca_native, 'nested_pca_weighted_score',

@@ -176,6 +176,47 @@ def cross_validate[A: CVAdapter](
     return _cross_validate[A](estimator, X, y, adapter, scorers, metric_names, cv, fit_metadata, score_metadata, return_train_score=return_train_score, return_estimator=return_estimator, return_indices=return_indices, error_score=error_score)
 
 
+def cross_validate[A: DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, var scorers: Optional[List[A.Scorer]] = None,
+    metric_names: List[String] = ["score"],
+    *, fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata,
+    var cv: Optional[List[IndexSplit]] = None, return_train_score: Bool = False,
+    return_estimator: Bool = False, return_indices: Bool = False,
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> CVResult[A.Scorer.Estimator]:
+    """Generate omitted folds and use the adapter's scorer when none are supplied."""
+    if not cv:
+        cv = adapter.default_cv(X, y)
+    if not scorers:
+        var defaults = List[A.Scorer]()
+        defaults.append(adapter.default_scorer())
+        scorers = defaults^
+    return cross_validate[A](
+        estimator, X, y, adapter, scorers.value(), metric_names, cv.value(), fit_metadata,
+        score_metadata, return_train_score=return_train_score,
+        return_estimator=return_estimator, return_indices=return_indices,
+        error_score=error_score,
+    )
+
+
+def cross_validate[A: DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, var scorers: Optional[List[A.Scorer]] = None,
+    metric_names: List[String] = ["score"],
+    *, var cv: Optional[List[IndexSplit]] = None, return_train_score: Bool = False,
+    return_estimator: Bool = False, return_indices: Bool = False,
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> CVResult[A.Scorer.Estimator] where conforms_to(A.Scorer.Metadata, Defaultable):
+    """Use default metadata for both fitting and scoring."""
+    return cross_validate[A](
+        estimator, X, y, adapter, scorers^, metric_names, cv=cv^,
+        fit_metadata=A.Scorer.Metadata(), score_metadata=A.Scorer.Metadata(),
+        return_train_score=return_train_score, return_estimator=return_estimator,
+        return_indices=return_indices, error_score=error_score,
+    )
+
+
 def cross_val_score[A: CVAdapter](estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target, adapter: A, var scorer: A.Scorer, cv: List[IndexSplit], fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata, *, error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000)))) raises -> NDArray[DType.float64]:
     var scorers = List[A.Scorer]()
     scorers.append(scorer^)
@@ -191,18 +232,20 @@ def cross_val_score[A: DefaultCVAdapter](
     adapter: A, *,
     fit_metadata: A.Scorer.Metadata,
     score_metadata: A.Scorer.Metadata,
+    var scoring: Optional[A.Scorer] = None,
     cv: Optional[List[IndexSplit]] = None,
     error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
 ) raises -> NDArray[DType.float64]:
-    """Evaluate the adapter's default scorer and generate omitted folds from X and y."""
-    var scorer = adapter.default_scorer()
+    """Evaluate one scorer and generate omitted folds from X and y."""
+    if not scoring:
+        scoring = adapter.default_scorer()
     if cv:
         return cross_val_score[A](
-            estimator, X, y, adapter, scorer^, cv.value(), fit_metadata, score_metadata,
+            estimator, X, y, adapter, scoring.take(), cv.value(), fit_metadata, score_metadata,
             error_score=error_score,
         )
     return cross_val_score[A](
-        estimator, X, y, adapter, scorer^, adapter.default_cv(X, y), fit_metadata, score_metadata,
+        estimator, X, y, adapter, scoring.take(), adapter.default_cv(X, y), fit_metadata, score_metadata,
         error_score=error_score,
     )
 
@@ -210,12 +253,13 @@ def cross_val_score[A: DefaultCVAdapter](
 def cross_val_score[A: DefaultCVAdapter](
     estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
     adapter: A, *,
+    var scoring: Optional[A.Scorer] = None,
     cv: Optional[List[IndexSplit]] = None,
     error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
 ) raises -> NDArray[DType.float64] where conforms_to(A.Scorer.Metadata, Defaultable):
     """Use default metadata for both fitting and scoring."""
     return cross_val_score[A](
-        estimator, X, y, adapter, cv=cv, error_score=error_score,
+        estimator, X, y, adapter, scoring=scoring^, cv=cv, error_score=error_score,
         fit_metadata=A.Scorer.Metadata(), score_metadata=A.Scorer.Metadata(),
     )
 

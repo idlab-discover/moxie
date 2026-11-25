@@ -35,16 +35,19 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
     comptime Decision where conforms_to(Self.E, DecisionFunction) = Self.E.Decision
     comptime Probabilities where conforms_to(Self.E, ProbabilityPredictor) = Self.E.Probabilities
 
-    comptime _label = (
+    comptime _label_dtype = (
         DType.float64 if Self.E.Target == List[Float64] else
         DType.float32 if Self.E.Target == List[Float32] else DType.int64
+    )
+    comptime _label = (
+        Int if Self.E.Target == List[Int] else Scalar[Self._label_dtype]
     )
 
     var estimator: Self.E
 
     def __init__(out self, var estimator: Self.E):
-        comptime assert Self.E.Target == List[Scalar[Self._label]], (
-            "BinaryAdapter requires List[Int64], List[Float32] or List[Float64] targets"
+        comptime assert Self.E.Target == List[Self._label], (
+            "BinaryAdapter requires List[Int], List[Int64], List[Float32] or List[Float64] targets"
         )
         comptime assert Self.E.Prediction == Self.E.Target, (
             "BinaryAdapter requires prediction and target types to match"
@@ -70,10 +73,10 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
         return pairwise_input(self.estimator)
 
     @staticmethod
-    def _native_target(y: Self.Target) raises -> List[Scalar[Self._label]]:
+    def _native_target(y: Self.Target) raises -> List[Self._label]:
         if y.ndim != 1:
             raise Error("ValueError: binary codes must be a rank-one array")
-        var labels = List[Scalar[Self._label]](capacity=y.size)
+        var labels = List[Self._label](capacity=y.size)
         var signed = False
         var zero = False
         for i in range(y.size):
@@ -82,7 +85,10 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
                 raise Error("ValueError: expected binary codes 0/1 or -1/+1")
             signed = signed or code == -1
             zero = zero or code == 0
-            labels.append(code.cast[Self._label]())
+            comptime if Self.E.Target == List[Int]:
+                labels.append(rebind[Self._label](Int(code)))
+            else:
+                labels.append(rebind[Self._label](code.cast[Self._label_dtype]()))
         if signed and zero:
             raise Error("ValueError: expected binary codes 0/1 or -1/+1")
         return labels^
@@ -95,10 +101,14 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
         return self
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
-        var labels = rebind_var[List[Scalar[Self._label]]](self.estimator.predict(X))
+        var labels = rebind_var[List[Self._label]](self.estimator.predict(X))
         var result = Self.Prediction(nm.Shape(len(labels)))
         for i in range(len(labels)):
-            var code = labels[i]
+            var code: Float64
+            comptime if Self.E.Target == List[Int]:
+                code = Float64(rebind[Int](labels[i]))
+            else:
+                code = rebind[Scalar[Self._label_dtype]](labels[i]).cast[DType.float64]()
             if code != -1 and code != 0 and code != 1:
                 raise Error("ValueError: component predicted a value outside the binary codes")
             result[nm.Item(i)] = code.cast[DType.int64]()

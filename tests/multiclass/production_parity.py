@@ -7,7 +7,9 @@ wraps real Moxie estimators and their sklearn counterparts:
 - `moxie.tree.DecisionTreeClassifier` through the dense
   `moxie.feature_selection.DecisionTreeClassifierImportance` adapter
   (predict_proba component; the tree's own API returns List probabilities), and
-- `moxie.svm.LinearSVC` through `BinaryAdapter` for the native List targets.
+- `moxie.svm.LinearSVC` and
+  `moxie.discriminant_analysis.LinearDiscriminantAnalysis` through
+  `BinaryAdapter` for the native List targets.
 
 Cases cover OvR, OvO and OutputCode; 2, 3 and 5 classes; int64, float64 and
 string labels; Float32 and Float64 features; seeded OutputCode codebooks.
@@ -26,7 +28,10 @@ Tolerances:
   integers) and must agree within 1e-15; OvO tree decisions combine them with
   votes through one division, allowed 1e-14 relative;
 - LinearSVC uses the primal solver with tol=1e-9. Allow 1e-7 relative / 1e-8
-  absolute for decision values because of reduction order and stopping.
+  absolute for decision values because of reduction order and stopping;
+- LDA uses the default SVD solver. Allow 1e-9 relative / 1e-11 absolute for
+  Float64 responses across SVD implementations, and 1e-5 relative / 5e-6
+  absolute for Float32 responses because Moxie accumulates in Float64.
 """
 import argparse
 import inspect
@@ -38,6 +43,8 @@ from pathlib import Path
 
 import numpy as np
 import sklearn
+from sklearn import discriminant_analysis
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.linear_model import RidgeClassifier
 from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier, OutputCodeClassifier, _predict_binary
 from sklearn.svm import LinearSVC, _classes as svm_classes
@@ -50,6 +57,8 @@ TOLERANCE = {
     "ridge32": (2e-4, 1e-5),
     "tree": (1e-14, 1e-15),
     "linear-svc": (1e-7, 1e-8),
+    "lda64": (1e-9, 1e-11),
+    "lda32": (1e-5, 5e-6),
 }
 
 COMPONENTS = {
@@ -63,12 +72,15 @@ COMPONENTS = {
                     "DecisionTreeClassifierImportance[{dtype}](DecisionTreeClassifier[DType.int64](max_depth=2, random_state=0))"),
     "linear-svc": (lambda: LinearSVC(dual=False, tol=1e-9, random_state=0),
                    "BinaryAdapter(LinearSVC(dual=False, tol=1e-9, random_state=0))"),
+    "lda": (LinearDiscriminantAnalysis,
+            "BinaryAdapter(LinearDiscriminantAnalysis[{dtype}]())"),
 }
 COMPONENT_TYPE = {
     "ridge": "RidgeClassifier[{dtype}]", "ridge-noint": "RidgeClassifier[{dtype}]",
     "tree": "DecisionTreeClassifierImportance[{dtype}]",
     "tree-depth2": "DecisionTreeClassifierImportance[{dtype}]",
     "linear-svc": "BinaryAdapter[LinearSVC[]]",
+    "lda": "BinaryAdapter[LinearDiscriminantAnalysis[{dtype}]]",
 }
 STRINGS = ["setosa", "versicolor", "virginica", "", "zeta"]
 
@@ -141,6 +153,7 @@ def native_source(all_cases, expected):
     header = driver([]).split("def main() raises:")[0]
     header += '''
 from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OutputCodeClassifier, StringLabels, StringTarget
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.linear_model import RidgeClassifier
 from moxie.svm import LinearSVC
 from moxie.tree import DecisionTreeClassifier
@@ -200,6 +213,8 @@ def emit(name: String, y: StringTarget) raises:
 def tolerance(c, key):
     if c["component"] == "linear-svc":
         return TOLERANCE["linear-svc"]
+    if c["component"] == "lda":
+        return TOLERANCE["lda32" if c["dtype"] == "float32" else "lda64"]
     if c["component"].startswith("tree"):
         return (1e-14, 1e-15) if key == "decision" else TOLERANCE["tree"]
     return TOLERANCE["ridge32" if c["dtype"] == "float32" else "ridge64"]
@@ -217,13 +232,14 @@ def run_native(group, all_cases, expected):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--group", choices=("all", "ridge-tree", "linear-svc"), default="all")
-    selection = parser.parse_args().group
     groups = {
         "ridge-tree": ("ridge", "ridge-noint", "tree", "tree-depth2"),
         "linear-svc": ("linear-svc",),
+        "lda": ("lda",),
     }
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--group", choices=("all", *groups), default="all")
+    selection = parser.parse_args().group
     all_cases, expected, got = [], [], []
     for group, components in groups.items():
         if selection not in ("all", group):
@@ -231,6 +247,10 @@ def main():
         if group == "linear-svc":
             assert Path(inspect.getfile(svm_classes)).read_bytes() == (
                 REFERENCE / "sklearn/svm/_classes.py"
+            ).read_bytes(), "install the pinned local scikit-learn checkout"
+        if group == "lda":
+            assert Path(inspect.getfile(discriminant_analysis)).read_bytes() == (
+                REFERENCE / "sklearn/discriminant_analysis.py"
             ).read_bytes(), "install the pinned local scikit-learn checkout"
         batch = cases(components)
         ref = [reference(c) for c in batch]

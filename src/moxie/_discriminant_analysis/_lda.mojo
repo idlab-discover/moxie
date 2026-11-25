@@ -332,7 +332,7 @@ struct LinearDiscriminantAnalysis[
     dtype: DType = DType.float64,
     L: ClassLabel = Int,
     C: CovarianceEstimator = NoCovarianceEstimator,
-](LinearDiscriminantTransformer, FeatureNamesOut, InputFeatureCount):
+](LinearDiscriminantTransformer, FeatureNamesOut, InputFeatureCount, Copyable):
     """Linear Discriminant Analysis (sklearn.discriminant_analysis.LinearDiscriminantAnalysis).
 
     A classifier with a linear decision boundary from class-conditional Gaussian

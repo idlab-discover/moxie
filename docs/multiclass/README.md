@@ -54,16 +54,19 @@ features). `moxie.tree.DecisionTreeClassifier` does through the dense
 exposes `NDArray` probabilities. `moxie.svm.LinearSVC` works through
 [`BinaryAdapter`](family.md#binary-adapter-for-numeric-list-labels), which
 converts its binary labels between `NDArray` and numeric `List` values.
+`moxie.discriminant_analysis.LinearDiscriminantAnalysis` works through the
+same adapter with its default `Int` labels and Float32 or Float64 features.
 `tests/multiclass/production_parity.py` compares all three wrappers around
-these production components against pinned sklearn. Pass `--group linear-svc`
-to the runner to check the LinearSVC composition on its own after assembly.
+these production components against pinned sklearn. Pass `--group lda` or
+`--group linear-svc` to check that component on its own after assembly.
 
 Composition: the wrappers work as `Pipeline` final steps and under `clone`,
 `cross_val_score` and `GridSearchCV` (nested `estimator__alpha` through the
 typed deep `Params` record). Adapters and scorers may name a concrete wrapper
 type (`tests/multiclass/test_concrete_adapters.mojo`) or stay generic over the
-estimator (`tests/multiclass/test_composition.mojo`). `GridSearchCV` is not a
-`SupervisedEstimator`, so a search cannot be a multiclass component.
+estimator (`tests/multiclass/test_composition.mojo`). Using a refitting
+`GridSearchCV` as the inner component requires its adapter to expose the
+multiclass feature and binary target types and supply default fit metadata.
 
 Sparse inputs, metadata routing, mutable Python RNG objects, bindings and
 serialization remain outside the supported scope.

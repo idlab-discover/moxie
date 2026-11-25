@@ -66,6 +66,11 @@ shared `InputFeatureCount` contract and LDA the shared `FeatureNamesOut` contrac
 `set_params`, and `cross_val_score`). QDA has no
 `transform`; calling it is a compile error.
 
+`LinearDiscriminantAnalysis.copy()` preserves fitted state in an independent
+copy. Use `clone` to copy constructor configuration into an unfitted
+estimator. The default `List[Int]` label type works with the multiclass
+[`BinaryAdapter`](../multiclass/family.md#binary-adapter-for-numeric-list-labels).
+
 Weighted scoring rejects NaN, infinity, all-zero weights and weights whose sum
 is zero, as in scikit-learn. Signed weights with a nonzero sum are accepted.
 

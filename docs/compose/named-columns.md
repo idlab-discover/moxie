@@ -221,6 +221,19 @@ branch chains dense OneHotEncoder with SelectPercentile using a chi-squared
 scorer. Pass a Float64 target array to the table preprocessor and use the
 original Int64 labels when fitting the downstream LogisticRegression.
 
+The notebook runs with seeded data by default. To compare on the gallery's
+OpenML Titanic version 1 rows, run only this notebook:
+
+```bash
+MOXIE_TITANIC_OPENML=1 pixi run -e notebooks notebooks notebooks/compose/plot_column_transformer_mixed_types.ipynb
+```
+
+The OpenML download is cached under `builds/titanic-reference`. The comparison
+uses the gallery's 80/20 split with seed 0 and its named route's feature groups.
+It casts passenger class to a string category so dtype selectors pick the same
+columns as the named route. Missing embarkation values stay missing through
+the notebook's exchange with Mojo.
+
 ## Predictive pipelines on mixed tables
 
 Use `as_table_transformer()` when a generic pipeline needs

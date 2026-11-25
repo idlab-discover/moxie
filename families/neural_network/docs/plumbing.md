@@ -1,6 +1,6 @@
 # Dense neural-network plumbing
 
-This family owns dense storage contracts, RBM and private MLP parameter helpers.
+This family owns dense storage contracts, RBM and the private MLP engine.
 See [scope](scope.md) for supported behavior and deferrals.
 
 ## Owners and dependencies
@@ -105,7 +105,9 @@ These are storage bounds, not measured performance claims.
 
 These exact signatures compile through raising probes. Trait conformance checks
 signatures; children must enforce the documented associated-type/layout rules
-and behavioral contracts in their tests. The RBM child implements its sampling contract; MLP engine traits remain probes.
+and behavioral contracts in their tests. The RBM child implements its sampling
+contract. The MLP traits remain extension probes. The family uses standalone
+[MLP engine functions](../shared/mlp_engine/docs/api.md) with owned results.
 
 MLP engine acceptance includes hidden identity/logistic/tanh/relu; output
 identity/exp/logistic/softmax; squared_error, poisson, log_loss and binary_log_loss;

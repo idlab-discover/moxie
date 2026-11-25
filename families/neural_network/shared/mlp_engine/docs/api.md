@@ -1,30 +1,50 @@
-# Private MLP parameter helpers
+# Private dense MLP engine
 
-Import helpers directly from `moxie.neural_network._mlp_engine`. This module
-currently supplies parameter preparation only; it does not implement MLPKernel
-or a trainable estimator. Package-level exports remain empty.
+Import helpers from `moxie.neural_network._mlp_engine`. They use the family's
+`LayerLayout` and `LayerTensors` with NuMojo Float32 or Float64 arrays.
 
-- `allocate[dtype](layout)` creates independent zeroed LayerTensors.
-- `initialize(params, rng, activation)` mutates tensors with scikit-learn's
-  Glorot initialization, advancing the borrowed RandomState. Hidden activation
-  accepts identity, logistic, tanh or relu; logistic uses the narrower bound.
-- `parameter_count(params)` returns the total coefficient/bias element count.
-- `pack(params)` returns an independent Float64 rank-one vector, coefficients
-  in layer/C order followed by intercepts in layer order.
-- `unpack(vector, params)` copies into existing tensors, preserving their layout.
-  The whole input is checked for size, finiteness and dtype overflow before writes.
+- `allocate[dtype](layout)` creates independent zeroed layer tensors.
+- `initialize(params, rng, activation)` applies scikit-learn's Glorot
+  initialization and advances the borrowed RNG. It visits logical C order
+  even with negative strides.
+- `parameter_count(params)` returns the total coefficient and bias count.
+- `pack(params)` returns an owned Float64 vector with coefficients in layer
+  and C order followed by intercepts in layer order.
+- `unpack(vector, params)` validates size, finiteness and dtype overflow before
+  copying into existing tensors. The tensors retain their layout and own
+  their storage independently of the solver vector.
+- `forward(X, params, hidden_activation, output_activation)` takes a nonempty
+  finite samples-by-features matrix and returns an owned samples-by-outputs
+  matrix in its dtype. Hidden activations are `identity`, `logistic`, `tanh`
+  and `relu`. Output activations are `identity`, `exp`, `logistic` and
+  `softmax`.
+- `loss_gradient(X, y, params, hidden_activation, output_activation, loss, alpha=0)`
+  returns the batch loss as Float64 and owned gradients in the same layer
+  order and dtype as the parameters. The weighted overload takes a borrowed,
+  rank-one `sample_weight` after `alpha`. Weights are finite with a nonzero
+  finite sum and can have arbitrary valid strides. L2 applies to coefficients
+  only and is divided by the sample count or weight sum.
 
-These functions use the family's LayerLayout/LayerTensors and NuMojo Float32 or
-Float64 arrays. Initialization visits logical C order even with negative strides.
-Unpack copies rather than adopting sklearn's vector views; solver vectors and
-model arrays therefore have independent ownership. Float32 casts are explicit.
-Overlapping concurrent mutation and manually invalid array metadata are excluded
-by the shared storage contract. Helpers raise Mojo Error with ValueError prefixes.
+Targets are finite rank-two arrays matching the output shape. The accepted
+output/loss pairs are identity with `squared_error`, exp with `poisson`,
+logistic with `binary_log_loss`, and softmax with `log_loss`. Use nonnegative
+Poisson targets, encoded binary targets, or categorical indicators as
+appropriate. Wrappers are responsible for encoding targets. For multioutput
+squared error the pinned implementation averages the reported loss across
+outputs while using the unscaled residual in backpropagation. The engine
+preserves both behaviors. Cross-entropy clips probabilities in the loss and
+uses the original activations for the residual.
 
-`pixi run build` compiles the supplied module and dependencies; `pixi run test`
-runs parameter contracts. `pixi run parity` compares initialization and packing
-with extracted function bodies from the pinned local sklearn checkout, then
-fails explicitly because the remaining engine acceptance tests are unfinished.
-The comparison includes subsequent RNG draws; tolerances of 1e-14 relative and
-1e-15 absolute account for Float64 text output and scalar square-root rounding.
-It does not validate learning, gradients, loss kernels or optimizers.
+Forward and backward matrix products use NuMojo rank-two `@`, including its
+vectorized CPU path. Numax's runtime-shape `numax.linalg.matmul` consumes
+`TensorLike` and returns `Dynamic` storage. The engine uses NuMojo directly
+to avoid converting these borrowed arrays to a second storage type at each layer.
+NuMojo can materialize transposes and strided operands. Bias reduction uses
+`moxie._dense.sum_axis2d`. Scalar loss and regularization sums accumulate in
+Float64, while activations, residuals and gradient tensors retain the input
+dtype. The CPU exponential and logarithm use LLVM intrinsics for Float64
+accuracy on the locked toolchain.
+
+Helpers raise Mojo `Error` with `ValueError` prefixes for invalid batch
+shapes and settings. Concurrent mutation and manually invalid array metadata
+are outside the shared storage contract.

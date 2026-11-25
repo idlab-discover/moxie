@@ -27,13 +27,19 @@ def main():
     subprocess.run(compiler_command(['mojo', 'precompile', '-I', str(ROOT/'builds/deps'), str(ROOT/'builds/deps/moxie'), '-o', str(ROOT/'builds/moxie.mojoc')]), check=True)
     flags = ['-O3', '--fp-mode=contract=off', '-I', str(ROOT/'builds/deps')]
     subprocess.run(compiler_command(['mojo', 'build', *flags, str(ROOT/'tests/parameters.mojo'), '-o', str(ROOT/'builds/parameters')]), check=True)
-    subprocess.run(compiler_command(['mojo', 'build', *flags, str(ROOT/'tests/parameter_dump.mojo'), '-o', str(ROOT/'builds/parameter_dump')]), check=True)
+    for stem in ('parameter_dump', 'objective_dump'):
+        subprocess.run(compiler_command([
+            'mojo', 'build', *flags, str(ROOT / 'tests' / f'{stem}.mojo'),
+            '-o', str(ROOT / 'builds' / stem),
+        ]), check=True)
     subprocess.run(compiler_command(['mojo', 'build', *flags, str(ROOT/'examples/parameters.mojo'), '-o', str(ROOT/'builds/example')]), check=True)
     if action in ('test', 'parity'):
         subprocess.run([str(ROOT/'builds/parameters')], check=True)
+        subprocess.run([str(ROOT/'builds/objective_dump')], check=True, stdout=subprocess.DEVNULL)
+        print('PASS MLP objective shape, input, saturation and finite-difference contracts', flush=True)
     if action == 'parity':
         subprocess.run([sys.executable, str(ROOT/'tests/parameter_parity.py')], check=True)
-        raise SystemExit('INCOMPLETE: forward/backprop and optimizer parity are not implemented')
+        subprocess.run([sys.executable, str(ROOT/'tests/objective_parity.py')], check=True)
 
 if __name__ == '__main__':
     main()

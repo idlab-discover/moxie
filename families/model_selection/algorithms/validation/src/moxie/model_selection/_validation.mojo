@@ -23,6 +23,19 @@ trait CVAdapter(FitAdapter):
         ...
     def metadata_rows(self, metadata: Self.Scorer.Metadata, rows: IndexArray) raises -> Self.Scorer.Metadata:
         ...
+    def validate_metadata(self, metadata: Self.Scorer.Metadata, n_samples: Int) raises:
+        """Validate whole-dataset metadata before selecting any rows."""
+        pass
+
+
+trait DefaultCVAdapter(CVAdapter):
+    """Opt into CV with adapter-supplied folds and scoring."""
+
+    def default_scorer(self) raises -> Self.Scorer:
+        ...
+
+    def default_cv(self, X: Self.Scorer.Input, y: Self.Scorer.Target) raises -> List[IndexSplit]:
+        ...
 
 
 trait IncrementalCVAdapter(CVAdapter):
@@ -120,6 +133,8 @@ def _cross_validate[A: CVAdapter](
 ) raises -> CVResult[A.Scorer.Estimator]:
     var n = adapter.n_samples(X, y)
     _checked_splits(cv, n)
+    adapter.validate_metadata(fit_metadata, n)
+    adapter.validate_metadata(score_metadata, n)
     var metrics = len(scorers)
     if metrics == 0 or len(metric_names) != metrics:
         raise Error("ValueError: scorers and metric names must be nonempty and aligned")
@@ -171,6 +186,40 @@ def cross_val_score[A: CVAdapter](estimator: A.Scorer.Estimator, X: A.Scorer.Inp
     return values^
 
 
+def cross_val_score[A: DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *,
+    fit_metadata: A.Scorer.Metadata,
+    score_metadata: A.Scorer.Metadata,
+    cv: Optional[List[IndexSplit]] = None,
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> NDArray[DType.float64]:
+    """Evaluate the adapter's default scorer and generate omitted folds from X and y."""
+    var scorer = adapter.default_scorer()
+    if cv:
+        return cross_val_score[A](
+            estimator, X, y, adapter, scorer^, cv.value(), fit_metadata, score_metadata,
+            error_score=error_score,
+        )
+    return cross_val_score[A](
+        estimator, X, y, adapter, scorer^, adapter.default_cv(X, y), fit_metadata, score_metadata,
+        error_score=error_score,
+    )
+
+
+def cross_val_score[A: DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *,
+    cv: Optional[List[IndexSplit]] = None,
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> NDArray[DType.float64] where conforms_to(A.Scorer.Metadata, Defaultable):
+    """Use default metadata for both fitting and scoring."""
+    return cross_val_score[A](
+        estimator, X, y, adapter, cv=cv, error_score=error_score,
+        fit_metadata=A.Scorer.Metadata(), score_metadata=A.Scorer.Metadata(),
+    )
+
+
 def _checked_prediction_splits(cv: List[IndexSplit], n: Int) raises:
     _checked_splits(cv, n)
     var seen = zeros[DType.int64](Shape(n))
@@ -209,7 +258,10 @@ def validation_curve[A: CVAdapter & ParameterAdapter](
     error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
 ) raises -> Tuple[NDArray[DType.float64], NDArray[DType.float64]]:
     """Return train/test scores (parameter, split), evaluating split-first."""
-    _checked_splits(cv, adapter.n_samples(X, y))
+    var n = adapter.n_samples(X, y)
+    _checked_splits(cv, n)
+    adapter.validate_metadata(fit_metadata, n)
+    adapter.validate_metadata(score_metadata, n)
     if len(param_range) == 0:
         raise Error("ValueError: param_range must not be empty")
     var scores = ScoreTable(
@@ -300,7 +352,10 @@ def learning_curve[A: CVAdapter, size_dtype: DType = DType.float64](
     comptime if not conforms_to(A, IncrementalCVAdapter):
         if exploit_incremental_learning:
             raise Error("ValueError: incremental learning requires IncrementalCVAdapter")
-    _checked_splits(cv, adapter.n_samples(X, y))
+    var n = adapter.n_samples(X, y)
+    _checked_splits(cv, n)
+    adapter.validate_metadata(fit_metadata, n)
+    adapter.validate_metadata(score_metadata, n)
     var sizes = _learning_sizes[size_dtype](train_sizes, cv[0].train.size)
     var scores = ScoreTable(
         NDArray[DType.float64](Shape(sizes.size, len(cv), 1)),
@@ -473,6 +528,8 @@ def permutation_test_score[C: PermutationCV](
     var n = adapter.n_samples(X, y)
     if n < 1:
         raise Error("ValueError: permutation_test_score requires samples")
+    adapter.validate_metadata(fit_metadata, n)
+    adapter.validate_metadata(score_metadata, n)
     var blocks = List[IndexArray]()
     if groups:
         if len(groups.value()) != n:

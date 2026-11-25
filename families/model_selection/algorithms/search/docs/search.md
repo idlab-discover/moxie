@@ -11,26 +11,51 @@ The runnable [example](../examples/search.mojo) tunes a real DummyRegressor:
 var grid = Dict[String, List[Float64]]()
 grid["constant"] = [0.0, 2.0, 4.0, 5.0, 9.0]
 var model = DummyRegressor(strategy="constant")
-var search = GridSearchCV[RegressionAdapter](model, grid, RegressionAdapter())
-_ = search.fit(X, y, None, None)
+comptime RegressionAdapter = DenseSupervisedAdapter[DummyRegressor[]]
+var adapter = RegressionAdapter(configure)
+var search = GridSearchCV[RegressionAdapter](model, grid, adapter)
+_ = search.fit(X, y)
 print(search.best_params_()["constant"])
 var prediction = search.predict(X)
 
 var random = RandomizedSearchCV[RegressionAdapter](
-    model, ParameterGrid[Float64](grid), RegressionAdapter(),
+    model, ParameterGrid[Float64](grid), adapter,
     n_iter=3, random_state=42,
 )
-_ = random.fit(X, y, None, None)
+_ = random.fit(X, y)
 ```
 
-Run `pixi run test` in `algorithms/search` to compile and run the example.
-The example adapter is explicit so users can adapt it to their estimator's
-parameter, target and metadata types. Dummy estimators are live test/example
-dependencies from Moxie core (`moxie.dummy`); the search implementation imports no concrete estimator.
+The example's `configure` function applies each candidate dictionary to the
+estimator's constructor parameters. It uses the same adapter for both searches
+and for `cross_val_score[RegressionAdapter](model, X, y, adapter)`.
+
+`DenseSupervisedAdapter[E, Y, dtype, V, weight_dtype]` works with ordinary
+row-oriented NDArray inputs. It takes a concrete estimator type and the concrete
+target type when it differs from Float64 NDArray. Specify the feature dtype
+when it differs from Float64 and the weight dtype when it differs from the
+feature dtype. Array targets support rank one or two with Float32, Float64
+or Int64 elements. List targets support String, Int, Int64, Float32 or Float64.
+Each fold preserves target layout and dtype.
+
+The adapter calls the estimator's default score. The optional
+`apply_params` argument accepts a noncapturing Mojo function with signature
+`def(mut E, Dict[String, V]) thin raises`. `V` defaults to Float64. An empty
+parameter dictionary evaluates the original configuration. Nonempty candidate
+dictionaries require an applier that rejects unsupported names.
+Fit and score metadata are separate optional rank-one weight arrays. Weighted
+fit requires `WeightedSupervisedEstimator`; score weights use the estimator's
+scoring signature.
+
+Omitting `cv` generates five unshuffled folds from the current fit data.
+Classifiers use stratification for binary and multiclass targets. An estimator
+wrapper that exposes a classifier's score without implementing `ClassifierMixin`
+can choose the classifier policy with `classifier=True`, as in the
+[StandardScaler/PCA/SVC fixture](../../../../../tests/pipeline/test_nested_pca.mojo).
+Use a custom adapter for pairwise kernel slicing or other metadata layouts.
 
 ## Adapter and configuration contracts
 
-`SearchAdapter` composes `CVAdapter` and the family `ParameterAdapter`.
+`SearchAdapter` composes `DefaultCVAdapter` and the family `ParameterAdapter`.
 Its existing adapter implementations also work with `validation_curve`; no
 search import is required by the validation engine. Its contracts are:
 
@@ -77,6 +102,19 @@ clone. The default `None` requires the overload
 `fit(X, y, fit_metadata, score_metadata, rng)` with an application-owned mutable
 `RandomState`. That stream advances. Providing both a configured integer seed
 and a stream raises. There is no hidden global RNG.
+
+The dense adapter's focused test compares default KFold indices, weighted
+Float32 regression scores and the full-data refit with the pinned reference.
+Run it from the repository root with the locked environment and assembled
+sources.
+
+```sh
+mojo build -O3 --fp-mode=contract=off -I builds/deps \
+  families/model_selection/algorithms/search/tests/dense_adapter.mojo \
+  -o builds/dense_adapter
+python families/model_selection/algorithms/search/tests/dense_adapter_parity.py \
+  builds/dense_adapter
+```
 
 ## Results and refitting
 

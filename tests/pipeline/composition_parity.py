@@ -28,6 +28,7 @@ assert subprocess.check_output(['git', '-C', SOURCE, 'rev-parse', 'HEAD'], text=
 FILES = [
     'sklearn/model_selection/_search.py',
     'sklearn/model_selection/_validation.py',
+    'sklearn/model_selection/_split.py',
     'sklearn/utils/_metadata_requests.py',
     'sklearn/pipeline.py',
 ]
@@ -42,6 +43,7 @@ def load(name, relative):
     return module
 
 
+split = load('sklearn.model_selection._moxie_split_reference', 'sklearn/model_selection/_split.py')
 search = load('sklearn.model_selection._moxie_search_reference', 'sklearn/model_selection/_search.py')
 # Same wiring as families/model_selection/algorithms/search/tests/search_parity.py:
 # pinned CV bodies over the 1.9.1 wheel's validation, callbacks and tags.
@@ -57,6 +59,7 @@ functions = [n for n in ast.parse((SOURCE / 'sklearn/model_selection/_validation
 for function in functions:
     function.decorator_list = []
 exec(compile(ast.Module(body=functions, type_ignores=[]), 'validation', 'exec'), ns)
+search.check_cv = ns['check_cv'] = split.check_cv
 for name in ('_fit_and_score', '_aggregate_score_dicts', '_insert_error_scores',
              '_normalize_score_results', '_warn_or_raise_about_fit_failures'):
     setattr(search, name, ns[name])
@@ -81,8 +84,10 @@ pca_search = GridSearchCV(Pipeline([('pca', PCA()), ('svc', SVC())]),
                  {'pca__n_components': [1, 2], 'svc__C': [0.1, 10.0]}, cv=kf).fit(X, y)
 scaled_pca = Pipeline([('standardscaler', StandardScaler()), ('pca', PCA()), ('svc', SVC())])
 scaled_pca_search = GridSearchCV(scaled_pca,
-    {'pca__n_components': [1, 2], 'svc__C': [0.1, 10.0]}, cv=kf).fit(X, y)
-out['nested_pca_cv'] = cross_val_score(scaled_pca, X, y, cv=kf)
+    {'pca__n_components': [1, 2], 'svc__C': [0.1, 10.0]}).fit(X, y)
+out['nested_pca_cv'] = cross_val_score(scaled_pca, X, y)
+out['nested_pca_test_index'] = [(fold, row) for fold, (_, test) in enumerate(
+    split.check_cv(None, y, classifier=True).split(X, y)) for row in test]
 inner = GridSearchCV(SVC(), {'C': [0.1, 1.0, 10.0]}, cv=KFold(3))
 out['nested_cv'] = cross_val_score(inner, X, y, cv=kf).tolist()
 nested_best = []
@@ -118,7 +123,7 @@ def search_checks(native, prefix, fitted):
     compare(native, prefix + '_candidate', [[p[k] for k in keys] for p in params])
     compare(native, prefix + '_mean', result['mean_test_score'], atol=1e-12)
     compare(native, prefix + '_rank', result['rank_test_score'])
-    compare(native, prefix + '_fold', np.stack([result[f'split{k}_test_score'] for k in range(3)], axis=1))
+    compare(native, prefix + '_fold', np.stack([result[f'split{k}_test_score'] for k in range(fitted.n_splits_)], axis=1))
     compare(native, prefix + '_best', [fitted.best_index_])
     compare(native, prefix + '_prediction', fitted.predict(dataset()[0]))
 
@@ -130,6 +135,7 @@ search_checks(scaled_native, 'pipeline', scaled_search)
 search_checks(scaled_native, 'pca', pca_search)
 nested_pca_native = records(binary_dir / 'nested_pca')
 compare(nested_pca_native, 'nested_pca_cv', out['nested_pca_cv'])
+compare(nested_pca_native, 'nested_pca_test_index', out['nested_pca_test_index'])
 search_checks(nested_pca_native, 'nested_pca', scaled_pca_search)
 compare(nested_pca_native, 'nested_pca_weighted_score',
         scaled_pca_search.best_estimator_.score(X, y, sample_weight=np.arange(1, len(y) + 1)),

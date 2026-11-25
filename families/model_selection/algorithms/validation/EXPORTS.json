@@ -7,6 +7,7 @@
       "cross_val_score": "moxie.model_selection._validation",
       "cross_val_predict": "moxie.model_selection._validation",
       "CVAdapter": "moxie.model_selection._validation",
+      "DefaultCVAdapter": "moxie.model_selection._validation",
       "PredictionAdapter": "moxie.model_selection._validation",
       "CVResult": "moxie.model_selection._validation",
       "validation_curve": "moxie.model_selection._validation",

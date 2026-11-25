@@ -81,14 +81,14 @@ struct BernoulliCounts(CountUpdater):
                 statistics.feature_count[Item(c, f)] = statistics.feature_count.item(c, f) + addition.item(c, f)
 
 
-struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier):
+struct BernoulliNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier):
     """Dense BernoulliNB with weighted counts and incremental fitting."""
 
     comptime Params = BernoulliNBParams
-    comptime Input = _Matrix
+    comptime Input = NDArray[Self.dtype]
     comptime Target = Self.D.Target
     comptime Prediction = Self.Target
-    comptime Probabilities = _Matrix
+    comptime Probabilities = DenseMatrix
     comptime SampleWeight = List[Float64]
     comptime Classes = Self.Target
 
@@ -205,7 +205,7 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         *,
         ref[sample_weight_origin] sample_weight: Float64,
@@ -220,7 +220,7 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
         *,
@@ -230,14 +230,14 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         return self
 
     def fit[
-        dtype: DType,
+        input_dtype: DType,
         origin: MutOrigin,
         x_origin: ImmOrigin,
         y_origin: ImmOrigin,
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: NDArray[dtype],
+        ref[x_origin] X: NDArray[input_dtype],
         ref[y_origin] y: Self.Target,
         *,
         ref[sample_weight_origin] sample_weight: Float64,
@@ -247,14 +247,14 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         return self
 
     def partial_fit[
-        dtype: DType,
+        input_dtype: DType,
         origin: MutOrigin,
         x_origin: ImmOrigin,
         y_origin: ImmOrigin,
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: NDArray[dtype],
+        ref[x_origin] X: NDArray[input_dtype],
         ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
         *,
@@ -270,7 +270,7 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         y_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
     ) raises -> ref[self] Self:
         var fresh = self.__sklearn_clone__()
@@ -285,7 +285,7 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         *,
         ref[sample_weight_origin] sample_weight: Self.SampleWeight,
@@ -301,7 +301,7 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         y_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
     ) raises -> ref[self] Self:
@@ -317,7 +317,7 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
         *,
@@ -333,13 +333,13 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         self._update_array(dense_from_lists(X), y, classes, sample_weight)
 
     def fit[
-        dtype: DType,
+        input_dtype: DType,
         origin: MutOrigin,
         x_origin: ImmOrigin,
         y_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: NDArray[dtype],
+        ref[x_origin] X: NDArray[input_dtype],
         ref[y_origin] y: Self.Target,
         *,
         sample_weight: Optional[List[Float64]] = None,
@@ -350,13 +350,13 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         return self
 
     def partial_fit[
-        dtype: DType,
+        input_dtype: DType,
         origin: MutOrigin,
         x_origin: ImmOrigin,
         y_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: NDArray[dtype],
+        ref[x_origin] X: NDArray[input_dtype],
         ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
         *,
@@ -367,9 +367,9 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
         self = updated^
         return self
 
-    def _update_array[dtype: DType](mut self, X: NDArray[dtype], y: Self.Target,
+    def _update_array[input_dtype: DType](mut self, X: NDArray[input_dtype], y: Self.Target,
             classes: Optional[Self.Classes], sample_weight: Optional[List[Float64]]) raises:
-        var prepared = _prepare[dtype, Self.D](X, y, self._domain, classes, sample_weight,
+        var prepared = _prepare[input_dtype, Self.D](X, y, self._domain, classes, sample_weight,
                                      self.n_features_in_, False)
         ref batch = prepared.batch
         var alpha = FeatureAlpha(self.alpha, self.alpha_values.copy())
@@ -401,7 +401,7 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
                 ) - denominator
         self.class_log_prior_ = _log_priors(class_counts, self.class_prior, self.fit_prior)
 
-    def predict_joint_log_proba[dtype: DType](self, X: NDArray[dtype]) raises -> DenseMatrix:
+    def predict_joint_log_proba[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> DenseMatrix:
         check_is_fitted(self)
         _ = validate_matrix(X, self.n_features_in_)
         _check_binarize(self.binarize)
@@ -422,32 +422,66 @@ struct BernoulliNB[D: ClassDomain = IntListDomain](Copyable, WeightedSupervisedE
                 result[Item(i, c)] = joint + (self.class_log_prior_[c] + negative_sum)
         return result^
 
-    def predict[dtype: DType](self, X: NDArray[dtype]) raises -> Self.Target:
+    def predict[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> Self.Target:
         var joint = self.predict_joint_log_proba(X)
         return predict_labels(self._domain.value(), joint)
 
-    def predict_log_proba[dtype: DType](self, X: NDArray[dtype]) raises -> DenseMatrix:
+    def predict_log_proba[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> DenseMatrix:
         return log_normalize(self.predict_joint_log_proba(X))
 
-    def predict_proba[dtype: DType](self, X: NDArray[dtype]) raises -> DenseMatrix:
+    def predict_proba[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> DenseMatrix:
         return exp_normalize(self.predict_joint_log_proba(X))
 
-    def score[dtype: DType](self, X: NDArray[dtype], y: Self.Target,
+    def score[input_dtype: DType](self, X: NDArray[input_dtype], y: Self.Target,
                            sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
         return weighted_accuracy[Self.D](y, self.predict(X), sample_weight)
 
-    def predict_joint_log_proba(self, X: Self.Input) raises -> Self.Probabilities:
-        return probability_lists(self.predict_joint_log_proba(dense_from_lists(X)))
+    # Trait-typed NDArray[dtype] overloads; they delegate to the generic paths.
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        _ = self.fit[input_dtype=Self.dtype](X, y, sample_weight=Optional[List[Float64]](None))
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
+        _ = self.fit[input_dtype=Self.dtype](X, y, sample_weight=Optional[List[Float64]](sample_weight.copy()))
+        return self
+
+    def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+    ) raises -> ref[self] Self:
+        _ = self.partial_fit[input_dtype=Self.dtype](X, y, classes, sample_weight=Optional[List[Float64]](None))
+        return self
 
     def predict(self, X: Self.Input) raises -> Self.Target:
-        return self.predict(dense_from_lists(X))
+        return self.predict[input_dtype=Self.dtype](X)
 
     def predict_log_proba(self, X: Self.Input) raises -> Self.Probabilities:
-        return probability_lists(self.predict_log_proba(dense_from_lists(X)))
+        return self.predict_log_proba[input_dtype=Self.dtype](X)
 
     def predict_proba(self, X: Self.Input) raises -> Self.Probabilities:
-        return probability_lists(self.predict_proba(dense_from_lists(X)))
+        return self.predict_proba[input_dtype=Self.dtype](X)
 
     def score(self, X: Self.Input, y: Self.Target,
+              sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
+        return self.score[input_dtype=Self.dtype](X, y, sample_weight)
+
+    def predict_joint_log_proba(self, X: _Matrix) raises -> _Matrix:
+        return probability_lists(self.predict_joint_log_proba(dense_from_lists(X)))
+
+    def predict(self, X: _Matrix) raises -> Self.Target:
+        return self.predict(dense_from_lists(X))
+
+    def predict_log_proba(self, X: _Matrix) raises -> _Matrix:
+        return probability_lists(self.predict_log_proba(dense_from_lists(X)))
+
+    def predict_proba(self, X: _Matrix) raises -> _Matrix:
+        return probability_lists(self.predict_proba(dense_from_lists(X)))
+
+    def score(self, X: _Matrix, y: Self.Target,
               sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
         return self.score(dense_from_lists(X), y, sample_weight)

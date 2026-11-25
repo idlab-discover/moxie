@@ -54,6 +54,7 @@ building. See the individual guides for added cases, tolerances and coverage
 limits. Dictionary learning and SparsePCA remain unfinished.
 
 Runtime PCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA, KernelPCA,
-NMF and MiniBatchNMF support fitted and unfitted native model files.
+NMF, MiniBatchNMF, LatentDirichletAllocation and SparseCoder support fitted and
+unfitted native model files.
 See [persistence](serialization.md) for the supported dtypes, schema selection,
-and resuming IncrementalPCA and MiniBatchNMF.
+and resuming IncrementalPCA, MiniBatchNMF and LatentDirichletAllocation.

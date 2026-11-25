@@ -8,11 +8,14 @@ from .decomposition._truncated_svd import TruncatedSVD
 from .decomposition._factor_analysis import FactorAnalysis
 from .decomposition._fastica import FastICA, WhitenOption
 from .decomposition._kernel_pca import KernelPCA, KernelPower
+from .decomposition._lda import LatentDirichletAllocation, LatentDirichletAllocationParams
+from .decomposition._sparse_coding import SparseCoder
 from .decomposition._nmf import (
     AlphaH, BetaLoss, MiniBatchNMF, MiniBatchNMFParams, NMF, NMFComponents,
     NMFConfig, NMFParams, _gamma,
 )
-from .serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
+from .serialization import ArrayPayload, BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
+from ._random import RandomState
 
 
 def _write_optional_int(mut writer: BinaryWriter, value: Optional[Int]):
@@ -24,6 +27,18 @@ def _write_optional_int(mut writer: BinaryWriter, value: Optional[Int]):
 def _read_optional_int(mut reader: BinaryReader) raises -> Optional[Int]:
     if reader.boolean():
         return reader.integer()
+    return None
+
+
+def _write_optional_float(mut writer: BinaryWriter, value: Optional[Float64]):
+    writer.boolean(Bool(value))
+    if value:
+        writer.scalar(value.value())
+
+
+def _read_optional_float(mut reader: BinaryReader) raises -> Optional[Float64]:
+    if reader.boolean():
+        return reader.scalar[DType.float64]()
     return None
 
 
@@ -131,7 +146,14 @@ def _write_array[dtype: DType](
         return
     if not array:
         raise Error("ModelSchemaError: missing " + name)
-    ref value = array.value()
+    _write_dense_array(archive, name, array.value(), shape, allow_nan=allow_nan,
+        allow_positive_inf=allow_positive_inf, nonnegative=nonnegative)
+
+
+def _write_dense_array[dtype: DType](
+    mut archive: ModelArchive, name: String, value: NDArray[dtype], shape: List[Int],
+    *, allow_nan: Bool = False, allow_positive_inf: Bool = False, nonnegative: Bool = False,
+) raises:
     if value.ndim != len(shape):
         raise Error("ModelSchemaError: invalid shape for " + name)
     for axis in range(len(shape)):
@@ -166,6 +188,16 @@ def _read_array[dtype: DType](
     var payload = archive.array(name)
     if payload.shape != shape:
         raise Error("ModelSchemaError: invalid shape for " + name)
+    return _decode_dense_array[dtype](payload, allow_nan=allow_nan,
+        allow_positive_inf=allow_positive_inf, nonnegative=nonnegative)
+
+
+def _decode_dense_array[dtype: DType](
+    payload: ArrayPayload, *, allow_nan: Bool = False, allow_positive_inf: Bool = False,
+    nonnegative: Bool = False,
+) raises -> NDArray[dtype]:
+    ref shape = payload.shape
+    ref name = payload.name
     var values = payload.values[dtype]()
     var dimensions = Shape(shape[0])
     if len(shape) == 2:
@@ -1028,4 +1060,197 @@ struct MiniBatchNMFSchema[dtype: DType = DType.float64](ModelSchema):
             fitted, shape, nonnegative=True)
         model._components_denominator = _read_array[Self.dtype](archive, "_components_denominator",
             fitted, shape, nonnegative=True)
+        return model^
+
+
+def _check_sparse_coder_dimensions(features: Int, atoms: Int) raises:
+    if features < 0 or atoms < 0 or (features == 0) != (atoms == 0):
+        raise Error("ModelSchemaError: invalid SparseCoder fitted dimensions")
+
+
+struct SparseCoderSchema[dtype: DType = DType.float64](ModelSchema):
+    """Version 1 of the dense fixed dictionary, settings and fitted dimensions."""
+
+    comptime Model = SparseCoder[Self.dtype]
+    comptime _type_id = "moxie.decomposition.SparseCoder"
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        _check_sparse_coder_dimensions(model.n_features_in_, model.n_components_)
+        if model.dictionary.ndim != 2 or model.dictionary.shape[0] < 1 or model.dictionary.shape[1] < 1:
+            raise Error("ModelSchemaError: dictionary must be a nonempty matrix")
+
+        var archive = ModelArchive(Self._type_id, 1)
+        var writer = BinaryWriter()
+        writer.uint(UInt64(dtype_code[Self.dtype]()))
+        writer.string(model.transform_algorithm)
+        _write_optional_int(writer, model.transform_n_nonzero_coefs)
+        _write_optional_float(writer, model.transform_alpha)
+        writer.boolean(model.split_sign)
+        _write_optional_int(writer, model.n_jobs)
+        writer.boolean(model.positive_code)
+        writer.integer(model.transform_max_iter)
+        writer.integer(model.n_features_in_)
+        writer.integer(model.n_components_)
+        archive.manifest = writer^.finish()
+        _write_dense_array(archive, "dictionary", model.dictionary,
+            [model.dictionary.shape[0], model.dictionary.shape[1]])
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self._type_id, 1)
+        archive.validate()
+        _check_arrays(archive, True, 1)
+        var reader = BinaryReader(archive.manifest)
+        _check_dtype[Self.dtype](reader)
+        var algorithm = reader.string()
+        var nonzero = _read_optional_int(reader)
+        var alpha = _read_optional_float(reader)
+        var split = reader.boolean()
+        var jobs = _read_optional_int(reader)
+        var positive = reader.boolean()
+        var max_iter = reader.integer()
+        var features = reader.integer()
+        var atoms = reader.integer()
+        reader.finish()
+        _check_sparse_coder_dimensions(features, atoms)
+
+        ref payload = archive.payloads[0]
+        if payload.name != "dictionary":
+            raise Error("ModelSchemaError: missing dictionary")
+        ref shape = payload.shape
+        if len(shape) != 2 or shape[0] < 1 or shape[1] < 1:
+            raise Error("ModelSchemaError: dictionary must be a nonempty matrix")
+        var dictionary = _decode_dense_array[Self.dtype](payload)
+        var model = Self.Model(dictionary, transform_algorithm=algorithm,
+            transform_n_nonzero_coefs=nonzero, transform_alpha=alpha,
+            split_sign=split, n_jobs=jobs, positive_code=positive, transform_max_iter=max_iter)
+        model.n_features_in_ = features
+        model.n_components_ = atoms
+        return model^
+
+
+def _write_lda_params(mut writer: BinaryWriter, params: LatentDirichletAllocationParams):
+    writer.integer(params.n_components)
+    _write_optional_float(writer, params.doc_topic_prior)
+    _write_optional_float(writer, params.topic_word_prior)
+    writer.string(params.learning_method)
+    writer.scalar(params.learning_decay)
+    writer.scalar(params.learning_offset)
+    writer.integer(params.max_iter)
+    writer.integer(params.batch_size)
+    writer.integer(params.evaluate_every)
+    writer.scalar(params.total_samples)
+    writer.scalar(params.perp_tol)
+    writer.scalar(params.mean_change_tol)
+    writer.integer(params.max_doc_update_iter)
+    _write_optional_int(writer, params.n_jobs)
+    writer.integer(params.verbose)
+    _write_optional_int(writer, params.random_state)
+
+
+def _read_lda_params(mut reader: BinaryReader) raises -> LatentDirichletAllocationParams:
+    return LatentDirichletAllocationParams(reader.integer(),
+        _read_optional_float(reader), _read_optional_float(reader), reader.string(),
+        reader.scalar[DType.float64](), reader.scalar[DType.float64](),
+        reader.integer(), reader.integer(), reader.integer(), reader.scalar[DType.float64](),
+        reader.scalar[DType.float64](), reader.scalar[DType.float64](),
+        reader.integer(), _read_optional_int(reader), reader.integer(), _read_optional_int(reader))
+
+
+def _check_lda_state[dtype: DType](
+    model: LatentDirichletAllocation[dtype], state: _ComponentState,
+) raises:
+    if state.fitted:
+        if (
+            state.features < 1 or state.rank < 1 or model.n_iter_ < 0
+            or model.n_batch_iter_ <= model.n_iter_
+            or not (model.doc_topic_prior_ >= 0 and model.doc_topic_prior_ <= 1)
+            or not (model.topic_word_prior_ >= 0 and model.topic_word_prior_ <= 1)
+            or model.bound_ < 0 or not model.random_state_
+        ):
+            raise Error("ModelSchemaError: invalid fitted LDA metadata")
+    elif (
+        state.features or state.rank or model.n_batch_iter_ or model.n_iter_
+        or model.doc_topic_prior_ != 0 or model.topic_word_prior_ != 0
+        or model.bound_ != 0 or model.random_state_
+    ):
+        raise Error("ModelSchemaError: unfitted LDA has learned metadata")
+
+
+struct LatentDirichletAllocationSchema[dtype: DType = DType.float64](ModelSchema):
+    """Version 1 of dense LDA, including state for continuing partial fit."""
+
+    comptime Model = LatentDirichletAllocation[Self.dtype]
+    comptime _type_id = "moxie.decomposition.LatentDirichletAllocation"
+    comptime _rng_words = 624
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var state = _component_state(model.components_, model.n_features_in_)
+        _check_lda_state(model, state)
+        var archive = ModelArchive(Self._type_id, 1)
+        var writer = BinaryWriter()
+        writer.uint(UInt64(dtype_code[Self.dtype]()))
+        _write_lda_params(writer, model.get_params())
+        state.write(writer)
+        writer.scalar(model.doc_topic_prior_)
+        writer.scalar(model.topic_word_prior_)
+        writer.integer(model.n_batch_iter_)
+        writer.integer(model.n_iter_)
+        writer.scalar(model.bound_)
+        if model.random_state_:
+            ref rng = model.random_state_.value()
+            writer.integer(rng.state_position())
+            writer.boolean(rng.has_gauss())
+            writer.scalar(rng.cached_gauss())
+            var words = List[UInt32](capacity=Self._rng_words)
+            for i in range(Self._rng_words):
+                words.append(rng.state_word(i))
+            var rng_shape: List[Int] = [Self._rng_words]
+            archive.add_array("random_state_", rng_shape, words)
+        archive.manifest = writer^.finish()
+        var shape: List[Int] = [state.rank, state.features]
+        var zero_prior = model.doc_topic_prior_ == 0 or model.topic_word_prior_ == 0
+        _write_array(archive, "components_", model.components_, state.fitted, shape,
+            allow_nan=zero_prior, nonnegative=True)
+        _write_array(archive, "exp_dirichlet_component_", model.exp_dirichlet_component_,
+            state.fitted, shape, allow_nan=zero_prior, nonnegative=True)
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self._type_id, 1)
+        archive.validate()
+        var reader = BinaryReader(archive.manifest)
+        _check_dtype[Self.dtype](reader)
+        var params = _read_lda_params(reader)
+        var state = _ComponentState.read(reader)
+        _check_arrays(archive, state.fitted, 3)
+        var model = Self.Model()
+        _ = model.set_params(params)
+        model.n_features_in_ = state.features
+        model.doc_topic_prior_ = reader.scalar[DType.float64]()
+        model.topic_word_prior_ = reader.scalar[DType.float64]()
+        model.n_batch_iter_ = reader.integer()
+        model.n_iter_ = reader.integer()
+        model.bound_ = reader.scalar[DType.float64]()
+        if state.fitted:
+            var position = reader.integer()
+            var has_gauss = reader.boolean()
+            var cached_gauss = reader.scalar[DType.float64]()
+            ref payload = archive.array("random_state_")
+            if payload.shape != [Self._rng_words]:
+                raise Error("ModelSchemaError: invalid shape for random_state_")
+            model.random_state_ = RandomState(state_words=payload.values[DType.uint32](),
+                position=position, has_gauss=has_gauss, cached_gauss=cached_gauss)
+        reader.finish()
+        _check_lda_state(model, state)
+        var shape: List[Int] = [state.rank, state.features]
+        var zero_prior = model.doc_topic_prior_ == 0 or model.topic_word_prior_ == 0
+        model.components_ = _read_array[Self.dtype](archive, "components_", state.fitted,
+            shape, allow_nan=zero_prior, nonnegative=True)
+        model.exp_dirichlet_component_ = _read_array[Self.dtype](archive,
+            "exp_dirichlet_component_", state.fitted, shape, allow_nan=zero_prior, nonnegative=True)
         return model^

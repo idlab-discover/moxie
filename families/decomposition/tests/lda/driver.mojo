@@ -2,10 +2,13 @@
 learning_decay learning_offset max_doc_update_iter mean_change_tol perp_tol total_samples mode(fit|partial)."""
 from std.sys import argv
 from moxie.decomposition import LatentDirichletAllocation
+from moxie.decomposition_serialization import LatentDirichletAllocationSchema
+from moxie.serialization import dumps, loads
 from decomposition_testing import emit, emit_scalar, read_matrix
 
 
 def evaluate[dtype: DType]() raises:
+    comptime Schema = LatentDirichletAllocationSchema[dtype]
     var args = argv()
     var x = read_matrix[dtype](String(args[2]))
     var doc_prior: Optional[Float64] = None
@@ -18,10 +21,13 @@ def evaluate[dtype: DType]() raises:
         max_doc_update_iter=Int(args[13]), mean_change_tol=Float64(String(args[14])), perp_tol=Float64(String(args[15])),
         total_samples=Float64(String(args[16])))
     if String(args[17]) == "partial":
-        model.partial_fit(x)
-        model.partial_fit(x)
+        _ = model.partial_fit(x)
+        model = Schema.decode(loads(dumps(Schema.encode(model))))
+        _ = model.partial_fit(x)
     else:
-        model.fit(x)
+        _ = model.fit(x)
+    model = Schema.decode(loads(dumps(Schema.encode(model))))
+    if String(args[17]) == "fit":
         emit_scalar("bound", model.bound_)
         emit_scalar("n_iter", Float64(model.n_iter_))
     emit("components", model.components_.value())

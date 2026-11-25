@@ -15,6 +15,8 @@ compile time. The schema dtype defaults to Float64.
 | KernelPCA | `KernelPCASchema` |
 | NMF | `NMFSchema` |
 | MiniBatchNMF | `MiniBatchNMFSchema` |
+| LatentDirichletAllocation | `LatentDirichletAllocationSchema` |
+| SparseCoder | `SparseCoderSchema` |
 
 ```mojo
 from moxie.decomposition import IncrementalPCA
@@ -48,6 +50,14 @@ iteration count. MiniBatchNMF also restores the numerator and denominator
 accumulators, step count, and fit-time settings needed to continue
 `partial_fit`. A MiniBatchNMF model trained only by `partial_fit` can have
 `n_steps_ > 0` and `n_iter_ == 0`.
+LatentDirichletAllocation restores both topic matrices, the fitted priors,
+iteration counters, bound and its owned MT19937 stream, including any cached
+normal. This preserves the next `partial_fit` update even after a change to
+the configured seed.
+SparseCoder stores its finite, nonempty dictionary even before fitting because
+it can transform without fitting. The fitted feature and component counts are
+stored independently of the current dictionary. Coding algorithm support and
+the Float64 requirement for `split_sign` follow the estimator contract.
 
 Version 1 supports Float32 and Float64 inputs. Loading checks
 the estimator identity, schema version, dtype, array shapes and fitted metadata.
@@ -64,7 +74,8 @@ pixi run python families/decomposition/tools/family.py serialization-check
 
 It checks raw file round trips, resumption, strided learned arrays and invalid
 state. The differential drivers pass restored models through the pinned
-scikit-learn comparisons. The IncrementalPCA and MiniBatchNMF drivers also
-restore state between partial-fit batches. Set `MOXIE_ESTIMATORS` to a
+scikit-learn comparisons. The IncrementalPCA, MiniBatchNMF and
+LatentDirichletAllocation drivers also restore state between partial-fit
+batches. Set `MOXIE_ESTIMATORS` to a
 comma-separated list of supported estimator names to select the differential
 runs.

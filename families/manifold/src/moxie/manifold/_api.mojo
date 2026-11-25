@@ -6,72 +6,6 @@ Implemented estimators and functions live in their own modules.
 """
 from moxie.manifold._api_types import APIValue
 
-struct MDS(Movable):
-
-    "API scaffold for sklearn.manifold._mds.MDS. Operations are deferred."
-
-    var n_components: APIValue
-
-    var metric_mds: APIValue
-
-    var n_init: APIValue
-
-    var init: APIValue
-
-    var max_iter: APIValue
-
-    var verbose: APIValue
-
-    var eps: APIValue
-
-    var n_jobs: APIValue
-
-    var random_state: APIValue
-
-    var dissimilarity: APIValue
-
-    var metric: APIValue
-
-    var metric_params: APIValue
-
-    var normalized_stress: APIValue
-
-    var embedding_: APIValue
-
-    var stress_: APIValue
-
-    var dissimilarity_matrix_: APIValue
-
-    var n_features_in_: APIValue
-
-    var feature_names_in_: APIValue
-
-    var n_iter_: APIValue
-
-    def get_metadata_routing(mut self) raises -> APIValue:
-        "Scikit-learn signature: get_metadata_routing(self)."
-        raise Error("NotImplementedError: MDS.get_metadata_routing is an API scaffold")
-
-    def get_params(mut self, deep: Some[Movable] = True) raises -> APIValue:
-        "Scikit-learn signature: get_params(self, deep=True)."
-        raise Error("NotImplementedError: MDS.get_params is an API scaffold")
-
-    def set_params(mut self, params: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_params(self, **params)."
-        raise Error("NotImplementedError: MDS.set_params is an API scaffold")
-
-    def __init__(out self, n_components: Some[Movable] = 2, *, metric_mds: Some[Movable] = True, n_init: Some[Movable] = 1, init: Some[Movable] = "warn", max_iter: Some[Movable] = 300, verbose: Some[Movable] = 0, eps: Some[Movable] = 1e-06, n_jobs: Some[Movable] = None, random_state: Some[Movable] = None, dissimilarity: Some[Movable] = "deprecated", metric: Some[Movable] = "euclidean", metric_params: Some[Movable] = None, normalized_stress: Some[Movable] = "auto") raises:
-        "Scikit-learn signature: __init__(self, n_components=2, *, metric_mds=True, n_init=1, init='warn', max_iter=300, verbose=0, eps=1e-06, n_jobs=None, random_state=None, dissimilarity='deprecated', metric='euclidean', metric_params=None, normalized_stress='auto')."
-        raise Error("NotImplementedError: MDS.__init__ is an API scaffold")
-
-    def fit(mut self, X: Some[Movable], y: Some[Movable] = None, init: Some[Movable] = None) raises:
-        "Scikit-learn signature: fit(self, X, y=None, init=None)."
-        raise Error("NotImplementedError: MDS.fit is an API scaffold")
-
-    def fit_transform(mut self, X: Some[Movable], y: Some[Movable] = None, init: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: fit_transform(self, X, y=None, init=None)."
-        raise Error("NotImplementedError: MDS.fit_transform is an API scaffold")
-
 struct LocallyLinearEmbedding(Movable):
 
     "API scaffold for sklearn.manifold._locally_linear.LocallyLinearEmbedding. Operations are deferred."
@@ -203,10 +137,6 @@ struct SpectralEmbedding(Movable):
 def locally_linear_embedding(X: Some[Movable], *, n_neighbors: Some[Movable], n_components: Some[Movable], reg: Some[Movable] = 0.001, eigen_solver: Some[Movable] = "auto", tol: Some[Movable] = 1e-06, max_iter: Some[Movable] = 100, method: Some[Movable] = "standard", hessian_tol: Some[Movable] = 0.0001, modified_tol: Some[Movable] = 1e-12, random_state: Some[Movable] = None, n_jobs: Some[Movable] = None) raises -> APIValue:
     "Scikit-learn signature: locally_linear_embedding(X, *, n_neighbors, n_components, reg=0.001, eigen_solver='auto', tol=1e-06, max_iter=100, method='standard', hessian_tol=0.0001, modified_tol=1e-12, random_state=None, n_jobs=None)."
     raise Error("NotImplementedError: locally_linear_embedding is an API scaffold")
-
-def smacof(dissimilarities: Some[Movable], *, metric: Some[Movable] = True, n_components: Some[Movable] = 2, init: Some[Movable] = None, n_init: Some[Movable] = 1, n_jobs: Some[Movable] = None, max_iter: Some[Movable] = 300, verbose: Some[Movable] = 0, eps: Some[Movable] = 1e-06, random_state: Some[Movable] = None, return_n_iter: Some[Movable] = False, normalized_stress: Some[Movable] = "auto") raises -> APIValue:
-    "Scikit-learn signature: smacof(dissimilarities, *, metric=True, n_components=2, init=None, n_init=1, n_jobs=None, max_iter=300, verbose=0, eps=1e-06, random_state=None, return_n_iter=False, normalized_stress='auto')."
-    raise Error("NotImplementedError: smacof is an API scaffold")
 
 def spectral_embedding(adjacency: Some[Movable], *, n_components: Some[Movable] = 8, eigen_solver: Some[Movable] = None, random_state: Some[Movable] = None, eigen_tol: Some[Movable] = "auto", norm_laplacian: Some[Movable] = True, drop_first: Some[Movable] = True) raises -> APIValue:
     "Scikit-learn signature: spectral_embedding(adjacency, *, n_components=8, eigen_solver=None, random_state=None, eigen_tol='auto', norm_laplacian=True, drop_first=True)."

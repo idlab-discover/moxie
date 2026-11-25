@@ -2885,6 +2885,12 @@
         "moxie.manifold._isomap": {
           "file": "src/moxie/manifold/_isomap.mojo"
         },
+        "moxie.manifold._mds": {
+          "file": "src/moxie/manifold/_mds.mojo"
+        },
+        "moxie.manifold._smacof": {
+          "file": "src/moxie/manifold/_smacof.mojo"
+        },
         "moxie.manifold._plumbing": {
           "file": "src/moxie/manifold/_plumbing.mojo"
         },
@@ -2902,7 +2908,12 @@
           "moxie.manifold": {
             "EmbeddingEstimator": "moxie.manifold._base",
             "OutOfSampleEmbedding": "moxie.manifold._base",
-            "MDS": "moxie.manifold._api",
+            "MDS": "moxie.manifold._mds",
+            "MDSMetric": "moxie.manifold._mds",
+            "MDSMetricParams": "moxie.manifold._mds",
+            "MDSParams": "moxie.manifold._mds",
+            "NormalizedStress": "moxie.manifold._smacof",
+            "SMACOFResult": "moxie.manifold._smacof",
             "TSNE": "moxie.manifold._t_sne",
             "TSNEParams": "moxie.manifold._t_sne",
             "TSNEMetricParams": "moxie.manifold._t_sne",
@@ -2912,7 +2923,7 @@
             "LocallyLinearEmbedding": "moxie.manifold._api",
             "SpectralEmbedding": "moxie.manifold._api",
             "locally_linear_embedding": "moxie.manifold._api",
-            "smacof": "moxie.manifold._api",
+            "smacof": "moxie.manifold._smacof",
             "spectral_embedding": "moxie.manifold._api",
             "trustworthiness": "moxie.manifold._t_sne"
           }

@@ -1,14 +1,14 @@
 # Dense-only scope
 
 This project implements dense contracts, validation, owned snapshots,
-dense TSNE, Isomap, ClassicalMDS and trustworthiness. See [dense t-SNE](tsne.md),
-[dense Isomap](isomap.md) and [algorithm support](algorithms.md) for settings,
+dense TSNE, Isomap, MDS, ClassicalMDS and trustworthiness. See [dense t-SNE](tsne.md),
+[dense Isomap](isomap.md), [dense MDS and SMACOF](mds.md), and [algorithm support](algorithms.md) for settings,
 native API differences and parity coverage. Tests cover Float32 and Float64,
 finite nonempty rank-two inputs, contiguous and offset or negative-stride
 views, square pairwise matrices, dense fixed-k neighbor tables, signed
 symmetric spectral operators and coordinate shape checks.
 
-Dense work remains open for MDS and smacof, SpectralEmbedding and
+Dense work remains open for SpectralEmbedding and
 spectral_embedding, and all four LLE reconstruction methods.
 See [plumbing.md](plumbing.md) for ownership and dependencies.
 

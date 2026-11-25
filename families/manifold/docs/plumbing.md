@@ -1,6 +1,6 @@
 # Manifold plumbing
 
-This directory owns manifold contracts, validation, dense TSNE, Isomap, ClassicalMDS
+This directory owns manifold contracts, validation, dense TSNE, Isomap, MDS, ClassicalMDS
 and trustworthiness.
 Existing `EmbeddingEstimator` and `OutOfSampleEmbedding` remain unchanged.
 Public imports follow sklearn.manifold; `_plumbing` is a private native exchange

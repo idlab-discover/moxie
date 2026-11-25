@@ -261,6 +261,19 @@ struct _CalibratedClassifier[E: CalibrationEstimator](Copyable, Movable):
 comptime _DefaultCalibrationEstimator = ClassifierCalibrationAdapter[LinearSVC[]]
 
 
+def _widen_features(X: nm.NDArray[DType.float32]) raises -> Array:
+    if X.ndim != 2 or X.shape[0] == 0 or X.shape[1] == 0:
+        raise Error("ValueError: expected a nonempty matrix")
+    if X.is_c_contiguous() or X.is_f_contiguous():
+        return X.astype[DType.float64]()
+    # NuMojo astype reads consecutive storage even for strided views.
+    var result = Array(X.shape)
+    for i in range(X.shape[0]):
+        for j in range(X.shape[1]):
+            result[nm.Item(i, j)] = Float64(X.item(i, j))
+    return result^
+
+
 struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstimator](
     CalibratedClassifier, CalibrationDisplayEstimator, Copyable, Movable
 ):
@@ -368,8 +381,20 @@ struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstim
     def __sklearn_is_fitted__(self) -> Bool:
         return len(self.calibrated_classifiers_) > 0
 
+    def _require_fitted(self) raises:
+        if not self.__sklearn_is_fitted__():
+            raise Error("NotFittedError: CalibratedClassifierCV is unfitted")
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target) raises -> ref[self] Self:
         return self.fit(X, y, None)
+
+    def fit(
+        mut self,
+        X: nm.NDArray[DType.float32],
+        y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        return self.fit(_widen_features(X), y, sample_weight)
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self,
@@ -454,8 +479,7 @@ struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstim
         return self
 
     def predict_proba(self, X: Self.Input) raises -> Self.Probabilities:
-        if not self.__sklearn_is_fitted__():
-            raise Error("NotFittedError: CalibratedClassifierCV is unfitted")
+        self._require_fitted()
         matrix(X)
         if X.shape[1] != self.n_features_in_:
             raise Error("ValueError: inconsistent feature count")
@@ -472,9 +496,12 @@ struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstim
                     )
         return out^
 
+    def predict_proba(self, X: nm.NDArray[DType.float32]) raises -> Self.Probabilities:
+        self._require_fitted()
+        return self.predict_proba(_widen_features(X))
+
     def class_labels(self) raises -> Array:
-        if not self.__sklearn_is_fitted__():
-            raise Error("NotFittedError: CalibratedClassifierCV is unfitted")
+        self._require_fitted()
         return self.classes_.copy()
 
     def calibration_probabilities(self, X: Array) raises -> Array:
@@ -494,6 +521,10 @@ struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstim
             out[nm.Item(i)] = self.classes_.item(best)
         return out^
 
+    def predict(self, X: nm.NDArray[DType.float32]) raises -> Self.Prediction:
+        self._require_fitted()
+        return self.predict(_widen_features(X))
+
     def score(
         self,
         X: Self.Input,
@@ -512,3 +543,12 @@ struct CalibratedClassifierCV[E: CalibrationEstimator = _DefaultCalibrationEstim
             if y.item(i) == predictions.item(i):
                 correct += w.item(i)
         return correct / total
+
+    def score(
+        self,
+        X: nm.NDArray[DType.float32],
+        y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> Float64:
+        self._require_fitted()
+        return self.score(_widen_features(X), y, sample_weight)

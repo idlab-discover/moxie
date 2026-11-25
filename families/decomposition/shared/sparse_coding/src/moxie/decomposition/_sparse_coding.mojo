@@ -1,14 +1,67 @@
-"""Dense sparse coding; threshold branch of sklearn's BSD-3-Clause _dict_learning.
-
-Regression-based coding belongs to the external linear-model solver owners.
-"""
+# Adapted from sklearn/decomposition/_dict_learning.py, scikit-learn developers.
+# SPDX-License-Identifier: BSD-3-Clause
+"""Dense threshold and coordinate-descent sparse coding."""
 from numojo import NDArray, Shape, zeros
 from std.math import abs, isfinite
 from moxie.base import UnsupervisedEstimator
+from moxie._dense import row_squared_norms
+from moxie.linear_model._cd_fast import coordinate_descent_gram
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
-from ._matrix import get2, set2, contiguous, feature_names
+from ._matrix import get1, get2, set2, contiguous, feature_names
+
+
+def _lasso_cd_code[dtype: DType](
+    X: NDArray[dtype], dictionary: NDArray[dtype],
+    gram: Optional[NDArray[dtype]], init: Optional[NDArray[dtype]],
+    alpha: Float64, max_iter: Int, positive: Bool,
+) raises -> NDArray[dtype]:
+    var n_samples = X.shape[0]
+    var n_atoms = dictionary.shape[0]
+    if max_iter < 1:
+        raise Error("ValueError: lasso_cd requires max_iter >= 1")
+    if init:
+        ref initial = init.value()
+        var single_vector = n_samples == 1 and initial.shape == Shape(n_atoms)
+        if initial.shape != Shape(n_samples, n_atoms) and not single_vector:
+            raise Error("ValueError: init must have shape (samples, atoms)")
+    var transposed = dictionary.T()
+    var system: NDArray[dtype]
+    if gram:
+        ref supplied = gram.value()
+        if supplied.shape != Shape(n_atoms, n_atoms):
+            raise Error("ValueError: gram must have shape (atoms, atoms)")
+        system = contiguous(supplied)
+    else:
+        system = dictionary @ transposed
+    validate_matrix(system)
+
+    # Each row starts as X @ dictionary.T and is replaced by its solved code.
+    var code = X @ transposed
+    validate_matrix(code)
+    var target_norms = row_squared_norms(X)
+    for i in range(n_samples):
+        var target_norm = Float64(target_norms.unsafe_get(i))
+        if not isfinite(target_norm):
+            raise Error("ValueError: lasso_cd target norm must be finite")
+        var cross = zeros[dtype](Shape(n_atoms))
+        var start = zeros[dtype](Shape(n_atoms))
+        for j in range(n_atoms):
+            cross.unsafe_set(j, code.unsafe_get(i * n_atoms + j))
+            if init:
+                ref initial = init.value()
+                var value = get1(initial, j) if initial.ndim == 1 else get2(initial, i, j)
+                if not isfinite(value):
+                    raise Error("ValueError: init must be finite")
+                start.unsafe_set(j, Scalar[dtype](value))
+        var result = coordinate_descent_gram(
+            system, cross, start^, target_norm, alpha, 0, max_iter, 1e-8,
+            positive=positive, early_stopping=True,
+        )
+        for j in range(n_atoms):
+            code.unsafe_set(i * n_atoms + j, result.coef.unsafe_get(j))
+    return code^
 
 
 def sparse_encode[dtype: DType](
@@ -19,11 +72,11 @@ def sparse_encode[dtype: DType](
     n_jobs: Optional[Int] = None, check_input: Bool = True, verbose: Int = 0,
     positive: Bool = False,
 ) raises -> NDArray[dtype]:
-    """Threshold covariance D @ X.T, returning dense (samples, atoms) codes."""
+    """Return dense (samples, atoms) codes for a fixed dictionary."""
     if algorithm not in [String("lasso_lars"), "lasso_cd", "lars", "omp", "threshold"]:
         raise Error("ValueError: invalid sparse coding algorithm")
-    if algorithm != "threshold":
-        raise Error("NotImplementedError: sparse coding requires the external linear_model LARS/CD/OMP engine; use threshold")
+    if algorithm != "threshold" and algorithm != "lasso_cd":
+        raise Error("NotImplementedError: sparse coding requires a linear_model LARS/OMP solver for this algorithm")
     if alpha and not (alpha.value() >= 0 and isfinite(alpha.value())):
         raise Error("ValueError: alpha must be finite and nonnegative")
     if max_iter < 0 or verbose < 0 or (n_nonzero_coefs and n_nonzero_coefs.value() < 1):
@@ -33,6 +86,9 @@ def sparse_encode[dtype: DType](
     validate_matrix(X)
     validate_matrix(dictionary)
     if dictionary.shape[1] != X.shape[1]: raise Error("ValueError: dictionary and X have different feature counts")
+    var penalty = alpha.or_else(1.0)
+    if algorithm == "lasso_cd":
+        return _lasso_cd_code(X, dictionary, gram, init, penalty, max_iter, positive)
     var covariance = zeros[dtype](Shape(0, 0))
     if cov:
         validate_matrix(cov.value())
@@ -41,7 +97,7 @@ def sparse_encode[dtype: DType](
         covariance = contiguous(cov.value())
     else:
         covariance = dictionary @ X.T()
-    var threshold = Scalar[dtype](alpha.value() if alpha else 1.0)
+    var threshold = Scalar[dtype](penalty)
     var code = zeros[dtype](Shape(X.shape[0], dictionary.shape[0]))
     for i in range(code.shape[0]):
         for j in range(code.shape[1]):
@@ -66,7 +122,7 @@ struct SparseCoderParams[dtype: DType](Copyable, Movable):
 
 
 struct SparseCoder[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
-    """Stateless coding with an owned fixed dictionary; threshold mode supported."""
+    """Stateless coding with an owned fixed dictionary; threshold and lasso_cd modes supported."""
     comptime Params = SparseCoderParams[Self.dtype]
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]

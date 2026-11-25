@@ -12,7 +12,7 @@ Derived from moxie `scaffold-v1.1`; reference: local scikit-learn
 | `FactorAnalysis` | lapack/randomized SVD EM, varimax/quartimax, scores | [factor_analysis.md](docs/factor_analysis.md) |
 | `FastICA`, `fastica` | parallel/deflation, logcosh/exp/cube, all whiten modes | [fastica.md](docs/fastica.md) |
 | `NMF`, `MiniBatchNMF`, `non_negative_factorization` | cd and mu solvers, all beta losses, inits, online updates | [nmf.md](docs/nmf.md) |
-| `SparseCoder`, `sparse_encode` | threshold only; regression solver modes remain unavailable | [sparse_coding.md](docs/sparse_coding.md) |
+| `SparseCoder`, `sparse_encode` | threshold and cyclic Lasso CD | [sparse_coding.md](docs/sparse_coding.md) |
 | `KernelPCA` | centered named/precomputed kernels, dense/randomized eigenspaces, learned inverse maps | [kernel_pca.md](docs/kernel_pca.md) |
 | `LatentDirichletAllocation` | batch/online variational Bayes, partial_fit, transform, score/perplexity | [lda.md](docs/lda.md) |
 | `randomized_svd` | gesdd (Jacobi) and gesvd (Golub-Kahan) drivers | [svd_engine](shared/svd_engine/docs/api.md) |

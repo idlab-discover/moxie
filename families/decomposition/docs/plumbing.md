@@ -1,7 +1,7 @@
 # Dense decomposition plumbing
 
 Current integration includes [KernelPCA](kernel_pca.md), using the current Moxie
-KernelRidge numerical owner, [LDA](lda.md), and [threshold sparse coding](sparse_coding.md)
+KernelRidge numerical owner, [LDA](lda.md), and [dense sparse coding](sparse_coding.md)
 from its family-owned shared engine. The root family environment builds these
 modules without creating separate child environments.
 

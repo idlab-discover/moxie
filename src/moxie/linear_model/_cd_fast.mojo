@@ -248,16 +248,16 @@ def coordinate_descent[dtype: DType](
     )
 
 
-def _gram_gap(
-    coef: NDArray[DType.float64], product: NDArray[DType.float64], cross: NDArray[DType.float64],
-    target_norm2: Float64, alpha: Float64, beta: Float64, roundoff: Bool,
-    mut correlations: NDArray[DType.float64],
-) -> Tuple[Float64, Float64]:
-    var cross_dot = Float64(0)
-    var gram_dot = Float64(0)
-    var w1 = Float64(0)
-    var w2 = Float64(0)
-    var dualnorm = Float64(0)
+def _gram_gap[dtype: DType](
+    coef: NDArray[dtype], product: NDArray[dtype], cross: NDArray[dtype],
+    target_norm2: Scalar[dtype], alpha: Scalar[dtype], beta: Scalar[dtype], positive: Bool, roundoff: Bool,
+    mut correlations: NDArray[dtype],
+) -> Tuple[Scalar[dtype], Scalar[dtype]]:
+    var cross_dot = Scalar[dtype](0)
+    var gram_dot = Scalar[dtype](0)
+    var w1 = Scalar[dtype](0)
+    var w2 = Scalar[dtype](0)
+    var dualnorm = Scalar[dtype](0)
     for j in range(coef.size):
         var value = coef.unsafe_get(j)
         var q = cross.unsafe_get(j)
@@ -269,7 +269,7 @@ def _gram_gap(
         var correlation = q - qw
         if alpha != 0:
             correlation -= beta * value
-            dualnorm = max(dualnorm, abs(correlation))
+            dualnorm = max(dualnorm, correlation if positive else abs(correlation))
         else:
             dualnorm += correlation * correlation
         correlations.unsafe_set(j, correlation)
@@ -278,9 +278,9 @@ def _gram_gap(
     return (_dual_gap(r2, ry, w2, w1, dualnorm, alpha, beta, roundoff), dualnorm)
 
 
-def _update_gram_product(
-    gram: NDArray[DType.float64], column: Int, delta: Float64,
-    mut product: NDArray[DType.float64],
+def _update_gram_product[dtype: DType](
+    gram: NDArray[dtype], column: Int, delta: Scalar[dtype],
+    mut product: NDArray[dtype],
 ):
     # The symmetric Gram is contiguous, so this column update reads a row.
     var offset = column * product.size
@@ -288,63 +288,94 @@ def _update_gram_product(
         product.unsafe_set(j, product.unsafe_get(j) + delta * gram.unsafe_get(offset + j))
 
 
-def coordinate_descent_gram(
-    gram: NDArray[DType.float64], cross: NDArray[DType.float64], var coef: NDArray[DType.float64],
-    target_norm2: Float64, alpha: Float64, beta: Float64, max_iter: Int, tol: Float64,
-) raises -> CoordinateResult[DType.float64]:
-    """Cyclic elastic-net steps on a contiguous symmetric Gram system."""
+def _screen_gram[dtype: DType](
+    gram: NDArray[dtype], correlations: NDArray[dtype], active: List[Int],
+    alpha: Scalar[dtype], beta: Scalar[dtype], gap: Scalar[dtype], dualnorm: Scalar[dtype],
+    mut coef: NDArray[dtype], mut product: NDArray[dtype],
+) -> List[Int]:
+    var radius = sqrt(2 * abs(gap)) / alpha
+    var scale = max(alpha, dualnorm)
+    var retained = List[Int](capacity=len(active))
+    for j in active:
+        var diagonal = gram.unsafe_get(j * coef.size + j)
+        var theta = correlations.unsafe_get(j) / scale
+        if diagonal != 0 and (1 - abs(theta)) <= radius * sqrt(diagonal + beta):
+            retained.append(j)
+        else:
+            var old = coef.unsafe_get(j)
+            if old != 0:
+                _update_gram_product(gram, j, -old, product)
+                coef.unsafe_set(j, 0)
+    return retained^
+
+
+def coordinate_descent_gram[dtype: DType](
+    gram: NDArray[dtype],
+    cross: NDArray[dtype],
+    var coef: NDArray[dtype],
+    target_norm2: Float64,
+    alpha: Float64,
+    beta: Float64,
+    max_iter: Int,
+    tol: Float64,
+    *,
+    positive: Bool = False,
+    early_stopping: Bool = False,
+) raises -> CoordinateResult[dtype]:
+    """Cyclic elastic-net steps on a contiguous symmetric Gram system.
+
+    Callers supply matching contiguous vectors, the squared target norm and
+    unnormalized penalties. The returned result owns the updated coefficients.
+    """
+    var a = Scalar[dtype](alpha)
+    var b = Scalar[dtype](beta)
+    var tolerance = Scalar[dtype](tol)
+    var norm2 = Scalar[dtype](target_norm2)
     var p = coef.size
-    var product = zeros[DType.float64](Shape(p))
-    var correlations = zeros[DType.float64](Shape(p))
+    var product = zeros[dtype](Shape(p))
+    var correlations = zeros[dtype](Shape(p))
     var active = List[Int](capacity=p)
     for j in range(p):
         var diagonal = gram.unsafe_get(j * p + j)
-        if diagonal != 0 and diagonal + beta <= 0:
+        if diagonal != 0 and diagonal + b <= 0:
             raise Error("ValueError: Gram coordinate descent requires positive penalized curvature")
         active.append(j)
         var value = coef.unsafe_get(j)
         if value != 0:
             _update_gram_product(gram, j, value, product)
-    var threshold = tol * target_norm2
-    var gap, dualnorm = _gram_gap(coef, product, cross, target_norm2, alpha, beta, False, correlations)
-    var screen = alpha > 0
+    var threshold = tolerance * norm2
+    var gap, dualnorm = _gram_gap(coef, product, cross, norm2, a, b, positive, False, correlations)
+    if early_stopping and gap >= 0 and gap <= threshold:
+        check_finite(coef, "coef", "coordinate_descent_gram")
+        return CoordinateResult[dtype](coef^, Float64(gap), 0, True)
+    if a > 0:
+        active = _screen_gram(gram, correlations, active, a, b, gap, dualnorm, coef, product)
     for iteration in range(max_iter):
-        if screen:
-            var radius = sqrt(2 * abs(gap)) / alpha
-            var retained = List[Int](capacity=len(active))
-            for j in active:
-                var diagonal = gram.unsafe_get(j * p + j)
-                var theta = correlations.unsafe_get(j) / max(alpha, dualnorm)
-                if diagonal != 0 and (1 - abs(theta)) <= radius * sqrt(diagonal + beta):
-                    retained.append(j)
-                else:
-                    var old = coef.unsafe_get(j)
-                    if old != 0:
-                        _update_gram_product(gram, j, -old, product)
-                        coef.unsafe_set(j, 0)
-            active = retained^
-            screen = False
-        var largest = Float64(0)
-        var change = Float64(0)
+        var largest = Scalar[dtype](0)
+        var change = Scalar[dtype](0)
         for j in active:
             var diagonal = gram.unsafe_get(j * p + j)
             if diagonal == 0:
                 continue
             var old = coef.unsafe_get(j)
             var corr = cross.unsafe_get(j) - product.unsafe_get(j) + old * diagonal
-            var value = copysign(max(abs(corr) - alpha, 0.0), corr) / (diagonal + beta)
+            var value = Scalar[dtype](0)
+            if not positive or corr >= 0:
+                value = copysign(max(abs(corr) - a, Scalar[dtype](0)), corr) / (diagonal + b)
             coef.unsafe_set(j, value)
             if value != old:
                 _update_gram_product(gram, j, value - old, product)
             largest = max(largest, abs(value))
             change = max(change, abs(value - old))
-        if largest == 0 or change <= tol * largest or len(active) <= 1 or iteration + 1 == max_iter:
-            gap, dualnorm = _gram_gap(coef, product, cross, target_norm2, alpha, beta, True, correlations)
+        if largest == 0 or change <= tolerance * largest or len(active) <= 1 or iteration + 1 == max_iter:
+            gap, dualnorm = _gram_gap(coef, product, cross, norm2, a, b, positive, True, correlations)
             if gap <= threshold:
                 check_finite(coef, "coef", "coordinate_descent_gram")
-                return CoordinateResult[DType.float64](coef^, gap, iteration + 1, True)
-            screen = alpha > 0
+                return CoordinateResult[dtype](coef^, Float64(gap), iteration + 1, True)
+            if a > 0:
+                # The reference screens after the final failed gap check too.
+                active = _screen_gram(gram, correlations, active, a, b, gap, dualnorm, coef, product)
     check_finite(coef, "coef", "coordinate_descent_gram")
     if not isfinite(gap):
         raise Error("ValueError: Gram coordinate descent produced a nonfinite dual gap")
-    return CoordinateResult[DType.float64](coef^, gap, max_iter, False)
+    return CoordinateResult[dtype](coef^, Float64(gap), max_iter, False)

@@ -281,6 +281,7 @@ def cross_val_predict[A: PredictionAdapter](estimator: A.Scorer.Estimator, X: A.
         raise Error("ValueError: numeric prediction adapter supports method='predict' only; class responses require ClassPredictionAdapter")
     var n = adapter.n_samples(X, y)
     _checked_prediction_splits(cv, n)
+    adapter.validate_metadata(fit_metadata, n)
     var output: Optional[NDArray[A.PredictionDType]] = None
     for fold in range(len(cv)):
         var X_train = adapter.input_rows(X, cv[fold].train, cv[fold].train)
@@ -292,6 +293,26 @@ def cross_val_predict[A: PredictionAdapter](estimator: A.Scorer.Estimator, X: A.
         var predicted = adapter.predict(model, X_test)
         _scatter_prediction(output, predicted, cv[fold].test, n)
     return output.value().copy()
+
+
+def cross_val_predict[A: PredictionAdapter & DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, fit_metadata: A.Scorer.Metadata,
+    cv: Optional[List[IndexSplit]] = None, method: String = "predict",
+) raises -> NDArray[A.PredictionDType]:
+    if cv:
+        return cross_val_predict[A](estimator, X, y, adapter, cv.value(), fit_metadata, method=method)
+    var folds = adapter.default_cv(X, y)
+    return cross_val_predict[A](estimator, X, y, adapter, folds, fit_metadata, method=method)
+
+
+def cross_val_predict[A: PredictionAdapter & DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, cv: Optional[List[IndexSplit]] = None, method: String = "predict",
+) raises -> NDArray[A.PredictionDType] where conforms_to(A.Scorer.Metadata, Defaultable):
+    return cross_val_predict[A](
+        estimator, X, y, adapter, fit_metadata=A.Scorer.Metadata(), cv=cv, method=method,
+    )
 
 
 def validation_curve[A: CVAdapter & ParameterAdapter](
@@ -840,6 +861,7 @@ def cross_val_predict[A: StringPredictionAdapter](
         raise Error("ValueError: string prediction adapter supports method='predict' only")
     var n = adapter.n_samples(X, y)
     _checked_prediction_splits(cv, n)
+    adapter.validate_metadata(fit_metadata, n)
     var output: Optional[StringTarget] = None
     for fold in range(len(cv)):
         var X_train = adapter.input_rows(X, cv[fold].train, cv[fold].train)
@@ -865,6 +887,26 @@ def cross_val_predict[A: StringPredictionAdapter](
             for column in range(predicted.columns()):
                 output.value().set(Int(cv[fold].test[Item(j)]), predicted.get(j, column), column)
     return output.value().copy()
+
+
+def cross_val_predict[A: StringPredictionAdapter & DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, fit_metadata: A.Scorer.Metadata,
+    cv: Optional[List[IndexSplit]] = None, method: String = "predict",
+) raises -> StringTarget:
+    if cv:
+        return cross_val_predict[A](estimator, X, y, adapter, cv.value(), fit_metadata, method=method)
+    var folds = adapter.default_cv(X, y)
+    return cross_val_predict[A](estimator, X, y, adapter, folds, fit_metadata, method=method)
+
+
+def cross_val_predict[A: StringPredictionAdapter & DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, cv: Optional[List[IndexSplit]] = None, method: String = "predict",
+) raises -> StringTarget where conforms_to(A.Scorer.Metadata, Defaultable):
+    return cross_val_predict[A](
+        estimator, X, y, adapter, fit_metadata=A.Scorer.Metadata(), cv=cv, method=method,
+    )
 
 
 def _align_class_response[dtype: DType](classes: IndexArray, values: NDArray[dtype], n_classes: Int, method: String) raises -> NDArray[dtype]:
@@ -908,6 +950,7 @@ def cross_val_predict[A: ClassPredictionAdapter](
         raise Error("ValueError: class prediction method must be predict_proba, predict_log_proba or decision_function")
     var n = adapter.n_samples(X, y)
     _checked_prediction_splits(cv, n)
+    adapter.validate_metadata(fit_metadata, n)
     var encoded = adapter.encode_target(y)
     if (encoded.ndim != 1 and encoded.ndim != 2) or encoded.shape[0] != n:
         raise Error("ValueError: encoded targets must preserve rows and rank one or two")
@@ -954,3 +997,23 @@ def cross_val_predict[A: ClassPredictionAdapter](
     for i in range(len(outputs)):
         values.append(outputs[i].value().copy())
     return CVClassPrediction[A.ResponseDType](values^, list_output)
+
+
+def cross_val_predict[A: ClassPredictionAdapter & DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, fit_metadata: A.Scorer.Metadata,
+    cv: Optional[List[IndexSplit]] = None, method: String,
+) raises -> CVClassPrediction[A.ResponseDType]:
+    if cv:
+        return cross_val_predict[A](estimator, X, y, adapter, cv.value(), fit_metadata, method=method)
+    var folds = adapter.default_cv(X, y)
+    return cross_val_predict[A](estimator, X, y, adapter, folds, fit_metadata, method=method)
+
+
+def cross_val_predict[A: ClassPredictionAdapter & DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, cv: Optional[List[IndexSplit]] = None, method: String,
+) raises -> CVClassPrediction[A.ResponseDType] where conforms_to(A.Scorer.Metadata, Defaultable):
+    return cross_val_predict[A](
+        estimator, X, y, adapter, fit_metadata=A.Scorer.Metadata(), cv=cv, method=method,
+    )

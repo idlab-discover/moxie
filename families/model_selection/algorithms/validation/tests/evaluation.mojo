@@ -24,8 +24,10 @@ struct Adapter(PredictionAdapter, DefaultCVAdapter, ParameterAdapter):
     comptime Value = String
     comptime PredictionDType = DType.float64
     var stratified: Bool
-    def __init__(out self, stratified: Bool = False):
+    var n_splits: Int
+    def __init__(out self, stratified: Bool = False, *, n_splits: Int = 4):
         self.stratified = stratified
+        self.n_splits = n_splits
     def n_samples(self, X: Dense, y: Dense) raises -> Int:
         if X.ndim != 2 or y.ndim != 1 or X.shape[0] != y.shape[0]:
             raise Error("ValueError: invalid dense shapes")
@@ -38,6 +40,11 @@ struct Adapter(PredictionAdapter, DefaultCVAdapter, ParameterAdapter):
         if metadata:
             return _rows(metadata.value(), rows)
         return None
+    def validate_metadata(self, metadata: Optional[Dense], n_samples: Int) raises:
+        if metadata:
+            ref weights = metadata.value()
+            if weights.ndim != 1 or weights.shape[0] != n_samples:
+                raise Error("ValueError: expected one weight per sample")
     def fit(self, mut estimator: DummyRegressor, X: Dense, y: Dense, metadata: Optional[Dense]) raises:
         if metadata:
             _ = estimator.fit(X, y, sample_weight=metadata.value())
@@ -57,7 +64,7 @@ struct Adapter(PredictionAdapter, DefaultCVAdapter, ParameterAdapter):
         var n = self.n_samples(X, y)
         var cursor = (
             StratifiedKFold(2).split(n, y=SplitLabels(y))
-            if self.stratified else KFold(4).split(n)
+            if self.stratified else KFold(self.n_splits).split(n)
         )
         while True:
             var pair = cursor.next()
@@ -106,7 +113,26 @@ def main() raises:
     var weights = Dense(Shape(8))
     for i in range(8):
         weights[Item(i)] = Float64(i + 1)
-    var weighted_prediction = cross_val_predict[Adapter](estimator, X, y, Adapter(), splits, weights.copy())
+    var five_fold = Adapter(n_splits=5)
+    var default_prediction = cross_val_predict[Adapter](estimator, X, y, five_fold)
+    var weighted_default = cross_val_predict[Adapter](
+        estimator, X, y, five_fold, fit_metadata=weights.copy(),
+    )
+    var weighted_prediction = cross_val_predict[Adapter](
+        estimator, X, y, five_fold, cv=Adapter().default_cv(X, y), fit_metadata=weights.copy(),
+    )
+    assert_equal(default_prediction.ndim, 1)
+    assert_equal(weighted_default.ndim, 1)
+    assert_equal(default_prediction.size, 8)
+    assert_equal(weighted_default.size, 8)
+    for row in range(8):
+        print("prediction_default", row, default_prediction[Item(row)])
+        print("prediction_weighted_default", row, weighted_default[Item(row)])
+    assert_false(estimator.__sklearn_is_fitted__())
+    with assert_raises(contains="one weight per sample"):
+        _ = cross_val_predict[Adapter](estimator, X, y, Adapter(), fit_metadata=Dense(Shape(9)))
+    with assert_raises(contains="at least one split"):
+        _ = cross_val_predict[Adapter](estimator, X, y, Adapter(), cv=List[IndexSplit]())
     for fold in range(4):
         var total: Float64 = 0
         var mass: Float64 = 0

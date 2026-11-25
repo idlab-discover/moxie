@@ -69,8 +69,15 @@ struct-level bounds. See [search composition](../../search/docs/search.md#compos
 ## Out-of-fold predictions
 
 `cross_val_predict[A]` accepts an estimator, X, y, adapter, explicit split list
-and fit metadata. Choose one prediction-adapter capability per adapter type so
-the result type is unambiguous at compile time:
+and fit metadata. An adapter that also implements `DefaultCVAdapter` enables the
+short form `cross_val_predict[A](estimator, X, y, adapter)`. This uses
+`adapter.default_cv(X, y)` on the original target before class-response encoding.
+For sklearn's default policy, supply five unshuffled stratified folds for binary
+or multiclass classification and five unshuffled KFold splits otherwise.
+Use `cv=` to override fold generation and `fit_metadata=` for explicit metadata.
+Omitting metadata requires a default-constructible associated metadata type.
+Choose one prediction-adapter capability per adapter type so the result type
+is unambiguous at compile time:
 
 - Existing `PredictionAdapter`: rank-one/two numeric `NDArray[PredictionDType]`,
   unchanged return type. The adapter's `predict` method selects the native
@@ -85,8 +92,9 @@ the result type is unambiguous at compile time:
 
 All three use `CVAdapter` for feature/target/metadata slicing. Train-square and
 test-vs-train pairwise slicing stays explicit. Scorers supply associated types
-but are not called. Each fold gets a fresh unfitted clone, including when the
-original is fitted. Metadata stays aligned with selected original sample rows.
+and prediction never selects or evaluates a scorer. Each fold gets a fresh
+unfitted clone, including when the original is fitted. The adapter validates
+whole-dataset fit metadata before slicing it along the original training rows.
 Rank, row count and output width must remain consistent across folds. No caller
 arrays, splits, targets or estimator state are mutated.
 

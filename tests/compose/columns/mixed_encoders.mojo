@@ -2,7 +2,7 @@
 from moxie._categorical import categorical_column
 from moxie.base import clone
 from moxie.compose import ColumnEntry, ColumnTable, ColumnTransformer
-from moxie.model_selection import LeaveOneOut, PredefinedSplit, StratifiedKFold
+from moxie.model_selection import LeaveOneOut, PredefinedSplit, RepeatedStratifiedKFold, StratifiedKFold
 from moxie.preprocessing import OrdinalEncoder, TargetEncoder, TargetEncoderSplits
 from numojo import Shape, zeros
 from parity_io import ResultLine
@@ -37,7 +37,8 @@ def main() raises:
         ColumnEntry("target", TargetEncoder(smooth=0.0, cv=cv^), color.copy()),
         ColumnEntry("automatic", TargetEncoder(target_type="continuous", cv=None, shuffle=False), color.copy()),
         ColumnEntry("leave_one_out", TargetEncoder(cv=LeaveOneOut()), color.copy()),
-        ColumnEntry("predefined", TargetEncoder(cv=PredefinedSplit(test_fold)), color^),
+        ColumnEntry("predefined", TargetEncoder(cv=PredefinedSplit(test_fold)), color.copy()),
+        ColumnEntry("repeated", TargetEncoder(cv=RepeatedStratifiedKFold(n_splits=2, n_repeats=1, random_state=0)), color^),
         ColumnEntry("numeric", "passthrough", age^),
     )
     with assert_raises(contains="NotFittedError"):
@@ -67,6 +68,6 @@ def main() raises:
     for name in model.get_feature_names_out():
         print(String("name|", name))
     ref spans = model.output_indices_.value()
-    for name in ["ordinal", "target", "automatic", "leave_one_out", "predefined", "numeric", "remainder"]:
+    for name in ["ordinal", "target", "automatic", "leave_one_out", "predefined", "repeated", "numeric", "remainder"]:
         ref span = spans[name]
         print(String("span|", name, "|", span.start, "|", span.stop))

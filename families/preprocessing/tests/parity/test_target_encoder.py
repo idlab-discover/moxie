@@ -21,7 +21,8 @@ from harness import Driver, oracle
 oracle()
 from sklearn import config_context
 from sklearn.model_selection import (
-    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, StratifiedGroupKFold, StratifiedKFold,
+    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit,
+    RepeatedKFold, RepeatedStratifiedKFold, StratifiedGroupKFold, StratifiedKFold,
 )
 from sklearn.preprocessing import TargetEncoder
 
@@ -39,6 +40,7 @@ d.prelude('''
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import seed_global_random_state, RandomState
 from moxie.model_selection import GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, SplitLabels, StratifiedGroupKFold, StratifiedKFold
+from moxie.model_selection import RepeatedKFold, RepeatedStratifiedKFold
 from moxie.preprocessing._vocabulary import CategoryKind, StringKind, StringNaNKind, NumericKind
 from moxie.preprocessing._label import LabelKind, StringLabels, NumericLabels
 from moxie.preprocessing._target_encoder import kfold_test_folds, stratified_kfold_test_folds
@@ -192,6 +194,9 @@ def native_args(kind, kw):
             parts.append(f'cv={type(v).__name__}()')
         elif k == 'cv' and isinstance(v, PredefinedSplit):
             parts.append(f'cv=PredefinedSplit({d.input(v.test_fold)})')
+        elif k == 'cv' and isinstance(v, (RepeatedKFold, RepeatedStratifiedKFold)):
+            parts.append(f'cv={type(v).__name__}(n_splits={v.cvargs["n_splits"]}, '
+                         f'n_repeats={v.n_repeats}, random_state={v.random_state})')
         elif k == 'cv' and isinstance(v, list):
             indices = ', '.join(f'IndexSplit({d.input(train)}, {d.input(test)})' for train, test in v)
             parts.append(f'cv=TargetEncoderSplits([{indices}])')
@@ -330,6 +335,13 @@ run_case('predefined_continuous', 's', y_cont, dict(cv=PredefinedSplit(predefine
 run_case('predefined_multiclass', 's', y_multi_s,
          dict(cv=PredefinedSplit(predefined), categories=[['red'], ['x'], ['a']]))
 run_case('predefined_one_fold', 's', y_cont, dict(cv=PredefinedSplit(np.zeros_like(predefined))))
+run_case('repeated_kfold', 's', y_cont, dict(cv=RepeatedKFold(n_splits=4, n_repeats=1, random_state=0)))
+run_case('repeated_stratified', 's', y_multi_s,
+         dict(cv=RepeatedStratifiedKFold(n_splits=4, n_repeats=1, random_state=42)))
+run_case('repeated_kfold_global', 's', y_cont,
+         dict(cv=RepeatedKFold(n_splits=4, n_repeats=1)), global_seed=42)
+run_case('repeated_stratified_global', 's', y_bin,
+         dict(cv=RepeatedStratifiedKFold(n_splits=4, n_repeats=1)), global_seed=42)
 test_parts = [np.arange(start, n, 3, dtype=np.int64)[::-1] for start in range(3)]
 custom_cv = [
     (np.resize(test_parts[(i + 1) % 3][::2], 13), test)
@@ -476,6 +488,24 @@ for tag, splitter, groups, needle in [
            f'var X: List[CategoricalColumn[StringCategories]] = {columns("s", S)}\n'
            f'var enc = TargetEncoder({native_args("s", dict(cv=splitter))})\n'
            f'_ = enc.fit_transform(X, {d.input(y_cont)}{native_groups})')
+    expect(f'err_{tag}', 'error', needle, 'error')
+
+for tag, splitter, y, needle in [
+    ('repeat_kfold_overlap', RepeatedKFold(n_splits=3, n_repeats=2, random_state=0), y_cont,
+     'must cover each sample index exactly once'),
+    ('repeat_stratified_overlap', RepeatedStratifiedKFold(n_splits=3, n_repeats=2, random_state=0), y_bin,
+     'must cover each sample index exactly once'),
+    ('repeat_too_many_folds', RepeatedKFold(n_splits=n + 1, n_repeats=1, random_state=0), y_cont,
+     'exceeds sample count'),
+    ('repeat_stratified_continuous', RepeatedStratifiedKFold(n_splits=3, n_repeats=1, random_state=0), y_cont,
+     'Supported target types'),
+]:
+    sk_raises(lambda: TargetEncoder(cv=splitter).fit_transform(S, y))
+    label_kind, y_expr = target(y)
+    d.case(f'err_{tag}',
+           f'var X: List[CategoricalColumn[StringCategories]] = {columns("s", S)}\n'
+           f'var enc = TargetEncoder[StringKind, {label_kind}]({native_args("s", dict(cv=splitter))})\n'
+           f'_ = enc.fit_transform(X, {y_expr})')
     expect(f'err_{tag}', 'error', needle, 'error')
 
 out = d.run(imports='from moxie.preprocessing import TargetEncoder, TargetEncoderSplits')

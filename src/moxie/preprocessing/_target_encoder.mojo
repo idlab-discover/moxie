@@ -31,7 +31,9 @@ from moxie._random import RandomState, check_random_state
 from moxie.base import FitTransformer
 from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
 from moxie.model_selection._split import (
-    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, SplitLabels, StratifiedGroupKFold, StratifiedKFold,
+    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit,
+    RepeatedKFold, RepeatedStratifiedKFold, SplitLabels, StratifiedGroupKFold,
+    StratifiedKFold,
 )
 from moxie.preprocessing._base import TargetPreprocessor
 from moxie.preprocessing._common import (
@@ -359,11 +361,11 @@ struct TargetEncoderSplits(Copyable, Sized):
 
 comptime TargetEncoderCV = Variant[
     Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), GroupKFold, StratifiedGroupKFold,
-    LeaveOneOut, LeaveOneGroupOut, PredefinedSplit,
+    LeaveOneOut, LeaveOneGroupOut, PredefinedSplit, RepeatedKFold, RepeatedStratifiedKFold,
 ]
 comptime _CVUpdate = Variant[
     Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), NoneType, GroupKFold, StratifiedGroupKFold,
-    LeaveOneOut, LeaveOneGroupOut, PredefinedSplit,
+    LeaveOneOut, LeaveOneGroupOut, PredefinedSplit, RepeatedKFold, RepeatedStratifiedKFold,
 ]
 
 
@@ -500,6 +502,10 @@ struct TargetEncoder[
             self.cv = TargetEncoderCV(cv[LeaveOneGroupOut].copy())
         elif cv.isa[PredefinedSplit]():
             self.cv = TargetEncoderCV(cv[PredefinedSplit].copy())
+        elif cv.isa[RepeatedKFold]():
+            self.cv = TargetEncoderCV(cv[RepeatedKFold].copy())
+        elif cv.isa[RepeatedStratifiedKFold]():
+            self.cv = TargetEncoderCV(cv[RepeatedStratifiedKFold].copy())
         if shuffle:
             self.shuffle = shuffle.value()
         if random_state:
@@ -638,6 +644,10 @@ struct TargetEncoder[
             return self.cv[StratifiedGroupKFold].n_splits
         if self.cv.isa[PredefinedSplit]():
             return self.cv[PredefinedSplit].get_n_splits()
+        if self.cv.isa[RepeatedKFold]():
+            return self.cv[RepeatedKFold].n_splits
+        if self.cv.isa[RepeatedStratifiedKFold]():
+            return self.cv[RepeatedStratifiedKFold].n_splits
         if self.cv.isa[TargetEncoderSplits]():
             return len(self.cv[TargetEncoderSplits])
         if self.cv.isa[Int]():
@@ -745,6 +755,27 @@ struct TargetEncoder[
             return folds^
         if self.cv.isa[TargetEncoderSplits]():
             return self.cv[TargetEncoderSplits]._test_folds(n)
+        # One repeat is a shuffled fold partition. For an unseeded splitter,
+        # sklearn's coverage pass advances the global RNG before cross-fitting.
+        if self.cv.isa[RepeatedKFold]():
+            ref repeated = self.cv[RepeatedKFold]
+            if repeated.n_repeats != 1:
+                raise Error(_COVERAGE_ERROR)
+            var splitter = KFold(repeated.n_splits, shuffle=True)
+            with check_random_state(repeated.random_state) as rng:
+                if not repeated.random_state:
+                    _ = splitter.split(n, rng[])
+                return _test_fold_assignments(splitter.split(n, rng[]), n)
+        if self.cv.isa[RepeatedStratifiedKFold]():
+            ref repeated = self.cv[RepeatedStratifiedKFold]
+            if repeated.n_repeats != 1:
+                raise Error(_COVERAGE_ERROR)
+            var splitter = StratifiedKFold(repeated.n_splits, shuffle=True)
+            var codes = self._class_codes(y)
+            with check_random_state(repeated.random_state) as rng:
+                if not repeated.random_state:
+                    _ = splitter.split(n, codes, rng[])
+                return _test_fold_assignments(splitter.split(n, codes, rng[]), n)
         if self.cv.isa[KFold]():
             ref splitter = self.cv[KFold]
             var seed = splitter.random_state if splitter.shuffle else Optional[Int](0)

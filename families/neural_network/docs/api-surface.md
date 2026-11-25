@@ -7,7 +7,8 @@ compile-time specialization. Fit and typed set_params support fluent mutation.
 
 `MLPClassifier` and `MLPRegressor` implement [dense ordinary supervised
 fit](mlp.md) and support both feature dtypes, optional sample weights and
-three solvers. `MLPParams` is their typed configuration record.
+three solvers. SGD and Adam support incremental training through `partial_fit`.
+`MLPParams` is their typed configuration record.
 
 Core `DEPENDENCIES.json` selects the actual RBM implementation and all family
 modules in one namespace. `pixi run neural-network-build` compiles that namespace;

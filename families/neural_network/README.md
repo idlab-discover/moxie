@@ -2,8 +2,9 @@
 
 `moxie.neural_network` exports dense `BernoulliRBM`, `MLPClassifier` and
 `MLPRegressor`. The MLP estimators support ordinary dense Float32 and Float64
-training with L-BFGS, SGD and Adam. See the [MLP API](docs/mlp.md) for fitted
-state, constructor options and composition examples.
+training with L-BFGS, SGD and Adam and incremental training with SGD and Adam.
+See the [MLP API](docs/mlp.md) for fitted state, constructor options and
+composition examples.
 
 From the Moxie root:
 
@@ -25,8 +26,8 @@ private engine in isolation.
 Side-by-side notebooks against the official gallery live in
 `notebooks/neural_network/`: `plot_rbm_logistic_classification` (Float64
 numerical parity of the RBM pipeline, Float32 distribution checks) and
-`plot_mlp_alpha` (documents the raising MLP declarations). Run them with
-`pixi run -e notebooks notebooks notebooks/neural_network`.
+`plot_mlp_alpha` (bounded dense MLP parity and full-budget diagnostics).
+Run them with `pixi run -e notebooks notebooks notebooks/neural_network`.
 
 See [scope](docs/scope.md), [RBM API](algorithms/rbm/docs/api.md),
 [MLP engine](shared/mlp_engine/docs/api.md), and [provenance](provenance/rollup.json).

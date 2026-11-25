@@ -255,7 +255,7 @@ The [family scope](../families/svm/docs/scope.md) lists supported capabilities
 and exclusions.
 
 [Neural networks](../families/neural_network/README.md) are owned by Moxie, with a
-dense BernoulliRBM subset and ordinary dense MLP classifier and regressor fit.
+dense BernoulliRBM subset and ordinary and incremental dense MLP training.
 See the family scope for supported solver and lifecycle contracts.
 
 [Semi-supervised learning](../families/semi_supervised/README.md) is owned by Moxie,

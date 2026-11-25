@@ -68,8 +68,41 @@ before rounding. SGD and Adam coefficients retain the input dtype.
   is accepted without Python's conversion warning. Stochastic verbose output
   prints the iteration and loss using Mojo's numeric formatter.
 
-Incremental fit, warm-start refitting, validation-set early stopping,
-multilabel classification and named partial parameter updates remain open.
-The ordinary supervised, weighted and probability traits are available for
-typed pipelines and dense CV. The incremental MLP capability traits remain
-declarations for the incremental implementation.
+## Incremental training
+
+`partial_fit` performs one pass over the supplied batch with SGD or Adam.
+It retains parameters, optimizer buffers and training history between calls,
+including when the first update follows an ordinary stochastic fit. `n_iter_()`
+is one after each successful update. `t_()` counts all training rows seen and
+`loss_curve_()` gains one entry per update. The optimizer keeps the settings
+used to create it. A fresh ordinary fit starts a new optimizer and history.
+
+When updating an unfitted classifier, pass the full class domain as a
+nonempty rank-1 array of the label dtype. The method sorts and deduplicates it.
+Later batches may contain a subset of those classes. If supplied again, the
+class domain must match. When `warm_start=True`, each incremental batch must contain
+the full class domain, as in scikit-learn.
+
+```mojo
+var classifier = MLPClassifier(solver="sgd", random_state=42)
+_ = classifier.partial_fit(X_first, y_first, classes=all_classes)
+_ = classifier.partial_fit(X_next, y_next, sample_weight=weights_next)
+```
+
+Both estimators support keyword `sample_weight`, an explicit mutable
+`RandomState` as the third argument, and fluent mutation through
+`MLPClassifierAPI` and `MLPRegressorAPI`. Integer seeds are reapplied on each
+call. An explicit RNG advances as training draws from it, including if a
+later minibatch raises. Failed updates preserve learned state and fit warnings.
+
+Mojo exposes the method through the incremental traits for every constructor
+configuration. Calling it with L-BFGS, L-BFGS fitted state or
+`early_stopping=True` raises `ValueError`. The pinned Python regressor can
+perform a full L-BFGS solve through its `partial_fit` method. The native
+incremental contract limits every successful call to one stochastic epoch.
+Continuing a fit requires the same input width, hidden topology, output shape
+and output activation. Start a fresh ordinary fit to change these boundaries.
+
+Warm-start refitting, validation-set early stopping, multilabel classification
+and named partial parameter updates remain open. Ordinary supervised, weighted
+and probability traits remain available for typed pipelines and dense CV.

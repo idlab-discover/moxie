@@ -58,17 +58,17 @@ def fixtures(module):
                     yield module.MLPRegressor(loss=loss, **params), X, y, weights, weighted, False
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--binary", type=Path, default=FAMILY / "builds/mlp_dump")
-    args = parser.parse_args()
-    actual = iter(subprocess.check_output([args.binary], text=True).splitlines())
-    reference = load_reference()
-    worst = {}
-    for case, (model, X, y, weights, weighted, classifier) in enumerate(fixtures(reference)):
+def fitted_snapshots(reference):
+    for model, X, y, weights, weighted, classifier in fixtures(reference):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             model.fit(X, y, sample_weight=weights if weighted else None)
+        yield model, X, y, weights, weighted, classifier, caught, None
+
+
+def compare(actual, snapshots):
+    worst = {}
+    for case, (model, X, y, weights, weighted, classifier, caught, rng_draw) in enumerate(snapshots):
         dtype = X.dtype
         tol = 2e-5 if dtype == np.float32 and model.solver == "lbfgs" else (
             3e-6 if dtype == np.float32 else 2e-11
@@ -120,8 +120,19 @@ def main():
                 stack(model.predict_log_proba(X))
             else:
                 stack(model.predict(X))
+        if rng_draw is not None:
+            assert int(next(actual)) == rng_draw, context
     assert next(actual, None) is None
-    print(f"PASS {case + 1} public MLP fits against pinned sklearn")
+    return case + 1, worst
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--binary", type=Path, default=FAMILY / "builds/mlp_dump")
+    args = parser.parse_args()
+    actual = iter(subprocess.check_output([args.binary], text=True).splitlines())
+    count, worst = compare(actual, fitted_snapshots(load_reference()))
+    print(f"PASS {count} public MLP fits against pinned sklearn")
     print("Maximum absolute differences", {str(dtype): float(error) for dtype, error in worst.items()})
 
 

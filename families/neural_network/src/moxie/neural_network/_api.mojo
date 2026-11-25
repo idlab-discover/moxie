@@ -4,16 +4,16 @@
 
 from numojo import NDArray, Shape, zeros
 from moxie._feature_metadata import InputFeatureCount
-from moxie._labels import encode_column
+from moxie._labels import NumericEncoding, encode_column
 from moxie._random import RandomState
-from moxie.base import (
-    ClassifierMixin, LogProbabilityPredictor, RegressorMixin, WeightedSupervisedEstimator,
-)
+from moxie.base import WeightedSupervisedEstimator
 from moxie.warnings import FitWarning
+from ._base import MLPClassifierAPI, MLPRegressorAPI
 from ._mlp_engine import _log, _weight_sum
 from ._mlp_model import (
     MLPParams, _MLPState, _regression_output, _regression_score, _sample_weight, _target_matrix,
 )
+from ._plumbing import validate_incremental
 
 
 def _validate_labels[dtype: DType](y: NDArray[dtype], rows: Int) raises:
@@ -23,8 +23,28 @@ def _validate_labels[dtype: DType](y: NDArray[dtype], rows: Int) raises:
         raise Error("ValueError: expected one label per sample")
 
 
+def _label_values[dtype: DType](y: NDArray[dtype]) raises -> NDArray[DType.int64]:
+    var result = zeros[DType.int64](Shape(y.shape[0]))
+    for row in range(result.size):
+        var value = y.unsafe_get(row * Int(y.strides[0]))
+        comptime if dtype == DType.uint64:
+            if value > Scalar[dtype](9223372036854775807):
+                raise Error("ValueError: labels must fit in Int64")
+        result.unsafe_set(row, value.cast[DType.int64]())
+    return result^
+
+
+def _same_classes(left: NDArray[DType.int64], right: NDArray[DType.int64]) -> Bool:
+    if left.size != right.size:
+        return False
+    for index in range(left.size):
+        if left.unsafe_get(index) != right.unsafe_get(index):
+            return False
+    return True
+
+
 struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.int64](
-    ClassifierMixin, LogProbabilityPredictor, WeightedSupervisedEstimator,
+    MLPClassifierAPI, WeightedSupervisedEstimator,
     InputFeatureCount, Copyable, Movable,
 ):
     """Multilayer perceptron for dense single-label classification."""
@@ -32,6 +52,7 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
     comptime Params = MLPParams
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label_dtype]
+    comptime Classes = Self.Target
     comptime Prediction = Self.Target
     comptime SampleWeight = Self.Input
     comptime Probabilities = Self.Input
@@ -157,10 +178,10 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
         return self._fitted().out_activation.copy()
 
     def loss_curve_(self) raises -> Optional[List[Float64]]:
-        return self._fitted().loss_curve.copy()
+        return self._fitted().loss_curve()
 
     def best_loss_(self) raises -> Optional[Float64]:
-        return self._fitted().best_loss
+        return self._fitted().best_loss()
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
@@ -180,7 +201,7 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
         mut rng: RandomState,
     ) raises -> ref[self] Self:
         var weights: Optional[ImmPointer[Self.SampleWeight, ImmStaticOrigin]] = None
-        self._fit(X, y, rng, weights)
+        self._fit(X, y, rng, weights, incremental=False)
         return self
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](
@@ -188,46 +209,114 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
         mut rng: RandomState, *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
     ) raises -> ref[self] Self:
         var weights: Optional[ImmPointer[Self.SampleWeight, sample_weight_origin]] = Pointer(to=sample_weight)
-        self._fit(X, y, rng, weights)
+        self._fit(X, y, rng, weights, incremental=False)
+        return self
+
+    def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+    ) raises -> ref[self] Self:
+        """Train for one epoch, declaring the full class domain when unfitted."""
+        var rng = RandomState(self._params._seed())
+        return self.partial_fit(X, y, rng, classes=classes)
+
+    def partial_fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
+        var rng = RandomState(self._params._seed())
+        return self.partial_fit(X, y, rng, classes=classes, sample_weight=sample_weight)
+
+    def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        mut rng: RandomState,
+        classes: Optional[Self.Classes] = None,
+    ) raises -> ref[self] Self:
+        var weights: Optional[ImmPointer[Self.SampleWeight, ImmStaticOrigin]] = None
+        self._fit(X, y, rng, weights, incremental=True, classes=classes)
+        return self
+
+    def partial_fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        mut rng: RandomState,
+        classes: Optional[Self.Classes] = None,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
+        var weights: Optional[ImmPointer[Self.SampleWeight, sample_weight_origin]] = Pointer(to=sample_weight)
+        self._fit(X, y, rng, weights, incremental=True, classes=classes)
         return self
 
     def _fit[weight_origin: ImmOrigin](
         mut self, X: Self.Input, y: Self.Target, mut rng: RandomState,
         weights: Optional[ImmPointer[Self.SampleWeight, weight_origin]],
+        incremental: Bool,
+        classes: Optional[Self.Classes] = None,
     ) raises:
-        if self._params.warm_start and self._state:
+        if incremental:
+            validate_incremental(self._params.solver, self._params.early_stopping)
+        elif self._params.warm_start and self._state:
             raise Error("NotImplementedError: MLP warm-start refitting is unfinished")
         if X.ndim != 2:
             raise Error("ValueError: expected a dense rank-2 matrix")
         if self._params.loss != "log_loss":
             raise Error("ValueError: MLPClassifier requires log_loss")
         _validate_labels(y, X.shape[0])
-        comptime if Self.label_dtype == DType.uint64:
-            for row in range(y.shape[0]):
-                if y.unsafe_get(row * Int(y.strides[0])) > Scalar[Self.label_dtype](9223372036854775807):
-                    raise Error("ValueError: labels must fit in Int64")
-        var stride = Int(y.strides[0])
-        var labels64 = zeros[DType.int64](Shape(y.shape[0]))
-        for row in range(labels64.size):
-            labels64.unsafe_set(row, y.unsafe_get(row * stride).cast[DType.int64]())
-        var encoding = encode_column(labels64, classification=False)
-        var classes = encoding.classes.size
-        var width = classes if classes > 2 else 1
+        var values = _label_values(y)
+        var encoding: NumericEncoding[DType.int64]
+        var codes: NDArray[DType.int64]
+        if incremental:
+            encoding = self._incremental_encoding(values, classes)
+            codes = encoding.encode(values)
+        else:
+            encoding = encode_column(values, classification=False)
+            codes = encoding.index.inverse.copy()
+        var count = encoding.classes.size
+        var width = count if count > 2 else 1
         var encoded = zeros[Self.dtype](Shape(X.shape[0], width))
         for row in range(X.shape[0]):
-            var code = Int(encoding.index.inverse.unsafe_get(row))
-            if classes > 2:
+            var code = Int(codes.unsafe_get(row))
+            if count > 2:
                 encoded.unsafe_set(row * width + code, 1)
             else:
                 encoded.unsafe_set(row, code.cast[Self.dtype]())
         var state = _MLPState(
-            X, encoded, self._params, "softmax" if classes > 2 else "logistic",
-            "log_loss" if classes > 2 else "binary_log_loss", rng, weights,
+            X, encoded, self._params, "softmax" if count > 2 else "logistic",
+            "log_loss" if count > 2 else "binary_log_loss", rng, weights,
+            previous=self._state, incremental=incremental,
         )
         var labels = encoding.classes.astype[Self.label_dtype]()
         self.fit_warnings = state.warnings.copy()
         self._state = state^
         self._classes = labels^
+
+    def _incremental_encoding(
+        self, values: NDArray[DType.int64], classes: Optional[Self.Classes],
+    ) raises -> NumericEncoding[DType.int64]:
+        var supplied: Optional[NumericEncoding[DType.int64]] = None
+        if classes:
+            ref labels = classes.value()
+            if labels.ndim != 1 or labels.size == 0:
+                raise Error("ValueError: classes must be a nonempty vector")
+            supplied = encode_column(_label_values(labels), classification=False)
+        var encoding: NumericEncoding[DType.int64]
+        if self._classes:
+            encoding = encode_column(_label_values(self._classes.value()), classification=False)
+            if supplied and not _same_classes(encoding.classes, supplied.value().classes):
+                raise Error("ValueError: classes differ from the previous fit")
+        elif supplied:
+            encoding = supplied.value().copy()
+        else:
+            raise Error("ValueError: classes must be provided on the first partial_fit")
+        if self._params.warm_start:
+            var present = encode_column(values, classification=False)
+            if not _same_classes(encoding.classes, present.classes):
+                raise Error("ValueError: warm_start requires y to contain the same classes")
+        return encoding^
 
     def classes_(self) raises -> Self.Target:
         _ = self._fitted()
@@ -297,7 +386,7 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
 
 
 struct MLPRegressor[dtype: DType = DType.float64](
-    RegressorMixin, WeightedSupervisedEstimator, InputFeatureCount, Copyable, Movable,
+    MLPRegressorAPI, WeightedSupervisedEstimator, InputFeatureCount, Copyable, Movable,
 ):
     """Multilayer perceptron for dense single- and multi-output regression."""
 
@@ -426,10 +515,10 @@ struct MLPRegressor[dtype: DType = DType.float64](
         return self._fitted().out_activation.copy()
 
     def loss_curve_(self) raises -> Optional[List[Float64]]:
-        return self._fitted().loss_curve.copy()
+        return self._fitted().loss_curve()
 
     def best_loss_(self) raises -> Optional[Float64]:
-        return self._fitted().best_loss
+        return self._fitted().best_loss()
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
@@ -449,7 +538,7 @@ struct MLPRegressor[dtype: DType = DType.float64](
         mut rng: RandomState,
     ) raises -> ref[self] Self:
         var weights: Optional[ImmPointer[Self.SampleWeight, ImmStaticOrigin]] = None
-        self._fit(X, y, rng, weights)
+        self._fit(X, y, rng, weights, incremental=False)
         return self
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](
@@ -457,14 +546,52 @@ struct MLPRegressor[dtype: DType = DType.float64](
         mut rng: RandomState, *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
     ) raises -> ref[self] Self:
         var weights: Optional[ImmPointer[Self.SampleWeight, sample_weight_origin]] = Pointer(to=sample_weight)
-        self._fit(X, y, rng, weights)
+        self._fit(X, y, rng, weights, incremental=False)
+        return self
+
+    def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        """Train for one epoch using the retained stochastic optimizer."""
+        var rng = RandomState(self._params._seed())
+        return self.partial_fit(X, y, rng)
+
+    def partial_fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
+        var rng = RandomState(self._params._seed())
+        return self.partial_fit(X, y, rng, sample_weight=sample_weight)
+
+    def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        mut rng: RandomState,
+    ) raises -> ref[self] Self:
+        var weights: Optional[ImmPointer[Self.SampleWeight, ImmStaticOrigin]] = None
+        self._fit(X, y, rng, weights, incremental=True)
+        return self
+
+    def partial_fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        mut rng: RandomState,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
+        var weights: Optional[ImmPointer[Self.SampleWeight, sample_weight_origin]] = Pointer(to=sample_weight)
+        self._fit(X, y, rng, weights, incremental=True)
         return self
 
     def _fit[weight_origin: ImmOrigin](
         mut self, X: Self.Input, y: Self.Target, mut rng: RandomState,
         weights: Optional[ImmPointer[Self.SampleWeight, weight_origin]],
+        incremental: Bool,
     ) raises:
-        if self._params.warm_start and self._state:
+        if incremental:
+            validate_incremental(self._params.solver, self._params.early_stopping)
+        elif self._params.warm_start and self._state:
             raise Error("NotImplementedError: MLP warm-start refitting is unfinished")
         if X.ndim != 2:
             raise Error("ValueError: expected a dense rank-2 matrix")
@@ -479,7 +606,10 @@ struct MLPRegressor[dtype: DType = DType.float64](
                         raise Error("ValueError: Poisson targets must be nonnegative")
         elif self._params.loss != "squared_error":
             raise Error("ValueError: loss must be squared_error or poisson")
-        var state = _MLPState(X, target, self._params, activation, self._params.loss, rng, weights)
+        var state = _MLPState(
+            X, target, self._params, activation, self._params.loss, rng, weights,
+            previous=self._state, incremental=incremental,
+        )
         self.fit_warnings = state.warnings.copy()
         self._state = state^
 

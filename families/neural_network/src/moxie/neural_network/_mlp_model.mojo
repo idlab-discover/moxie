@@ -79,7 +79,7 @@ struct MLPParams(Copyable, Movable):
 
 
 struct _MLPState[dtype: DType](Copyable, Movable):
-    var _stochastic: Optional[LayerTensors[Self.dtype]]
+    var _stochastic: Optional[StochasticTrainer[Self.dtype]]
     var _lbfgs: Optional[LBFGSResult]
     var out_activation: String
     var n_features: Int
@@ -88,14 +88,13 @@ struct _MLPState[dtype: DType](Copyable, Movable):
     var n_iter: Int
     var t: Int
     var loss: Float64
-    var best_loss: Optional[Float64]
-    var loss_curve: Optional[List[Float64]]
     var warnings: List[FitWarning]
 
     def __init__[weight_origin: ImmOrigin](
         out self, X: NDArray[Self.dtype], y: NDArray[Self.dtype], params: MLPParams,
         output_activation: String, loss: String, mut rng: RandomState,
         weights: Optional[ImmPointer[NDArray[Self.dtype], weight_origin]],
+        previous: Optional[Self], incremental: Bool,
     ) raises:
         params._validate()
         validate_matrix(X)
@@ -109,38 +108,49 @@ struct _MLPState[dtype: DType](Copyable, Movable):
         for width in params.hidden_layer_sizes:
             units.append(width)
         units.append(y.shape[1])
-        var initial = allocate[Self.dtype](LayerLayout(units))
-        initialize(initial, rng, params.activation)
-
-        self._stochastic = None
-        self._lbfgs = None
+        var layout = LayerLayout(units)
         self.out_activation = output_activation
         self.n_features = X.shape[1]
         self.n_outputs = y.shape[1]
         self.n_layers = len(units)
-        self.n_iter = 0
-        self.t = 0
-        self.loss = 0
-        self.best_loss = None
-        self.loss_curve = None
         self.warnings = []
-        if params.solver == "lbfgs":
-            var result = _fit_lbfgs(
-                X, y, initial, params.activation, output_activation, loss,
-                params.alpha, LBFGSOptions(params.max_iter, params.max_fun, params.tol),
-                weights,
-            )
-            self.n_iter = result.n_iter
-            self.loss = result.loss
-            if result.warning:
-                self.warnings.append(FitWarning("ConvergenceWarning", result.warning.copy()))
-            self._lbfgs = result^
-            return
+        var trainer: StochasticTrainer[Self.dtype]
+        if incremental and previous:
+            ref fitted = previous.value()
+            if not fitted._stochastic:
+                raise Error("ValueError: partial_fit requires stochastic fitted state")
+            if X.shape[1] != fitted.n_features:
+                raise Error("ValueError: input width differs from the fitted network")
+            if y.shape[1] != fitted.n_outputs or output_activation != fitted.out_activation:
+                raise Error("ValueError: output shape or activation differs from the fitted network")
+            ref retained = fitted._stochastic.value()
+            if retained._layout.units != units:
+                raise Error("ValueError: hidden layer sizes differ from the fitted network")
+            trainer = retained.copy()
+        else:
+            var initial = allocate[Self.dtype](layout)
+            initialize(initial, rng, params.activation)
+            if params.solver == "lbfgs":
+                var result = _fit_lbfgs(
+                    X, y, initial, params.activation, output_activation, loss,
+                    params.alpha, LBFGSOptions(params.max_iter, params.max_fun, params.tol),
+                    weights,
+                )
+                self._stochastic = None
+                self.n_iter = result.n_iter
+                self.t = 0
+                self.loss = result.loss
+                if result.warning:
+                    self.warnings.append(FitWarning("ConvergenceWarning", result.warning.copy()))
+                self._lbfgs = result^
+                return
+            trainer = StochasticTrainer(initial, params._optimizer())
 
-        var trainer = StochasticTrainer(initial, params._optimizer())
+        self._lbfgs = None
         var options = StochasticOptions(
             batch_size=params.batch_size, max_iter=params.max_iter, shuffle=params.shuffle,
             tol=params.tol, n_iter_no_change=params.n_iter_no_change, verbose=params.verbose,
+            incremental=incremental,
         )
         var report = trainer._train(
             X, y, rng, params.activation, output_activation, loss, params.alpha,
@@ -149,9 +159,7 @@ struct _MLPState[dtype: DType](Copyable, Movable):
         self.n_iter = trainer.n_iter
         self.t = trainer.t
         self.loss = trainer.loss
-        self.best_loss = trainer.best_loss
-        self.loss_curve = trainer.loss_curve.copy()
-        self._stochastic = trainer.parameters().copy()
+        self._stochastic = trainer^
         if report.batch_size_clipped:
             self.warnings.append(FitWarning(
                 "UserWarning",
@@ -164,6 +172,16 @@ struct _MLPState[dtype: DType](Copyable, Movable):
                        ") reached and the optimization hasn't converged yet."),
             ))
 
+    def best_loss(self) -> Optional[Float64]:
+        if self._stochastic:
+            return self._stochastic.value().best_loss
+        return None
+
+    def loss_curve(self) -> Optional[List[Float64]]:
+        if self._stochastic:
+            return self._stochastic.value().loss_curve.copy()
+        return None
+
     def parameter_dtype(self) -> DType:
         return DType.float64 if self._lbfgs else Self.dtype
 
@@ -171,13 +189,13 @@ struct _MLPState[dtype: DType](Copyable, Movable):
         self._check_parameter_dtype[parameter_dtype]()
         if self._lbfgs:
             return _copy_layers[parameter_dtype](self._lbfgs.value().params.coefs)
-        return _copy_layers[parameter_dtype](self._stochastic.value().coefs)
+        return _copy_layers[parameter_dtype](self._stochastic.value().parameters().coefs)
 
     def intercepts[parameter_dtype: DType](self) raises -> List[NDArray[parameter_dtype]]:
         self._check_parameter_dtype[parameter_dtype]()
         if self._lbfgs:
             return _copy_layers[parameter_dtype](self._lbfgs.value().params.intercepts)
-        return _copy_layers[parameter_dtype](self._stochastic.value().intercepts)
+        return _copy_layers[parameter_dtype](self._stochastic.value().parameters().intercepts)
 
     def _check_parameter_dtype[parameter_dtype: DType](self) raises:
         if parameter_dtype != self.parameter_dtype():
@@ -198,7 +216,7 @@ struct _MLPState[dtype: DType](Copyable, Movable):
     ) raises -> NDArray[DType.float64]:
         if self._lbfgs:
             return self._predict_lbfgs(X, activation)
-        var prediction = forward(X, self._stochastic.value(), activation, self.out_activation)
+        var prediction = forward(X, self._stochastic.value().parameters(), activation, self.out_activation)
         return prediction.astype[DType.float64]()
 
     def predict_feature_matrix(
@@ -206,7 +224,7 @@ struct _MLPState[dtype: DType](Copyable, Movable):
     ) raises -> NDArray[Self.dtype]:
         if self._lbfgs:
             return self._predict_lbfgs(X, activation).astype[Self.dtype]()
-        return forward(X, self._stochastic.value(), activation, self.out_activation)
+        return forward(X, self._stochastic.value().parameters(), activation, self.out_activation)
 
 
 def _copy_layers[target: DType, dtype: DType](layers: List[NDArray[dtype]]) raises -> List[NDArray[target]]:

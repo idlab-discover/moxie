@@ -3,7 +3,7 @@ from numojo import NDArray, Shape, mean
 from std.math import sqrt, cos, tan, isfinite
 from std.algorithm import vectorize
 from std.sys import simd_width_of, llvm_intrinsic
-from moxie._random import RandomState
+from moxie._random import RandomState, check_random_state
 from moxie._kernel_features import FeatureMapState, validate_matrix, component_width
 from moxie._kernel_approximation_contracts import KernelFeatureMap
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
@@ -127,10 +127,8 @@ struct RBFSampler[dtype: DType = DType.float64](KernelFeatureMap, FeatureNamesOu
         return self.n_features_in_
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
-        if not self.params.random_state:
-            raise Error("ValueError: random_state=None requires fit_with_rng(X, context)")
-        var rng = RandomState(self.params.random_state.value())
-        self.fit_with_rng(X, rng, y)
+        with check_random_state(self.params.random_state) as rng:
+            self.fit_with_rng(X, rng[], y)
         return self
 
     def fit_with_rng(mut self, X: Self.Input, mut rng: RandomState, y: Optional[Self.Target] = None) raises:
@@ -248,10 +246,8 @@ struct SkewedChi2Sampler[dtype: DType = DType.float64](KernelFeatureMap, Feature
         return self.n_features_in_
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
-        if not self.params.random_state:
-            raise Error("ValueError: random_state=None requires fit_with_rng(X, context)")
-        var rng = RandomState(self.params.random_state.value())
-        self.fit_with_rng(X, rng, y)
+        with check_random_state(self.params.random_state) as rng:
+            self.fit_with_rng(X, rng[], y)
         return self
 
     def fit_with_rng(mut self, X: Self.Input, mut rng: RandomState, y: Optional[Self.Target] = None) raises:

@@ -51,12 +51,12 @@ row-major allocations. Integer sampling indices use NuMojo Int64 arrays.
 Constructors retain typed Params separately from state. `get_params` returns a
 configuration copy; `set_params` changes configuration; a subsequent ordinary
 fit replaces learned arrays. `clone` creates an unfitted estimator with copied
-configuration, never copied learned arrays. Mutable RNG configuration requires
-an explicit state snapshot for clone, while fitting borrows the configured
-stream; integer configuration recreates the stream per fit. None maps to one
-application-owned entropy context passed by mutable reference, as specified by
-shared random. Fit mutates in place, returns a mutable borrow of self, and accepts an ignored
-optional target. Fit-transform is fit followed by transform. These native
+configuration. Integer seeds recreate the stream per fit. `None` acquires
+the process-wide stream through `check_random_state`. Nystroem releases that
+lease after drawing its permutation, before evaluating any user kernel.
+Explicit RNG entry points borrow the caller's state. Fit mutates in place,
+returns a mutable borrow of self, and accepts an ignored optional target.
+Fit-transform is fit followed by transform. These native
 adaptations are inherited, and exercised by trait/clone contract tests.
 No probability, score, sample weight, incremental fit or inverse capability is
 imposed. Python metadata routing, pandas output, dynamic parameter dictionaries

@@ -5,7 +5,7 @@ Prints component indices, normalization_, transform(Y) and the next RNG draw.
 from std.sys import argv
 from numojo import NDArray, Shape
 from moxie.kernel_approximation import Nystroem, NoCallableKernel
-from moxie._random import RandomState
+from moxie._random import check_random_state, seed_global_random_state
 from moxie._kernel_nystroem import _workers
 
 
@@ -26,8 +26,8 @@ def evaluate[dtype: DType, output_dtype: DType = dtype](t: List[String]) raises:
     for k in range(q * p):
         y.unsafe_set(k, Scalar[dtype](Float64(t[10 + n * p + k])))
     var model = Nystroem[dtype, NoCallableKernel, output_dtype](t[1], gamma=option(t[2]), coef0=option(t[3]), degree=option(t[4]), n_components=Int(t[5]), n_jobs=Int(t[len(t)-1]))
-    var rng = RandomState(Int(t[6]))
-    model.fit_with_rng(x, rng)
+    seed_global_random_state(Int(t[6]))
+    _ = model.fit(x)
     for k in range(model.component_indices_.size):
         print(model.component_indices_.unsafe_get(k))
     for k in range(model.normalization_.size):
@@ -35,7 +35,8 @@ def evaluate[dtype: DType, output_dtype: DType = dtype](t: List[String]) raises:
     var z = model.transform(y)
     for k in range(z.size):
         print(Float64(z.unsafe_get(k)))
-    print(rng.random_sample())
+    with check_random_state() as rng:
+        print(rng[].random_sample())
 
 
 def main() raises:

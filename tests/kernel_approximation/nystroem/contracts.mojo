@@ -3,7 +3,7 @@ from numojo import NDArray, Shape, NDArrayStrides, zeros
 from moxie.kernel_approximation import Nystroem, NystroemKernelParams, NoCallableKernel
 from moxie._kernel_ridge import RowKernel
 from moxie.base import clone
-from moxie._random import RandomState, entropy_state
+from moxie._random import RandomState, check_random_state, entropy_state
 from std.testing import assert_equal, assert_true, assert_false, assert_raises, assert_almost_equal
 from std.math import exp, isfinite
 
@@ -19,6 +19,15 @@ struct Linear(Copyable, Movable, RowKernel):
         for k in range(X.shape[1]):
             total += Float64(X.unsafe_get(i * Int(X.strides[0]) + k * Int(X.strides[1]))) * Float64(Y.unsafe_get(j * Int(Y.strides[0]) + k * Int(Y.strides[1])))
         return SIMD[dtype, 1](self.scale * total)
+
+
+@fieldwise_init
+struct LinearWithRandomAccess(Copyable, Movable, RowKernel):
+    def evaluate[dtype: DType](self, X: NDArray[dtype], i: Int, Y: NDArray[dtype], j: Int) raises -> Scalar[dtype]:
+        # A user kernel may acquire its own lease during evaluation.
+        with check_random_state() as rng:
+            _ = rng[].next_uint32()
+        return Linear(1.0).evaluate(X, i, Y, j)
 
 
 def same[dtype: DType](a: NDArray[dtype], b: NDArray[dtype]) raises:
@@ -46,8 +55,9 @@ def contracts[dtype: DType]() raises:
     assert_equal(defaults.get_params().kernel, "rbf")
     assert_equal(defaults.get_params().n_components, 100)
     assert_false(Bool(defaults.get_params().gamma))
-    with assert_raises(contains="random_state=None"):
-        defaults.fit(x)
+    assert_true(defaults.fit(x).__sklearn_is_fitted__())
+    var uses_rng = Nystroem[dtype, LinearWithRandomAccess](LinearWithRandomAccess(), n_components=3)
+    assert_equal(uses_rng.fit_transform(x).shape[1], 3)
     var model = Nystroem[dtype](gamma=0.5, n_components=4, random_state=0)
     with assert_raises(contains="NotFittedError"):
         _ = model.transform(x)

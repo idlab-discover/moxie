@@ -154,10 +154,8 @@ def contracts[dtype: DType]() raises:
     var default_s = SkewedChi2Sampler[dtype]()
     assert_equal(default_r.get_params().n_components, 100)
     assert_equal(default_s.get_params().skewedness, 1.0)
-    with assert_raises():
-        default_r.fit(x)
-    with assert_raises():
-        default_s.fit(x)
+    assert_true(default_r.fit(x).__sklearn_is_fitted__())
+    assert_true(default_s.fit(x).__sklearn_is_fitted__())
     var rng = RandomState(7)
     var snapshot = rng.copy()
     _ = default_r.fit_transform_with_rng(x, rng)

@@ -14,7 +14,7 @@ from std.sys import num_logical_cores
 from max.algorithm import parallelize
 from std.math import sqrt, isfinite
 from mojo_linalg import svd, NumericalError
-from moxie._random import RandomState
+from moxie._random import RandomState, check_random_state
 from moxie._kernel_features import FeatureMapState, validate_matrix, component_width, basis_width
 from moxie._kernel_approximation_contracts import KernelFeatureMap
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
@@ -281,28 +281,33 @@ struct Nystroem[dtype: DType = DType.float64, Kernel: RowKernel & Copyable & Dei
         return self.n_features_in_
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
-        """Fit with a fresh `RandomState(random_state)`; None needs `fit_with_rng`."""
-        if not self.params.random_state:
-            raise Error("ValueError: Nystroem: random_state=None requires fit_with_rng(X, context)")
-        var rng = RandomState(self.params.random_state.value())
-        self.fit_with_rng(X, rng, y)
+        var k: Int
+        var permutation: NDArray[DType.int64]
+        with check_random_state(self.params.random_state) as rng:
+            k = self._validate_fit(X)
+            permutation = rng[].permutation(X.shape[0])
+        self._fit_basis(X, permutation, k)
         return self
 
     def fit_with_rng(mut self, X: Self.Input, mut rng: RandomState, y: Optional[Self.Target] = None) raises:
         """Sample the basis with `rng.permutation(n_samples)[:k]`, then normalize its kernel."""
+        var k = self._validate_fit(X)
+        self._fit_basis(X, rng.permutation(X.shape[0]), k)
+
+    def _validate_fit(self, X: Self.Input) raises -> Int:
         validate_matrix(X)
         self.params.validate()
         self._check_output_dtype()
         _ = _workers(self.params.n_jobs, X.shape[0])
-        var n_samples = X.shape[0]
+        return basis_width(X.shape[0], self.params.n_components)
+
+    def _fit_basis(mut self, X: Self.Input, permutation: NDArray[DType.int64], k: Int) raises:
         var warnings = List[String]()
-        if self.params.n_components > n_samples:
+        if self.params.n_components > X.shape[0]:
             warnings.append(
                 "n_components > n_samples. This is not possible.\nn_components was set to n_samples,"
                 " which results in inefficient evaluation of the full kernel."
             )
-        var k = basis_width(n_samples, self.params.n_components)
-        var permutation = rng.permutation(n_samples)
         var indices = zeros[DType.int64](Shape(k))
         var p = X.shape[1]
         var basis = zeros[Self.dtype](Shape(k, p))

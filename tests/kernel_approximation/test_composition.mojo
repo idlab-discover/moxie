@@ -10,6 +10,7 @@ from moxie.kernel_approximation import RBFSampler, SkewedChi2Sampler, AdditiveCh
 from moxie.linear_model import RidgeClassifier
 from moxie.pipeline import Pipeline, make_pipeline, make_union
 from moxie.base import clone
+from moxie._random import RandomState, check_random_state, seed_global_random_state
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 
 
@@ -80,6 +81,49 @@ def nystroem_pipeline[dtype: DType]() raises:
     same(pipe.transformer.component_indices_, nys.component_indices_)
 
 
+def default_stream_in_composition() raises:
+    var x = data[DType.float64]()
+    var y = labels()
+    var rbf = make_pipeline(RBFSampler(n_components=8), RidgeClassifier())
+    var sketch = make_pipeline(PolynomialCountSketch(n_components=8), RidgeClassifier())
+    var skew = SkewedChi2Sampler(n_components=8)
+    var nystroem = Nystroem(n_components=5)
+    seed_global_random_state(42)
+    var invalid = RBFSampler(n_components=0)
+    with assert_raises(contains="n_components"):
+        _ = invalid.fit(x)
+    var explicit_rng = RandomState(42)
+    var rbf_reference = RBFSampler(n_components=8)
+    var sketch_reference = PolynomialCountSketch(n_components=8)
+    var skew_reference = SkewedChi2Sampler(n_components=8)
+    var nystroem_reference = Nystroem(n_components=5)
+    var model = RidgeClassifier()
+    for _ in range(2):
+        _ = rbf.fit(x, y)
+        var rbf_features = rbf_reference.fit_transform_with_rng(x, explicit_rng)
+        same(rbf.transformer.random_weights_, rbf_reference.random_weights_)
+        same(rbf.transformer.random_offset_, rbf_reference.random_offset_)
+        _ = model.fit(rbf_features, y)
+        same(rbf.predict(x), model.predict(rbf_features))
+
+        _ = sketch.fit(x, y)
+        var sketch_features = sketch_reference.fit_transform_with_rng(x, explicit_rng)
+        same(sketch.transformer.indexHash_, sketch_reference.indexHash_)
+        same(sketch.transformer.bitHash_, sketch_reference.bitHash_)
+        _ = model.fit(sketch_features, y)
+        same(sketch.predict(x), model.predict(sketch_features))
+
+        same(skew.fit_transform(x), skew_reference.fit_transform_with_rng(x, explicit_rng))
+        same(nystroem.fit_transform(x), nystroem_reference.fit_transform_with_rng(x, explicit_rng))
+        same(nystroem.component_indices_, nystroem_reference.component_indices_)
+    with check_random_state() as rng:
+        assert_equal(rng[].next_uint32(), explicit_rng.next_uint32())
+        with assert_raises(contains="RuntimeError"):
+            _ = rbf.fit(x, y)
+        var seeded = RBFSampler(n_components=8, random_state=42)
+        _ = seeded.fit(x)
+
+
 def union[dtype: DType]() raises:
     var x = data[dtype]()
     var u = make_union[dtype=dtype](RBFSampler[dtype](n_components=4, random_state=0), AdditiveChi2Sampler[dtype](sample_steps=1))
@@ -143,6 +187,7 @@ def main() raises:
     pipeline_matches_two_stages[DType.float64]()
     nystroem_pipeline[DType.float32]()
     nystroem_pipeline[DType.float64]()
+    default_stream_in_composition()
     union[DType.float32]()
     union[DType.float64]()
     counts[DType.float32]()

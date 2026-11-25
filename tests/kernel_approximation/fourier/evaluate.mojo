@@ -1,7 +1,7 @@
 from std.sys import argv
 from numojo import NDArray, Shape
 from moxie.kernel_approximation import RBFSampler, SkewedChi2Sampler
-from moxie._random import RandomState
+from moxie._random import check_random_state, seed_global_random_state
 
 def emit[dtype: DType](x: NDArray[dtype]):
     for i in range(x.size):
@@ -17,25 +17,27 @@ def evaluate[dtype: DType]() raises:
     var x = NDArray[dtype](Shape(n, p))
     for k in range(n*p):
         x.unsafe_set(k, Scalar[dtype](Float64(a[9+k])))
-    var rng = RandomState(seed)
+    # The oracle passes an isolated stream initialized to the same state.
+    seed_global_random_state(seed)
     if a[1] == "rbf":
         var model = RBFSampler[dtype](gamma=parameter, n_components=m)
         if a[8] == "scale":
             model.params.gamma_mode = "scale"
-        model.fit_with_rng(x, rng)
+        _ = model.fit(x)
         emit(model.random_weights_)
         emit(model.random_offset_)
         emit(model.transform(x))
         print(model._gamma)
     else:
         var model = SkewedChi2Sampler[dtype](skewedness=parameter, n_components=m)
-        model.fit_with_rng(x, rng)
+        _ = model.fit(x)
         emit(model.random_weights_)
         emit(model.random_offset_)
         emit(model.transform(x))
         print(0.0)
-    print(rng.random_sample())
-    print(rng.standard_normal())
+    with check_random_state() as rng:
+        print(rng[].random_sample())
+        print(rng[].standard_normal())
 
 def main() raises:
     var a = argv()

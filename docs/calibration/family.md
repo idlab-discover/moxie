@@ -7,10 +7,13 @@ Python, NumPy, SciPy and scikit-learn are used only for validation.
 ## Using the estimator
 
 ```mojo
-from moxie.calibration import CalibratedClassifierCV
+from moxie.calibration import CalibratedClassifierCV, adapt_classifier
+from moxie.naive_bayes import GaussianNB
 
-# classifier implements CalibrationEstimator; X and y are NuMojo arrays.
-var model = CalibratedClassifierCV(classifier, method="sigmoid", cv=5)
+# X and y are NuMojo arrays.
+var model = CalibratedClassifierCV(
+    adapt_classifier(GaussianNB()), method="sigmoid", cv=5
+)
 model.fit(X, y)
 var probabilities = model.predict_proba(X_test)
 var labels = model.predict(X_test)
@@ -61,6 +64,27 @@ have `a_` and `b_`; temperature models have `beta_`. These private model types
 are implementation details, not additional public sklearn estimators.
 
 ## Classifier adapter
+
+Use `adapt_classifier(estimator)` with the default type specializations of
+`GaussianNB`, `LinearDiscriminantAnalysis`, `QuadraticDiscriminantAnalysis`
+and `LogisticRegression`. Pass the result to `CalibratedClassifierCV` or, if
+already fitted, to `CalibrationDisplay.from_estimator`. The adapter prefers
+`decision_function` for calibration and uses `predict_proba` for displays.
+With GaussianNB it uses probabilities for both. The adapter converts Float64
+calibration targets to the classifier's native `List[Int]` or Int64 array and
+returns its actual fitted classes in column order. It forwards explicit weights
+to GaussianNB and LogisticRegression and rejects them for LDA and QDA.
+
+`ClassifierCalibrationAdapter(estimator, read_classes, name)` also supports
+custom classifiers with these input and target types and compatible response
+traits. Supply a thin Mojo function that returns the fitted class labels as
+a Float64 vector. `estimator()` borrows the fitted classifier for inspection.
+Copies share a read-only snapshot, and fitting replaces the snapshot on
+success. For classifiers without fitted copying, such as QDA, updating adapter
+parameters creates an unfitted snapshot. Ordinary clones are unfitted.
+For a fitted native `FrozenEstimator[LogisticRegression[]]`, pass the frozen
+handle directly to `adapt_classifier`. The adapter preserves the handle through
+cloning and selects one pooled calibrator with `ensemble="auto"`.
 
 `CalibrationEstimator` extends the shared configuration/clone contract. It
 requires `fit(X, y, sample_weight=None)`, `class_labels()`, `response(X)`, and
@@ -196,7 +220,7 @@ kwargs, interactive windows and other image formats are not supported.
 ## Limits and validation
 
 Remaining gaps include the default LinearSVC, sparse estimators, Float32 or
-string-label estimator fitting, direct splitter-object dispatch, arbitrary fit
+string-label estimator fitting, arbitrary fit
 metadata, parallel jobs, metadata routing, persistence, feature names and
 Matplotlib object interoperability. Temperature ensemble folds with missing
 training classes are rejected explicitly. These are scope limits, not claims
@@ -212,7 +236,11 @@ It compares native output arrays against that reference, including weighted
 and unweighted fitting, constant and extreme scores, duplicate scores, curve
 boundaries, binary and multiclass outputs, ensemble modes, frozen adapters,
 materialized splits, missing classes, default minority-class splits, and
-explicit KFold and seeded shuffled KFold and StratifiedKFold.
+explicit KFold and seeded shuffled KFold and StratifiedKFold. Production
+classifier cases load GaussianNB, LDA, QDA and LogisticRegression from the
+same revision and check binary and multiclass class order, predictions and
+probabilities. They also check frozen logistic calibration with disjoint
+training and calibration data.
 Additional checks compare Float32 and string-label curves and native display
 statistics, labels and metadata with the reference. SVG structure and native
 ownership/overlay behavior have separate contract tests.
@@ -223,10 +251,10 @@ probabilities allow `5e-6 * (1 + abs(expected))` because the optimizers and
 stopping criteria differ. On the three-sample, large-score case, the reference
 stops with a gradient near `6.1e-7`; an independent BFGS solve with `gtol=1e-12`
 confirmed a probability difference of about `3.2e-6` from that result.
-Labels compare exactly. These tolerances apply to
-the tested cases, not arbitrary ill-conditioned data. No performance claim is
-made. Fixtures, tool versions, seed, command and results are retained under
-ignored `builds/parity/`.
+Production composition probabilities use the same `5e-6` bound to account for
+differences in the underlying classifiers' solvers and reductions. Labels
+compare exactly. Fixtures, tool versions, seed, command and results are
+retained under ignored `builds/calibration-parity/`.
 
 ## Moxie integration
 
@@ -246,10 +274,7 @@ the adapter's class metadata and preferred response. A general FrozenEstimator
 does not by itself provide those methods. Adapt the classifier first.
 Frozen parameter replacement retains Moxie's shallow parameter semantics.
 
-The isolated consumer uses Moxie's production LinearDiscriminantAnalysis with
-integer labels. Its test adapter converts numeric targets to `List[Int]`,
-reshapes binary decision vectors to one-column matrices, and explicitly
-rejects sample weights because LDA has no weighted fitting contract. The
-centroid example remains a demonstration classifier. The consumer exercises
-all methods, ordinary and frozen adapters, fluent generic dispatch, custom
-splits, failed-fit preservation, calibration curves and SVG export.
+The isolated consumer uses `adapt_classifier` with Moxie's production
+LinearDiscriminantAnalysis and exercises all methods, ordinary and frozen
+adapters, fluent generic dispatch, custom splits, failed-fit preservation,
+calibration curves and SVG export.

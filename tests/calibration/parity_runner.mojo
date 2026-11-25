@@ -1,5 +1,6 @@
 """Execute externally generated oracle cases in a native process."""
 from std.sys import argv
+from std.utils import Variant
 from std.math import isfinite
 import numojo as nm
 from moxie.model_selection import KFold, StratifiedKFold
@@ -9,6 +10,8 @@ from moxie.calibration import (
     CalibrationCV,
     CalibrationSplit,
     CalibrationDisplay,
+    CalibrationEstimator,
+    adapt_classifier,
 )
 from moxie._calibration_algorithms import (
     Array,
@@ -16,6 +19,10 @@ from moxie._calibration_algorithms import (
     _IsotonicCalibration,
     _TemperatureScaling,
 )
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from moxie.frozen import FrozenEstimator
+from moxie.linear_model import LogisticRegression
+from moxie.naive_bayes import GaussianNB
 from calibration_centroid import Centroid
 
 
@@ -58,6 +65,31 @@ def compare(
                 raise Error(
                     context + ": actual=" + String(a) + " expected=" + String(b)
                 )
+
+
+def compare_production[E: CalibrationEstimator, origin: ImmOrigin](
+    var estimator: E,
+    x: Array,
+    y: Array,
+    w: Optional[Array],
+    q: Array,
+    expected: Array,
+    fields: List[StringSpan[origin]],
+    context: String,
+) raises:
+    var use_auto = String(fields[7]) == "auto"
+    var ensemble: Variant[Bool, String] = "auto"
+    if not use_auto:
+        ensemble = String(fields[7]) == "true"
+    var model = CalibratedClassifierCV(
+        estimator^, cv=3, method=String(fields[6]), ensemble=ensemble^
+    )
+    _ = model.fit(x, y, w)
+    compare(model.classes_, array(String(fields[9])), 0, context)
+    compare(model.predict_proba(q), expected, 5e-6, context)
+    compare(model.predict(q), array(String(fields[8])), 0, context)
+    if use_auto and len(model.calibrated_classifiers_) != 1:
+        raise Error(context + ": frozen calibration must fit a single calibrator")
 
 
 def main() raises:
@@ -203,6 +235,35 @@ def main() raises:
             _ = model.fit(x, y, w)
             compare(model.predict_proba(q), expected, 5e-6, context)
             compare(model.predict(q), array(String(fields[10])), 0, context)
+        elif kind == "production_gaussian":
+            compare_production(
+                adapt_classifier(GaussianNB()),
+                x, y, w, q, expected, fields, context,
+            )
+        elif kind == "production_lda":
+            compare_production(
+                adapt_classifier(LinearDiscriminantAnalysis()),
+                x, y, w, q, expected, fields, context,
+            )
+        elif kind == "production_qda":
+            compare_production(
+                adapt_classifier(QuadraticDiscriminantAnalysis()),
+                x, y, w, q, expected, fields, context,
+            )
+        elif kind == "production_logistic":
+            compare_production(
+                adapt_classifier(LogisticRegression(tol=1e-10, max_iter=500)),
+                x, y, w, q, expected, fields, context,
+            )
+        elif kind == "production_frozen_logistic":
+            var estimator = LogisticRegression(tol=1e-10, max_iter=500)
+            var train_x = array(String(fields[10]))
+            var train_y = array(String(fields[11])).astype[DType.int64]()
+            _ = estimator.fit(train_x, train_y)
+            compare_production(
+                adapt_classifier(FrozenEstimator(estimator^)),
+                x, y, w, q, expected, fields, context,
+            )
         else:
             raise Error("unknown parity case")
         count += 1

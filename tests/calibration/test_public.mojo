@@ -1,70 +1,19 @@
-"""Isolated consumer using Moxie's production LDA through an explicit adapter."""
+"""Isolated consumer using Moxie's production LDA through the built-in adapter."""
 import numojo as nm
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from std.sys import argv
-from std.memory import ArcPointer
 from moxie.base import clone, SupervisedEstimator
 from moxie.calibration import (
-    CalibrationEstimator, CalibratedClassifierCV, CalibrationSplit,
+    adapt_classifier, CalibratedClassifierCV, CalibrationSplit,
     FrozenCalibrationEstimator, calibration_curve, CalibrationDisplay,
 )
-from moxie.discriminant_analysis import LinearDiscriminantAnalysis
+from moxie.discriminant_analysis import (
+    LinearDiscriminantAnalysis,
+    QuadraticDiscriminantAnalysis,
+)
 from moxie.frozen import FrozenEstimator
 
 comptime Array = nm.NDArray[DType.float64]
-
-
-struct LDAAdapter(CalibrationEstimator):
-    """Test adapter: LDA supplies decision responses but has no weighted fit."""
-    comptime Params = LinearDiscriminantAnalysis[DType.float64, Int].Params
-    var model: ArcPointer[LinearDiscriminantAnalysis[DType.float64, Int]]
-
-    def __init__(out self) raises:
-        self.model = ArcPointer(LinearDiscriminantAnalysis[DType.float64, Int]())
-
-    def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return self.model[].get_params(deep)
-
-    def set_params[origin: MutOrigin, params_origin: ImmOrigin](
-        ref[origin] self, ref[params_origin] params: Self.Params
-    ) raises -> ref[self] Self:
-        var model = self.model[].__sklearn_clone__()
-        _ = model.set_params(params)
-        self.model = ArcPointer(model^)
-        return self
-
-    def __sklearn_clone__(self) raises -> Self:
-        var result = Self()
-        result.model = ArcPointer(self.model[].__sklearn_clone__())
-        return result^
-
-    def __sklearn_is_fitted__(self) -> Bool:
-        return self.model[].__sklearn_is_fitted__()
-
-    def fit(mut self, X: Array, y: Array, sample_weight: Optional[Array] = None) raises:
-        if sample_weight:
-            raise Error("ValueError: LDA does not support weighted fitting")
-        var labels = List[Int]()
-        for i in range(y.size):
-            labels.append(Int(y.item(i)))
-        var model = self.model[].__sklearn_clone__()
-        _ = model.fit(X, labels)
-        self.model = ArcPointer(model^)
-
-    def class_labels(self) raises -> Array:
-        var result = nm.zeros[DType.float64](nm.Shape(len(self.model[].classes_)))
-        for i in range(len(self.model[].classes_)):
-            result[nm.Item(i)] = Float64(self.model[].classes_[i])
-        return result^
-
-    def uses_probabilities(self) -> Bool:
-        return False
-
-    def response(self, X: Array) raises -> Array:
-        var response = self.model[].decision_function(X)
-        if response.ndim == 1:
-            return response.reshape(nm.Shape(response.size, 1))
-        return response^
 
 
 def generic_fit[E: SupervisedEstimator](mut model: E, X: E.Input, y: E.Target) raises:
@@ -78,7 +27,26 @@ def main() raises:
         X[nm.Item(i, 0)] = Float64(i % 2) + Float64(i % 7) / 4
         X[nm.Item(i, 1)] = Float64(i % 11) / 3
         y[nm.Item(i)] = -3.0 if i % 2 == 0 else 7.0
-    var unfitted = FrozenCalibrationEstimator(FrozenEstimator(LDAAdapter()))
+    var base = adapt_classifier(LinearDiscriminantAnalysis())
+    with assert_raises():
+        _ = base.class_labels()
+    var invalid = y.copy()
+    invalid[nm.Item(0)] = -3.5
+    with assert_raises():
+        base.fit(X, invalid)
+    assert_false(base.__sklearn_is_fitted__())
+
+    var qda = adapt_classifier(QuadraticDiscriminantAnalysis())
+    qda.fit(X, y)
+    var qda_update = qda.copy()
+    var qda_params = qda_update.get_params()
+    qda_params.tol = 1e-5
+    _ = qda_update.set_params(qda_params)
+    assert_true(qda.__sklearn_is_fitted__())
+    assert_false(qda_update.__sklearn_is_fitted__())
+    assert_equal(qda_update.get_params().tol, 1e-5)
+
+    var unfitted = FrozenCalibrationEstimator(FrozenEstimator(base.copy()))
     with assert_raises():
         unfitted.fit(X, y)
     var splits = List[CalibrationSplit]()
@@ -93,7 +61,7 @@ def main() raises:
         splits.append(CalibrationSplit(train^, test^))
     var methods: List[String] = ["sigmoid", "isotonic", "temperature"]
     for method in methods:
-        var model = CalibratedClassifierCV(LDAAdapter(), method=method.copy(), cv=splits.copy(), ensemble=False)
+        var model = CalibratedClassifierCV(adapt_classifier(LinearDiscriminantAnalysis()), method=method.copy(), cv=splits.copy(), ensemble=False)
         generic_fit(model, X, y)
         assert_equal(len(model.calibrated_classifiers_), 1)
         var params = model.get_params()
@@ -109,9 +77,18 @@ def main() raises:
         var after = model.predict_proba(X)
         assert_equal(before.item(0, 1), after.item(0, 1))
         assert_false(clone(model).__sklearn_is_fitted__())
-        var base = LDAAdapter()
         base.fit(X, y)
-        var frozen = FrozenCalibrationEstimator(FrozenEstimator(base^))
+        var replacement = base.copy()
+        var base_params = replacement.get_params()
+        base_params.tol = 1e-5
+        _ = replacement.set_params(base_params)
+        assert_equal(base.get_params().tol, 1e-4)
+        assert_equal(replacement.get_params().tol, 1e-5)
+        assert_true(replacement.__sklearn_is_fitted__())
+        assert_false(clone(base).__sklearn_is_fitted__())
+        var base_display = CalibrationDisplay.from_estimator(base, X, y)
+        assert_equal(base_display.estimator_name.value(), "LinearDiscriminantAnalysis")
+        var frozen = FrozenCalibrationEstimator(FrozenEstimator(base.copy()))
         var copied = clone(frozen)
         assert_true(copied.__sklearn_is_fitted__())
         var frozen_model = CalibratedClassifierCV(frozen^, method=method.copy(), cv=splits.copy())

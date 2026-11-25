@@ -40,6 +40,51 @@ def reference():
     return module
 
 
+def production_reference():
+    from sklearn.linear_model import _cd_fast
+    from sklearn.linear_model._glm import _newton_solver
+    from sklearn.utils import _array_api, fixes
+
+    source = ROOT.parent / 'scikit-learn'
+
+    def load(path, package='sklearn'):
+        name = path.rsplit('/', 1)[-1]
+        filename = ROOT / 'builds/calibration-parity' / f'reference_{name}.py'
+        filename.write_bytes(subprocess.check_output(
+            ['git', '-C', str(source), 'show', f'{REVISION}:sklearn/{path}.py']
+        ))
+        spec = importlib.util.spec_from_file_location(f'{package}._moxie_{name}_reference', filename)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def supply_missing(target, pinned, *names):
+        for name in names:
+            if not hasattr(target, name):
+                setattr(target, name, getattr(pinned, name))
+
+    # The pinned source imports newer private helpers than the support wheel
+    # provides. Supply the pinned implementations where those names are absent.
+    supply_missing(_array_api, load('utils/_array_api', 'sklearn.utils'),
+                   '_cov', '_swapaxes', '_unravel_index', 'array_device')
+    supply_missing(fixes, load('utils/fixes', 'sklearn.utils'), '_is_gil_enabled')
+    if not hasattr(_cd_fast, 'enet_coordinate_descent_sparse'):
+        _cd_fast.enet_coordinate_descent_sparse = _cd_fast.sparse_enet_coordinate_descent
+    supply_missing(_newton_solver, load('linear_model/_glm/_newton_solver', 'sklearn.linear_model._glm'),
+                   'NewtonCDGramSolver', 'NewtonCDSolver')
+    da = load('discriminant_analysis')
+    logistic = load('linear_model/_logistic', 'sklearn.linear_model')
+    logistic.LinearModelLoss = load(
+        'linear_model/_linear_loss', 'sklearn.linear_model'
+    ).LinearModelLoss
+    return (
+        load('naive_bayes').GaussianNB,
+        da.LinearDiscriminantAnalysis,
+        da.QuadraticDiscriminantAnalysis,
+        logistic.LogisticRegression,
+    )
+
+
 class Centroid(ClassifierMixin, BaseEstimator):
     def __init__(self, probability_response=False):
         self.probability_response = probability_response
@@ -260,6 +305,37 @@ def main():
                 ).fit(X, y, sample_weight=w)
                 add(kind, X, y, w, q, model.predict_proba(q), method, ensemble,
                     False, False, model.predict(q))
+    # Cover both response protocols, weighted fitting and class-column ordering
+    # with production classifiers rather than a shared test double.
+    gaussian, lda, qda, logistic = production_reference()
+    production = [
+        ('gaussian', gaussian(), True),
+        ('lda', lda(), False),
+        ('qda', qda(), False),
+        ('logistic', logistic(tol=1e-10, max_iter=500), True),
+    ]
+    for n_classes in (2, 3):
+        codes = np.arange(90) % n_classes
+        X = rng.normal(size=(len(codes), 3)) + codes[:, None] * np.array([0.8, -0.3, 0.5])
+        q = rng.normal(size=(17, 3))
+        w = rng.uniform(0.25, 2, size=len(codes))
+        for name, estimator, weighted in production:
+            for method in ('sigmoid', 'isotonic', 'temperature'):
+                y = codes if method == 'temperature' else 5 * codes - 7
+                for ensemble in (False, True):
+                    sample_weight = w if weighted else None
+                    model = ref.CalibratedClassifierCV(
+                        estimator, method=method, cv=3, ensemble=ensemble
+                    ).fit(X, y, sample_weight=sample_weight)
+                    add(f'production_{name}', X, y, sample_weight, q, model.predict_proba(q),
+                        method, ensemble, model.predict(q), model.classes_)
+        y = 5 * codes - 7
+        prefit = logistic(tol=1e-10, max_iter=500).fit(X[:45], y[:45])
+        model = ref.CalibratedClassifierCV(FrozenEstimator(prefit), cv=3).fit(
+            X[45:], y[45:], sample_weight=w[45:]
+        )
+        add('production_frozen_logistic', X[45:], y[45:], w[45:], q, model.predict_proba(q),
+            'sigmoid', 'auto', model.predict(q), model.classes_, X[:45], y[:45])
     fixtures = out / 'cases.txt'
     fixtures.write_text('\n'.join(records) + '\n')
     command = ['mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', 'builds/deps', '-I', 'examples/calibration_support', 'tests/calibration/parity_runner.mojo', '-o', str(out / 'runner')]

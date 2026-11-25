@@ -47,11 +47,13 @@ matrix of the estimator's input array type. Generic consumers can use it after
 fitting. To use a dense covariance estimator inside LDA or QDA, wrap it in the
 [discriminant analysis adapter](../../../docs/discriminant_analysis/api.md#mojo-adaptations-each-covered-by-tests).
 
-`clone` and keyword `set_params` work on every estimator. `moxie.model_selection`
-searches and cross-validation take a hand-written typed `SearchAdapter` whose
-scorer calls the estimator's own `score`, as sklearn does with `scoring=None`;
-`notebooks/covariance/plot_covariance_estimation.ipynb` runs
-`GridSearchCV(ShrunkCovariance(), {"shrinkage": ...})` and matches sklearn.
+`clone` and keyword `set_params` work on every estimator. The
+[covariance estimation notebook](../../../notebooks/covariance/plot_covariance_estimation.ipynb)
+uses a typed `SearchAdapter` for `GridSearchCV` with `ShrunkCovariance`. The
+adapter takes a `None` target and selects fold rows with the public
+`select_rows` function. It uses the estimator's own `score(X)` and five
+unshuffled folds, matching scikit-learn's defaults. The notebook compares
+individual fold scores, mean scores, and the winning grid entry.
 A covariance estimator or `EllipticEnvelope` cannot be the final step of a
 `moxie.pipeline.Pipeline`: that step must be a `SupervisedEstimator & Predictor`,
 so `make_pipeline(StandardScaler(), EllipticEnvelope())` fails to compile

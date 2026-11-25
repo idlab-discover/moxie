@@ -502,6 +502,76 @@ def _feature_weights[dtype: DType](weights: NDArray[dtype]) raises -> List[Float
     return values^
 
 
+struct _WeightedCorrelation[input_dtype: DType](DenseMetric):
+    comptime dtype = Self.input_dtype
+    var _weights: List[Float64]
+    var _first_weighted_feature: Int
+
+    def __init__(out self, weights: NDArray[Self.dtype]) raises:
+        var values = _feature_weights(weights)
+        var total: Float64 = 0
+        for weight in values:
+            total += weight
+        if not isfinite(total) or total == 0:
+            raise Error("ValueError: correlation weights must have a finite positive sum")
+        var first = -1
+        for feature in range(len(values)):
+            values[feature] /= total
+            if first == -1 and values[feature] > 0:
+                first = feature
+        self._weights = values^
+        self._first_weighted_feature = first
+
+    def validate_features(self, n_features: Int) raises:
+        if len(self._weights) != n_features:
+            raise Error("ValueError: TSNE weights must match features")
+
+    def distance(
+        self, x: NDArray[Self.dtype], i: Int, y: NDArray[Self.dtype], j: Int,
+    ) raises -> Float64:
+        # Center relative to a contributing feature so constant rows have zero variance.
+        var x_base = at(x, i, self._first_weighted_feature)
+        var y_base = at(y, j, self._first_weighted_feature)
+        var x_mean: Float64 = 0
+        var y_mean: Float64 = 0
+        for feature in range(len(self._weights)):
+            var weight = self._weights[feature]
+            if weight != 0:
+                x_mean += weight * (at(x, i, feature) - x_base)
+                y_mean += weight * (at(y, j, feature) - y_base)
+        var xy: Float64 = 0
+        var xx: Float64 = 0
+        var yy: Float64 = 0
+        for feature in range(len(self._weights)):
+            var weight = self._weights[feature]
+            if weight != 0:
+                var a = (at(x, i, feature) - x_base) - x_mean
+                var b = (at(y, j, feature) - y_base) - y_mean
+                var wa = weight * a
+                var wb = weight * b
+                xy += a * wb
+                xx += a * wa
+                yy += b * wb
+        if xx == 0 or yy == 0:
+            raise Error("ValueError: weighted correlation requires nonconstant rows on positively weighted features")
+        var correlation = xy / (sqrt(xx) * sqrt(yy))
+        if not isfinite(correlation):
+            raise Error("ValueError: weighted correlation is not finite")
+        return min(Float64(2), max(Float64(0), 1 - correlation))
+
+
+def _weighted_correlation[dtype: DType](
+    name: String, options: Optional[TSNEMetricParams[dtype]],
+) raises -> Optional[_WeightedCorrelation[dtype]]:
+    if name == "correlation" and options:
+        ref params = options.value()
+        if params.w:
+            if params.p or params.V or params.VI or params.missing_values:
+                raise Error("ValueError: metric_params do not match the selected metric")
+            return _WeightedCorrelation(params.w.value())
+    return None
+
+
 @fieldwise_init
 struct _WeightedSquaredEuclidean[input_dtype: DType](DenseMetric):
     comptime dtype = Self.input_dtype
@@ -607,6 +677,11 @@ def _squared_distances[dtype: DType](
         return _symmetric_squared_distances(
             _CallableDistance[dtype](callback.value()), X, name,
         )
+    var correlation = _weighted_correlation(name, options)
+    if correlation:
+        ref kernel = correlation.value()
+        kernel.validate_features(X.shape[1])
+        return _symmetric_squared_distances(kernel, X, name)
     var n = X.shape[0]
     if name == "precomputed":
         var squared = zeros[DType.float32](Shape(n, n))
@@ -738,6 +813,9 @@ def _neighbor_probabilities[dtype: DType](
         return _metric_neighbor_probabilities(
             _CallableDistance[dtype](callback.value()), X, False, perplexity, verbose,
         )
+    var correlation = _weighted_correlation(name, options)
+    if correlation:
+        return _metric_neighbor_probabilities(correlation.value(), X, False, perplexity, verbose)
     var precomputed = name == "precomputed"
     if precomputed:
         validate_pairwise(X, nonnegative=True, symmetric=False)

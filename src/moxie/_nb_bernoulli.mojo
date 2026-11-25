@@ -1,5 +1,6 @@
 """Native dense BernoulliNB; sklearn 4358542a1bd3 (BSD-3-Clause)."""
 import numojo as nm
+from moxie.warnings import FitWarning
 from numojo import NDArray, Shape, Item
 from moxie._dense import sum_axis2d
 from moxie._naive_bayes_common import _scalar_weights
@@ -101,7 +102,8 @@ struct BernoulliNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64]
     var classes_: Self.Target
     var _domain: Optional[Self.D]
     var class_count_: DenseMatrix
-    var class_log_prior_: List[Float64]
+    var class_log_prior_: DenseMatrix
+    var fit_warnings: List[FitWarning]
     var n_features_in_: Int
     var feature_count_: DenseMatrix
     var feature_log_prob_: DenseMatrix
@@ -125,7 +127,8 @@ struct BernoulliNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64]
         self.classes_ = Self.D.empty_target()
         self._domain = None
         self.class_count_ = nm.zeros[DType.float64](Shape(0))
-        self.class_log_prior_ = List[Float64]()
+        self.fit_warnings = []
+        self.class_log_prior_ = nm.zeros[DType.float64](Shape(0))
         self.n_features_in_ = 0
         self.feature_count_ = nm.zeros[DType.float64](Shape(0, 0))
         self.feature_log_prob_ = nm.zeros[DType.float64](Shape(0, 0))
@@ -385,9 +388,7 @@ struct BernoulliNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64]
         var statistics = CountStatistics(self.class_count_.view(), self.feature_count_.view())
         BernoulliCounts(self.binarize).accumulate_typed(X, batch, statistics)
         self.feature_log_prob_ = nm.zeros[DType.float64](Shape(batch.n_classes, batch.n_features))
-        var class_counts = List[Float64]()
         for c in range(batch.n_classes):
-            class_counts.append(self.class_count_.item(c))
             for f in range(batch.n_features):
                 var smoothing = alpha.scalar
                 if alpha.values:
@@ -399,7 +400,8 @@ struct BernoulliNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64]
                 self.feature_log_prob_[Item(c, f)] = _log(
                     self.feature_count_.item(c, f) + smoothing
                 ) - denominator
-        self.class_log_prior_ = _log_priors(class_counts, self.class_prior, self.fit_prior)
+        self.class_log_prior_ = _log_priors(self.class_count_, self.class_prior, self.fit_prior)
+        self.fit_warnings = alpha._fit_warnings(self.force_alpha)
 
     def predict_joint_log_proba[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> DenseMatrix:
         check_is_fitted(self)
@@ -419,7 +421,7 @@ struct BernoulliNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64]
                     joint += _binary_value(X.item(i, f), self.binarize) * (
                         self.feature_log_prob_.item(c, f) - negative.item(f)
                     )
-                result[Item(i, c)] = joint + (self.class_log_prior_[c] + negative_sum)
+                result[Item(i, c)] = joint + (self.class_log_prior_.item(c) + negative_sum)
         return result^
 
     def predict[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> Self.Target:

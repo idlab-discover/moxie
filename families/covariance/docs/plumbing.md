@@ -118,7 +118,8 @@ it must not claim same-dtype parity for that branch. Dynamic option-dependent
 returns use typed records/optional fields. Fit/set_params return a mutable borrow of the original estimator, typed
 Params replace dynamic kwargs, and errors have descriptive Mojo Error prefixes,
 as in the inherited interfaces. Python metadata routing, pandas feature names,
-reflection, serialization and bindings remain separate work.
+reflection, pickle and bindings remain separate work. Use the native
+[family schemas](parity.md#model-files) for persistence.
 
 Reuse NuMojo creation, deep copy/view, elementwise multiply, column subtraction,
 mean with explicit returned_dtype and rank-2 matmul as approved baselines.

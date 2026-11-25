@@ -6,6 +6,8 @@ from moxie.covariance._empirical_covariance import EmpiricalCovariance
 from moxie.covariance._serialization import EmpiricalCovarianceSchema
 from moxie.covariance._graph_lasso import GraphicalLasso
 from moxie.covariance._graph_lasso import GraphicalLassoCV
+from moxie.covariance._serialization import GraphicalLassoCVSchema
+from moxie.covariance._serialization import GraphicalLassoSchema
 from moxie.covariance._shrunk_covariance_adaptive import LedoitWolf
 from moxie.covariance._serialization import LedoitWolfSchema
 from moxie.covariance._robust_covariance import MinCovDet

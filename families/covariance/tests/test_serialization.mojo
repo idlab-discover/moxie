@@ -4,11 +4,13 @@ from moxie.covariance import (
     ShrunkCovariance, ShrunkCovarianceSchema,
     LedoitWolf, LedoitWolfSchema, OAS, OASSchema,
     MinCovDet, MinCovDetSchema, EllipticEnvelope, EllipticEnvelopeSchema,
+    GraphicalLasso, GraphicalLassoSchema, GraphicalLassoCV, GraphicalLassoCVSchema,
+    empirical_covariance,
 )
 from moxie.serialization import ModelSchema, dumps, load_model, save_model
 from numojo import NDArray, NDArrayStrides, Shape, zeros
 from parity_io import Tokens, emit, emit_scalar
-from std.math import nan
+from std.math import inf, nan
 from std.sys import argv
 from std.testing import assert_equal, assert_false, assert_raises, assert_true
 
@@ -276,12 +278,136 @@ def invalid_robust_archive(X: NDArray[DType.float32]) raises:
         _ = EllipticEnvelopeSchema[DType.float32].encode(envelope)
 
 
+def emit_graphical_diagnostics(
+    name: String, iterations: Int, costs: List[Tuple[Float64, Float64]],
+) raises:
+    var values = zeros[DType.float64](Shape(len(costs), 2))
+    for i in range(len(costs)):
+        values.unsafe_set(2 * i, costs[i][0])
+        values.unsafe_set(2 * i + 1, costs[i][1])
+    emit(name + "_costs", values)
+    emit_scalar(name + "_n_iter", Float64(iterations))
+
+
+def check_graphical[dtype: DType](X: NDArray[dtype], probe: NDArray[dtype], path: String) raises:
+    comptime FixedSchema = GraphicalLassoSchema[dtype]
+    comptime CVSchema = GraphicalLassoCVSchema[dtype]
+    var fixed = GraphicalLasso[dtype](0.1, mode="lars", max_iter=70)
+    var empty = roundtrip[FixedSchema](fixed, path)
+    assert_false(empty.__sklearn_is_fitted__())
+    with assert_raises():
+        _ = empty.score(probe)
+    _ = fixed.fit(X)
+    _ = fixed.set_params(alpha=0.8, max_iter=0, assume_centered=True, covariance=String("precomputed"))
+    var restored = roundtrip[FixedSchema](fixed, path)
+    assert_equal(restored.alpha, 0.8)
+    assert_equal(restored.max_iter, 0)
+    assert_true(restored.assume_centered)
+    assert_equal(restored.covariance.value(), "precomputed")
+    assert_equal(restored.n_features_in_(), X.shape[1])
+    assert_false(restored.__sklearn_clone__().__sklearn_is_fitted__())
+    inference("graphical", restored.score(probe), fixed.score(probe),
+              restored.mahalanobis(probe), fixed.mahalanobis(probe), probe.shape[0])
+    emit("graphical_covariance", restored.covariance_())
+    emit("graphical_precision", restored.get_precision())
+    emit("graphical_location", restored.location_())
+    emit_graphical_diagnostics("graphical", restored.n_iter_(), restored.costs_())
+
+    var edge = GraphicalLasso[dtype](0, covariance=String("precomputed"), max_iter=0)
+    _ = edge.fit(empirical_covariance(X))
+    var zero_alpha = roundtrip[FixedSchema](edge, path)
+    assert_equal(zero_alpha.n_iter_(), 0)
+    assert_equal(len(zero_alpha.costs_()), 1)
+    _ = edge.set_params(alpha=0.1)
+    _ = edge.fit(empirical_covariance(X))
+    var zero_budget = roundtrip[FixedSchema](edge, path)
+    assert_equal(zero_budget.n_iter_(), 1)
+    assert_equal(len(zero_budget.costs_()), 0)
+
+    var alphas: List[Float64] = [0.2, 0.4, 0.1]
+    var cv = GraphicalLassoCV[dtype](alphas=alphas, cv=3, n_jobs=1, mode="lars")
+    var empty_cv = roundtrip[CVSchema](cv, path)
+    assert_false(empty_cv.__sklearn_is_fitted__())
+    assert_true(Bool(empty_cv.alphas.values))
+    assert_equal(empty_cv.alphas.values.value()[0], 0.2)
+    assert_equal(empty_cv.cv.value(), 3)
+    assert_equal(empty_cv.n_jobs.value(), 1)
+    with assert_raises():
+        _ = empty_cv.cv_results_()
+    _ = cv.fit(X)
+    _ = cv.set_params(alphas=5, cv=2, n_refinements=2, mode="cd", n_jobs=3, max_iter=0)
+    var restored_cv = roundtrip[CVSchema](cv, path)
+    assert_equal(restored_cv.alphas.count, 5)
+    assert_false(Bool(restored_cv.alphas.values))
+    assert_equal(restored_cv.cv.value(), 2)
+    assert_equal(restored_cv.n_jobs.value(), 3)
+    assert_equal(restored_cv.n_refinements, 2)
+    assert_equal(restored_cv.mode, "cd")
+    assert_equal(restored_cv.max_iter, 0)
+    assert_false(restored_cv.__sklearn_clone__().__sklearn_is_fitted__())
+    inference("graphical_cv", restored_cv.score(probe), cv.score(probe),
+              restored_cv.mahalanobis(probe), cv.mahalanobis(probe), probe.shape[0])
+    emit("graphical_cv_covariance", restored_cv.covariance_())
+    emit("graphical_cv_precision", restored_cv.get_precision())
+    emit("graphical_cv_location", restored_cv.location_())
+    emit_scalar("graphical_cv_alpha", restored_cv.alpha_())
+    emit_graphical_diagnostics("graphical_cv", restored_cv.n_iter_(), restored_cv.costs_())
+    var results = restored_cv.cv_results_()
+    assert_equal(results.split_test_score.shape[0], 4)
+    assert_equal(results.split_test_score.shape[1], 3)
+    emit("graphical_cv_alphas", results.alphas)
+    emit("graphical_cv_splits", results.split_test_score)
+    emit("graphical_cv_mean", results.mean_test_score)
+    emit("graphical_cv_std", results.std_test_score)
+
+    # The solver and path use IEEE exceptional values as diagnostics.
+    # Serialization also accepts the same logical alpha order in a strided view.
+    var count = results.alphas.size
+    var reversed_alphas = zeros[DType.float64](Shape(count))
+    for i in range(count):
+        reversed_alphas.unsafe_set(count - 1 - i, results.alphas.unsafe_get(i))
+    results.alphas = reversed_alphas.view_with_layout(Shape(count), NDArrayStrides(-1), count - 1)
+    results.split_test_score.unsafe_set(0, -inf[DType.float64]())
+    results.mean_test_score.unsafe_set(0, -inf[DType.float64]())
+    results.std_test_score.unsafe_set(0, nan[DType.float64]())
+    cv._results = results^
+    _ = roundtrip[CVSchema](cv, path)
+
+    var archive = CVSchema.encode(cv)
+    with assert_raises():
+        _ = FixedSchema.decode(archive)
+    for i in range(len(archive.payloads)):
+        if archive.payloads[i].name == "split_test_score":
+            archive.payloads[i].shape = [3, 4]
+    with assert_raises():
+        _ = CVSchema.decode(archive)
+    archive = CVSchema.encode(cv)
+    for i in range(len(archive.manifest) - 8, len(archive.manifest)):
+        archive.manifest[i] = 0
+    with assert_raises():
+        _ = CVSchema.decode(archive)
+    var fixed_archive = FixedSchema.encode(fixed)
+    for i in range(len(fixed_archive.payloads)):
+        if fixed_archive.payloads[i].name == "costs_":
+            fixed_archive.payloads[i].shape = [2 * len(fixed.costs_())]
+    with assert_raises():
+        _ = FixedSchema.decode(fixed_archive)
+    fixed._n_iter = -1
+    with assert_raises():
+        _ = FixedSchema.encode(fixed)
+    fixed._n_iter = restored.n_iter_()
+    fixed._model._precision64 = None
+    with assert_raises():
+        _ = FixedSchema.encode(fixed)
+
+
 def run_case[dtype: DType](mut tokens: Tokens, path: String) raises:
     var X = tokens.matrix[dtype]()
     var probe = tokens.matrix[dtype]()
     var robust_X = tokens.matrix[dtype]()
     check_models(X, probe, path)
     check_robust(robust_X, probe, path)
+    check_graphical(robust_X, probe, path)
     comptime if dtype == DType.float32:
         strided_state(rebind[NDArray[DType.float32]](X))
         invalid_archives(rebind[NDArray[DType.float32]](X^))

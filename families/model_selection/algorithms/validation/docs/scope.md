@@ -335,21 +335,22 @@ remain outside the native interface.
 
 ## Validation
 
-The negative-MSE probe compares the same scorer with and without weights,
-using Float32 and Float64 multioutput targets, reversed rows and weights,
-and vector predictions scored against a singleton-column target. The native
-probe also checks shape and finite-value errors, zero-sum weights and unfitted
-prediction. With the pinned sklearn wheel installed at `oracle_dir`, use the
-validation child's assembled sources and locked Mojo executable:
+The regression scorer probe compares negative MSE, MAE, and RMSE with and
+without weights. Cases include Float32 and Float64 targets, multiple outputs,
+reversed rows and weights, and a vector scored against a singleton-column
+target. The native probe also checks invalid shapes, non-finite input,
+zero-sum weights, and unfitted prediction. Use the validation child's assembled
+sources, the locked toolchain, and the pinned local sklearn checkout.
 
 ```sh
 mojo build -O3 --fp-mode=contract=off -I builds/deps tests/neg_mean_squared_error.mojo -o builds/neg_mean_squared_error
-MOXIE_SKLEARN_ORACLE="$oracle_dir" PYTHONPATH="$oracle_dir" \
 python tests/neg_mean_squared_error_parity.py builds/neg_mean_squared_error
 ```
 
 The probe allows `2e-7` for Float32 and `1e-13` for Float64
-to account for reduction rounding.
+to account for reduction rounding. Pass the search child's compiled
+`dense_named_scoring.mojo` test as a second argument to check the built-in
+adapter against pinned sklearn CV folds and grid-search results.
 
 Run `pixi run build`, `pixi run test`, and `pixi run parity` from this child.
 Curve consumers use `-O3`, as these tasks do: on the pinned Mojo 1.0 / NuMojo

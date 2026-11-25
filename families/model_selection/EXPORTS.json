@@ -12,6 +12,8 @@
       "validate_indices": "moxie.model_selection._indices",
       "EstimatorScore": "moxie.model_selection._evaluation",
       "NegMeanSquaredError": "moxie.model_selection._evaluation",
+      "NegMeanAbsoluteError": "moxie.model_selection._evaluation",
+      "NegRootMeanSquaredError": "moxie.model_selection._evaluation",
       "TypedScorer": "moxie.model_selection._evaluation",
       "FitAdapter": "moxie.model_selection._evaluation",
       "clone_fit_score": "moxie.model_selection._evaluation",

@@ -13,6 +13,8 @@ compile time. The schema dtype defaults to Float64.
 | FactorAnalysis | `FactorAnalysisSchema` |
 | FastICA | `FastICASchema` |
 | KernelPCA | `KernelPCASchema` |
+| NMF | `NMFSchema` |
+| MiniBatchNMF | `MiniBatchNMFSchema` |
 
 ```mojo
 from moxie.decomposition import IncrementalPCA
@@ -41,6 +43,11 @@ KernelPCA restores the fitted training data, eigenspace and kernel centering
 statistics, including for precomputed kernels and zero-component fits. It
 stores any learned inverse map independently of the current
 `fit_inverse_transform` setting.
+NMF and MiniBatchNMF preserve the learned rank, reconstruction error, and
+iteration count. MiniBatchNMF also restores the numerator and denominator
+accumulators, step count, and fit-time settings needed to continue
+`partial_fit`. A MiniBatchNMF model trained only by `partial_fit` can have
+`n_steps_ > 0` and `n_iter_ == 0`.
 
 Version 1 supports Float32 and Float64 inputs. Loading checks
 the estimator identity, schema version, dtype, array shapes and fitted metadata.
@@ -57,6 +64,7 @@ pixi run python families/decomposition/tools/family.py serialization-check
 
 It checks raw file round trips, resumption, strided learned arrays and invalid
 state. The differential drivers pass restored models through the pinned
-scikit-learn comparisons. The IncrementalPCA driver also restores state between
-each pair of partial-fit batches. Set `MOXIE_ESTIMATORS` to a comma-separated
-list of supported estimator names to select the differential runs.
+scikit-learn comparisons. The IncrementalPCA and MiniBatchNMF drivers also
+restore state between partial-fit batches. Set `MOXIE_ESTIMATORS` to a
+comma-separated list of supported estimator names to select the differential
+runs.

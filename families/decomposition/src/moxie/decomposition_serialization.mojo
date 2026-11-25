@@ -8,6 +8,10 @@ from .decomposition._truncated_svd import TruncatedSVD
 from .decomposition._factor_analysis import FactorAnalysis
 from .decomposition._fastica import FastICA, WhitenOption
 from .decomposition._kernel_pca import KernelPCA, KernelPower
+from .decomposition._nmf import (
+    AlphaH, BetaLoss, MiniBatchNMF, MiniBatchNMFParams, NMF, NMFComponents,
+    NMFConfig, NMFParams, _gamma,
+)
 from .serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 
 
@@ -119,7 +123,7 @@ def _check_value[dtype: DType](
 def _write_array[dtype: DType](
     mut archive: ModelArchive, name: String, array: Optional[NDArray[dtype]],
     fitted: Bool, shape: List[Int], *, allow_nan: Bool = False,
-    allow_positive_inf: Bool = False,
+    allow_positive_inf: Bool = False, nonnegative: Bool = False,
 ) raises:
     if not fitted:
         if array:
@@ -133,19 +137,21 @@ def _write_array[dtype: DType](
     for axis in range(len(shape)):
         if value.shape[axis] != shape[axis]:
             raise Error("ModelSchemaError: invalid shape for " + name)
-    var nonnegative = name in ("singular_values_", "explained_variance_", "eigenvalues_")
+    var require_nonnegative = nonnegative or name in (
+        "singular_values_", "explained_variance_", "eigenvalues_"
+    )
     var positive = name == "noise_variance_"
     var values = List[Scalar[dtype]](capacity=value.size)
     for i in range(shape[0]):
         var offset = i * Int(value.strides[0])
         if len(shape) == 1:
             var item = value.unsafe_get(offset)
-            _check_value(name, item, allow_nan, allow_positive_inf, nonnegative, positive)
+            _check_value(name, item, allow_nan, allow_positive_inf, require_nonnegative, positive)
             values.append(item)
         else:
             for j in range(shape[1]):
                 var item = value.unsafe_get(offset + j * Int(value.strides[1]))
-                _check_value(name, item, allow_nan, allow_positive_inf, nonnegative, positive)
+                _check_value(name, item, allow_nan, allow_positive_inf, require_nonnegative, positive)
                 values.append(item)
     archive.add_array(name, shape, values)
 
@@ -153,6 +159,7 @@ def _write_array[dtype: DType](
 def _read_array[dtype: DType](
     archive: ModelArchive, name: String, fitted: Bool, shape: List[Int],
     *, allow_nan: Bool = False, allow_positive_inf: Bool = False,
+    nonnegative: Bool = False,
 ) raises -> Optional[NDArray[dtype]]:
     if not fitted:
         return None
@@ -164,11 +171,13 @@ def _read_array[dtype: DType](
     if len(shape) == 2:
         dimensions = Shape(shape[0], shape[1])
     var array = zeros[dtype](dimensions)
-    var nonnegative = name in ("singular_values_", "explained_variance_", "eigenvalues_")
+    var require_nonnegative = nonnegative or name in (
+        "singular_values_", "explained_variance_", "eigenvalues_"
+    )
     var positive = name == "noise_variance_"
     for i in range(len(values)):
         var value = values[i]
-        _check_value(name, value, allow_nan, allow_positive_inf, nonnegative, positive)
+        _check_value(name, value, allow_nan, allow_positive_inf, require_nonnegative, positive)
         array.unsafe_set(i, value)
     return array^
 
@@ -788,4 +797,235 @@ struct KernelPCASchema[dtype: DType = DType.float64](ModelSchema):
         model._kernel_mean = _read_array[Self.dtype](archive, "_kernel_mean", state.fitted, [state.samples])
         model.X_transformed_fit_ = _read_array[Self.dtype](archive, "X_transformed_fit_", state.has_inverse, [state.samples, state.rank])
         model.dual_coef_ = _read_array[Self.dtype](archive, "dual_coef_", state.has_inverse, [state.samples, state.features])
+        return model^
+
+
+def _write_nmf_config(mut writer: BinaryWriter, config: NMFConfig) raises:
+    if config.n_components.isa[Int]():
+        writer.uint(1)
+        writer.integer(config.n_components[Int])
+    elif config.n_components.isa[String]():
+        writer.uint(2)
+        writer.string(config.n_components[String])
+    else:
+        writer.uint(0)
+    writer.boolean(Bool(config.init))
+    if config.init:
+        writer.string(config.init.value())
+    writer.boolean(config.beta_loss.isa[String]())
+    if config.beta_loss.isa[String]():
+        writer.string(config.beta_loss[String])
+    else:
+        writer.scalar(config.beta_loss[Float64])
+    writer.scalar(config.tol)
+    writer.integer(config.max_iter)
+    _write_optional_int(writer, config.random_state)
+    writer.scalar(config.alpha_W)
+    writer.boolean(config.alpha_H.isa[String]())
+    if config.alpha_H.isa[String]():
+        writer.string(config.alpha_H[String])
+    else:
+        writer.scalar(config.alpha_H[Float64])
+    writer.scalar(config.l1_ratio)
+    writer.integer(config.verbose)
+
+
+def _read_nmf_config(mut reader: BinaryReader) raises -> NMFConfig:
+    var components: NMFComponents
+    var tag = reader.uint()
+    if tag == 0:
+        components = NoneType()
+    elif tag == 1:
+        components = reader.integer()
+    elif tag == 2:
+        components = reader.string()
+    else:
+        raise Error("ModelSchemaError: invalid NMF n_components tag")
+    var init: Optional[String] = None
+    if reader.boolean():
+        init = reader.string()
+    var beta: BetaLoss
+    if reader.boolean():
+        beta = reader.string()
+    else:
+        beta = reader.scalar[DType.float64]()
+    var tol = reader.scalar[DType.float64]()
+    var max_iter = reader.integer()
+    var seed = _read_optional_int(reader)
+    var alpha_w = reader.scalar[DType.float64]()
+    var alpha_h: AlphaH
+    if reader.boolean():
+        alpha_h = reader.string()
+    else:
+        alpha_h = reader.scalar[DType.float64]()
+    var l1_ratio = reader.scalar[DType.float64]()
+    var verbose = reader.integer()
+    return NMFConfig(components^, init, beta^, tol, max_iter, seed, alpha_w,
+        alpha_h^, l1_ratio, verbose)
+
+
+@fieldwise_init
+struct _NMFState(Movable):
+    var dimensions: _ComponentState
+    var iterations: Int
+    var error: Float64
+
+    def validate(self, *, online: Bool) raises:
+        if self.dimensions.fitted:
+            # NMF permits more components than input features.
+            if (
+                self.dimensions.rank < 1 or self.dimensions.features < 1
+                or self.iterations < Int(not online) or self.error < 0
+                or not isfinite(self.error)
+            ):
+                raise Error("ModelSchemaError: invalid fitted NMF metadata")
+        elif self.dimensions.rank or self.dimensions.features or self.iterations or self.error != 0:
+            raise Error("ModelSchemaError: unfitted NMF has learned metadata")
+
+    def write(self, mut writer: BinaryWriter):
+        self.dimensions.write(writer)
+        writer.integer(self.iterations)
+        writer.scalar(self.error)
+
+    @staticmethod
+    def read(mut reader: BinaryReader) raises -> Self:
+        return Self(_ComponentState.read(reader), reader.integer(), reader.scalar[DType.float64]())
+
+    def shape(self) -> List[Int]:
+        return [self.dimensions.rank, self.dimensions.features]
+
+
+struct NMFSchema[dtype: DType = DType.float64](ModelSchema):
+    """Version 1 of dense NMF configuration and learned state."""
+
+    comptime Model = NMF[Self.dtype]
+    comptime _type_id = "moxie.decomposition.NMF"
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self._type_id, 1)
+        var writer = BinaryWriter()
+        writer.uint(UInt64(dtype_code[Self.dtype]()))
+        _write_nmf_config(writer, model.get_params().config)
+        writer.string(model.solver)
+        writer.boolean(model.shuffle)
+        var state = _NMFState(_ComponentState(model.__sklearn_is_fitted__(),
+            model.n_features_in_, model.n_components_), model.n_iter_, model.reconstruction_err_)
+        state.validate(online=False)
+        state.write(writer)
+        archive.manifest = writer^.finish()
+        _write_array(archive, "components_", model.components_, state.dimensions.fitted,
+            state.shape(), nonnegative=True)
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self._type_id, 1)
+        archive.validate()
+        var reader = BinaryReader(archive.manifest)
+        _check_dtype[Self.dtype](reader)
+        var params = NMFParams(_read_nmf_config(reader), reader.string(), reader.boolean())
+        var state = _NMFState.read(reader)
+        reader.finish()
+        state.validate(online=False)
+        _check_arrays(archive, state.dimensions.fitted, 1)
+        var model = Self.Model()
+        _ = model.set_params(params)
+        model.n_features_in_ = state.dimensions.features
+        model.n_components_ = state.dimensions.rank
+        model.n_iter_ = state.iterations
+        model.reconstruction_err_ = state.error
+        model.components_ = _read_array[Self.dtype](archive, "components_",
+            state.dimensions.fitted, state.shape(), nonnegative=True)
+        return model^
+
+
+def _check_minibatch_nmf_state[dtype: DType](model: MiniBatchNMF[dtype], fitted: Bool) raises:
+    if fitted:
+        if (
+            model.n_steps_ < 1 or model.n_steps_ < model.n_iter_ or model._k != model.n_components_
+            or not isfinite(model._beta) or model._gamma != _gamma(model._beta)
+            or not (model._rho >= 0 and model._rho <= 1) or model._transform_max_iter < 1
+        ):
+            raise Error("ModelSchemaError: invalid fitted MiniBatchNMF metadata")
+    elif model.n_steps_:
+        raise Error("ModelSchemaError: unfitted MiniBatchNMF has learned steps")
+
+
+struct MiniBatchNMFSchema[dtype: DType = DType.float64](ModelSchema):
+    """Version 1 of dense MiniBatchNMF, including the online accumulators."""
+
+    comptime Model = MiniBatchNMF[Self.dtype]
+    comptime _type_id = "moxie.decomposition.MiniBatchNMF"
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self._type_id, 1)
+        var writer = BinaryWriter()
+        writer.uint(UInt64(dtype_code[Self.dtype]()))
+        _write_nmf_config(writer, model.get_params().config)
+        writer.integer(model.batch_size)
+        _write_optional_int(writer, model.max_no_improvement)
+        writer.scalar(model.forget_factor)
+        writer.boolean(model.fresh_restarts)
+        writer.integer(model.fresh_restarts_max_iter)
+        _write_optional_int(writer, model.transform_max_iter)
+
+        var fitted = model.__sklearn_is_fitted__()
+        var state = _NMFState(_ComponentState(fitted, model.n_features_in_, model.n_components_),
+            model.n_iter_, model.reconstruction_err_)
+        state.validate(online=True)
+        _check_minibatch_nmf_state(model, fitted)
+        state.write(writer)
+        if fitted:
+            writer.integer(model.n_steps_)
+            writer.scalar(model._beta)
+            writer.scalar(model._gamma)
+            writer.scalar(model._rho)
+            writer.integer(model._transform_max_iter)
+        archive.manifest = writer^.finish()
+        var shape = state.shape()
+        _write_array(archive, "components_", model.components_, fitted, shape, nonnegative=True)
+        _write_array(archive, "_components_numerator", model._components_numerator, fitted, shape,
+            nonnegative=True)
+        _write_array(archive, "_components_denominator", model._components_denominator, fitted, shape,
+            nonnegative=True)
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self._type_id, 1)
+        archive.validate()
+        var reader = BinaryReader(archive.manifest)
+        _check_dtype[Self.dtype](reader)
+        var params = MiniBatchNMFParams(_read_nmf_config(reader), reader.integer(),
+            _read_optional_int(reader), reader.scalar[DType.float64](), reader.boolean(),
+            reader.integer(), _read_optional_int(reader))
+        var state = _NMFState.read(reader)
+        var fitted = state.dimensions.fitted
+        state.validate(online=True)
+        _check_arrays(archive, fitted, 3)
+        var model = Self.Model(max_iter=params.config.max_iter)
+        _ = model.set_params(params)
+        if fitted:
+            model._k = state.dimensions.rank
+            model.n_steps_ = reader.integer()
+            model._beta = reader.scalar[DType.float64]()
+            model._gamma = reader.scalar[DType.float64]()
+            model._rho = reader.scalar[DType.float64]()
+            model._transform_max_iter = reader.integer()
+        reader.finish()
+
+        model.n_features_in_ = state.dimensions.features
+        model.n_components_ = state.dimensions.rank
+        model.n_iter_ = state.iterations
+        model.reconstruction_err_ = state.error
+        _check_minibatch_nmf_state(model, fitted)
+        var shape = state.shape()
+        model.components_ = _read_array[Self.dtype](archive, "components_", fitted, shape,
+            nonnegative=True)
+        model._components_numerator = _read_array[Self.dtype](archive, "_components_numerator",
+            fitted, shape, nonnegative=True)
+        model._components_denominator = _read_array[Self.dtype](archive, "_components_denominator",
+            fitted, shape, nonnegative=True)
         return model^

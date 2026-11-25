@@ -1,8 +1,9 @@
-"""Native string/exact Int64 labels against pinned sklearn scorer/policy bodies.
+"""Native string, exact Int64 and list labels against pinned sklearn scorers.
 
 Uses the same documented validation/LabelBinarizer/SciPy test plumbing as the
 existing parity runners; this is bounded dense parity, not full sklearn parity.
 """
+import argparse
 import importlib.util
 import json
 from pathlib import Path
@@ -19,7 +20,7 @@ u = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(u)
 
 
-def main():
+def main(list_targets_only=False):
     ns, mi = u.oracle(), mi_oracle()
     lines = ['import numojo as nm', 'from moxie._labels import StringTarget',
              'from moxie.feature_selection import f_classif, chi2, mutual_info_classif, DiscreteFeatures, BuiltinScorer, MutualInfoScorer, SelectKBest, SelectPercentile, SelectFpr, SelectFdr, SelectFwe, GenericUnivariateSelect, SelectionParameter', 'from std.testing import assert_equal, assert_raises',
@@ -51,22 +52,59 @@ def main():
         lines.append(f'    var x = nm.zeros[DType.{dtype}](nm.Shape(18, 4))')
         for j, v in enumerate(x.ravel()):
             lines.append(f'    x.unsafe_set({j}, {int(v)})')
-        lines.append(f'    var refit_x = nm.zeros[DType.{dtype}](nm.Shape(18, 3))')
-        for j, v in enumerate(x[:, :3].ravel()):
-            lines.append(f'    refit_x.unsafe_set({j}, {int(v)})')
+        if not list_targets_only:
+            lines.append(f'    var refit_x = nm.zeros[DType.{dtype}](nm.Shape(18, 3))')
+            for j, v in enumerate(x[:, :3].ravel()):
+                lines.append(f'    refit_x.unsafe_set({j}, {int(v)})')
         if strings:
             vals = ', '.join(json.dumps(str(v), ensure_ascii=False) for v in y)
             shape = ', 18, 1' if case % 3 == 1 else ''
-            lines.append(f'    var y = StringTarget([{vals}]{shape})')
-        else:
+            if not list_targets_only:
+                lines.append(f'    var y = StringTarget([{vals}]{shape})')
+        elif not list_targets_only:
             shape = '18, 1' if case % 3 == 1 else '18'
             # Reversed, offset view exercises exact labels and native stride access.
             lines += ['    var backing = nm.zeros[DType.int64](nm.Shape(40))',
                       f'    var y = backing.view_with_layout(nm.Shape({shape}), nm.NDArrayStrides({"-2, 1" if "," in shape else "-2"}), 36)']
             for j, v in enumerate(y):
                 lines.append(f'    y.unsafe_set({-2*j}, {int(v)})')
+        if strings:
+            list_type, list_dtype = 'String', 'float64'
+            list_y, list_values = y, vals
+        elif case % 4 == 2:
+            list_type = 'Int' if case < 8 else 'Int64'
+            list_dtype = 'int64'
+            list_y, list_values = y, ', '.join(str(int(v)) for v in y)
+        else:
+            list_type = 'Float32' if case < 8 else 'Float64'
+            list_dtype = list_type.lower()
+            list_y = groups.astype(list_dtype)
+            list_values = ', '.join(str(float(v)) for v in list_y)
+        lines.append(f'    var list_y: List[{list_type}] = [{list_values}]')
         for method in ['f_classif', 'chi2', 'mutual_info_classif']:
             is_mi = method.startswith('mutual')
+            # Check native list targets at the selector entry point. Use the
+            # continuous MI path here alongside the array path above.
+            list_target = f'DType.{dtype}, DType.{list_dtype}, List[{list_type}]'
+            if is_mi:
+                list_truth = mi[method](x.copy(), list_y, random_state=7)
+                list_scorer = f'MutualInfoScorer[{list_target}](random_state=7)'
+            else:
+                list_truth, list_ps = ns[method](x, list_y)
+                list_scorer = f'BuiltinScorer[{list_target}]("{method}")'
+            selection = f'list_{method}'
+            lines += [f'    var {selection} = SelectKBest({list_scorer}, k=2)',
+                      f'    _ = {selection}.fit(x, list_y.copy())',
+                      f'    var {selection}_scores = {selection}.scores_()',
+                      f'    var {selection}_mask = {selection}.get_support()[List[Bool]].copy()']
+            emit(f'{selection}_scores.unsafe_get({{j}})', list_truth)
+            if not is_mi:
+                lines.append(f'    var {selection}_p = {selection}.pvalues_()')
+                emit(f'{selection}_p.value().unsafe_get({{j}})', list_ps)
+            emit(f'Int({selection}_mask[{{j}}])',
+                 ns['SelectKBest'](SimpleNamespace(scores_=list_truth, k=2)), True)
+            if list_targets_only:
+                continue
             truth = mi[method](x.copy(), y, discrete_features=True, random_state=7) if is_mi else ns[method](x, y)
             opts = ', discrete_features=DiscreteFeatures(True), random_state=7' if is_mi else ''
             name = "result_" + method
@@ -99,30 +137,47 @@ def main():
                         lines += [f'    var clone{name} = clone({name})', '    with assert_raises():', f'        _ = clone{name}.scores_()', f'    clone{name}.fit(x, y.copy())', f'    {name} = clone{name}^']
                     if phase == 1:
                         lines.append(f'    {name}.fit(refit_x, y.copy())')
-        # Seeded continuous MI also exercises compact IDs in neighbor grouping.
-        truth = mi['mutual_info_classif'](x.copy(), y, random_state=7)
-        lines.append('    var continuous = mutual_info_classif(x, y, random_state=7)')
-        emit('continuous.unsafe_get({j})', truth)
-        lines += ['    var state = RandomState(7)', '    var stream = mutual_info_classif(x, y, random_state=state)']
-        emit('stream.unsafe_get({j})', truth)
+        if not list_targets_only:
+            # Seeded continuous MI also exercises compact IDs in neighbor grouping.
+            truth = mi['mutual_info_classif'](x.copy(), y, random_state=7)
+            lines.append('    var continuous = mutual_info_classif(x, y, random_state=7)')
+            emit('continuous.unsafe_get({j})', truth)
+            lines += ['    var state = RandomState(7)', '    var stream = mutual_info_classif(x, y, random_state=state)']
+            emit('stream.unsafe_get({j})', truth)
         cases.append((fn, lines[case_start:]))
         del lines[case_start:]
     folder = ROOT / 'builds/label-parity-source'; folder.mkdir(exist_ok=True)
     outputs = []
-    for name, body in cases:
-        source = folder / (name + '.mojo')
-        source.write_text('\n'.join(lines + ['def main() raises:'] + body) + '\n')
-        binary = 'label-parity-' + name
+    if list_targets_only:
+        source = folder / 'list_targets.mojo'
+        definitions = [
+            '\n'.join(['@no_inline', f'def {name}() raises:', *body])
+            for name, body in cases
+        ]
+        calls = [f'    {name}()' for name, _ in cases]
+        source.write_text('\n'.join(lines + definitions + ['def main() raises:', *calls]) + '\n')
+        binary = 'label-parity-list-targets'
         check.compile_file(ROOT, source, binary)
         outputs.append(check.run(ROOT / 'builds' / binary, capture=True).stdout)
+    else:
+        for name, body in cases:
+            source = folder / (name + '.mojo')
+            source.write_text('\n'.join(lines + ['def main() raises:'] + body) + '\n')
+            binary = 'label-parity-' + name
+            check.compile_file(ROOT, source, binary)
+            outputs.append(check.run(ROOT / 'builds' / binary, capture=True).stdout)
     out = ''.join(outputs)
     actual = np.array([float(row.split()[1]) for row in out.splitlines()])
     np.testing.assert_allclose(actual, expected, rtol=5e-5, atol=2e-12, equal_nan=True)
     np.testing.assert_array_equal(actual[exact], np.array(expected)[exact])
-    (ROOT / 'builds/label-parity.json').write_text(json.dumps({'values': len(expected), 'cases': len(cases), 'rtol': 5e-5, 'atol': 2e-12}))
+    report = 'label-parity-list-targets.json' if list_targets_only else 'label-parity.json'
+    (ROOT / 'builds' / report).write_text(json.dumps({'values': len(expected), 'cases': len(cases), 'rtol': 5e-5, 'atol': 2e-12}))
     print('PASS native label parity', len(expected), 'values')
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--list-targets-only', action='store_true')
+    args = parser.parse_args()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        main()
+        main(args.list_targets_only)

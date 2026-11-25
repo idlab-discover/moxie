@@ -112,11 +112,14 @@ selector.fit(X, y.copy())
 ```
 
 For Int64 arrays use `BuiltinScorer[DType.float32, DType.int64]("f_classif")`.
-The optional `target_type` parameter defaults to `NDArray[target_dt]`. Choose
-`StringTarget` for string labels or `List[Scalar[target_dt]]` for a numeric
-list with Float32, Float64, or Int64 elements. The scorer materializes each
-numeric list as a rank-one array of the same dtype before scoring. The
-pipeline continues to pass the original target type to its final estimator.
+The optional `target_type` parameter defaults to `NDArray[target_dt]`. Both
+`BuiltinScorer` and [`MutualInfoScorer`](../mutual-info.md) accept
+`StringTarget`, `List[String]`, `List[Int]`, and `List[Scalar[target_dt]]`.
+Use the second parameter to match the element dtype of a Float32, Float64, or
+Int64 scalar list. The scorers materialize numeric lists as rank-one arrays
+and convert native Int to exact Int64. They wrap string lists in a
+`StringTarget`. The pipeline passes the original typed list to its final
+estimator.
 
 ```mojo
 from moxie.feature_selection import BuiltinScorer, SelectKBest

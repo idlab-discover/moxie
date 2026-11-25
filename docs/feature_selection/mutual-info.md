@@ -96,17 +96,26 @@ var numeric = MutualInfoScorer[DType.float32, DType.float64](random_state=7)
 var integers = MutualInfoScorer[DType.float32, DType.int64](random_state=7)
 # Import StringTarget from moxie._labels.
 var strings = MutualInfoScorer[DType.float32, target_type=StringTarget](random_state=7)
+# Native list labels shared with a classifier in a Pipeline.
+var string_list = MutualInfoScorer[target_type=List[String]](random_state=7)
 ```
 
 The shared label engine encodes classes before MI converts class IDs to Float64.
-Both random-state overloads accept native labels. String and Int64 targets in
-the adapter require `classification=True`; regression rejects them explicitly.
+Both standalone random-state overloads accept native array and StringTarget
+labels. In the scorer adapter, set `target_type` to `List[String]`,
+`List[Int]`, or `List[Scalar[target_dt]]` to share a typed list with a
+pipeline estimator. The scorer materializes the list in rank-one storage
+without changing its class identities. Regression requires Float32 or Float64
+targets, including lists of those scalars.
 SelectKBest, SelectPercentile and GenericUnivariateSelect ranking modes work
 with these scorers. SelectFpr, SelectFdr, SelectFwe and GenericUnivariateSelect's
 p-value modes raise when support or a transform is requested, because MI does
 not supply p-values. Fitting still records the MI scores.
 
 `tests/feature_selection/parity_labels.py` adds native string/Int64 comparisons against the pinned
-reference, including continuous and discrete feature estimators, both seeded
-random-state overloads, exact masks and clone fitting. Native contracts cover
-invalid targets, refitting, and independently typed numeric MI adapters.
+reference, including native lists, continuous and discrete feature estimators,
+both seeded random-state overloads, exact masks and clone fitting.
+Pass `--list-targets-only` to run the list classification cases by themselves.
+`tests/feature_selection/parity_mutual_info.py` also compares scores for
+floating-point regression lists. Native contracts cover invalid targets,
+refitting, and a SelectKBest pipeline with a string-label LinearSVC.

@@ -19,6 +19,34 @@ def validate_matrix(x: Dense, columns: Int = -1) raises:
                 raise Error("ValueError: input must be finite")
 
 
+def _kernel_float64[dtype: DType](X: nm.NDArray[dtype]) raises -> Dense:
+    # NuMojo astype casts physical storage. Pack noncontiguous views first.
+    if X.size == 0 or X.is_c_contiguous() or X.is_f_contiguous():
+        return X.astype[DType.float64]()
+    return X.contiguous().astype[DType.float64]()
+
+
+def _check_feature_names_width[dtype: DType](
+    X: nm.NDArray[dtype], names: List[String],
+) raises:
+    if X.ndim != 2 or len(names) != X.shape[1]:
+        raise Error("ValueError: feature_names length must match X columns")
+
+
+def _check_feature_names[dtype: DType](
+    X: nm.NDArray[dtype],
+    names: List[String],
+    fitted_names: Optional[List[String]],
+    fitted: Bool,
+) raises:
+    if not fitted:
+        raise Error("NotFittedError: estimator is not fitted")
+    _check_feature_names_width(X, names)
+    if fitted_names:
+        if names != fitted_names.value():
+            raise Error("ValueError: feature names must match those passed during fit, in the same order")
+
+
 def validate_vector(x: Dense, length: Int) raises:
     if x.ndim != 1 or x.shape[0] != length:
         raise Error("ValueError: expected matching rank-1 vector")

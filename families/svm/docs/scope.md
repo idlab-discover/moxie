@@ -38,10 +38,10 @@ class/weight handling, and `l1_min_c` bounds. Their restrictions are in the
   [linear](../algorithms/linear/docs/api.md#sample-weight-requests) estimators expose
   sample-weight requests for fit and for score where supported. Automatic
   forwarding by composition parents remains open.
-- LinearSVC and LinearSVR accept
-  [explicit feature names](../algorithms/linear/docs/api.md#feature-names)
-  for dense arrays. Kernel feature-name metadata, Python bindings, reflection,
-  pandas output, and Python callable objects remain separate work.
+- [Kernel](../algorithms/c_svm/docs/api.md#feature-names) and
+  [linear](../algorithms/linear/docs/api.md#feature-names) estimators accept
+  explicit feature names for dense arrays. Python bindings, reflection, pandas
+  output, and Python callable objects remain separate work.
 - All seven estimators support experimental native model files.
   See the [linear schemas](../algorithms/linear/docs/api.md#native-model-files)
   and [kernel schemas](../algorithms/c_svm/docs/api.md#native-model-files).

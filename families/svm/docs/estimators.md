@@ -72,8 +72,8 @@ a separate operation. Native fit/set_params return a mutable borrow.
 [Kernel](../algorithms/c_svm/docs/api.md#sample-weight-requests) and
 [linear](../algorithms/linear/docs/api.md#sample-weight-requests) estimators
 expose sample-weight requests.
-Feature-name metadata, reflection, pandas, Python serialization,
-Python callable objects and estimator repr are future binding work.
+Dense estimators accept explicit feature names. Reflection, pandas, Python
+serialization, Python callable objects and estimator repr are future binding work.
 
 ## Dense acceptance obligations for each child
 

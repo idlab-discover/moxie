@@ -13,8 +13,8 @@ from moxie.svm._linear import ClassWeight
 from moxie.svm._nu_svm import NuSVC, NuSVR
 from moxie.svm._one_class import OneClassSVM
 from moxie.svm.linear_serialization import (
-    _class_rows, _label_type, _read_labels, _read_request, _read_rng,
-    _write_labels, _write_request, _write_rng,
+    _class_rows, _label_type, _read_feature_names, _read_labels, _read_request, _read_rng,
+    _write_feature_names, _write_labels, _write_request, _write_rng,
 )
 
 comptime _PublicIndices = nm.NDArray[DType.int32]
@@ -354,11 +354,11 @@ def _read_supervised_requests(
 
 
 struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchema):
-    """Version 3 state for a dense SVC."""
+    """Version 4 state for a dense SVC."""
 
     comptime Model = SVC[Self.Label]
     comptime TypeId = "moxie.svm.SVC"
-    comptime StateVersion = 3
+    comptime StateVersion = 4
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -385,13 +385,16 @@ struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchem
             _validate_class_weights(model.class_weight_)
         _write_request(writer, model._metadata.fit)
         _write_request(writer, model._metadata.score)
+        _write_feature_names(
+            writer, model.feature_names_in_, model._snapshot.value().n_features if model._snapshot else 0,
+        )
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
         var version = archive.schema_version
-        archive.expect(Self.TypeId, version if 1 <= version <= 2 else Self.StateVersion)
+        archive.expect(Self.TypeId, version if 1 <= version <= 3 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -401,6 +404,11 @@ struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchem
         var rng = _read_rng(reader)
         var state = _read_fit(archive, reader, len(classes), 1)
         var requests = _read_supervised_requests(reader, version)
+        var names: Optional[List[String]] = None
+        if version >= 4:
+            names = _read_feature_names(
+                reader, state.snapshot.value().n_features if state.snapshot else 0,
+            )
         reader.finish()
         var model = Self.Model(
             kernel=config.kernel, degree=config.degree, gamma=config.gamma,
@@ -413,6 +421,7 @@ struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchem
         )
         model._metadata = requests^
         model._rng = rng^
+        model.feature_names_in_ = names^
         _ = _class_count(classes, Bool(state.engine))
         model.classes_ = classes^
         if state.engine:
@@ -445,11 +454,11 @@ struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchem
 
 
 struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchema):
-    """Version 3 state for a dense NuSVC."""
+    """Version 4 state for a dense NuSVC."""
 
     comptime Model = NuSVC[Self.Label]
     comptime TypeId = "moxie.svm.NuSVC"
-    comptime StateVersion = 3
+    comptime StateVersion = 4
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -476,13 +485,16 @@ struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSch
             _validate_class_weights(model.class_weight_)
         _write_request(writer, model._metadata.fit)
         _write_request(writer, model._metadata.score)
+        _write_feature_names(
+            writer, model.feature_names_in_, model._snapshot.value().n_features if model._snapshot else 0,
+        )
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
         var version = archive.schema_version
-        archive.expect(Self.TypeId, version if 1 <= version <= 2 else Self.StateVersion)
+        archive.expect(Self.TypeId, version if 1 <= version <= 3 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -492,6 +504,11 @@ struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSch
         var rng = _read_rng(reader)
         var state = _read_fit(archive, reader, len(classes), 1)
         var requests = _read_supervised_requests(reader, version)
+        var names: Optional[List[String]] = None
+        if version >= 4:
+            names = _read_feature_names(
+                reader, state.snapshot.value().n_features if state.snapshot else 0,
+            )
         reader.finish()
         var model = Self.Model(
             kernel=config.kernel, degree=config.degree, gamma=config.gamma,
@@ -504,6 +521,7 @@ struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSch
         )
         model._metadata = requests^
         model._rng = rng^
+        model.feature_names_in_ = names^
         _ = _class_count(classes, Bool(state.engine))
         model.classes_ = classes^
         if state.engine:
@@ -536,11 +554,11 @@ struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSch
 
 
 struct SVRSchema(ModelSchema):
-    """Version 3 state for a dense SVR."""
+    """Version 4 state for a dense SVR."""
 
     comptime Model = SVR
     comptime TypeId = "moxie.svm.SVR"
-    comptime StateVersion = 3
+    comptime StateVersion = 4
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -559,13 +577,16 @@ struct SVRSchema(ModelSchema):
         )
         _write_request(writer, model._metadata.fit)
         _write_request(writer, model._metadata.score)
+        _write_feature_names(
+            writer, model.feature_names_in_, model._snapshot.value().n_features if model._snapshot else 0,
+        )
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
         var version = archive.schema_version
-        archive.expect(Self.TypeId, version if 1 <= version <= 2 else Self.StateVersion)
+        archive.expect(Self.TypeId, version if 1 <= version <= 3 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -574,6 +595,11 @@ struct SVRSchema(ModelSchema):
         var rng = _read_rng(reader)
         var state = _read_fit(archive, reader, 0, 0)
         var requests = _read_supervised_requests(reader, version)
+        var names: Optional[List[String]] = None
+        if version >= 4:
+            names = _read_feature_names(
+                reader, state.snapshot.value().n_features if state.snapshot else 0,
+            )
         reader.finish()
         var model = Self.Model(
             kernel=config.kernel, degree=config.degree, gamma=config.gamma,
@@ -583,6 +609,7 @@ struct SVRSchema(ModelSchema):
         )
         model._metadata = requests^
         model._rng = rng^
+        model.feature_names_in_ = names^
         if state.engine:
             ref engine = state.engine.value()
             ref snapshot = state.snapshot.value()
@@ -606,11 +633,11 @@ struct SVRSchema(ModelSchema):
 
 
 struct NuSVRSchema(ModelSchema):
-    """Version 3 state for a dense NuSVR."""
+    """Version 4 state for a dense NuSVR."""
 
     comptime Model = NuSVR
     comptime TypeId = "moxie.svm.NuSVR"
-    comptime StateVersion = 3
+    comptime StateVersion = 4
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -629,13 +656,16 @@ struct NuSVRSchema(ModelSchema):
         )
         _write_request(writer, model._metadata.fit)
         _write_request(writer, model._metadata.score)
+        _write_feature_names(
+            writer, model.feature_names_in_, model._snapshot.value().n_features if model._snapshot else 0,
+        )
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
         var version = archive.schema_version
-        archive.expect(Self.TypeId, version if 1 <= version <= 2 else Self.StateVersion)
+        archive.expect(Self.TypeId, version if 1 <= version <= 3 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -644,6 +674,11 @@ struct NuSVRSchema(ModelSchema):
         var rng = _read_rng(reader)
         var state = _read_fit(archive, reader, 0, 0)
         var requests = _read_supervised_requests(reader, version)
+        var names: Optional[List[String]] = None
+        if version >= 4:
+            names = _read_feature_names(
+                reader, state.snapshot.value().n_features if state.snapshot else 0,
+            )
         reader.finish()
         var model = Self.Model(
             kernel=config.kernel, degree=config.degree, gamma=config.gamma,
@@ -653,6 +688,7 @@ struct NuSVRSchema(ModelSchema):
         )
         model._metadata = requests^
         model._rng = rng^
+        model.feature_names_in_ = names^
         if state.engine:
             ref engine = state.engine.value()
             ref snapshot = state.snapshot.value()
@@ -676,11 +712,11 @@ struct NuSVRSchema(ModelSchema):
 
 
 struct OneClassSVMSchema(ModelSchema):
-    """Version 3 state for a dense OneClassSVM."""
+    """Version 4 state for a dense OneClassSVM."""
 
     comptime Model = OneClassSVM
     comptime TypeId = "moxie.svm.OneClassSVM"
-    comptime StateVersion = 3
+    comptime StateVersion = 4
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -699,13 +735,16 @@ struct OneClassSVMSchema(ModelSchema):
         if model._model:
             _write_array(archive, "offset_", model.offset_, [1])
         _write_request(writer, model._fit_request)
+        _write_feature_names(
+            writer, model.feature_names_in_, model._snapshot.value().n_features if model._snapshot else 0,
+        )
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
         var version = archive.schema_version
-        archive.expect(Self.TypeId, version if 1 <= version <= 2 else Self.StateVersion)
+        archive.expect(Self.TypeId, version if 1 <= version <= 3 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -715,6 +754,11 @@ struct OneClassSVMSchema(ModelSchema):
         var request = SampleWeightRequest()
         if version >= 3:
             request = _read_request(reader)
+        var names: Optional[List[String]] = None
+        if version >= 4:
+            names = _read_feature_names(
+                reader, state.snapshot.value().n_features if state.snapshot else 0,
+            )
         reader.finish()
         var model = Self.Model(
             kernel=config.kernel, degree=config.degree, gamma=config.gamma,
@@ -724,6 +768,7 @@ struct OneClassSVMSchema(ModelSchema):
         )
         model._fit_request = request^
         model._rng = rng^
+        model.feature_names_in_ = names^
         if state.engine:
             ref engine = state.engine.value()
             ref snapshot = state.snapshot.value()

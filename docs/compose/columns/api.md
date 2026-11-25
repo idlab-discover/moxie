@@ -100,9 +100,10 @@ TypeError), `get_feature_names_out(input_features)`, `fit`, `fit_transform`,
 - Output feature names need components conforming to the compose
   `FeatureNamesOut` trait or `moxie._feature_metadata.FeatureNamesOut`
   (sklearn checks `hasattr`); others raise sklearn's AttributeError text.
-  Preprocessing scalers, dense imputers and `SelectPercentile` conform. Some other families'
-  transformers define the method without declaring a trait, so their names
-  are not yet available through ColumnTransformer.
+  Preprocessing scalers, dense imputers, `SelectPercentile`,
+  `MiniBatchKMeans`, `BisectingKMeans`, `Birch` and `FeatureAgglomeration`
+  conform. For example, a `FeatureAgglomeration` entry named `pool` generates
+  `pool__featureagglomeration0` for its first pooled output under the default naming.
 - `make_pipeline(SimpleImputer(), StandardScaler())` returns a
   `TransformerPipeline` that can be used as one entry. Its stages must agree
   on the target type and on the intermediate array type.

@@ -27,6 +27,9 @@
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },
+        "moxie._feature_metadata": {
+          "file": "src/moxie/_feature_metadata.mojo"
+        },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
         }

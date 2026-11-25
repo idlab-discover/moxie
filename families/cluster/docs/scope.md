@@ -65,6 +65,12 @@ input-name contracts in both dtypes. The parity command compares exact names
 with the local sklearn naming functions and writes
 `builds/feature-names-parity.json`.
 
+`MiniBatchKMeans`, `BisectingKMeans`, `Birch` and `FeatureAgglomeration`
+declare the shared `FeatureNamesOut` trait so typed compositions can read
+their fitted names. The [mixed-table Compose test](../../../tests/compose/columns/mixed_cluster_names.mojo)
+checks pooled feature names, dense one-hot names and block spans against
+the pinned scikit-learn reference.
+
 Dense `Birch` is implemented in `algorithms/birch` and exported by the family
 and both isolated consumers. It reuses agglomerative Ward clustering, the
 centroid distance kernel, and neighbor queries. See its [API](../algorithms/birch/docs/api.md)

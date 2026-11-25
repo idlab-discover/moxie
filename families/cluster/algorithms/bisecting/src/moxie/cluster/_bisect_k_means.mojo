@@ -1,6 +1,7 @@
 """Dense divisive clustering, adapted from sklearn (BSD-3-Clause)."""
 import numojo as nm
 from std.math import isfinite
+from moxie._feature_metadata import FeatureNamesOut
 from moxie._random import RandomState, check_random_state
 from moxie.utils.validation import FittedState
 from moxie.cluster._base import PredictiveClusterer, ClusterDistanceTransformer
@@ -35,7 +36,9 @@ struct BisectingKMeansParams(Copyable, Movable):
     var bisecting_strategy: String
 
 
-struct BisectingKMeans[dtype: DType = DType.float64](PredictiveClusterer, ClusterDistanceTransformer, Copyable, Movable):
+struct BisectingKMeans[dtype: DType = DType.float64](
+    PredictiveClusterer, ClusterDistanceTransformer, FeatureNamesOut, Copyable, Movable,
+):
     comptime Params = BisectingKMeansParams
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = nm.NDArray[Self.dtype]

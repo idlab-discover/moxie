@@ -1,8 +1,7 @@
 """Compare mixed tables with the pinned sklearn compositions.
 
-One-hot values, names and spans must match exactly. The scaler uses Float64
-accumulation and can round differently from NumPy's reductions, so its output
-allows 1e-12 absolute and relative error.
+One-hot values, names and spans must match exactly. Numeric outputs allow
+1e-12 absolute and relative error for rounding differences in reductions.
 """
 from pathlib import Path
 import json
@@ -85,10 +84,10 @@ def check_composition(case, model, train, test, extra_outputs=(), *, numeric_wid
     report.mkdir(parents=True, exist_ok=True)
     (report / f"{case}-report.json").write_text(json.dumps({
         "revision": io.REVISION, "sources": {**hashes, **(extra_sources or {})},
-        "scaler_max_errors": errors,
+        "numeric_max_errors": errors,
         "names": names, "spans": {name: [span.start, span.stop] for name, span in spans.items()},
     }, indent=2) + "\n")
-    print(f"{case}: one-hot values, names and spans exact, scaler within 1e-12")
+    print(f"{case}: one-hot values, names and spans exact, numeric output within 1e-12")
 
 
 def check_categorical_imputation(case, *, numeric=False):
@@ -273,6 +272,39 @@ def check_mixed_raw_string_categories():
     )
 
 
+def check_mixed_cluster_names():
+    source = "sklearn/cluster/_agglomerative.py"
+    transform_source = "sklearn/cluster/_feature_agglomeration.py"
+    base_source = "sklearn/base.py"
+    validation_source = "sklearn/utils/validation.py"
+    reference = io.verify_reference([source, transform_source, base_source, validation_source])
+    io.load_pinned(transform_source, register=True)
+    agglomeration = io.load_pinned(source).FeatureAgglomeration
+    base = io.load_pinned(base_source)
+    validation = io.load_pinned(validation_source)
+    # The fitted class inherits its naming method from sklearn.base.
+    base._generate_get_feature_names_out = validation._generate_get_feature_names_out
+    agglomeration.get_feature_names_out = base.ClassNamePrefixFeaturesOutMixin.get_feature_names_out
+    io.pinned_code(agglomeration.fit, source)
+    io.pinned_code(agglomeration.transform, transform_source)
+    io.pinned_code(agglomeration.get_feature_names_out, base_source)
+    train = pd.DataFrame({
+        "left": [2.0, 4.0, 8.0, 16.0],
+        "color": pd.Categorical(["blue", "red", "blue", "red"]),
+        "right": [4.0, 6.0, 10.0, 18.0],
+    })
+    test = pd.DataFrame({
+        "color": pd.Categorical(["red", "green"]),
+        "right": [8.0, 12.0],
+        "left": [4.0, 8.0],
+    })
+    model = compose.ColumnTransformer([
+        ("pool", agglomeration(n_clusters=1), compose.make_column_selector(dtype_include="number")),
+        ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"), ["color"]),
+    ])
+    check_composition("mixed_cluster_names", model, train, test, extra_sources=reference)
+
+
 if __name__ == "__main__":
     check_mixed("mixed", "color", ["red", "blue", "red", "amber", "blue"], ["green", None, "red"])
     check_mixed_numeric_categories()
@@ -283,3 +315,4 @@ if __name__ == "__main__":
     check_mixed_float_columns()
     check_mixed_integer_columns()
     check_mixed_boolean_columns()
+    check_mixed_cluster_names()

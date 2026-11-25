@@ -23,6 +23,9 @@ struct PairedScores(Copyable, Movable):
     var x_scores: Matrix
     var y_scores: Matrix
 
+    def _take_y_scores(deinit self) -> Matrix:
+        return self.y_scores^
+
 
 @fieldwise_init
 struct ProjectionWeights(Copyable, Movable):

@@ -140,10 +140,51 @@ def check_promoted_input() raises:
         model.partial_fit(zeros[DType.float32](Shape(1, 2)))
 
 
+def check_named_params[dtype: DType]() raises:
+    var X = zeros[dtype](Shape(3, 2))
+    var model = BernoulliRBM[dtype](2, n_iter=1, verbose=1, random_state=42)
+    _ = model.fit(X)
+    var before = model.transform(X)
+    _ = model.set_params(learning_rate=0.06)
+    var params = model.get_params()
+    assert_equal(params.learning_rate, 0.06)
+    assert_equal(params.n_components, 2)
+    assert_equal(params.batch_size, 10)
+    assert_equal(params.n_iter, 1)
+    assert_equal(params.verbose, 1)
+    assert_equal(params.random_state.value(), 42)
+    _ = model.set_params(n_components=3, batch_size=2, n_iter=0, verbose=0)
+    var after = model.set_params().transform(X)
+    assert_equal(after.shape, before.shape)
+    for i in range(before.size):
+        assert_equal(after.unsafe_get(i), before.unsafe_get(i))
+
+    _ = model.set_params(random_state=Optional[Int](0))
+    var unfitted = clone(model)
+    assert_equal(unfitted.__sklearn_is_fitted__(), False)
+    params = unfitted.get_params()
+    assert_equal(params.random_state.value(), 0)
+    assert_equal(params.n_iter, 0)
+    assert_equal(params.verbose, 0)
+    _ = model.set_params(random_state=Optional[Optional[Int]](Optional[Int]()))
+    assert_equal(Bool(model.get_params().random_state), False)
+    with assert_raises(contains="random_state=None"):
+        _ = model.fit(X)
+    var rng = RandomState(0)
+    _ = model.fit(X, rng)
+    _ = unfitted.fit(X)
+    assert_equal(model.h_samples_.shape, Shape(2, 3))
+    assert_equal(model.components_.shape, Shape(3, 2))
+    for i in range(model.components_.size):
+        assert_equal(model.components_.unsafe_get(i), unfitted.components_.unsafe_get(i))
+
+
 def main() raises:
     errors[DType.float64]()
     errors[DType.float32]()
     check[DType.float64]()
     check[DType.float32]()
     check_promoted_input()
-    print("PASS RBM estimator contracts including Float32 incremental input")
+    check_named_params[DType.float64]()
+    check_named_params[DType.float32]()
+    print("PASS RBM estimator contracts including named parameter updates and Float32 incremental input")

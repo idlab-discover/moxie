@@ -11,9 +11,14 @@ change matrix shapes or the initialization sequence.
 
 Constructor parameters retain the reference names and defaults: n_components=256,
 learning_rate=0.1, batch_size=10, n_iter=10, verbose=0, random_state=None.
-Fit and typed set_params return mutable self; partial_fit mutates in place and returns nothing. `get_params()` returns a typed
-RBMParams record; modify that record and pass it to set_params. Named partial
-set_params overloads remain unfinished. `clone(model)` from moxie.base returns
+Fit and `set_params` return mutable self. `partial_fit` mutates in place and
+returns nothing. Pass the typed `RBMParams` record from `get_params()` to
+replace all settings, or use keyword arguments such as
+`model.set_params(learning_rate=0.06)` to update only the supplied settings.
+For `random_state`, pass `Optional[Int](42)` to set a seed or
+`Optional[Optional[Int]](Optional[Int]())` to clear it. Omitting the argument
+preserves the setting. Updates preserve learned state and fit validates the
+new settings. `clone(model)` from moxie.base returns
 unfitted configuration. Learned attributes are components_, intercept_hidden_,
 intercept_visible_, h_samples_ and n_features_in_. Empty arrays before fitting
 are a native representation, not fitted results.

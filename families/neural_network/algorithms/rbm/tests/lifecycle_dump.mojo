@@ -58,11 +58,7 @@ def check[dtype: DType]() raises:
     _ = idle.fit(X)
     state(idle, X)
     # set_params then refit replaces every learned array.
-    var params = model.get_params()
-    params.n_components = 4
-    params.learning_rate = 0.2
-    params.batch_size = 7
-    _ = model.set_params(params).fit(X)
+    _ = model.set_params(n_components=4, learning_rate=0.2, batch_size=7).fit(X)
     state(model, X)
     # Reversed-column view: arbitrary strides read the same logical matrix.
     var view = X.view_with_layout(Shape(23, 12), NDArrayStrides(12, -1), 11)

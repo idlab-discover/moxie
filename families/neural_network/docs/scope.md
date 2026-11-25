@@ -15,10 +15,9 @@ SGD and Adam support validation-set early stopping. See the
 
 Dense finite rank-2 inputs, both dtypes and arbitrary valid strides use NuMojo
 storage and Moxie RNG. Sparse inputs, implicit densification, Python reflection,
-pandas, metadata routing and serialization are unsupported. RBM named partial
-set_params remains unfinished. Its typed
-set_params and fit return mutable self; the family-specific RBMSampling
-partial_fit contract retains its existing None return.
+pandas, metadata routing and serialization are unsupported. RBM's typed and
+named `set_params` overloads and `fit` return mutable self. The family-specific
+`RBMSampling.partial_fit` contract returns None.
 
 `pixi run neural-network-check` validates native lifecycle/error/ownership
 contracts, six private RBM kernel cases with full RNG state, six public RBM

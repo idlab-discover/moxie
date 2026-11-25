@@ -79,6 +79,29 @@ caching off. Use the full Params record to reset `random_state` to `None`, since
 `model.copy()` also copies its learned buffers. `fit` and `set_params` return
 a mutable borrow, following the [shared native contract](../interfaces.md).
 
+## Native persistence
+
+`GaussianRandomProjectionSchema[dtype]` and `SparseRandomProjectionSchema[dtype]`
+support unfitted models and fitted models with dense components. For
+`SparseRandomProjection`, fitting at effective density 1 produces dense
+components. A fitted model with CSR components raises an error at save time
+even when `dense_output=True`.
+
+```mojo
+from moxie.random_projection_serialization import GaussianRandomProjectionSchema
+from moxie.serialization import load_model, save_model
+
+save_model[GaussianRandomProjectionSchema](model, "projection.moxie")
+var restored = load_model[GaussianRandomProjectionSchema]("projection.moxie")
+```
+
+Choose the estimator's dtype in the schema, which defaults to Float64. Loading
+restores independent components, any cached inverse, and learned dimensions
+without fitting or drawing from the RNG. It also preserves the current
+constructor settings, including changes made since fit. The archive uses
+Moxie's [experimental native model format](../serialization.md). Python pickle
+files and RNG stream snapshots are outside this format.
+
 ## Matrix representation and dtypes
 
 `ProjectionMatrix[dtype]` is family-local owned storage, not a new shared array
@@ -245,4 +268,4 @@ Concrete and generic calls can chain `model.set_params(params).fit(X).transform(
 use the full record to reset `random_state=None`. `clone` returns an unfitted
 estimator; `.copy()` independently copies fitted buffers. Modifying components
 does not invalidate an existing inverse cache, matching the reference. Refitting
-regenerates consistent components and inverse. Persistence is not implemented.
+regenerates consistent components and inverse.

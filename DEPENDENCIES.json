@@ -212,6 +212,9 @@
         "moxie.random_projection": {
           "file": "src/moxie/random_projection.mojo"
         },
+        "moxie.random_projection_serialization": {
+          "file": "src/moxie/random_projection_serialization.mojo"
+        },
         "moxie._projection.matrix": {
           "file": "src/moxie/_projection/matrix.mojo"
         },

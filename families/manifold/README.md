@@ -1,7 +1,8 @@
 # Manifold
 
-Moxie owns dense TSNE, ClassicalMDS, trustworthiness and the dense manifold
-contracts in this directory. See [dense t-SNE](docs/tsne.md),
+Moxie owns dense TSNE, Isomap, ClassicalMDS, trustworthiness and the dense
+manifold contracts in this directory. See [dense t-SNE](docs/tsne.md),
+[dense Isomap](docs/isomap.md),
 [ClassicalMDS and trustworthiness](docs/algorithms.md), and [scope](docs/scope.md)
 for supported metrics and native API differences.
 
@@ -26,8 +27,8 @@ and neighbors engines. [PROVENANCE.json](PROVENANCE.json) and `SCAFFOLD_BASE`
 record the original source.
 
 The notebook `notebooks/manifold/plot_lle_digits.ipynb` compares its Classical MDS
-panel and trustworthiness scores with scikit-learn and checks the unsupported
-manifold operations used by the example. Run it with
+and t-SNE panels, trustworthiness scores and an Isomap subset with scikit-learn.
+It also checks the unsupported manifold operations used by the example. Run it with
 `pixi run -e notebooks notebooks notebooks/manifold`.
 
 - [Family contracts](docs/family.md)

@@ -1,6 +1,6 @@
 # Manifold plumbing
 
-This directory owns manifold contracts, validation, dense TSNE, ClassicalMDS
+This directory owns manifold contracts, validation, dense TSNE, Isomap, ClassicalMDS
 and trustworthiness.
 Existing `EmbeddingEstimator` and `OutOfSampleEmbedding` remain unchanged.
 Public imports follow sklearn.manifold; `_plumbing` is a private native exchange
@@ -15,11 +15,11 @@ module. Its records are not new sklearn public exports.
 | `algorithms/spectral/` | SpectralEmbedding, spectral_embedding; affinities, Laplacians, connectivity diagnostics | scaffold, neighbors.nearest, decomposition.svd_engine |
 | `algorithms/lle/` | LocallyLinearEmbedding, locally_linear_embedding; local reconstruction | scaffold, neighbors.nearest, decomposition.svd_engine |
 | `algorithms/tsne/` | TSNE, trustworthiness; exact and fixed-k probabilities, Barnes–Hut forces, KL optimization and rank diagnostics | scaffold, neighbors.nearest, decomposition.pca |
-| `algorithms/isomap/` (deferred) | Isomap; graph shortest paths | scaffold, neighbors.nearest, decomposition.kernel_pca |
+| `_isomap.mojo` | Isomap; graph shortest paths and held-out projection | neighbors.nearest, decomposition.kernel_pca, preprocessing.KernelCenterer |
 
 The child directories in this table describe planned organization; no algorithm child
 projects currently exist. Implemented algorithms live in `src/moxie/manifold`. Use `_mds`, `_classical_mds`,
-`_spectral_embedding`, `_locally_linear`, `_t_sne` module boundaries as in sklearn.
+`_spectral_embedding`, `_locally_linear`, `_t_sne` and `_isomap` module boundaries as in sklearn.
 The shared private adapter module is a deliberate native adaptation: it fixes
 storage and ownership without combining unrelated optimizers. No stress, KL,
 reconstruction, shortest-path, affinity-building or spectral engine lives here.
@@ -87,7 +87,7 @@ MDS eigenvalues are distinct child-owned result records/learned attributes.
 Public helpers keep their sklearn return structures via typed child records
 where dynamic tuple arity requires an adaptation. `fit_transform` returns the
 coordinate array; the internal exchange record does not change that API.
-Only LLE (and deferred Isomap) opts into out-of-sample transformation. MDS,
+Isomap implements out-of-sample transformation. LLE declares that capability. MDS,
 ClassicalMDS, TSNE and SpectralEmbedding must not gain a fabricated `transform`.
 
 ## Shared numerical and native obligations
@@ -97,8 +97,8 @@ matrix and measured copy costs. Reuse `_dense.sum_axis2d` and `row_squared_norms
 NuMojo finite elementwise multiply, column subtraction, rank-two matmul and
 explicit-output-dtype mean are approved within that matrix. General axis sum,
 `dot`, variance/ddof, unpivoted solve/inverse/LU and NuMojo random are excluded.
-No new operation-specific numerical exception is introduced here; validation
-loops only inspect entries and allocate no arithmetic result.
+The exchange records only validate entries and allocate no arithmetic result.
+Isomap documents its path and reconstruction loops in [dense Isomap](isomap.md).
 
 Seeded streams come from `moxie._random.RandomState`; integer seeds reset where
 sklearn resets, mutable states advance, and native None uses an application-owned

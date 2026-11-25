@@ -27,6 +27,9 @@
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },
+        "moxie.warnings": {
+          "file": "src/moxie/warnings.mojo"
+        },
         "moxie._feature_metadata": {
           "file": "src/moxie/_feature_metadata.mojo"
         },
@@ -189,7 +192,8 @@
             "TSNEParams": "moxie.manifold._t_sne",
             "TSNEMetricParams": "moxie.manifold._t_sne",
             "ClassicalMDS": "moxie.manifold._classical_mds",
-            "Isomap": "moxie.manifold._api",
+            "Isomap": "moxie.manifold._isomap",
+            "IsomapParams": "moxie.manifold._isomap",
             "LocallyLinearEmbedding": "moxie.manifold._api",
             "SpectralEmbedding": "moxie.manifold._api",
             "locally_linear_embedding": "moxie.manifold._api",
@@ -215,6 +219,9 @@
         },
         "moxie.manifold._classical_mds": {
           "file": "src/moxie/manifold/_classical_mds.mojo"
+        },
+        "moxie.manifold._isomap": {
+          "file": "src/moxie/manifold/_isomap.mojo"
         },
         "moxie.manifold._plumbing": {
           "file": "src/moxie/manifold/_plumbing.mojo"

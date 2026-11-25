@@ -1,23 +1,22 @@
 # Dense-only scope
 
 This project implements dense contracts, validation, owned snapshots,
-dense TSNE, ClassicalMDS and trustworthiness. See [dense t-SNE](tsne.md) and
-[algorithm support](algorithms.md) for settings, native API differences and parity coverage. The supported
-and tested settings are float32/float64, finite nonempty rank-two inputs,
-contiguous and offset/negative-stride views, square pairwise matrices, dense
-fixed-k neighbor tables, signed symmetric spectral operators and coordinate
-shape checks. Public estimator traits and the baseline remain unchanged.
+dense TSNE, Isomap, ClassicalMDS and trustworthiness. See [dense t-SNE](tsne.md),
+[dense Isomap](isomap.md) and [algorithm support](algorithms.md) for settings,
+native API differences and parity coverage. Tests cover Float32 and Float64,
+finite nonempty rank-two inputs, contiguous and offset or negative-stride
+views, square pairwise matrices, dense fixed-k neighbor tables, signed
+symmetric spectral operators and coordinate shape checks.
 
 Dense work remains open for MDS and smacof, SpectralEmbedding and
-spectral_embedding, all four LLE reconstruction methods, and Isomap.
+spectral_embedding, and all four LLE reconstruction methods.
 See [plumbing.md](plumbing.md) for ownership and dependencies.
 
 Sparse containers, conversions, arithmetic, graph-returning APIs and solvers
 are deferred by the accepted dense-only policy.
-Spectral nearest-neighbor and precomputed-nearest-neighbor affinities,
-sparse spectral solver branches and
-sparse t-SNE inputs and sparse probability graph interfaces are deferred. No sparse input is densified.
-No `_sparse` module is required or provided. The shared numerics owner does not
+This includes spectral nearest-neighbor and precomputed-nearest-neighbor
+affinities, sparse spectral solvers, sparse t-SNE inputs and probability
+graphs, and Isomap on sparse neighbor graphs. The shared numerics owner does not
 provide dense factorizations. ClassicalMDS consumes the live decomposition engine.
 
 Reference: sklearn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`,

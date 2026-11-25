@@ -431,6 +431,9 @@
         "moxie.feature_selection._sequential_adapter": {
           "file": "src/moxie/feature_selection/_sequential_adapter.mojo"
         },
+        "moxie.feature_selection._ridge_classifier_importance": {
+          "file": "src/moxie/feature_selection/_ridge_classifier_importance.mojo"
+        },
         "moxie.feature_selection._logistic_importance": {
           "file": "src/moxie/feature_selection/_logistic_importance.mojo"
         },
@@ -767,6 +770,7 @@
             "ConfiguredScorer": "moxie.feature_selection._univariate_selection",
             "DecisionTreeClassifierImportance": "moxie.feature_selection._tree_importance",
             "LinearSVCImportance": "moxie.feature_selection._linear_svc_importance",
+            "RidgeClassifierImportance": "moxie.feature_selection._ridge_classifier_importance",
             "LogisticRegressionImportance": "moxie.feature_selection._logistic_importance",
             "DenseSupervisedCV": "moxie.feature_selection._sequential_adapter",
             "DiscreteFeatures": "moxie.feature_selection._mutual_info",

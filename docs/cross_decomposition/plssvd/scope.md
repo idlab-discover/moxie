@@ -14,7 +14,6 @@ cases. Components beyond the rank of X.T @ y are checked for
 orthonormality only; exact sign-tie or perturbation-sensitive references are
 compared by score spectra.
 
-Current Moxie commands and report locations are documented in
-[the family guide](../README.md). The native benchmark program is retained
-under `tests/cross_decomposition/plssvd/benchmark.mojo`; performance has not
-been remeasured during integration.
+See [the family guide](../README.md) for parity commands and report locations
+and the [dense fit benchmark](../README.md#dense-fit-benchmark) for timing
+PLSSVD.

@@ -1,6 +1,6 @@
 from std.testing import assert_raises
 from moxie.feature_extraction import FeatureHasher, image
-from moxie.feature_extraction.text import HashingVectorizer, TfidfVectorizer
+from moxie.feature_extraction.text import HashingVectorizer, strip_accents_ascii, strip_accents_unicode
 
 
 def main() raises:
@@ -10,5 +10,7 @@ def main() raises:
     with assert_raises():
         _ = HashingVectorizer()
     with assert_raises():
-        _ = TfidfVectorizer()
-    print("PASS: deferred feature-extraction constructors reject execution")
+        _ = strip_accents_ascii("é")
+    with assert_raises():
+        _ = strip_accents_unicode("é")
+    print("PASS: deferred feature-extraction APIs reject execution")

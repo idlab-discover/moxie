@@ -121,6 +121,20 @@ struct TfidfTransformer[dtype: DType = DType.float64](
             raise Error("AttributeError: idf_ requires a successful fit with use_idf=True")
         return self._idf.value().copy()
 
+    def _set_idf(mut self, values: Self.Transformed) raises:
+        if values.ndim != 1 or values.shape[0] == 0:
+            raise Error("ValueError: idf_ must be a nonempty rank-one array")
+        var columns = values.shape[0]
+        if self._state.is_fitted():
+            self._state.check_features(columns)
+        var idf = zeros[Self.output_dtype](Shape(columns))
+        var stride = Int(values.strides[0])
+        for column in range(columns):
+            idf.unsafe_set(column, values.unsafe_get(column * stride))
+        self._idf = idf^
+        if not self._state.is_fitted():
+            self._state.n_features_in_ = columns
+
     def _check_norm(self) raises:
         if self.norm and self.norm.value() != "l1" and self.norm.value() != "l2":
             raise Error("ValueError: norm must be 'l1', 'l2' or None")

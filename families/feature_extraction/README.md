@@ -10,7 +10,7 @@ Implemented: dense `DictVectorizer`, `PatchExtractor`, `extract_patches_2d`,
 Select `sparse=False` for dictionary vectorization and `return_as="dense"`
 for graph output. The reference sparse defaults still raise.
 
-`FeatureHasher`, `HashingVectorizer` and `TfidfVectorizer` remain raising declarations.
+`FeatureHasher` and `HashingVectorizer` remain raising declarations.
 Complex and extended-precision dictionary dtypes remain unfinished. See
 [scope](docs/scope.md), [dictionary API](algorithms/dict_hash/docs/api.md),
 [image API](algorithms/image/docs/api.md) and [text API](algorithms/text/docs/api.md).

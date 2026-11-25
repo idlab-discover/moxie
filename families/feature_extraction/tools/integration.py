@@ -66,6 +66,7 @@ def main():
             run(sys.executable, project / 'tests/parity.py')
             if child == 'text':
                 run(sys.executable, project / 'tests/count_parity.py')
+                run(sys.executable, project / 'tests/vectorizer_parity.py')
     elif action == 'start':
         for project, name in [(ROOT, 'plumbing'), (ROOT / 'algorithms/dict_hash', 'cities'),
                               (ROOT / 'algorithms/image', 'patches')]:

@@ -106,11 +106,11 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
     comptime Array = NDArray[Self.dtype]
     comptime ScalarType = Scalar[Self.dtype]
     comptime Params = GaussianNBParams
-    comptime Input = _Matrix
+    comptime Input = NDArray[Self.dtype]
     comptime Target = Self.D.Target
     comptime Prediction = Self.Target
     comptime Classes = Self.Target
-    comptime Probabilities = _Matrix
+    comptime Probabilities = NDArray[Self.dtype]
     comptime SampleWeight = List[Float64]
 
     var priors: Optional[List[Float64]]
@@ -179,7 +179,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         *,
         ref[sample_weight_origin] sample_weight: Float64,
@@ -194,7 +194,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
         *,
@@ -244,7 +244,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         y_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
     ) raises -> ref[self] Self:
         _ = self.fit(dense_from_lists(X), y)
@@ -257,7 +257,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         *,
         ref[sample_weight_origin] sample_weight: Self.SampleWeight,
@@ -271,7 +271,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         y_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
     ) raises -> ref[self] Self:
@@ -285,7 +285,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         sample_weight_origin: ImmOrigin,
     ](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
+        ref[x_origin] X: _Matrix,
         ref[y_origin] y: Self.Target,
         classes: Optional[Self.Classes] = None,
         *,
@@ -414,18 +414,52 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
                            sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
         return weighted_accuracy[Self.D](y, self.predict(X), sample_weight)
 
-    def predict_joint_log_proba(self, X: Self.Input) raises -> Self.Probabilities:
-        return probability_lists(self.predict_joint_log_proba(dense_from_lists(X)))
+    # Trait-typed NDArray[dtype] overloads; they delegate to the generic paths.
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        _ = self.fit[input_dtype=Self.dtype](X, y, sample_weight=Optional[List[Float64]](None))
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
+        _ = self.fit[input_dtype=Self.dtype](X, y, sample_weight=Optional[List[Float64]](sample_weight.copy()))
+        return self
+
+    def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+    ) raises -> ref[self] Self:
+        _ = self.partial_fit[input_dtype=Self.dtype](X, y, classes, sample_weight=Optional[List[Float64]](None))
+        return self
 
     def predict(self, X: Self.Input) raises -> Self.Target:
-        return self.predict(dense_from_lists(X))
+        return self.predict[input_dtype=Self.dtype](X)
 
     def predict_log_proba(self, X: Self.Input) raises -> Self.Probabilities:
-        return probability_lists(self.predict_log_proba(dense_from_lists(X)))
+        return self.predict_log_proba[input_dtype=Self.dtype](X)
 
     def predict_proba(self, X: Self.Input) raises -> Self.Probabilities:
-        return probability_lists(self.predict_proba(dense_from_lists(X)))
+        return self.predict_proba[input_dtype=Self.dtype](X)
 
     def score(self, X: Self.Input, y: Self.Target,
+              sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
+        return self.score[input_dtype=Self.dtype](X, y, sample_weight)
+
+    def predict_joint_log_proba(self, X: _Matrix) raises -> _Matrix:
+        return probability_lists(self.predict_joint_log_proba(dense_from_lists(X)))
+
+    def predict(self, X: _Matrix) raises -> Self.Target:
+        return self.predict(dense_from_lists(X))
+
+    def predict_log_proba(self, X: _Matrix) raises -> _Matrix:
+        return probability_lists(self.predict_log_proba(dense_from_lists(X)))
+
+    def predict_proba(self, X: _Matrix) raises -> _Matrix:
+        return probability_lists(self.predict_proba(dense_from_lists(X)))
+
+    def score(self, X: _Matrix, y: Self.Target,
               sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
         return self.score(dense_from_lists(X), y, sample_weight)

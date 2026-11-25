@@ -20,12 +20,19 @@ import subprocess
 import numpy as np
 import sklearn
 from sklearn import naive_bayes as nb
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[2]
 REFERENCE = ROOT.parent / "scikit-learn"
 REVISION = "4358542a1bd39af2e7e1cbace8b9fed067473c5b"
 assert subprocess.check_output(["git", "-C", str(REFERENCE), "rev-parse", "HEAD"], text=True).strip() == REVISION
-assert Path(inspect.getfile(nb)).read_bytes() == (REFERENCE / "sklearn/naive_bayes.py").read_bytes(), "Install the pinned local checkout"
+for obj, relative in ((nb, "sklearn/naive_bayes.py"),
+                      (make_pipeline, "sklearn/pipeline.py"),
+                      (StandardScaler, "sklearn/preprocessing/_data.py")):
+    assert Path(inspect.getfile(obj)).read_bytes() == (REFERENCE / relative).read_bytes(), (
+        f"{relative} must come from the pinned local checkout"
+    )
 OUT = ROOT / "builds" / "naive-bayes-reference"
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -56,6 +63,9 @@ from std.testing import assert_true, assert_equal, assert_raises
 from moxie._labels import StringTarget
 from moxie._naive_bayes_dense import dense_from_lists, NumericDomain, StringDomain
 from moxie.naive_bayes import GaussianNB, MultinomialNB, ComplementNB, BernoulliNB, CategoricalNB
+from moxie.base import clone
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
 
 @no_inline
 def close(actual: Float64, expected: Float64) raises:
@@ -528,6 +538,36 @@ for arithmetic, expected in ((np.float32, 1.0), (np.float64, 0.5)):
     oracle = nb.GaussianNB().partial_fit(data, [9, -2], classes=[-2, 9])
     np.testing.assert_allclose(oracle.predict_proba(np.ones((1, 2), dtype=arithmetic)),
                                expected, rtol=1e-7, atol=1e-7)
+
+# Use differently scaled features and overlapping classes so the pipeline
+# comparison exercises nontrivial probabilities on held-out rows.
+X = np.array([[0., 10.], [1., 18.], [2., 14.], [2., 20.], [3., 11.], [4., 17.]])
+y = np.array([7, 7, 7, -2, -2, -2])
+Q = np.array([[1.5, 15.], [2.5, 16.], [4.5, 18.]])
+ident = f"case_{len(case_names)}"
+case_names.append(ident)
+lines.extend([f"\n@no_inline\ndef {ident}() raises:",
+              f"    var X = dense_from_lists({literal(X)})",
+              f"    var Q = dense_from_lists({literal(Q)})",
+              f"    var y: List[Int] = {literal(y)}",
+              "    var pipe = make_pipeline(StandardScaler(), GaussianNB())",
+              "    with assert_raises():",
+              "        _ = pipe.predict_proba(Q)",
+              "    _ = pipe.fit(X, y)"])
+pipeline = make_pipeline(StandardScaler(), nb.GaussianNB()).fit(X, y)
+compare("pipe.estimator.classes_", pipeline.classes_, labels=True)
+compare("pipe.predict(Q)", pipeline.predict(Q), labels=True)
+compare("pipe.predict_proba(Q)", pipeline.predict_proba(Q))
+compare("pipe.predict_log_proba(Q)", pipeline.predict_log_proba(Q))
+compare("pipe.score(Q, [-2, -2, 7])", pipeline.score(Q, [-2, -2, 7]))
+lines.extend(["    var fresh = clone(pipe)",
+              "    with assert_raises():",
+              "        _ = fresh.predict_proba(Q)",
+              f"    var refit_y: List[Int] = {literal(-y)}",
+              "    _ = pipe.fit(X, refit_y)"])
+pipeline.fit(X, -y)
+compare("pipe.estimator.classes_", pipeline.classes_, labels=True)
+compare("pipe.predict_proba(Q)", pipeline.predict_proba(Q))
 
 # Bound compilation memory while retaining every case and its original index.
 parser = argparse.ArgumentParser(description=__doc__)

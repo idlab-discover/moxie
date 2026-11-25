@@ -266,13 +266,14 @@ to the same estimator, following the [shared native contract](../interfaces.md).
 
 - `clone`, fitted `copy()` and `get_params`/`set_params` follow the shared
   contract above.
-- Typed pipelines: each estimator's trait `Input` is `List[List[Float64]]`; the
-  `NDArray` methods are extra overloads, not the trait type. A
-  `moxie.pipeline` step that outputs `NDArray` (for example `StandardScaler`)
-  therefore cannot precede a Naive Bayes classifier:
-  `make_pipeline(StandardScaler(), GaussianNB())` fails at compile time (the
-  pipeline's `rebind` of the scaler output to `GaussianNB.Input` fails).
-  Transform first and pass the array to the classifier's `NDArray` overloads.
+- `make_pipeline(StandardScaler(), GaussianNB())` takes a Float64 NDArray and
+  returns NDArray probabilities. For a Float32 pipeline use
+  `StandardScaler[DType.float32]()` and `GaussianNB[dtype=DType.float32]()`.
+  The scaler output must match the estimator's compile-time `Input` type.
+  Direct Gaussian calls also accept Lists and other supported NDArray dtypes.
+- The four discrete classifiers currently expose `List[List[Float64]]` as their
+  trait `Input`. For a transformer that outputs NDArray, call `transform` and
+  pass the result to the classifier's NDArray overloads.
 - `moxie.model_selection.learning_curve` (like the other CV helpers built on
   the same trait) takes an explicit `CVAdapter` / `TypedScorer`; `GaussianNB` with
   `exploit_incremental_learning=True` drives `partial_fit` through an

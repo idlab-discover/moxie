@@ -5,6 +5,7 @@ from ._base import (
     GaussianProcessPosterior,
     GaussianUncertainty,
 )
+from ._gpc import GaussianProcessClassifier, GaussianProcessClassifierParams
 from ._gpr import (
     FminLBFGSB,
     GPROptimizer,
@@ -14,4 +15,4 @@ from ._gpr import (
 from . import kernels
 
 from ._gpr import GaussianProcessRegressorParams, LikelihoodResult, LogMarginalLikelihood
-from ._plumbing import PredictionResult, OptimizationResult
+from ._plumbing import LatentMoments, PredictionResult, OptimizationResult

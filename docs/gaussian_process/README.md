@@ -1,10 +1,10 @@
 # Gaussian processes
 
-Moxie owns dense `GaussianProcessRegressor` and the implemented
-`moxie.gaussian_process.kernels` API. `GaussianProcessClassifier` remains
-unimplemented. The retired Gaussian-process sibling is not a dependency.
+Moxie owns dense Gaussian process regression, binary classification and the
+`moxie.gaussian_process.kernels` API. The retired Gaussian-process sibling is not a dependency.
 
 - [Regression API](regression/api.md) and [scope](regression/scope.md).
+- [Binary classification API](classification/api.md).
 - [Kernel API](kernels/api.md) and [scope](kernels/scope.md).
 - [API coverage and deferred features](api-surface.md).
 - [Native contracts and ownership](plumbing.md).
@@ -62,7 +62,7 @@ explicit `None` sampling advance the shared stream. Caller-owned streams advance
 in place. Omitted `sample_y` state is integer zero. Sampling parity compares
 whitened norms because valid SVD sign choices can change individual draws.
 
-Classification, structured/custom kernels, callable pairwise metrics, training
-aliasing, Python reflection, metadata routing and pickling remain deferred.
+Multiclass classification, structured/custom kernels, callable pairwise metrics,
+training aliasing, Python reflection, metadata routing and pickling remain open.
 CompoundKernel theta splitting preserves the documented correction to the
 reference setter; unsupported nested CompoundKernel compositions remain explicit.

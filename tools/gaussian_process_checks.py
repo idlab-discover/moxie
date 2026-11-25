@@ -92,11 +92,10 @@ def isolated(run):
 def test(run, executable):
     ownership()
     for source in sources() + EXAMPLES:
-        if source.stem not in ('benchmark', 'gpr_driver', 'kernel_driver', 'pairwise_driver'):
+        if source.stem not in ('benchmark', 'gpc_driver', 'gpr_driver', 'kernel_driver', 'pairwise_driver'):
             run(executable(source))
     for name, diagnostic in [('missing_predict', "required function 'predict' is not implemented"),
-                             ('missing_kernel', 'diag'),
-                             ('classification', 'GaussianProcessClassifier')]:
+                             ('missing_kernel', 'diag')]:
         result = subprocess.run(['mojo', 'build', '-I', str(DEPS), str(TESTS / 'negative' / f'{name}.mojo'),
                                  '-o', str(ROOT / 'builds/invalid-gp')], capture_output=True, text=True)
         assert result.returncode and diagnostic in result.stderr, result.stderr
@@ -106,17 +105,20 @@ def test(run, executable):
 
 def parity(run):
     ownership()
-    for script in ('kernels/parity.py', 'kernels/pairwise_parity.py', 'regression/parity.py'):
+    for script in ('kernels/parity.py', 'kernels/pairwise_parity.py', 'regression/parity.py',
+                   'classification/parity.py'):
         run(sys.executable, TESTS / script)
 
 
 if __name__ == '__main__':
     import check
     action = sys.argv[1]
-    if action in ('build', 'test', 'parity'):
+    if action in ('build', 'test', 'parity', 'classification'):
         check.run(sys.executable, ROOT / 'shared/assembly/tools/assemble_family.py',
                   '--consumer', ROOT, '--lock', ROOT / 'DEPENDENCIES.json', '--output', DEPS)
-        for source in sources() + EXAMPLES:
+        selected = (sorted((TESTS / 'classification').glob('*.mojo'))
+                    if action == 'classification' else sources() + EXAMPLES)
+        for source in selected:
             binary = check.executable(source)
             binary.parent.mkdir(parents=True, exist_ok=True)
             check.run('mojo', 'build', *FLAGS, '-I', DEPS, source, '-o', binary)
@@ -124,5 +126,9 @@ if __name__ == '__main__':
         test(check.run, check.executable)
     elif action in ('parity', 'parity-only'):
         parity(check.run)
+    elif action == 'classification':
+        ownership()
+        check.run(check.executable(TESTS / 'classification/contracts.mojo'))
+        check.run(sys.executable, TESTS / 'classification/parity.py')
     elif action != 'build':
         raise ValueError(action)

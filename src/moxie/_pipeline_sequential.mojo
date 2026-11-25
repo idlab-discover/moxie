@@ -6,6 +6,7 @@ from moxie.base import (
     BaseEstimator, SupervisedEstimator, UnsupervisedEstimator, Predictor,
     TransformerMixin, FitTransformer, InverseTransformer, SupervisedScorer, clone,
     ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, SampleScorer,
+    WeightedSupervisedEstimator,
 )
 from moxie._pipeline import validate_names
 from moxie._pipeline_contracts import PredictivePipeline, TransformingPipeline
@@ -78,6 +79,7 @@ struct Pipeline[
     E: SupervisedEstimator & Predictor & Deinitable,
 ](SupervisedEstimator, PredictivePipeline, UnionFeatureNames, UnionInputFeatures,
   SupervisedScorer where conforms_to(E, SupervisedScorer),
+  WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
   ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
   LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
   DecisionFunction where conforms_to(E, DecisionFunction),
@@ -94,7 +96,9 @@ struct Pipeline[
     comptime Input = Self.P.Input
     comptime Target = Self.E.Target
     comptime Prediction = Self.E.Prediction
-    comptime SampleWeight = Self.E.SampleWeight if conforms_to(Self.E, SupervisedScorer) else Int
+    comptime SampleWeight = Self.E.SampleWeight if conforms_to(Self.E, WeightedSupervisedEstimator) else (
+        Self.E.SampleWeight if conforms_to(Self.E, SupervisedScorer) else Int
+    )
     comptime Probabilities = Self.E.Probabilities if conforms_to(Self.E, ProbabilityPredictor) else Int
     comptime Decision = Self.E.Decision if conforms_to(Self.E, DecisionFunction) else Int
     comptime SampleScores = Self.E.SampleScores if conforms_to(Self.E, SampleScorer) else Int
@@ -171,9 +175,33 @@ struct Pipeline[
         ref[y_origin] y: Self.Target,
     ) raises -> ref[self] Self:
         self._validate_names()
-        comptime if conforms_to(Self.Target, Copyable) and conforms_to(Self.Target, Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
+        comptime if conforms_to(Self.Target, Copyable & Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
             var transformed = _fit_transform(self.transformer, X, y)
             _ = self.estimator.fit(rebind[Self.E.Input](transformed), y)
+        else:
+            comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
+        return self
+
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
+        """Fit the prefix normally and forward weights to the final estimator."""
+        self._validate_names()
+        comptime if conforms_to(Self.Target, Copyable & Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = _fit_transform(self.transformer, X, y)
+            _ = self.estimator.fit(
+                rebind[Self.E.Input](transformed), y,
+                sample_weight=rebind[Self.E.SampleWeight](sample_weight),
+            )
         else:
             comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
         return self

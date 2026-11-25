@@ -145,13 +145,32 @@ Unsupported final estimators fail at compile time; ordinary fit/predict remains
 available. The foundation scoring trait includes optional weights, so a native
 scorer that cannot accept them must reject nonempty weights explicitly. Python
 reflection, arbitrary score metadata, and optional-target/unsupervised scoring
-remain unsupported. Weighted scoring does not enable weighted fitting.
+remain unsupported.
 
 Tests compare four exact scalar delegation cases and real DummyRegressor R²
 with and without weights in Float32/Float64 against local scikit-learn. The
 dense fixtures yield exactly representable scores. Native contracts also cover
 unfitted/failed-fit behavior, clone and parameter updates, invalid targets and
 weights, conditional trait dispatch, and missing-score compilation failure.
+
+## Final-step sample weights
+
+When the final estimator conforms to `WeightedSupervisedEstimator`, the
+pipeline also conforms to that trait and accepts
+`pipe.fit(X, y, sample_weight=weights)`. This keyword takes the final
+estimator's weight type and replaces sklearn's `stepname__sample_weight`
+spelling for the terminal step. Nested pipelines forward the same argument
+through their final estimators. The prefix fits with its ordinary inputs and
+target, and the final estimator validates the borrowed weights. Omit the
+keyword for unweighted fitting. The weighted overload is unavailable at
+compile time for other final estimators.
+
+Float32 and Float64 tests use StandardScaler and DummyRegressor to compare
+direct and nested weighted fits and an unweighted refit against pinned
+scikit-learn. Predictions agree exactly on these fixtures. The unweighted
+scaler output is compared within `2e-6` for Float32 and `1e-12` for Float64 to
+allow rounding differences in standardization. Native tests also check
+generic trait dispatch, cloning, borrowed inputs, and invalid weights.
 
 ## Probability prediction
 
@@ -282,7 +301,7 @@ scikit-learn implementation.
 
 ## Current boundary
 
-This implementation exposes fit, predict, conditional score, per-sample scores,
+This implementation exposes fit, final-step weighted fit, predict, conditional score, per-sample scores,
 decision and probability methods, feature names, input feature counts,
 configuration, cloning and the two factories. The following sklearn Pipeline
 API is **deferred** (absent from the typed API, so use fails at compile time):
@@ -292,7 +311,7 @@ API is **deferred** (absent from the typed API, so use fails at compile time):
 - `passthrough`/`None` steps, `__len__`, integer/slice `__getitem__` and
   `named_steps` (use the typed `transformer`/`estimator` fields and names);
 - constructor options `memory`, `verbose` and `transform_input`;
-- fit parameter / sample-weight routing, metadata routing, callbacks,
+- arbitrary fit parameter routing, metadata routing, callbacks,
   `set_output` and `feature_names_in_`.
 
 [Dense FeatureUnion](feature-union.md) is implemented and can be a Pipeline

@@ -74,6 +74,7 @@ def test(run, executable):
     for name, diagnostic in [
         ('step_predict', "'predict'"), ('pipeline_samples', "'score_samples'"),
         ('pipeline_decision', "'decision_function'"), ('pipeline_score', "'score'"),
+        ('pipeline_weighted_fit', "unexpected keyword argument 'sample_weight'"),
         ('pipeline_log_probability', "'predict_log_proba'"),
         ('pipeline_probability', "'predict_proba'"),
         ('pipeline_type_mismatch', 'pipeline intermediate types must match'),
@@ -93,7 +94,8 @@ def test(run, executable):
 
 
 def parity(run):
-    for name in ('parity.py', 'union_parity.py', 'compose_parity.py', 'transforming_parity.py'):
+    for name in ('parity.py', 'union_parity.py', 'compose_parity.py',
+                 'transforming_parity.py', 'weighted_fit_parity.py'):
         run(sys.executable, TESTS / name)
     run(sys.executable, ROOT / 'tests/compose/pipeline/parity.py')
 

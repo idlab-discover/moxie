@@ -330,6 +330,14 @@ def main():
                     ).fit(X, y, sample_weight=sample_weight)
                     add(f'production_{name}', X, y, sample_weight, q, model.predict_proba(q),
                         method, ensemble, model.predict(q), model.classes_)
+                if name != 'logistic':
+                    prefit = estimator.fit(X[:45], y[:45])
+                    frozen = ref.CalibratedClassifierCV(
+                        FrozenEstimator(prefit), method=method, cv=3,
+                    ).fit(X[45:], y[45:], sample_weight=w[45:])
+                    add(f'production_frozen_{name}', X[45:], y[45:], w[45:], q,
+                        frozen.predict_proba(q), method, 'auto', frozen.predict(q),
+                        frozen.classes_, X[:45], y[:45])
         y = 5 * codes - 7
         prefit = logistic(tol=1e-10, max_iter=500).fit(X[:45], y[:45])
         model = ref.CalibratedClassifierCV(FrozenEstimator(prefit), cv=3).fit(

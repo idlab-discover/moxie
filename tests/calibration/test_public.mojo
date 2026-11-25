@@ -83,6 +83,12 @@ def main() raises:
     var unfitted = FrozenCalibrationEstimator(FrozenEstimator(base.copy()))
     with assert_raises():
         unfitted.fit(X, y)
+    var frozen_lda = CalibratedClassifierCV(
+        adapt_classifier(FrozenEstimator(LinearDiscriminantAnalysis()))
+    )
+    with assert_raises(contains="NotFittedError"):
+        _ = frozen_lda.fit(X, y)
+    assert_false(frozen_lda.__sklearn_is_fitted__())
     var splits = List[CalibrationSplit]()
     for fold in range(3):
         var train = List[Int]()

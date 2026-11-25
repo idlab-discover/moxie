@@ -86,9 +86,18 @@ a Float64 vector. `estimator()` borrows the fitted classifier for inspection.
 Copies share a read-only snapshot, and fitting replaces the snapshot on
 success. For classifiers without fitted copying, such as QDA, updating adapter
 parameters creates an unfitted snapshot. Ordinary clones are unfitted.
-For a fitted native `FrozenEstimator[LogisticRegression[]]`, pass the frozen
-handle directly to `adapt_classifier`. The adapter preserves the handle through
-cloning and selects one pooled calibrator with `ensemble="auto"`.
+For fitted `GaussianNB[]`, `LinearDiscriminantAnalysis[]`,
+`QuadraticDiscriminantAnalysis[]` and `LogisticRegression[]`, pass the
+`FrozenEstimator` handle directly to `adapt_classifier`.
+
+```mojo
+var calibrated = CalibratedClassifierCV(adapt_classifier(frozen.copy()))
+_ = calibrated.fit(X_calibration, y_calibration)
+```
+
+The calibration targets use a Float64 array. Copying the frozen handle shares
+the fitted estimator. Cloning the adapter preserves that handle, fitting keeps
+the base estimator frozen, and `ensemble="auto"` fits one pooled calibrator.
 
 `CalibrationEstimator` extends the shared configuration/clone contract. It
 requires `fit(X, y, sample_weight=None)`, `class_labels()`, `response(X)`, and
@@ -244,8 +253,9 @@ explicit KFold and seeded shuffled KFold and StratifiedKFold. Production
 classifier cases load GaussianNB, LDA, QDA and LogisticRegression from the
 same revision and check binary and multiclass class order, predictions and
 probabilities. Default LinearSVC cases cover all three calibrators, weighted
-and unweighted fitting, and every ensemble setting. The production cases also
-check frozen logistic calibration with disjoint training and calibration data.
+and unweighted fitting, and every ensemble setting. Frozen production cases
+use disjoint training and calibration data and check that cloning preserves
+fitted state and that automatic ensemble selection fits one calibrator.
 Additional checks compare Float32 and string-label curves and native display
 statistics, labels and metadata with the reference. SVG structure and native
 ownership/overlay behavior have separate contract tests.
@@ -275,8 +285,8 @@ under `builds/calibration-oracle` and installs the exact versions in
 `CalibrationEstimator` to Moxie's frozen ownership contract. Its clone retains
 the shared fitted handle, its fit checks fitted state without training, and
 `is_frozen()` selects pooled calibration for `ensemble="auto"`. It forwards
-the adapter's class metadata and preferred response. A general FrozenEstimator
-does not by itself provide those methods. Adapt the classifier first.
+the adapter's class metadata and preferred response. For a supported production
+classifier, use `adapt_classifier(frozen)` directly.
 Frozen parameter replacement retains Moxie's shallow parameter semantics.
 
 The isolated consumer uses `adapt_classifier` with Moxie's production

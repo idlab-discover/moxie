@@ -85,6 +85,24 @@ can choose the classifier policy with `classifier=True`, as in the
 [StandardScaler/PCA/SVC fixture](../../../../../tests/pipeline/test_nested_pca.mojo).
 Use a custom adapter for pairwise kernel slicing or other metadata layouts.
 
+For a Float32 or Float64 estimator implementing `UnsupervisedScorer`, use
+`DenseUnsupervisedSearchAdapter[Estimator, dtype]`. Pass a typed function
+that applies a candidate's parameter dictionary and rejects unknown keys.
+For example, with a Float64 grid of `ShrunkCovariance` shrinkage values:
+
+```mojo
+comptime Adapter = DenseUnsupervisedSearchAdapter[ShrunkCovariance[]]
+var search = GridSearchCV[Adapter](ShrunkCovariance(), grid, Adapter(apply_shrinkage))
+_ = search.fit(X, None)
+```
+
+The adapter uses ordinary sample rows, omits the estimator's target and calls
+its `score(X)`. Like `cross_val_score(estimator, X)`, it defaults to five
+unshuffled folds. Set `n_splits=` on the adapter or pass explicit `cv=` splits
+to the search constructor. The same adapter works with `RandomizedSearchCV`.
+See the [covariance notebook](../../../../../notebooks/covariance/plot_covariance_estimation.ipynb)
+for the complete grid and parameter applier.
+
 ## Adapter and configuration contracts
 
 `SearchAdapter` composes `DefaultCVAdapter` and the family `ParameterAdapter`.

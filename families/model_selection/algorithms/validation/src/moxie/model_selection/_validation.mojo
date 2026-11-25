@@ -57,7 +57,7 @@ struct _TargetlessEstimatorScore[
 
 struct DenseUnsupervisedAdapter[
     E: UnsupervisedScorer & Deinitable, dtype: DType = DType.float64,
-](DefaultCVAdapter):
+](DefaultCVAdapter, Copyable):
     """Cross-validation over ordinary dense sample rows with no target or metadata."""
 
     comptime Scorer = _TargetlessEstimatorScore[Self.E, Self.dtype]

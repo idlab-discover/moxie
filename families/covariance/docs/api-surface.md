@@ -47,13 +47,14 @@ matrix of the estimator's input array type. Generic consumers can use it after
 fitting. To use a dense covariance estimator inside LDA or QDA, wrap it in the
 [discriminant analysis adapter](../../../docs/discriminant_analysis/api.md#mojo-adaptations-each-covered-by-tests).
 
-`clone` and keyword `set_params` work on every estimator. The
-[covariance estimation notebook](../../../notebooks/covariance/plot_covariance_estimation.ipynb)
-uses a typed `SearchAdapter` for `GridSearchCV` with `ShrunkCovariance`. The
-adapter takes a `None` target and selects fold rows with the public
-`select_rows` function. It uses the estimator's own `score(X)` and five
-unshuffled folds, matching scikit-learn's defaults. The notebook compares
-individual fold scores, mean scores, and the winning grid entry.
+`clone` and keyword `set_params` work on every estimator. Use
+`cross_val_score(LedoitWolf(), X)` and `cross_val_score(ShrunkCovariance(), X)`
+to evaluate the estimators' log-likelihoods on five unshuffled folds by default.
+Use `DenseUnsupervisedSearchAdapter` for `GridSearchCV` with `ShrunkCovariance`.
+Pass a typed parameter applier for `shrinkage` and call `search.fit(X, None)`.
+The [covariance estimation notebook](../../../notebooks/covariance/plot_covariance_estimation.ipynb)
+checks Float32 and Float64 cross-validation scores, and compares the grid's
+individual fold scores, mean scores, and winning entry against scikit-learn.
 
 `make_pipeline(StandardScaler(), EllipticEnvelope())` forwards `fit_predict`,
 `predict`, `decision_function` and `score_samples`. It gives the scaler

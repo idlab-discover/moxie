@@ -161,8 +161,20 @@ def hgb_component(component):
     execute(pinned_oracle(), ROOT/'tests'/f'hgb_{component}_parity.py')
 
 
+def public_forests():
+    assemble(ROOT)
+    ownership(ROOT)
+    for name in ('test_public_forests', 'public_forest_driver'):
+        compile_file(ROOT/'tests'/f'{name}.mojo', ROOT/'builds'/name)
+    execute(ROOT/'builds/test_public_forests')
+    execute(pinned_oracle(), ROOT/'tests/public_forest_parity.py')
+
+
 def main():
     try:
+        if sys.argv[1] == 'public-forests':
+            public_forests()
+            return
         if sys.argv[1] in ('hgb-binning', 'hgb-histograms', 'hgb-splitting', 'hgb-grower', 'hgb-losses', 'hgb-classification', 'hgb-regressor', 'hgb-classifier'):
             hgb_component(sys.argv[1].removeprefix('hgb-'))
             return

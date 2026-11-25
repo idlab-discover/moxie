@@ -110,8 +110,8 @@ estimators to `SelectFromModel`, `RFE`, and
 `RFECV[DenseSupervisedCV[Estimator, Estimator.dtype]]`, where `Estimator` is the
 adapter type. Classifiers use the forest's single-output configuration and
 keep its typed labels and probability column order. The adapter uses the
-forest's feature dtype, which is Float32 for the public classifiers and
-ExtraTreesRegressor, and Float32 or Float64 for RandomForestRegressor. Optional
+forest's feature dtype, which defaults to Float32. All four public forests
+can select Float64 at compile time with `feature_dtype=DType.float64`. Optional
 weights use the selector's feature dtype and are widened to Float64 for the
 forest. The selector reads owned importances in that same feature dtype through
 `"auto"` or `"feature_importances_"`. The underlying Float64 importances remain

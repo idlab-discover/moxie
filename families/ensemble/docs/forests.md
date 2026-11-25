@@ -28,10 +28,12 @@ integral, `classes_` is sorted in the label type, and `predict` returns that
 type. Members always train on Float64 class codes, as scikit-learn's forest
 members do.
 
-Use `RandomForestRegressor[DType.float64](...)` to accept Float64 feature
-matrices, including inputs from a Float64 pipeline transformer. The associated
-`Input` type is selected at compile time and defaults to Float32. With Float64
-features, `fit`, `predict`, `apply` and `score` narrow the features to
+All four estimators accept the compile-time parameter
+`feature_dtype=DType.float64` to select Float64 feature matrices. For example,
+`RandomForestClassifier[feature_dtype=DType.float64](...)` accepts the output of
+the default `StandardScaler()`. The associated `Input` type defaults to
+Float32. The feature dtype is independent of the classifier's label type.
+With Float64 features, each fit and inference operation narrows its input to
 Float32 at the forest boundary, following scikit-learn. NuMojo's `astype`
 traverses physical storage, so a strided Float64 input is first materialized in
 logical row order. Regression targets and predictions remain Float64.
@@ -101,11 +103,15 @@ OOB scorer, no `decision_path`, feature-name metadata, partial dependence, or
 Python metadata routing. These are not full scikit-learn parity claims.
 
 Run `pixi run ensemble-test` for lifecycle and contract checks, and `pixi run ensemble-parity` for
-source-built scikit-learn comparisons. The public oracle checks 20 configurations
-and 24 fits, including labels, multi-output results, class weights, NaNs, OOB and
-warm starts. Predictions, probabilities, leaves and sampled rows must match
-exactly. Importances and scores use relative tolerance 1e-12; log probabilities
-allow absolute tolerance 1e-14 for libm differences. The existing engine oracle
+source-built scikit-learn comparisons. To run only the public forest contracts
+and parity, use `pixi run python families/ensemble/tools/check.py public-forests`.
+The public oracle checks 42 configurations and 50 fits, including Float32 and
+Float64 features, multi-output results, class weights, NaNs, OOB and warm
+starts. It covers the Float64 pipelines `StandardScaler → RandomForestClassifier`
+and `SimpleImputer → RandomForestRegressor`. Predictions, probabilities,
+leaves and sampled rows must match exactly. Importances, scores and log
+probabilities use relative tolerance 1e-12 and absolute tolerance 1e-14 for
+floating-point reduction and libm differences. The existing engine oracle
 checks additional sampling, tree parameters and shared-stream cases.
 The edge oracle (`tests/public_edge_parity.py`) checks NaN routing at prediction,
 `max_samples` above the row count, `log_loss`/`friedman_mse`, a single sample,

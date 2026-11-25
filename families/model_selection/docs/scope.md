@@ -37,7 +37,8 @@ ParameterGrid/ParameterSampler are implemented by the search child; see its
 cross_validate/cross_val_score/cross_val_predict accept explicit adapters and split
 lists. `cross_validate`, `cross_val_score`, `validation_curve`, `learning_curve`
 and `permutation_test_score` also accept an adapter with default scoring and
-fold generation.
+fold generation. `cross_val_predict` can generate folds when its prediction
+adapter also implements `DefaultCVAdapter`.
 See the [validation scope](../algorithms/validation/docs/scope.md)
 for tested numeric/String predictions, multioutput responses and class-column
 alignment.

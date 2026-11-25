@@ -1,7 +1,7 @@
 """Actual DummyClassifier predictions and class responses, including String labels."""
 from moxie.dummy import DummyClassifier as _DummyClassifier, Label
 from moxie._labels import StringTarget
-from moxie.model_selection import TypedScorer, StringPredictionAdapter, ClassPredictionAdapter, ClassResponse, CVClassPrediction, cross_val_predict, encode_prediction_target, KFold, IndexArray, IndexSplit
+from moxie.model_selection import TypedScorer, DefaultCVAdapter, StringPredictionAdapter, ClassPredictionAdapter, ClassResponse, CVClassPrediction, cross_val_predict, encode_prediction_target, KFold, IndexArray, IndexSplit, SplitLabels, check_cv
 from moxie.model_selection._split import _rows
 from numojo import NDArray, Shape, Item, zeros
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
@@ -41,10 +41,26 @@ struct Accuracy(TypedScorer):
         return estimator.score(X, labels(y), metadata)
 
 
+def default_classifier_folds(y: StringTarget) raises -> List[IndexSplit]:
+    var labels = SplitLabels(y)
+    var cursor = check_cv(None, labels, classifier=True).split(y.rows(), labels)
+    var folds = List[IndexSplit]()
+    while True:
+        var pair = cursor.next()
+        if not pair:
+            return folds^
+        folds.append(pair.take())
+
+
 @fieldwise_init
-struct StringAdapter(StringPredictionAdapter):
+struct StringAdapter(StringPredictionAdapter, DefaultCVAdapter):
     var matrix: Bool
     comptime Scorer = Accuracy
+    def default_scorer(self) raises -> Accuracy:
+        raise Error("prediction must not select a scorer")
+    def default_cv(self, X: Dense, y: StringTarget) raises -> List[IndexSplit]:
+        _ = self.n_samples(X, y)
+        return default_classifier_folds(y)
     def n_samples(self, X: Dense, y: StringTarget) raises -> Int:
         if X.shape[0] != y.rows():
             raise Error("ValueError: inconsistent target rows")
@@ -73,10 +89,15 @@ struct StringAdapter(StringPredictionAdapter):
         return StringTarget(values)
 
 
-struct ResponseAdapter(ClassPredictionAdapter):
+struct ResponseAdapter(ClassPredictionAdapter, DefaultCVAdapter):
     comptime ResponseDType = DType.float64
     def __init__(out self): pass
     comptime Scorer = Accuracy
+    def default_scorer(self) raises -> Accuracy:
+        raise Error("prediction must not select a scorer")
+    def default_cv(self, X: Dense, y: StringTarget) raises -> List[IndexSplit]:
+        _ = self.n_samples(X, y)
+        return default_classifier_folds(y)
     def n_samples(self, X: Dense, y: StringTarget) raises -> Int:
         if X.shape[0] != y.rows():
             raise Error("ValueError: inconsistent target rows")
@@ -211,4 +232,22 @@ def main() raises:
         _ = cross_val_predict[StringAdapter](model, X, y, StringAdapter(False), splits, None)
     with assert_raises():
         _ = cross_val_predict[ResponseAdapter](model, X, y, ResponseAdapter(), splits, None, method="predict_proba")
+    var default_X = zeros[DType.float64](Shape(12, 2))
+    var default_y = StringTarget(["z", "z", "é", "é", "z", "z", "z", "é", "é", "é", "z", "é"])
+    var default_weights = Dense(Shape(12))
+    for i in range(12):
+        default_weights[Item(i)] = Float64(i + 1)
+    var default_strings = cross_val_predict[StringAdapter](unfitted, default_X, default_y, StringAdapter(False))
+    assert_equal(default_strings.rank(), 1)
+    assert_equal(default_strings.rows(), 12)
+    for i in range(12):
+        print("string", "default", i, 0, default_strings.get(i))
+    emit("default_weighted", cross_val_predict[ResponseAdapter](
+        unfitted, default_X, default_y, ResponseAdapter(),
+        fit_metadata=default_weights^, method="predict_proba",
+    ))
+    emit("default_multi", cross_val_predict[ResponseAdapter](
+        unfitted, X, multi_y, ResponseAdapter(), method="predict_log_proba",
+    ))
+    assert_false(unfitted.__sklearn_is_fitted__())
     print("PASS real String/class responses, multioutput, missing classes, weights, partitions and isolation")

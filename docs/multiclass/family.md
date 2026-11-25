@@ -44,7 +44,14 @@ type, the adapter also forwards `partial_fit`. Pass optional `classes` as
 rank-one Int64 binary codes. The component validates the declared class set
 and owns the update.
 The multiclass wrappers still require the corresponding dense input and
-response types. `LinearSVC` declares Float64 inputs for generic composition.
+response types. `SVC` and `LinearSVC` declare Float64 inputs for generic
+composition. `BinaryAdapter(SVC())` works in all three wrappers. OutputCode
+uses the binary decision margins with signed -1/+1 codes. OvO forwards
+`kernel="precomputed"` through the adapter and retains the training indices
+for each class pair. OvR exposes `predict_proba` through SVC's static
+probability capability. Set `probability=True` before fit to use it. A fitted
+OvR with ordinary SVC components raises on a probability call when the
+option is disabled. Scikit-learn hides the method in that configuration.
 `BinaryAdapter(LinearDiscriminantAnalysis())` uses LDA's default native
 `List[Int]` label type and preserves its decision and probability responses
 for either feature dtype.

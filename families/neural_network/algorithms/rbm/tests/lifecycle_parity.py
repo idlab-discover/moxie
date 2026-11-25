@@ -28,8 +28,10 @@ def compare(name, expected, dtype):
     actual = np.asarray(fields[1:], dtype=float)
     expected = np.asarray(expected).ravel(order='C')
     assert actual.shape == expected.shape, (name, actual.shape, expected.shape)
-    if name in ('particles', 'gibbs'):
+    if name in ('particles', 'gibbs', 'next_draw'):
         assert_array_equal(actual, expected, err_msg=name)
+    elif name == 'small_step':
+        assert_allclose(actual, expected, rtol=1e-7, atol=0, err_msg=name)
     else:
         tolerance = 3e-5 if dtype == np.float32 else 2e-12
         assert_allclose(actual, expected, rtol=tolerance, atol=tolerance, err_msg=name)
@@ -56,10 +58,11 @@ for dtype in (np.float64, np.float32):
     state(model, X, dtype)
     compare('scores', model.score_samples(X), dtype)
     compare('gibbs', model.gibbs(X), dtype)
-    if dtype == np.float64:
-        model.partial_fit(X)
-        state(model, X, dtype)
-        compare('gibbs', model.gibbs(X), dtype)
+    model.partial_fit(X)
+    assert model.components_.dtype == model.h_samples_.dtype == dtype
+    assert model.intercept_hidden_.dtype == model.intercept_visible_.dtype == dtype
+    state(model, X, dtype)
+    compare('gibbs', model.gibbs(X), dtype)
     rng = np.random.RandomState(11)
     shared = RBM(n_components=6, batch_size=4, n_iter=3, random_state=rng)
     shared.fit(X)
@@ -67,9 +70,8 @@ for dtype in (np.float64, np.float32):
     compare('scores', shared.score_samples(X), dtype)
     compare('gibbs', shared.gibbs(X), dtype)
     compare('scores', shared.score_samples(X), dtype)
-    if dtype == np.float64:
-        shared.partial_fit(X)
-        state(shared, X, dtype)
+    shared.partial_fit(X)
+    state(shared, X, dtype)
     noisy = RBM(n_components=4, batch_size=6, n_iter=2, verbose=1, random_state=np.random.RandomState(5))
     printed = io.StringIO()
     with contextlib.redirect_stdout(printed):
@@ -87,6 +89,30 @@ for dtype in (np.float64, np.float32):
     strided.fit(view)
     state(strided, view, dtype)
     compare('scores', strided.score_samples(view), dtype)
+X = binary(23, 12, np.float32)
+query = X.astype(np.float64)
+model = RBM(n_components=5, batch_size=7, random_state=19)
+model.partial_fit(X[:, ::-1])
+assert model.components_.dtype == model.h_samples_.dtype == np.float64
+assert model.intercept_hidden_.dtype == model.intercept_visible_.dtype == np.float64
+state(model, query, np.float64)
+model.partial_fit(X[4:12])
+state(model, query, np.float64)
+compare('gibbs', model.gibbs(query), np.float64)
+
+rng = np.random.RandomState(19)
+shared = RBM(n_components=5, batch_size=7, random_state=rng)
+shared.partial_fit(X[:, ::-1])
+shared.partial_fit(X[4:12])
+state(shared, query, np.float64)
+compare('next_draw', rng.random_sample(), np.float64)
+
+large = np.full((2, 1), 1e34, dtype=np.float32)
+small_step = RBM(n_components=1, batch_size=2, n_iter=0, random_state=19, learning_rate=1e-50)
+small_step.fit(large)
+small_step.partial_fit(large)
+compare('small_step', small_step.intercept_visible_, np.float32)
+
 assert next(lines, None) is None
 assert len(verbose) == 4, verbose  # two epochs per dtype, one line each
 pattern = re.compile(r'^(\[BernoulliRBM\] Iteration \d+, pseudo-likelihood = -?\d+\.\d\d), time = \d+\.\d\ds$')
@@ -94,5 +120,5 @@ for actual, expected in zip(verbose, reference_verbose, strict=True):
     a, e = pattern.match(actual), pattern.match(expected)
     assert a and e and a.group(1) == e.group(1), (actual, expected)
 print('PASS RBM lifecycle parity (seeded and shared-context streams, partial_fit/Gibbs after fit, '
-      'verbose, n_iter=0, set_params refit, strided input); worst |error| float64 %.3g float32 %.3g against %s'
+      'promoted Float32 batches, verbose, n_iter=0, set_params refit, strided input); worst |error| float64 %.3g float32 %.3g against %s'
       % (worst[np.float64], worst[np.float32], REVISION))

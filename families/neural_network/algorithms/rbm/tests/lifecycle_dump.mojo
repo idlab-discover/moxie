@@ -35,10 +35,9 @@ def check[dtype: DType]() raises:
     state(model, X)
     emit("scores", model.score_samples(X))
     emit("gibbs", model.gibbs(X))
-    comptime if dtype == DType.float64:
-        model.partial_fit(X)
-        state(model, X)
-        emit("gibbs", model.gibbs(X))
+    model.partial_fit(X)
+    state(model, X)
+    emit("gibbs", model.gibbs(X))
     # Explicit context, the native counterpart of random_state=np.random.RandomState(11).
     var rng = RandomState(11)
     var shared = BernoulliRBM[dtype](6, batch_size=4, n_iter=3)
@@ -47,9 +46,8 @@ def check[dtype: DType]() raises:
     emit("scores", shared.score_samples(X, rng))
     emit("gibbs", shared.gibbs(X, rng))
     emit("scores", shared.score_samples(X, rng))
-    comptime if dtype == DType.float64:
-        shared.partial_fit(X, rng)
-        state(shared, X)
+    shared.partial_fit(X, rng)
+    state(shared, X)
     # Verbose training scores through the same context, which changes later draws.
     var noisy_rng = RandomState(5)
     var noisy = BernoulliRBM[dtype](4, batch_size=6, n_iter=2, verbose=1)
@@ -74,6 +72,40 @@ def check[dtype: DType]() raises:
     emit("scores", strided.score_samples(view))
 
 
+def check_promoted_input() raises:
+    # A fresh incremental fit promotes Float32 batches, including strided views.
+    var X = binary[DType.float32](23, 12)
+    var reversed = X.view_with_layout(Shape(23, 12), NDArrayStrides(12, -1), 11)
+    var offset = X.view_with_layout(Shape(8, 12), NDArrayStrides(12, 1), 48)
+    var model = BernoulliRBM[DType.float64](5, batch_size=7, random_state=19)
+    model.partial_fit(reversed)
+    var query = X.astype[DType.float64]()
+    state(model, query)
+    model.partial_fit(offset)
+    state(model, query)
+    emit("gibbs", model.gibbs(query))
+
+    var rng = RandomState(19)
+    var shared = BernoulliRBM[DType.float64](5, batch_size=7)
+    shared.partial_fit(reversed, rng)
+    shared.partial_fit(offset, rng)
+    state(shared, query)
+    print("next_draw", rng.random_sample())
+
+    # Continue from Float32 fit with a step below the Float32 exponent range.
+    # The promoted batch product makes the resulting parameter update observable.
+    var large = zeros[DType.float32](Shape(2, 1))
+    large.unsafe_set(0, 1e34)
+    large.unsafe_set(1, 1e34)
+    var small_step = BernoulliRBM[DType.float32](
+        1, batch_size=2, n_iter=0, random_state=19, learning_rate=1e-50
+    )
+    _ = small_step.fit(large)
+    small_step.partial_fit(large)
+    emit("small_step", small_step.intercept_visible_)
+
+
 def main() raises:
     check[DType.float64]()
     check[DType.float32]()
+    check_promoted_input()

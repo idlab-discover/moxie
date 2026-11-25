@@ -49,6 +49,25 @@ def _sample[dtype: DType](probabilities: NDArray[dtype], mut rng: RandomState) r
     return result^
 
 
+def _cast_matrix[dtype: DType, //, target: DType](X: NDArray[dtype]) raises -> NDArray[target]:
+    # NuMojo astype traverses physical storage. Materialize strided input first.
+    if X.is_c_contiguous():
+        return X.astype[target]()
+    return X.contiguous().astype[target]()
+
+
+def _add_update[storage_dtype: DType, compute_dtype: DType](
+    mut parameter: NDArray[storage_dtype],
+    positive: NDArray[compute_dtype],
+    negative: NDArray[storage_dtype],
+    rate: Scalar[compute_dtype],
+):
+    for i in range(parameter.size):
+        var delta = positive.unsafe_get(i) - negative.unsafe_get(i).cast[compute_dtype]()
+        var updated = parameter.unsafe_get(i).cast[compute_dtype]() + rate * delta
+        parameter.unsafe_set(i, updated.cast[storage_dtype]())
+
+
 def _fixed(value: Float64, decimals: Int) -> String:
     """`'%.{decimals}f' % value`: exact binary64 to fixed decimal, ties to even.
 
@@ -226,6 +245,15 @@ struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, F
         if learning_rate <= 0 or not isfinite(learning_rate):
             raise Error("ValueError: learning_rate must be positive")
         var positive = self.mean_hiddens(X)
+        self._update(X, positive, learning_rate, rng)
+
+    def _update[compute_dtype: DType](
+        mut self,
+        X: NDArray[compute_dtype],
+        positive: NDArray[compute_dtype],
+        learning_rate: Float64,
+        mut rng: RandomState,
+    ) raises:
         var visible = self.sample_visibles(self.h_samples_, rng)
         var negative = self.mean_hiddens(visible)
         var pos = positive.T() @ X
@@ -234,13 +262,10 @@ struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, F
         var hn = sum_axis2d(negative, 0)
         var vp = sum_axis2d(X, 0)
         var vn = sum_axis2d(visible, 0)
-        var lr = SIMD[Self.dtype, 1](learning_rate / Float64(X.shape[0]))
-        for i in range(self.components_.size):
-            self.components_.unsafe_set(i, self.components_.unsafe_get(i) + lr * (pos.unsafe_get(i) - neg.unsafe_get(i)))
-        for i in range(self.intercept_hidden_.size):
-            self.intercept_hidden_.unsafe_set(i, self.intercept_hidden_.unsafe_get(i) + lr * (hp.unsafe_get(i) - hn.unsafe_get(i)))
-        for i in range(self.intercept_visible_.size):
-            self.intercept_visible_.unsafe_set(i, self.intercept_visible_.unsafe_get(i) + lr * (vp.unsafe_get(i) - vn.unsafe_get(i)))
+        var rate = Scalar[compute_dtype](learning_rate / Float64(X.shape[0]))
+        _add_update(self.components_, pos, neg, rate)
+        _add_update(self.intercept_hidden_, hp, hn, rate)
+        _add_update(self.intercept_visible_, vp, vn, rate)
         self.h_samples_ = _sample(negative, rng)
 
     def _validate_params(self) raises:
@@ -372,26 +397,52 @@ struct BernoulliRBM[dtype: DType = DType.float64](RBMTransformer, RBMSampling, F
         return self._score_samples(X, rng)
 
     def partial_fit(mut self, X: Self.Input, y: Optional[Self.Input] = None) raises:
-        self._validate_params()
-        validate_matrix(X)
-        if not self._has_rng:
-            self._rng = RandomState(self._seed())
-            self._has_rng = True
-        # Borrowing the RNG field and mutating the whole estimator together is
-        # avoided by an explicit snapshot and restoration of this owned stream.
-        var rng = self._rng.copy()
-        self.partial_fit(X, rng)
+        self._check_partial_fit(X)
+        # Work on a local stream so failed validation cannot establish a new
+        # owned seed and the estimator can mutate while draws are in progress.
+        var rng = self._rng.copy() if self._has_rng else RandomState(self._seed())
+        self._partial_fit(X, rng)
         self._rng = rng^
+        self._has_rng = True
 
     def partial_fit(mut self, X: Self.Input, mut rng: RandomState) raises:
+        self._check_partial_fit(X)
+        self._partial_fit(X, rng)
+
+    def partial_fit[input_dtype: DType](
+        mut self, X: NDArray[input_dtype], y: Optional[NDArray[input_dtype]] = None
+    ) raises where input_dtype == DType.float32 and Self.dtype == DType.float64:
+        self.partial_fit(_cast_matrix[Self.dtype](X))
+
+    def partial_fit[input_dtype: DType](
+        mut self, X: NDArray[input_dtype], mut rng: RandomState
+    ) raises where input_dtype == DType.float32 and Self.dtype == DType.float64:
+        self.partial_fit(_cast_matrix[Self.dtype](X), rng)
+
+    def _check_partial_fit(self, X: Self.Input) raises:
         self._validate_params()
         validate_matrix(X)
+        if self._fitted and X.shape[1] != self.n_features_in_:
+            raise Error("ValueError: wrong feature count")
         comptime if Self.dtype == DType.float32:
-            raise Error("NotImplementedError: Float32 partial_fit promotion is unfinished; use Float64")
+            if not self._fitted:
+                raise Error(
+                    "ValueError: use BernoulliRBM[float64] to start with partial_fit, "
+                    "or call fit before partial_fit on BernoulliRBM[float32]"
+                )
+
+    def _partial_fit(mut self, X: Self.Input, mut rng: RandomState) raises:
+        comptime if Self.dtype == DType.float32:
+            # sklearn promotes the positive phase and parameter update. The
+            # fantasy particles and negative phase stay in fitted precision.
+            var batch = _cast_matrix[DType.float64](X)
+            var weights = _cast_matrix[DType.float64](self.components_).T()
+            var bias = self.intercept_hidden_.astype[DType.float64]()
+            var positive = _conditional(batch, weights, bias)
+            self._update(batch, positive, self.learning_rate, rng)
         else:
             if not self._fitted:
                 self.initialize(self.n_components, X.shape[1], self.batch_size, rng)
-            self._check(X)
             self.update(X, self.learning_rate, rng)
 
     def get_n_features_in(self) raises -> Int:

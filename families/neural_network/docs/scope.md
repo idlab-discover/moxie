@@ -2,9 +2,9 @@
 
 The family is owned by Moxie. Dense Float32/Float64 BernoulliRBM supports fit,
 transform, fit_transform, Gibbs sampling, pseudolikelihood, typed parameters,
-cloning and feature names. Float64 partial_fit is implemented. Float32 partial_fit
-explicitly raises because sklearn promotes its input to Float64 and the native
-learned-state transition remains unfinished. See the [RBM scope](../algorithms/rbm/docs/scope.md).
+cloning and feature names. For incremental fitting, a Float64 model accepts both
+batch dtypes. A Float32 model accepts Float32 batches after ordinary fit.
+See the [RBM scope](../algorithms/rbm/docs/scope.md).
 
 The [MLP estimators](mlp.md) implement ordinary fit with dense Float32/Float64
 features, integer single-label and multilabel classification, single- and
@@ -23,7 +23,8 @@ partial_fit contract retains its existing None return.
 `pixi run neural-network-check` validates native lifecycle/error/ownership
 contracts, six private RBM kernel cases with full RNG state, six public RBM
 fit/refit/transform/score/Gibbs cases, three Float64 incremental cases, RBM
-lifecycle sequences in both dtypes (partial_fit/Gibbs after fit, a shared
+lifecycle sequences in both dtypes (partial_fit/Gibbs after fit, fresh Float32
+batches on a Float64 model, a shared
 explicit RNG context, verbose output text, n_iter=0, set_params refit, strided
 input), RBM pipeline/union/clone composition, 32 MLP initialization/packing
 cases, 40 dense MLP forward/gradient fixtures, and L-BFGS and stochastic

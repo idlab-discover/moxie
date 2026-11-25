@@ -15,6 +15,8 @@ DEPS = FAMILY / 'builds/deps'
 RBM = FAMILY / 'algorithms/rbm'
 ENGINE = FAMILY / 'shared/mlp_engine'
 FLAGS = ['-O3', '--fp-mode=contract=off', '-I', str(DEPS)]
+RBM_TESTS = ('test_estimator', 'test_kernels', 'test_composition')
+RBM_PARITY = ('kernel', 'estimator', 'lifecycle')
 MLP_TESTS = ('test_mlp', 'test_mlp_composition', 'mlp_dump')
 MLP_INCREMENTAL_TESTS = ('test_mlp_incremental', 'mlp_incremental_dump')
 
@@ -58,25 +60,35 @@ def parity_public_mlp():
     run(sys.executable, FAMILY / 'tests/mlp_parity.py')
 
 
+def build_rbm():
+    (RBM / 'builds').mkdir(parents=True, exist_ok=True)
+    for name in (*RBM_TESTS, *(f'{case}_dump' for case in RBM_PARITY)):
+        run('mojo', 'build', *FLAGS, '-I', RBM / 'tests', RBM / 'tests' / f'{name}.mojo',
+            '-o', RBM / 'builds' / name)
+    run('mojo', 'build', *FLAGS, RBM / 'examples/rbm.mojo', '-o', RBM / 'builds/example')
+
+
+def parity_rbm():
+    for name in RBM_PARITY:
+        run(sys.executable, RBM / f'tests/{name}_parity.py')
+
+
 def build():
     assemble()
     run('mojo', 'precompile', DEPS / 'moxie', '-I', DEPS, '-o', FAMILY / 'builds/core.mojoc')
-    sources = list((RBM / 'tests').glob('test_*.mojo'))
-    sources += [RBM / 'tests/kernel_dump.mojo', RBM / 'tests/estimator_dump.mojo', RBM / 'tests/lifecycle_dump.mojo',
-                RBM / 'examples/rbm.mojo', ENGINE / 'tests/parameters.mojo',
-                ENGINE / 'tests/parameter_dump.mojo', ENGINE / 'tests/objective_dump.mojo',
-                ENGINE / 'tests/lbfgs_dump.mojo', ENGINE / 'tests/stochastic_dump.mojo',
-                ENGINE / 'examples/parameters.mojo']
+    build_rbm()
+    sources = [ENGINE / 'tests/parameters.mojo', ENGINE / 'tests/parameter_dump.mojo',
+               ENGINE / 'tests/objective_dump.mojo', ENGINE / 'tests/lbfgs_dump.mojo',
+               ENGINE / 'tests/stochastic_dump.mojo', ENGINE / 'examples/parameters.mojo']
+    (ENGINE / 'builds').mkdir(parents=True, exist_ok=True)
     for source in sources:
-        owner = RBM if source.is_relative_to(RBM) else ENGINE
-        (owner / 'builds').mkdir(parents=True, exist_ok=True)
-        target = owner / 'builds' / (source.stem if source.parent.name == 'tests' else 'example')
+        target = ENGINE / 'builds' / (source.stem if source.parent.name == 'tests' else 'example')
         run('mojo', 'build', *FLAGS, '-I', RBM / 'tests', source, '-o', target)
     build_public_mlp(MLP_TESTS + MLP_INCREMENTAL_TESTS)
 
 
 def test():
-    for owner, names in [(RBM, ['test_kernels', 'test_estimator', 'test_composition', 'example']),
+    for owner, names in [(RBM, (*RBM_TESTS, 'example')),
                          (ENGINE, ['parameters', 'example'])]:
         for name in names:
             run(owner / 'builds' / name)
@@ -89,8 +101,8 @@ def test():
 
 
 def parity():
-    for path in [RBM / 'tests/kernel_parity.py', RBM / 'tests/estimator_parity.py', RBM / 'tests/lifecycle_parity.py',
-                 ENGINE / 'tests/parameter_parity.py', ENGINE / 'tests/objective_parity.py',
+    parity_rbm()
+    for path in [ENGINE / 'tests/parameter_parity.py', ENGINE / 'tests/objective_parity.py',
                  ENGINE / 'tests/lbfgs_parity.py', ENGINE / 'tests/stochastic_parity.py']:
         run(sys.executable, path)
     parity_public_mlp()
@@ -118,6 +130,12 @@ if __name__ == '__main__':
     os.environ['OMP_NUM_THREADS'] = '1'
     os.environ['OPENBLAS_NUM_THREADS'] = '1'
     action = sys.argv[1]
+    if action == 'rbm':
+        assemble()
+        build_rbm()
+        for name in (*RBM_TESTS, 'example'):
+            run(RBM / 'builds' / name)
+        parity_rbm()
     if action == 'mlp':
         assemble()
         build_public_mlp()
@@ -136,5 +154,5 @@ if __name__ == '__main__':
         parity()
     if action in ('independence', 'all'):
         independence()
-    if action not in ('build', 'test', 'parity', 'independence', 'all', 'mlp', 'mlp-incremental'):
+    if action not in ('build', 'test', 'parity', 'independence', 'all', 'rbm', 'mlp', 'mlp-incremental'):
         raise ValueError(action)

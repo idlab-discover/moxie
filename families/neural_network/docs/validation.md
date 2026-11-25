@@ -4,6 +4,7 @@ Run from the Moxie root with its compatible locked Mojo 1.0.0 / MAX 26.5.0 envir
 
 ```sh
 pixi run neural-network-check
+pixi run python families/neural_network/tools/integration.py rbm
 pixi run python families/neural_network/tools/integration.py mlp
 pixi run python families/neural_network/tools/integration.py mlp-incremental
 pixi run python families/neural_network/shared/mlp_engine/tools/check.py parity
@@ -13,7 +14,11 @@ The combined check precompiles the full assembled Moxie namespace and compiles
 RBM/MLP helper tests and examples. Native tests cover family capabilities, finite
 input and shape validation, strides, ownership, refit, clone, errors and incremental
 eligibility. Two isolated fixture consumers verify shared sources and reject
-missing files and conflicting ownership. The `mlp` target compiles only the
+missing files and conflicting ownership. The `rbm` target compiles the RBM and
+its direct composition tests and runs the kernel, estimator and lifecycle
+comparisons. It checks Float32 batches in a fresh Float64 model, mixed-precision
+updates after a Float32 fit, and exact Bernoulli samples and RNG continuation.
+The `mlp` target compiles only the
 public ordinary-fit, warm-start and validation-stopping MLP tests and their directly affected
 compositions.
 The `mlp-incremental` target compiles the public incremental trait and error
@@ -48,5 +53,4 @@ probe files, and must produce byte-identical lifecycle output. Ownership checks 
 core owners. The standalone source is not a runtime or build dependency.
 
 The focused MLP check validates forward propagation, batch losses and gradients,
-and the L-BFGS, SGD and Adam trainers. Float32 RBM incremental promotion remains
-open.
+and the L-BFGS, SGD and Adam trainers.

@@ -138,13 +138,9 @@ use an integer `Label` for Int64 targets or a floating-point `Label` for
 floating-point targets. `SVC[Int]()` works with the default Int64 wrapper
 labels and Float64 features.
 
-The independent wrappers share their field layout with the chains: they also
-carry `order`, `random_state`, `random_order`, `verbose`, `chain_method`,
-`chain_method_` and `order_`, and `MultiOutputRegressor` carries an empty
-`classes_`. These are not scikit-learn attributes or parameters; they are not
-in `get_params`, and setting a chain option makes `fit` raise. A classifier's
-`partial_fit` with `classes` also records `classes_`, which scikit-learn sets
-only in `fit`.
+Independent wrappers fit and expose their components in target-column order.
+`MultiOutputClassifier.partial_fit` with `classes` also records `classes_`,
+which scikit-learn sets only in `fit`.
 
 Wrappers are `Copyable` when their component is `Copyable`. A fitted copy owns
 separate component state under that component's copy contract; cloning remains

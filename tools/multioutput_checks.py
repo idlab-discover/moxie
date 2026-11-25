@@ -79,17 +79,23 @@ def test(run, executable):
     for source in sources():
         run(executable(source))
     run(executable(ROOT / 'examples/multioutput.mojo'))
-    for name, marker in [('missing_predict', "required function 'predict'"),
-                         ('missing_probability', 'ProbabilityPredictor'),
-                         ('missing_weighted_fit', 'WeightedSupervisedEstimator'),
-                         ('missing_incremental', 'IncrementalRegressor'),
-                         ('missing_decision', 'DecisionFunction')]:
+    for name, markers in [
+        ('missing_predict', ("required function 'predict'",)),
+        ('missing_probability', ('ProbabilityPredictor',)),
+        ('missing_weighted_fit', ('WeightedSupervisedEstimator',)),
+        ('missing_incremental', ('IncrementalRegressor',)),
+        ('missing_decision', ('DecisionFunction',)),
+        ('independent_chain_fields', (
+            "has no attribute 'classes_'", "has no attribute 'order_'",
+        )),
+    ]:
         result = subprocess.run(['mojo', 'build', '-I', str(DEPS), '-I', str(TESTS),
                                  str(TESTS / 'compile_fail' / f'{name}.mojo'),
                                  '-o', str(ROOT / 'builds/invalid-multioutput')],
                                 capture_output=True, text=True)
-        (ROOT / f'builds/multioutput-{name}.log').write_text(result.stdout + result.stderr)
-        assert result.returncode and marker in result.stdout + result.stderr, result.stderr
+        output = result.stdout + result.stderr
+        (ROOT / f'builds/multioutput-{name}.log').write_text(output)
+        assert result.returncode and all(marker in output for marker in markers), output
     isolated(run)
     print('PASS: multioutput contracts, live ownership, isolated consumers and negative checks')
 

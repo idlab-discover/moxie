@@ -18,6 +18,8 @@ from moxie.calibration_serialization import (
     CalibratedClassifierCVSchema,
     CalibratedComplementNBClassifierCVSchema,
     CalibratedFrozenGaussianNBClassifierCVSchema,
+    CalibratedFrozenLDAClassifierCVSchema,
+    CalibratedFrozenQDAClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
     CalibratedLDAClassifierCVSchema,
     CalibratedMultinomialNBClassifierCVSchema,
@@ -148,6 +150,83 @@ def test_discriminant_configuration(X: Dense) raises:
     )
     with assert_raises(contains="requires covariance_estimator=None"):
         _ = CalibratedQDAClassifierCVSchema.encode(unsupported_qda)
+
+
+def test_frozen_discriminants(X: Dense, y: Dense) raises:
+    comptime LDASchema = CalibratedFrozenLDAClassifierCVSchema
+    comptime QDASchema = CalibratedFrozenQDAClassifierCVSchema
+    var lda = CalibratedClassifierCV(
+        adapt_classifier(FrozenEstimator(LinearDiscriminantAnalysis())),
+        cv=3,
+    )
+    check_unfitted[LDASchema](lda, X)
+    var empty = LDASchema.decode(loads(dumps(LDASchema.encode(lda))))
+    assert_true(empty.estimator.is_frozen())
+    assert_false(empty.estimator.__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = empty.fit(X, y)
+
+    var labels = List[Int](capacity=y.size)
+    for i in range(y.size):
+        labels.append(Int(y.item(i)))
+    var fitted_lda = LinearDiscriminantAnalysis(store_covariance=True)
+    _ = fitted_lda.fit(X, labels)
+    _ = lda.set_params(estimator=adapt_classifier(FrozenEstimator(fitted_lda^)))
+    var prefit_lda = LDASchema.decode(loads(dumps(LDASchema.encode(lda))))
+    assert_false(prefit_lda.__sklearn_is_fitted__())
+    assert_true(prefit_lda.estimator.__sklearn_is_fitted__())
+    _ = prefit_lda.fit(X, y)
+    _ = lda.fit(X, y)
+    assert_equal_predictions(lda, prefit_lda, X, y)
+    _ = lda.set_params(
+        estimator=adapt_classifier(FrozenEstimator(LinearDiscriminantAnalysis())),
+        method="isotonic",
+    )
+    var lda_file = "builds/calibration-frozen-lda-model.moxie"
+    save_model[LDASchema](lda, lda_file)
+    var restored_lda = load_model[LDASchema](lda_file)
+    assert_false(restored_lda.estimator.__sklearn_is_fitted__())
+    assert_equal(restored_lda.method, "isotonic")
+    assert_equal(len(restored_lda.calibrated_classifiers_), 1)
+    ref pair = restored_lda.calibrated_classifiers_[0]
+    assert_true(pair.estimator.is_frozen())
+    assert_true(pair.estimator.estimator().estimator().store_covariance)
+    assert_equal(pair.method, "sigmoid")
+    assert_equal_predictions(lda, restored_lda, X, y)
+
+    var malformed = LDASchema.encode(restored_lda)
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = QDASchema.decode(loads(dumps(malformed)))
+    malformed.payloads[len(malformed.payloads) - 1].name = "unexpected"
+    with assert_raises(contains="unexpected calibration child array"):
+        _ = LDASchema.decode(loads(dumps(malformed)))
+
+    var fitted_qda = QuadraticDiscriminantAnalysis(
+        reg_param=0.25, store_covariance=True,
+    )
+    _ = fitted_qda.fit(X, labels)
+    var qda = CalibratedClassifierCV(
+        adapt_classifier(FrozenEstimator(fitted_qda^)), method="isotonic", cv=3,
+    )
+    check_unfitted[QDASchema](qda, X)
+    _ = qda.fit(X, y)
+    var qda_file = "builds/calibration-frozen-qda-model.moxie"
+    save_model[QDASchema](qda, qda_file)
+    var restored_qda = load_model[QDASchema](qda_file)
+    assert_equal(restored_qda.estimator.estimator().estimator().reg_param, 0.25)
+    assert_true(restored_qda.estimator.estimator().estimator().store_covariance)
+    assert_equal_predictions(qda, restored_qda, X, y)
+
+    def custom_classes(estimator: FrozenEstimator[QuadraticDiscriminantAnalysis[]]) raises -> Dense:
+        return Dense(nm.Shape(0))
+
+    var custom = CalibratedClassifierCV(
+        ClassifierCalibrationAdapter(
+            FrozenEstimator(QuadraticDiscriminantAnalysis()), custom_classes, "QDA",
+        )
+    )
+    with assert_raises(contains="requires the built-in frozen QDA adapter"):
+        _ = QDASchema.encode(custom)
 
 
 def test_frozen_gaussian(X: Dense, y: Dense) raises:
@@ -548,6 +627,7 @@ def main() raises:
         y[nm.Item(i)] = label
     test_svc(X, y)
     test_discriminant_configuration(X)
+    test_frozen_discriminants(X, y)
     test_lda_fold_fit_warnings(X, y)
     test_gaussian(X, y)
     test_frozen_gaussian(X, y)

@@ -371,11 +371,11 @@ def main():
                     add(f'production_frozen_{name}', X[45:], y[45:], w[45:], q,
                         frozen.predict_proba(q), method, 'auto', frozen.predict(q),
                         frozen.classes_, X[:45], y[:45])
-                    if name == 'gaussian':
+                    if name in ('gaussian', 'lda', 'qda'):
                         frozen_ensemble = ref.CalibratedClassifierCV(
                             FrozenEstimator(prefit), method=method, cv=3, ensemble=True,
                         ).fit(X[45:], y[45:], sample_weight=w[45:])
-                        add('production_frozen_gaussian', X[45:], y[45:], w[45:], q,
+                        add(f'production_frozen_{name}', X[45:], y[45:], w[45:], q,
                             frozen_ensemble.predict_proba(q), method, True,
                             frozen_ensemble.predict(q), frozen_ensemble.classes_,
                             X[:45], y[:45])

@@ -2,15 +2,17 @@ import numojo as nm
 from std.testing import assert_equal, assert_true, assert_raises
 from moxie.tree import DecisionTreeClassifier, DecisionTreeRegressor, TreeTable, TreeColumn, export_text
 from moxie._categorical import categorical_column
-from moxie.tree._export import _fixed
+from moxie.utils._format import format_fixed
 
 def main() raises:
-    assert_equal(_fixed(2.675, 2), "2.67")
-    assert_equal(_fixed(1.25, 1), "1.2")
-    assert_equal(_fixed(1.75, 1), "1.8")
-    assert_equal(_fixed(-0.0, 3), "-0.000")
-    assert_equal(_fixed(-0.001, 2), "-0.00")
-    assert_equal(_fixed(9.999, 2), "10.00")
+    assert_equal(format_fixed(2.675, 2), "2.67")
+    assert_equal(format_fixed(1.25, 1), "1.2")
+    assert_equal(format_fixed(1.75, 1), "1.8")
+    assert_equal(format_fixed(-0.0, 3), "-0.000")
+    assert_equal(format_fixed(-0.001, 2), "-0.00")
+    assert_equal(format_fixed(9.999, 2), "10.00")
+    with assert_raises():
+        _ = format_fixed(1.25, -1)
     var X = nm.zeros[DType.float32](nm.Shape(4, 1))
     var y = nm.zeros[DType.float64](nm.Shape(4))
     for i in range(4):

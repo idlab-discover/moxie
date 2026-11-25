@@ -98,8 +98,8 @@ Python reflection, metadata routing, pandas output, feature names, pickling,
 array-API dispatch, sparse inputs and other exclusions in the estimator guides
 remain unsupported. Sample points are Float64 for both estimator dtypes, as in sklearn (NumPy
 promotes the float32 means with its float64 normal draws).
-`verbose` prints the reference messages at the reference iterations, but
-`verbose >= 2` lines show Mojo's shortest round-trip Float64 text for the time
-lapse, change and lower bound, not sklearn's `%.5f`, and Mojo `print` spacing.
+`verbose` follows sklearn's message layout and iteration intervals.
+At `verbose >= 2`, elapsed time, objective change and lower bound use five
+decimal places for finite values. Elapsed time comes from Mojo's monotonic clock.
 Full/tied sample coordinates can differ from NumPy because the SVD orientation
 can differ; parity checks labels, draw consumption and Mahalanobis norms.

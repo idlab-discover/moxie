@@ -17,6 +17,7 @@ from moxie._random import RandomState
 from moxie.mixture._contracts import EMHooks
 from moxie.mixture._initialization import initial_responsibilities
 from moxie.mixture._responsibilities import log_responsibilities, mean_vector, argmax_rows
+from moxie.utils._format import format_fixed
 
 comptime CONVERGENCE_WARNING = (
     "ConvergenceWarning: Best performing initialization did not converge. Try"
@@ -92,10 +93,6 @@ def e_step[M: EMHooks](model: M, X: NDArray[M.dtype]) raises -> Tuple[Float64, N
     return (mean, normalized[1].copy())
 
 
-def _elapsed(start: Int) -> Float64:
-    return Float64(perf_counter_ns() - start) * 1e-9
-
-
 def run_em[M: MixtureEMModel](mut model: M, X: NDArray[M.dtype], settings: EMSettings, mut rng: RandomState) raises -> EMResult:
     """Run all restarts, restore the best state, and return diagnostics + labels.
 
@@ -110,11 +107,12 @@ def run_em[M: MixtureEMModel](mut model: M, X: NDArray[M.dtype], settings: EMSet
     var best_n_iter = 0
     var best_state = Optional[M.State](None)
     var k = settings.n_components
-    var init_start = perf_counter_ns()
-    var iter_start = perf_counter_ns()
     for init in range(settings.n_init):
+        var init_start = 0
+        var iter_start = 0
         if settings.verbose >= 1:
             print("Initialization", init)
+        if settings.verbose >= 2:
             init_start = perf_counter_ns()
             iter_start = init_start
         if settings.do_init:
@@ -143,8 +141,13 @@ def run_em[M: MixtureEMModel](mut model: M, X: NDArray[M.dtype], settings: EMSet
                     if settings.verbose == 1:
                         print("  Iteration", iteration)
                     elif settings.verbose >= 2:
-                        print("  Iteration", iteration, "\t time lapse", _elapsed(iter_start), "s\t ll change", change)
-                        iter_start = perf_counter_ns()
+                        var now = perf_counter_ns()
+                        var elapsed = format_fixed(Float64(now - iter_start) * 1e-9, 5)
+                        print(
+                            "  Iteration " + String(iteration) + "\t time lapse "
+                            + elapsed + "s\t ll change " + format_fixed(change, 5)
+                        )
+                        iter_start = now
                 if abs(change) < settings.tol:
                     converged = True
                     break
@@ -153,7 +156,11 @@ def run_em[M: MixtureEMModel](mut model: M, X: NDArray[M.dtype], settings: EMSet
                 if settings.verbose == 1:
                     print("Initialization " + message + ".")
                 else:
-                    print("Initialization " + message + ". time lapse", _elapsed(init_start), "s\t lower bound", lower_bound, ".")
+                    var elapsed = format_fixed(Float64(perf_counter_ns() - init_start) * 1e-9, 5)
+                    print(
+                        "Initialization " + message + ". time lapse " + elapsed
+                        + "s\t lower bound " + format_fixed(lower_bound, 5) + "."
+                    )
             if lower_bound > max_lower_bound or max_lower_bound == negative_infinity:
                 max_lower_bound = lower_bound
                 best_state = model.get_state()

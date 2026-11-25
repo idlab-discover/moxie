@@ -1,7 +1,7 @@
 import numojo as nm
 from moxie.tree._classes import BaseDecisionTree
 from moxie.tree import export_text
-from moxie.tree._export import _fixed
+from moxie.utils._format import format_fixed
 from std.memory import bitcast
 
 def run[classifier: Bool, extra: Bool]() raises:
@@ -45,4 +45,4 @@ def main() raises:
         state = state * UInt64(6364136223846793005) + 1
         var value = bitcast[DType.float64](state)
         var decimals = i % 21
-        print(state, decimals, _fixed(value, decimals))
+        print(state, decimals, format_fixed(value, decimals))

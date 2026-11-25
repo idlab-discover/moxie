@@ -7,7 +7,7 @@ from moxie.base import clone
 from moxie.ensemble import RandomForestClassifier
 from moxie.linear_model import LogisticRegression, Ridge, RidgeClassifier
 from moxie.model_selection import IndexSplit, KFold, StratifiedKFold
-from moxie.multioutput import ChainFolds, MultiOutputRegressor, MultiOutputClassifier, RegressorChain, ClassifierChain
+from moxie.multioutput import ChainFolds, ChainSplitter, MultiOutputRegressor, MultiOutputClassifier, RegressorChain, ClassifierChain
 
 
 comptime ROWS = 12
@@ -96,6 +96,59 @@ def logistic_components() raises:
     _ = chain.fit(X, binary, cv=3)
     parity("ComponentsLogisticChainCVLabels", chain.predict(X))
     parity("ComponentsLogisticChainCVProba", chain.predict_proba(X))
+
+
+@fieldwise_init
+struct PerLinkKFold[label: DType](ChainSplitter):
+    comptime Input = NDArray[DType.float64]
+    comptime Target = NDArray[Self.label]
+    comptime Splits = KFold.Splits
+
+    var seed: Int
+    var threshold: Float64
+
+    def split(self, X: Self.Input, y: Self.Target) raises -> Self.Splits:
+        if self.seed < 0:
+            raise Error("ValueError: invalid splitter seed")
+        if y.ndim != 1 or X.shape[1] >= FEATURES + 2:
+            raise Error("ValueError: expected a target column before the final link")
+        var folds = 2 if Float64(y.unsafe_get(0)) > self.threshold else 3
+        return KFold(folds, shuffle=True, random_state=self.seed + X.shape[1]).split(X.shape[0])
+
+
+def custom_chain_cv() raises:
+    var X = features[DType.float64]()
+    var Y = targets[DType.float64]()
+    var order = List[Int]([2, 0, 1])
+    var regressor = RegressorChain(Ridge(0.5), order=order^, cv=PerLinkKFold[DType.float64](7, -6.0))
+    var prediction = regressor.fit(X, Y).predict(X)
+    parity("ComponentsRegressorChainCustomCV", prediction)
+    var params = regressor.get_params()
+    assert_equal(params.cv.seed, 7)
+    params.cv.seed = -1
+    _ = regressor.set_params(params)
+    with assert_raises(contains="invalid splitter seed"):
+        _ = regressor.fit(X, Y)
+    assert_same(regressor.predict(X), prediction)
+    params.cv.seed = 7
+    _ = regressor.set_params(params)
+    var regressor_clone = clone(regressor)
+    assert_false(regressor_clone.__sklearn_is_fitted__())
+    assert_same(regressor_clone.fit(X, Y).predict(X), prediction)
+
+    var binary = labels[DType.int64](False)
+    for i in range(ROWS):
+        binary.unsafe_set(i * 3, Int64(1 if i < 4 or i == 7 else 0))
+    var classifier = ClassifierChain(
+        LogisticRegression(tol=1e-10, max_iter=1000), chain_method="predict_proba",
+        cv=PerLinkKFold[DType.int64](7, 0.5),
+    )
+    var proba = classifier.fit(X, binary).predict_proba(X)
+    parity("ComponentsLogisticChainCustomCVProba", proba)
+    parity("ComponentsLogisticChainCustomCVLabels", classifier.predict(X))
+    var override = classifier.fit(X, binary, cv=3).predict_proba(X)
+    assert_true(abs(override.unsafe_get(1) - proba.unsafe_get(1)) > 1e-5)
+    assert_same(classifier.fit(X, binary).predict_proba(X), proba)
 
 
 def chain_cv() raises:
@@ -316,5 +369,6 @@ def main() raises:
     for i in range(ROWS * 3):
         assert_true(chained.unsafe_get(i) >= 0 and chained.unsafe_get(i) <= 1)
     chain_cv()
+    custom_chain_cv()
     logistic_components()
     print("PASS: production linear models and RandomForestClassifier components")

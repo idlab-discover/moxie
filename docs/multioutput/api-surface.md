@@ -54,15 +54,30 @@ from `moxie.multioutput` and `IndexSplit` from `moxie.model_selection`.
 needs out-of-fold responses. Those responses require the test indices to
 cover each sample exactly once.
 
+For folds that depend on the current link, pass a native `ChainSplitter`
+to either constructor as `cv=splitter`. Implement `split(X, y)` with the
+chain's feature matrix and target vector types, and return a fresh
+`moxie.model_selection.SplitCursor`. The splitter sees the augmented
+features and original target column for each link preceding the last.
+The chain checks that the test indices form a partition and handles fitting
+and scattering the held-out responses.
+
+Mojo infers the custom splitter type when calling
+`ClassifierChain(component, cv=splitter)`. When specifying types explicitly,
+use `[Component, dtype, label, Splitter]`. The resulting parameter record
+stores that concrete splitter type, so `set_params` can update its
+configuration. Built-in CV options use the default `ChainCV` variant.
+
 The `ChainParams.cv` value is carried by `get_params`,
 `set_params`, and `clone`. Native CV uses the model-selection target dtypes
 Int64, Float32 and Float64. Integer CV uses unshuffled KFold, with stratification
 for a classifier component and binary or multiclass targets. A shuffled native
 splitter requires an integer `random_state`.
 
-A `cv` keyword on `fit` overrides the configured value for that call. Use
-`fit(X, Y, cv=None)` for true preceding targets or `fit(X, Y, cv=provider)`
-with a custom `ChainResponses` provider. The provider returns one out-of-fold
+A built-in CV option passed to `fit` overrides the configured value for
+that call. Use `fit(X, Y, cv=None)` for true preceding targets or
+`fit(X, Y, cv=provider)` with a custom `ChainResponses` provider.
+The provider returns one out-of-fold
 response per original sample. Every link fits on the full data, and only links
 preceding the final one request CV responses. When configured CV is combined
 with `sample_weight`, the full-data links receive the weights. The out-of-fold

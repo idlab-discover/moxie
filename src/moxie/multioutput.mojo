@@ -47,18 +47,32 @@ struct ChainFolds(Copyable, Movable):
 comptime ChainCV = Variant[type_of(None), Int, KFold, StratifiedKFold, ChainFolds]
 
 
-struct ChainParams[P: Copyable & Deinitable](Copyable, Movable):
+trait ChainSplitter(Copyable):
+    """Generate a fresh cursor for the current augmented input and target column."""
+
+    comptime Input: Movable
+    comptime Target: Movable
+    comptime Splits: SplitCursor & Deinitable
+
+    def split(self, X: Self.Input, y: Self.Target) raises -> Self.Splits:
+        ...
+
+
+struct ChainParams[
+    P: Copyable & Deinitable, CV: Copyable & Deinitable = ChainCV,
+](Copyable, Movable):
     var estimator: Self.P
     var order: Optional[List[Int]]
     var random_state: Optional[Int]
     var random_order: Bool
     var verbose: Bool
     var chain_method: String
-    var cv: ChainCV
+    var cv: Self.CV
 
     def __init__(
         out self, var estimator: Self.P, var order: Optional[List[Int]], random_state: Optional[Int],
-        random_order: Bool, verbose: Bool, var chain_method: String, var cv: ChainCV = None,
+        random_order: Bool, verbose: Bool, var chain_method: String,
+        var cv: Self.CV = rebind_var[Self.CV](ChainCV(None)),
     ):
         self.estimator = estimator^
         self.order = order^
@@ -250,38 +264,54 @@ def _chain_fold_response[E: Predictor, dtype: DType, label: DType](
     raise Error("ValueError: component lacks the requested Float32 or Float64 CV response")
 
 
-struct _SplitterResponses[E: SupervisedEstimator & Predictor & Deinitable, dtype: DType, label: DType](ChainResponses):
+struct _SplitterResponses[
+    E: SupervisedEstimator & Predictor & Deinitable,
+    dtype: DType,
+    label: DType,
+    CV: Copyable & Deinitable,
+](ChainResponses):
     comptime Estimator = Self.E
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label]
     comptime Response = Self.Input
 
-    var cv: ChainCV
+    var cv: Self.CV
 
-    def __init__(out self, var cv: ChainCV) raises:
-        if cv.isa[Int]() and cv[Int] < 2:
-            raise Error("ValueError: n_splits must be at least 2")
+    def __init__(out self, var cv: Self.CV) raises:
+        comptime if Self.CV == ChainCV:
+            ref native_cv = rebind[ChainCV](cv)
+            if native_cv.isa[Int]() and native_cv[Int] < 2:
+                raise Error("ValueError: n_splits must be at least 2")
         self.cv = cv^
 
-    def _splits(self, y: Self.Target) raises -> List[IndexSplit]:
-        if self.cv.isa[KFold]():
-            return _materialize_chain_folds(self.cv[KFold].split(y.size))
-        if self.cv.isa[StratifiedKFold]():
+    def _splits(self, cv: ChainCV, y: Self.Target) raises -> List[IndexSplit]:
+        if cv.isa[KFold]():
+            return _materialize_chain_folds(cv[KFold].split(y.size))
+        if cv.isa[StratifiedKFold]():
             return _materialize_chain_folds(
-                self.cv[StratifiedKFold].split(y.size, SplitLabels._numeric(y)),
+                cv[StratifiedKFold].split(y.size, SplitLabels._numeric(y)),
             )
         comptime if conforms_to(Self.E, ClassifierMixin):
             var labels = SplitLabels._numeric(y)
-            var splitter = check_cv(Optional[Int](self.cv[Int]), labels, classifier=True)
+            var splitter = check_cv(Optional[Int](cv[Int]), labels, classifier=True)
             return _materialize_chain_folds(splitter.split(y.size, labels))
         else:
-            return _materialize_chain_folds(KFold(self.cv[Int]).split(y.size))
+            return _materialize_chain_folds(KFold(cv[Int]).split(y.size))
 
     def cross_val_response(self, estimator: Self.E, X: Self.Input, y: Self.Target, method: String) raises -> Self.Response:
         comptime if Self.label in (DType.int64, DType.float32, DType.float64):
-            if self.cv.isa[ChainFolds]():
-                return self._fit_folds(estimator, X, y, method, self.cv[ChainFolds]._splits)
-            return self._fit_folds(estimator, X, y, method, self._splits(y))
+            comptime if conforms_to(Self.CV, ChainSplitter):
+                comptime assert Self.CV.Input == Self.Input, "splitter input must match chain input"
+                comptime assert Self.CV.Target == Self.Target, "splitter target must match a chain target column"
+                var splits = _materialize_chain_folds(self.cv.split(
+                    rebind[Self.CV.Input](X), rebind[Self.CV.Target](y),
+                ))
+                return self._fit_folds(estimator, X, y, method, splits)
+            else:
+                ref cv = rebind[ChainCV](self.cv)
+                if cv.isa[ChainFolds]():
+                    return self._fit_folds(estimator, X, y, method, cv[ChainFolds]._splits)
+                return self._fit_folds(estimator, X, y, method, self._splits(cv, y))
         else:
             raise Error("ValueError: native chain CV targets must use Int64, Float32 or Float64")
 
@@ -696,7 +726,12 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         self.n_features_in_ = X.shape[1]
         return self
 
-struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DType = DType.float64, label: DType = dtype](
+struct RegressorChain[
+    E: SupervisedEstimator & Predictor & Deinitable,
+    dtype: DType = DType.float64,
+    label: DType = dtype,
+    Splitter: Copyable & Deinitable = ChainCV,
+](
     MultiOutputRegressorAPI,
     Copyable where conforms_to(E, Copyable),
     WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
@@ -705,7 +740,7 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
     comptime Target = NDArray[Self.label]
     comptime Prediction = Self.Target
     comptime SampleWeight = NDArray[DType.float64]
-    comptime Params = ChainParams[Self.E.Params]
+    comptime Params = ChainParams[Self.E.Params, Self.Splitter]
     var estimator: Self.E
     var n_jobs: Optional[Int]
     var order: Optional[List[Int]]
@@ -713,7 +748,7 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
     var random_order: Bool
     var verbose: Bool
     var chain_method: String
-    var cv: ChainCV
+    var cv: Self.Splitter
     var chain_method_: String
     var estimators_: List[Self.E]
     var classes_: List[NDArray[Self.label]]
@@ -722,7 +757,22 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
 
     def __init__(out self, var estimator: Self.E, *, order: Optional[List[Int]] = None, random_state: Optional[Int] = None,
                  random_order: Bool = False, verbose: Bool = False, chain_method: String = "predict",
-                 cv: ChainCV = None) raises:
+                 cv: ChainCV = None) raises where Self.Splitter == ChainCV:
+        self = Self(estimator^, rebind[Self.Splitter](cv), order, random_state, random_order, verbose, chain_method)
+
+    def __init__(
+        out self, var estimator: Self.E, *, cv: Self.Splitter,
+        order: Optional[List[Int]] = None, random_state: Optional[Int] = None,
+        random_order: Bool = False, verbose: Bool = False, chain_method: String = "predict",
+    ) raises where conforms_to(Self.Splitter, ChainSplitter):
+        self = Self(estimator^, cv, order, random_state, random_order, verbose, chain_method)
+
+    def __init__(
+        out self, var estimator: Self.E, _cv: Self.Splitter,
+        order: Optional[List[Int]], random_state: Optional[Int], random_order: Bool,
+        verbose: Bool, chain_method: String,
+    ):
+        comptime assert Self.Splitter == ChainCV or conforms_to(Self.Splitter, ChainSplitter)
         comptime assert Self.dtype in (DType.float32, DType.float64), "features must use Float32 or Float64"
         comptime assert Self.E.Input == Self.Input, "component Input must match feature dtype"
         comptime assert Self.E.Target == Self.Target, "component Target must match target dtype"
@@ -734,7 +784,7 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         self.random_order = random_order
         self.verbose = verbose
         self.chain_method = chain_method
-        self.cv = cv.copy()
+        self.cv = _cv.copy()
         self.chain_method_ = "predict"
         self.estimators_ = List[Self.E]()
         self.classes_ = List[NDArray[Self.label]]()
@@ -755,9 +805,10 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(clone(self.estimator), order=self.order.copy(), random_state=self.random_state,
-                    random_order=self.random_order, verbose=self.verbose,
-                    chain_method=self.chain_method, cv=self.cv)
+        return Self(
+            clone(self.estimator), self.cv, self.order, self.random_state,
+            self.random_order, self.verbose, self.chain_method,
+        )
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self.n_features_in_)
@@ -776,11 +827,13 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         self._fit_native_cv(X, y, sample_weight.copy(), self.cv.copy())
         return self
 
-    def _fit_native_cv(
-        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], var cv: ChainCV,
+    def _fit_native_cv[C: Copyable & Deinitable](
+        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], var cv: C,
     ) raises:
-        var use_cv = not cv.isa[type_of(None)]()
-        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label](cv^)
+        var use_cv = True
+        comptime if C == ChainCV:
+            use_cv = not rebind[ChainCV](cv).isa[type_of(None)]()
+        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label, C](cv^)
         self._fit(X, y, sample_weight, provider, use_cv=use_cv)
 
     def _fit[CV: ChainResponses](
@@ -879,7 +932,12 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         self._fit(X, y, None, cv)
         return self
 
-struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DType = DType.float64, label: DType = DType.int64](
+struct ClassifierChain[
+    E: SupervisedEstimator & Predictor & Deinitable,
+    dtype: DType = DType.float64,
+    label: DType = DType.int64,
+    Splitter: Copyable & Deinitable = ChainCV,
+](
     MultiOutputClassifierAPI,
     Copyable where conforms_to(E, Copyable),
     WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
@@ -890,7 +948,7 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
     comptime Prediction = Self.Target
     comptime Probabilities = NDArray[DType.float64]
     comptime SampleWeight = NDArray[DType.float64]
-    comptime Params = ChainParams[Self.E.Params]
+    comptime Params = ChainParams[Self.E.Params, Self.Splitter]
     var estimator: Self.E
     var n_jobs: Optional[Int]
     var order: Optional[List[Int]]
@@ -898,7 +956,7 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
     var random_order: Bool
     var verbose: Bool
     var chain_method: String
-    var cv: ChainCV
+    var cv: Self.Splitter
     var chain_method_: String
     var estimators_: List[Self.E]
     var classes_: List[NDArray[Self.label]]
@@ -907,7 +965,22 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
 
     def __init__(out self, var estimator: Self.E, *, order: Optional[List[Int]] = None, random_state: Optional[Int] = None,
                  random_order: Bool = False, verbose: Bool = False, chain_method: String = "predict",
-                 cv: ChainCV = None) raises:
+                 cv: ChainCV = None) raises where Self.Splitter == ChainCV:
+        self = Self(estimator^, rebind[Self.Splitter](cv), order, random_state, random_order, verbose, chain_method)
+
+    def __init__(
+        out self, var estimator: Self.E, *, cv: Self.Splitter,
+        order: Optional[List[Int]] = None, random_state: Optional[Int] = None,
+        random_order: Bool = False, verbose: Bool = False, chain_method: String = "predict",
+    ) raises where conforms_to(Self.Splitter, ChainSplitter):
+        self = Self(estimator^, cv, order, random_state, random_order, verbose, chain_method)
+
+    def __init__(
+        out self, var estimator: Self.E, _cv: Self.Splitter,
+        order: Optional[List[Int]], random_state: Optional[Int], random_order: Bool,
+        verbose: Bool, chain_method: String,
+    ):
+        comptime assert Self.Splitter == ChainCV or conforms_to(Self.Splitter, ChainSplitter)
         comptime assert Self.dtype in (DType.float32, DType.float64), "features must use Float32 or Float64"
         comptime assert Self.E.Input == Self.Input, "component Input must match feature dtype"
         comptime assert Self.E.Target == Self.Target, "component Target must match target dtype"
@@ -919,7 +992,7 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
         self.random_order = random_order
         self.verbose = verbose
         self.chain_method = chain_method
-        self.cv = cv.copy()
+        self.cv = _cv.copy()
         self.chain_method_ = "predict"
         self.estimators_ = List[Self.E]()
         self.classes_ = List[NDArray[Self.label]]()
@@ -940,9 +1013,10 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(clone(self.estimator), order=self.order.copy(), random_state=self.random_state,
-                    random_order=self.random_order, verbose=self.verbose,
-                    chain_method=self.chain_method, cv=self.cv)
+        return Self(
+            clone(self.estimator), self.cv, self.order, self.random_state,
+            self.random_order, self.verbose, self.chain_method,
+        )
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self.n_features_in_)
@@ -961,11 +1035,13 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
         self._fit_native_cv(X, y, sample_weight.copy(), self.cv.copy())
         return self
 
-    def _fit_native_cv(
-        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], var cv: ChainCV,
+    def _fit_native_cv[C: Copyable & Deinitable](
+        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], var cv: C,
     ) raises:
-        var use_cv = not cv.isa[type_of(None)]()
-        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label](cv^)
+        var use_cv = True
+        comptime if C == ChainCV:
+            use_cv = not rebind[ChainCV](cv).isa[type_of(None)]()
+        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label, C](cv^)
         self._fit(X, y, sample_weight, provider, use_cv=use_cv)
 
     def _fit[CV: ChainResponses](

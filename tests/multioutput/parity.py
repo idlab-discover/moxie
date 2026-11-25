@@ -150,6 +150,25 @@ def components(module, np):
         RidgeClassifier(), order=[0, 2, 1], chain_method='decision_function', cv=fixed_folds,
     )
     out['ComponentsDecisionChainFixedCV'] = fixed_classification.fit(X, uneven).decision_function(X).ravel().tolist()
+    class PerLinkKFold:
+        def __init__(self, threshold):
+            self.threshold = threshold
+
+        def get_n_splits(self, features, target, groups=None):
+            return 2 if target[0] > self.threshold else 3
+
+        def split(self, features, target, groups=None):
+            folds = self.get_n_splits(features, target)
+            return KFold(folds, shuffle=True, random_state=7 + features.shape[1]).split(features)
+
+    custom_regression = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1], cv=PerLinkKFold(-6.0))
+    out['ComponentsRegressorChainCustomCV'] = custom_regression.fit(X, Y).predict(X).ravel().tolist()
+    custom_classification = module.ClassifierChain(
+        LogisticRegression(tol=1e-10, max_iter=1000),
+        chain_method='predict_proba', cv=PerLinkKFold(0.5),
+    ).fit(X, uneven)
+    out['ComponentsLogisticChainCustomCVProba'] = custom_classification.predict_proba(X).ravel().tolist()
+    out['ComponentsLogisticChainCustomCVLabels'] = custom_classification.predict(X).ravel().tolist()
     shuffled_cv = module.ClassifierChain(
         RidgeClassifier(), order=[0, 2, 1], chain_method='decision_function',
         cv=StratifiedKFold(3, shuffle=True, random_state=7),

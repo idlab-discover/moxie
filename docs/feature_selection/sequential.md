@@ -33,6 +33,11 @@ target (StringTarget or Int64/Float32/Float64 array). No family importance trait
 is required. Estimator-specific restrictions, including the adopted Lasso and
 ElasticNet solver options, still apply.
 
+The [Iris release-highlight notebook](../../notebooks/release_highlights/plot_release_highlights_0_24_0.ipynb)
+uses `DenseSupervisedCV[KNeighborsClassifier[]]` with the native three-neighbor
+classifier. It checks the selected indices, names, and transformed values
+against the pinned reference on the full dataset.
+
 With `DenseSupervisedCV[Estimator]`, pass
 `scoring=EstimatorCVScore[Estimator](score_function)` to use a native scoring
 function. Its signature takes the fitted estimator, held-out features and

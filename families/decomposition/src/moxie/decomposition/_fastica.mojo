@@ -10,6 +10,7 @@ from std.math import sqrt, tanh, abs, isfinite
 from std.utils import Variant
 from mojo_linalg import symmetric_eigh, svd
 from moxie.base import UnsupervisedEstimator
+from moxie.warnings import FitWarning
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import RandomState
 from ._base import InvertibleDecomposition
@@ -20,6 +21,18 @@ from ._svd_engine import dense_svd
 
 comptime WhitenOption = Variant[String, Bool]
 """sklearn `whiten`: "unit-variance", "arbitrary-variance" or False."""
+
+comptime _ICA_IGNORED_COMPONENTS = "Ignoring n_components with whiten=False."
+comptime _ICA_SMALL_SINGULAR_VALUES = (
+    "There are some small singular values, using whiten_solver = 'svd' might lead to more accurate results."
+)
+comptime _ICA_CONVERGENCE = (
+    "FastICA did not converge. Consider increasing tolerance or the maximum number of iterations."
+)
+
+
+def _ica_clipped_components(rank: Int) -> String:
+    return "n_components is too large: it will be set to " + String(rank)
 
 
 @fieldwise_init
@@ -37,7 +50,6 @@ struct FastICAParams(Copyable, Movable):
     var random_state: Optional[Int]
 
 
-@fieldwise_init
 struct FastICAResult[dtype: DType](Movable):
     """Return record of `fastica`: sklearn's [K, W, S, X_mean, n_iter] list.
 
@@ -49,6 +61,19 @@ struct FastICAResult[dtype: DType](Movable):
     var S: Optional[NDArray[Self.dtype]]
     var X_mean: Optional[NDArray[Self.dtype]]
     var n_iter: Int
+    var fit_warnings: List[FitWarning]
+
+    def __init__(
+        out self, var K: Optional[NDArray[Self.dtype]], var W: NDArray[Self.dtype],
+        var S: Optional[NDArray[Self.dtype]], var X_mean: Optional[NDArray[Self.dtype]],
+        n_iter: Int, var fit_warnings: List[FitWarning] = [],
+    ):
+        self.K = K^
+        self.W = W^
+        self.S = S^
+        self.X_mean = X_mean^
+        self.n_iter = n_iter
+        self.fit_warnings = fit_warnings^
 
 
 def _whitening_mode(whiten: WhitenOption) raises -> String:
@@ -107,15 +132,16 @@ def _nonlinearity[dtype: DType](fun: String, alpha: Float64, wx: NDArray[dtype])
     return (gx^, derivative^)
 
 
-def _ica_par[dtype: DType](x: NDArray[dtype], tol: Float64, fun: String, alpha: Float64, max_iter: Int, w_init: NDArray[dtype]) raises -> Tuple[NDArray[dtype], Int]:
+def _ica_par[dtype: DType](
+    x: NDArray[dtype], tol: Float64, fun: String, alpha: Float64, max_iter: Int,
+    w_init: NDArray[dtype], mut warnings: List[FitWarning],
+) raises -> Tuple[NDArray[dtype], Int]:
     """Parallel (symmetric) FastICA iterations on whitened x (k, n)."""
     var w = sym_decorrelation(w_init)
     var k = w.shape[0]
     var p = Float64(x.shape[1])
     var xt = x.T()
-    var iterations = 0
     for ii in range(max_iter):
-        iterations = ii + 1
         var nonlinear = _nonlinearity(fun, alpha, w @ x)
         var update = nonlinear[0] @ xt
         for r in range(k):
@@ -130,9 +156,9 @@ def _ica_par[dtype: DType](x: NDArray[dtype], tol: Float64, fun: String, alpha: 
             limit = max(limit, abs(abs(dot) - 1))
         w = w1^
         if limit < tol:
-            break
-    # sklearn warns (ConvergenceWarning) when max_iter is exhausted.
-    return (w^, iterations)
+            return (w^, ii + 1)
+    warnings.append(FitWarning("ConvergenceWarning", _ICA_CONVERGENCE))
+    return (w^, max_iter)
 
 
 def _ica_def[dtype: DType](x: NDArray[dtype], tol: Float64, fun: String, alpha: Float64, max_iter: Int, w_init: NDArray[dtype]) raises -> Tuple[NDArray[dtype], Int]:
@@ -226,6 +252,7 @@ struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, Unsupervis
     var whitening_: Optional[NDArray[Self.dtype]]
     var n_iter_: Int
     var n_features_in_: Int
+    var fit_warnings: List[FitWarning]
     var _unmixing: Optional[NDArray[Self.dtype]]
 
     def __init__(
@@ -252,6 +279,7 @@ struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, Unsupervis
         self.whitening_ = None
         self.n_iter_ = 0
         self.n_features_in_ = 0
+        self.fit_warnings = []
         self._unmixing = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
@@ -335,10 +363,16 @@ struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, Unsupervis
         var n = X.shape[0]
         var p = X.shape[1]
         var rng = seeded_state(self.random_state, "FastICA")
-        # sklearn ignores n_components when whiten=False and clips it to min(n, p).
+        var warnings: List[FitWarning] = []
         var k = min(n, p)
-        if whitening and self.n_components and self.n_components.value() < k:
-            k = self.n_components.value()
+        if self.n_components:
+            var requested = self.n_components.value()
+            if not whitening:
+                warnings.append(FitWarning("UserWarning", _ICA_IGNORED_COMPONENTS))
+            elif requested > k:
+                warnings.append(FitWarning("UserWarning", _ica_clipped_components(k)))
+            else:
+                k = requested
         var raw = contiguous(X)
         var xt = raw.T()
         var means = zeros[Self.dtype](Shape(p))
@@ -363,12 +397,17 @@ struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, Unsupervis
                 var eps = machine_epsilon[Self.dtype]() * 10
                 u = zeros[Self.dtype](Shape(p, p))
                 d = zeros[Self.dtype](Shape(p))
+                var clipped = False
                 for j in range(p):
                     var source = p - 1 - j  # ascending -> descending
                     var value = get1(values, source)
-                    if value < eps: value = eps
+                    if value < eps:
+                        value = eps
+                        clipped = True
                     set1(d, j, sqrt(value))
                     for f in range(p): set2(u, f, j, get2(vectors, f, source))
+                if clipped:
+                    warnings.append(FitWarning("UserWarning", _ICA_SMALL_SINGULAR_VALUES))
             else:
                 var factors = dense_svd(xt, flip_sign=False)
                 for j in range(r):
@@ -398,10 +437,10 @@ struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, Unsupervis
         else:
             for i in range(k):
                 for j in range(k): set2(w_init, i, j, rng.normal())
-        var solved = _ica_par(x1, self.tol, self.fun, alpha, self.max_iter, w_init) if self.algorithm == "parallel" else _ica_def(x1, self.tol, self.fun, alpha, self.max_iter, w_init)
+        var solved = _ica_par(x1, self.tol, self.fun, alpha, self.max_iter, w_init, warnings) if self.algorithm == "parallel" else _ica_def(x1, self.tol, self.fun, alpha, self.max_iter, w_init)
         var w = solved[0].copy()
-        self.n_iter_ = solved[1]
         var sources: Optional[NDArray[Self.dtype]] = None
+        var components: NDArray[Self.dtype]
         if whitening:
             var unmix = w @ k_matrix
             if compute_sources or mode == "unit-variance":
@@ -418,18 +457,19 @@ struct FastICA[dtype: DType = DType.float64](InvertibleDecomposition, Unsupervis
                     for i in range(n): set2(s, i, j, get2(s, i, j) / std)
                     for c in range(k): set2(w, j, c, get2(w, j, c) / std)
                 sources = s^
-            self.components_ = w @ k_matrix
-            self.mean_ = means^
-            self.whitening_ = k_matrix^
+            components = w @ k_matrix
         else:
             if compute_sources:
                 sources = (w @ xt).T()
-            self.components_ = w.copy()
-            self.mean_ = None
-            self.whitening_ = None
-        self.mixing_ = pseudo_inverse(self.components_.value())
+            components = w.copy()
+        self.mixing_ = pseudo_inverse(components)
+        self.components_ = components^
+        self.mean_ = Optional(means^) if whitening else None
+        self.whitening_ = Optional(k_matrix^) if whitening else None
         self._unmixing = w^
+        self.n_iter_ = solved[1]
         self.n_features_in_ = p
+        self.fit_warnings = warnings^
         # sklearn computes S for unit-variance scaling even when compute_sources=False
         # and returns it, so fastica(..., compute_sources=False) still carries S there.
         if not compute_sources and mode != "unit-variance":
@@ -513,4 +553,4 @@ def fastica[dtype: DType](
         max_iter=max_iter, tol=tol, w_init=w_init, whiten_solver=whiten_solver, random_state=random_state)
     var sources = model._fit_transform(X, compute_sources)
     return FastICAResult[dtype](model.whitening_.copy(), model._unmixing.value().copy(), sources^,
-        model.mean_.copy(), model.n_iter_)
+        model.mean_.copy(), model.n_iter_, model.fit_warnings.copy())

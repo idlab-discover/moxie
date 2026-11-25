@@ -5,7 +5,18 @@ from moxie.decomposition import FastICA, fastica
 from moxie.decomposition._fastica import WhitenOption
 from moxie.decomposition_serialization import FastICASchema
 from moxie.serialization import dumps, loads
+from moxie.warnings import FitWarning
 from decomposition_testing import emit, emit_scalar, read_matrix
+
+
+def emit_warnings(warnings: List[FitWarning]) raises:
+    emit_scalar("warning_count", Float64(len(warnings)))
+    for i in range(len(warnings)):
+        var key = String(i)
+        for byte in warnings[i].category.as_bytes():
+            emit_scalar("warning_category_" + key, Float64(byte))
+        for byte in warnings[i].message.as_bytes():
+            emit_scalar("warning_message_" + key, Float64(byte))
 
 
 def evaluate[dtype: DType]() raises:
@@ -32,6 +43,7 @@ def evaluate[dtype: DType]() raises:
         emit("sources", result.S.value())
         if result.X_mean: emit("mean", result.X_mean.value())
         emit_scalar("n_iter", Float64(result.n_iter))
+        emit_warnings(result.fit_warnings)
         return
     var model = FastICA[dtype](k, algorithm=String(args[6]), whiten=whiten, fun=String(args[8]), fun_args=fun_args,
         max_iter=Int(args[10]), tol=Float64(String(args[11])), w_init=w_init, whiten_solver=String(args[12]),
@@ -47,6 +59,7 @@ def evaluate[dtype: DType]() raises:
     if model.mean_: emit("mean", model.mean_.value())
     if model.whitening_: emit("whitening", model.whitening_.value())
     emit_scalar("n_iter", Float64(model.n_iter_))
+    emit_warnings(model.fit_warnings)
     var projected = model.transform(x)
     emit("transform", projected)
     emit("inverse", model.inverse_transform(projected))

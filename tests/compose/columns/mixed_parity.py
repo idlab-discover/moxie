@@ -148,6 +148,34 @@ def check_mixed_float_columns():
     )
 
 
+def check_mixed_integer_columns():
+    train = pd.DataFrame({
+        "count": np.array([-4, 0, 7, 0, 13], dtype=np.int64),
+        "age": [10.0, np.nan, 30.0, 40.0, 20.0],
+        "color": pd.Categorical(["red", "blue", "red", "amber", "blue"]),
+    })
+    test = pd.DataFrame({
+        "age": [35.0, np.nan, 15.0],
+        "color": pd.Categorical(["green", None, "red"]),
+        "count": np.array([0, -4, 2**53 + 1], dtype=np.int64),
+    })
+    for kind in ["int", "int64", "integer", "signedinteger"]:
+        assert compose.make_column_selector(dtype_include=kind)(train) == ["count"]
+    assert compose.make_column_selector(dtype_include="floating")(train) == ["age"]
+    assert compose.make_column_selector(dtype_include="unsignedinteger")(train) == []
+    assert compose.make_column_selector(dtype_include="number", dtype_exclude="integer")(train) == ["age"]
+    model = compose.ColumnTransformer([
+        ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
+         compose.make_column_selector(dtype_include="number")),
+        ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
+         compose.make_column_selector(dtype_include="category")),
+    ])
+    check_composition(
+        "mixed_integer_columns", model, train, test, ("after_fit", "after_dtype_change"),
+        numeric_width=2,
+    )
+
+
 if __name__ == "__main__":
     check_mixed("mixed", "color", ["red", "blue", "red", "amber", "blue"], ["green", None, "red"])
     large = 2**53
@@ -158,3 +186,4 @@ if __name__ == "__main__":
     check_categorical_imputation("mixed_categorical_impute")
     check_categorical_imputation("mixed_numeric_impute", numeric=True)
     check_mixed_float_columns()
+    check_mixed_integer_columns()

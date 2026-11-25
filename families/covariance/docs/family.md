@@ -9,7 +9,7 @@ in-place fit, associated array types, and other Mojo-specific differences.
 
 | Trait | Shared capabilities | Additional required methods |
 | --- | --- | --- |
-| `CovarianceEstimator` | `UnsupervisedEstimator` | `get_precision`, `mahalanobis`, `score` |
+| `CovarianceEstimator` | `UnsupervisedEstimator` | `covariance_`, `get_precision`, `mahalanobis`, `score` |
 | `RobustCovarianceDetector` | `OutlierMixin, SampleScorer` | Inherited only |
 
 ## Behavioral distinctions

@@ -1,20 +1,32 @@
 """Test-only helpers: array construction/comparison and native covariance estimators."""
 from std.math import isnan, abs
 from numojo import NDArray, Shape, zeros
-from moxie.discriminant_analysis import CovarianceEstimator
+from moxie.covariance import (
+    CovarianceEstimator as NativeCovarianceEstimator,
+    EmpiricalCovariance,
+    LedoitWolf,
+    OAS,
+    ShrunkCovariance,
+)
+from moxie.discriminant_analysis import CovarianceEstimator, CovarianceEstimatorAdapter
 from moxie._discriminant_analysis._covariance import (
     empirical_covariance,
-    shrunk_covariance,
-    ledoit_wolf,
     standardized_ledoit_wolf,
 )
+
+def adapted_covariance[E: NativeCovarianceEstimator & Copyable & Deinitable](
+    var estimator: E, X: NDArray[DType.float64]
+) raises -> NDArray[DType.float64]:
+    var adapter = CovarianceEstimatorAdapter(estimator^)
+    adapter.fit(X)
+    return adapter.covariance()
 
 
 struct FixtureCovariance(CovarianceEstimator):
     """User-style covariance estimator selected by name (mirrors the parity oracle).
 
     kinds: 'shrunk' (ShrunkCovariance), 'lw' (LedoitWolf), 'stdlw' (standardized
-    Ledoit-Wolf test helper), 'diag' (diagonal variances), 'empirical'.
+    Ledoit-Wolf test helper), 'diag' (diagonal variances), 'empirical', 'oas'.
     """
 
     var kind: String
@@ -31,13 +43,17 @@ struct FixtureCovariance(CovarianceEstimator):
     def fit(mut self, X: NDArray[DType.float64]) raises:
         self.fit_calls += 1
         if self.kind == "shrunk":
-            self.fitted = shrunk_covariance(empirical_covariance(X), self.shrinkage)
+            self.fitted = adapted_covariance(
+                ShrunkCovariance(shrinkage=self.shrinkage, store_precision=False), X
+            )
         elif self.kind == "lw":
-            self.fitted = ledoit_wolf(X)
+            self.fitted = adapted_covariance(LedoitWolf(store_precision=False), X)
+        elif self.kind == "oas":
+            self.fitted = adapted_covariance(OAS(store_precision=False), X)
         elif self.kind == "stdlw":
             self.fitted = standardized_ledoit_wolf(X)
         elif self.kind == "empirical":
-            self.fitted = empirical_covariance(X)
+            self.fitted = adapted_covariance(EmpiricalCovariance(store_precision=False), X)
         elif self.kind == "diag":
             var c = empirical_covariance(X)
             var p = c.shape[0]

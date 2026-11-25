@@ -121,14 +121,31 @@ QDA: `means_` `(K, p)`, `priors_`, `rotations_` (List of `(p, n_k)`), `scalings_
       def fit(mut self, X: NDArray[DType.float64]) raises: ...
       def covariance(self) raises -> NDArray[DType.float64]: ...
   ```
-  `fit` receives a Float64 copy of the (per-class) samples. The estimator fits a private copy,
-  so the configured object is never mutated (sklearn mutates the object you pass). Using a type
+  `fit` receives a Float64 copy of the samples. LDA estimates within-class covariance and,
+  for `eigen`, total covariance. QDA estimates covariance for each class. Both fit private
+  configurations (sklearn mutates the object you pass). Using a type
   without `fit`/`covariance` (sklearn: `ValueError` at fit) fails at compile time
   (tests/compile_fail/covariance_without_trait.mojo).
-  `moxie.covariance` estimators (`OAS`, `LedoitWolf`, `ShrunkCovariance`, ...) implement
-  `moxie.covariance.CovarianceEstimator` (fluent `fit`, `covariance_()`), not this trait, so
-  sklearn's `covariance_estimator=OAS()` needs a small user adapter (see the `OASCovariance`
-  struct in the plot_lda notebook patch); they cannot be passed directly yet.
+
+  Use the public `CovarianceEstimatorAdapter` to pass an estimator from `moxie.covariance`.
+
+  ```mojo
+  from moxie.covariance import OAS
+  from moxie.discriminant_analysis import CovarianceEstimatorAdapter, LinearDiscriminantAnalysis
+
+  var covariance = CovarianceEstimatorAdapter(OAS(store_precision=False))
+  var lda = LinearDiscriminantAnalysis[DType.float64, Int, type_of(covariance)](
+      solver="lsqr", covariance_estimator=covariance^
+  )
+  ```
+
+  The adapter supports LDA's `lsqr` and `eigen` and QDA's `eigen` paths. Use Float64
+  covariance estimators to preserve the discriminant-analysis working precision, including
+  with Float32 classifier input. With a Float32 covariance estimator, the adapter casts the
+  samples to Float32 for its fit and widens its fitted covariance back to Float64.
+  Native adapters clone the wrapped estimator's configuration for fitting and cloning.
+  Custom implementations of the discriminant-analysis trait can override
+  `clone_configuration()` to discard any fitted state. Its default copies the value.
 - `transform` rejects `solver='lsqr'` from the current parameter, like sklearn, but subtracts
   `xbar_` according to the solver used at fit time. sklearn reads the current `solver`, so after
   `set_params(solver='eigen')` on an svd fit without refitting it skips the centering.

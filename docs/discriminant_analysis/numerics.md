@@ -17,10 +17,13 @@ Empirical covariance, fixed shrinkage, column means, and Ledoit-Wolf now
 reuse `moxie.covariance` and its existing helpers on Float64 work arrays.
 The family keeps row-major centering because the covariance helper returns
 column-major work arrays. It retains StandardScaler's corrected variance and near-constant
-feature test for automatic shrinkage, per-class aggregation, and its typed
-covariance-estimator adapter. That adapter takes a private Float64 copy and
-preserves the configured estimator. It is distinct from the public covariance
-family's estimator trait.
+feature test for automatic shrinkage and per-class aggregation. The
+`CovarianceEstimatorAdapter` delegates fitting and covariance retrieval to
+the covariance family's `fit` and `covariance_()` methods. Float64 estimators
+receive the existing private Float64 work array. Float32 estimators use
+NuMojo's `NDArray.astype` in both directions. The adapter makes a
+`contiguous()` copy before casting a non-C-contiguous array because the
+consumed casting implementation reads contiguous spans of the backing buffer.
 
 The generalized symmetric eigenproblem composes the existing Cholesky,
 triangular solve and symmetric-eigen kernels. The shared `_linalg` covariance

@@ -43,13 +43,12 @@ struct BruteForce[M: DenseMetric & Deinitable](DenseQueryBackend):
         self.n_features_in_ = x.shape[1]
         self._fit_X = snapshot^
 
-    def _validate_query(self, x: Optional[nm.NDArray[Self.dtype]]) raises:
-        if not self._fit_X: raise Error("NotFittedError: no indexed samples")
-        if x:
-            validate_matrix(x.value(), self.n_features_in_, self._precomputed, allow_nan=self._allow_nan)
-            comptime if conforms_to(Self.M, SelfQueryMetric):
-                comptime assert conforms_to(Self.M, SelfQueryMetric)
-                if not self._precomputed: self._metric.validate_cross_query()
+    def _validate_cross_query(self, x: nm.NDArray[Self.dtype]) raises:
+        validate_matrix(x, self.n_features_in_, self._precomputed, allow_nan=self._allow_nan)
+        comptime if conforms_to(Self.M, SelfQueryMetric):
+            comptime assert conforms_to(Self.M, SelfQueryMetric)
+            if not self._precomputed:
+                self._metric.validate_cross_query()
 
     def _query_metric(self, query_is_train: Bool) raises -> Self.M:
         """Per-call metric; self queries may derive parameters from fitted data."""
@@ -75,10 +74,17 @@ struct BruteForce[M: DenseMetric & Deinitable](DenseQueryBackend):
 
     def kneighbors(self, x: Optional[nm.NDArray[Self.dtype]], k: Int,
                    return_distance: Bool = True) raises -> TopKResult[Self.dtype]:
-        validate_k(k,self.n_samples_fit_,not x)
-        self._validate_query(x)
-        if x: return self._kneighbors(x.value(),k,return_distance,False)
-        return self._kneighbors(self._fit_X.value(),k,return_distance,True)
+        if x:
+            return self.kneighbors(x.value(), k, return_distance)
+        validate_k(k, self.n_samples_fit_, True)
+        return self._kneighbors(self._fit_X.value(), k, return_distance, True)
+
+    def kneighbors(
+        self, x: nm.NDArray[Self.dtype], k: Int, return_distance: Bool = True
+    ) raises -> TopKResult[Self.dtype]:
+        validate_k(k, self.n_samples_fit_, False)
+        self._validate_cross_query(x)
+        return self._kneighbors(x, k, return_distance, False)
 
     def _kneighbors(self, q: nm.NDArray[Self.dtype], k: Int, return_distance: Bool,
                     query_is_train: Bool) raises -> TopKResult[Self.dtype]:
@@ -122,8 +128,11 @@ struct BruteForce[M: DenseMetric & Deinitable](DenseQueryBackend):
                          return_distance: Bool = True, sort_results: Bool = False,
                          ) raises -> RadiusResult[Self.dtype]:
         validate_radius_options(radius,return_distance,sort_results)
-        self._validate_query(x)
-        if x: return self._radius(x.value(),radius,return_distance,sort_results,False)
+        if not self._fit_X:
+            raise Error("NotFittedError: no indexed samples")
+        if x:
+            self._validate_cross_query(x.value())
+            return self._radius(x.value(), radius, return_distance, sort_results, False)
         return self._radius(self._fit_X.value(),radius,return_distance,sort_results,True)
 
     def _radius(self, q: nm.NDArray[Self.dtype], radius: Float64,

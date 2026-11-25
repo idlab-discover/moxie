@@ -162,20 +162,41 @@ struct NearestNeighbors[dtype: DType = DType.float64, M: DenseMetric & Deinitabl
         self._fit_method = method
         return self
 
-    def kneighbors(self, X: Optional[nm.NDArray[Self.dtype]] = None,
-                   n_neighbors: Optional[Int] = None, return_distance: Bool = True) raises -> TopKResult[Self.dtype]:
+    def kneighbors(
+        self, X: Optional[Self.Input] = None,
+        n_neighbors: Optional[Int] = None, return_distance: Bool = True,
+    ) raises -> TopKResult[Self.dtype]:
+        if X:
+            return self.kneighbors(X.value(), n_neighbors, return_distance)
         comptime assert Self.M.dtype == Self.dtype
-        var k = self._params.n_neighbors
-        if n_neighbors: k = n_neighbors.value()
+        var k = n_neighbors.or_else(self._params.n_neighbors)
+        if self._tree:
+            ref tree = self._tree.value()
+            var stats = TreeStats()
+            return tree._query(tree.data, k, return_distance, False, True, stats)
+        if self._ball:
+            ref tree = self._ball.value()
+            var stats = TreeStats()
+            return tree._query(tree.data, k, return_distance, False, True, stats)
+        var result = self._engine.kneighbors(None, k, return_distance)
+        return rebind[TopKResult[Self.dtype]](result).copy()
+
+    def kneighbors(
+        self, X: Self.Input,
+        n_neighbors: Optional[Int] = None, return_distance: Bool = True,
+    ) raises -> TopKResult[Self.dtype]:
+        """Query explicit rows by borrowing the feature array."""
+        comptime assert Self.M.dtype == Self.dtype
+        var k = n_neighbors.or_else(self._params.n_neighbors)
         if self._tree:
             var stats = TreeStats()
-            if X: return self._tree.value()._query(X.value(),k,return_distance,False,False,stats)
-            return self._tree.value()._query(self._tree.value().data,k,return_distance,False,True,stats)
+            return self._tree.value()._query(X, k, return_distance, False, False, stats)
         if self._ball:
             var stats = TreeStats()
-            if X: return self._ball.value()._query(X.value(),k,return_distance,False,False,stats)
-            return self._ball.value()._query(self._ball.value().data,k,return_distance,False,True,stats)
-        var result = self._engine.kneighbors(rebind[Optional[nm.NDArray[Self.M.dtype]]](X), k, return_distance)
+            return self._ball.value()._query(X, k, return_distance, False, False, stats)
+        var result = self._engine.kneighbors(
+            rebind[nm.NDArray[Self.M.dtype]](X), k, return_distance
+        )
         return rebind[TopKResult[Self.dtype]](result).copy()
 
     def radius_neighbors(self, X: Optional[nm.NDArray[Self.dtype]] = None,

@@ -121,6 +121,12 @@ struct KNeighborsClassifier[dtype: DType = DType.float64, M: DenseMetric & Deini
                    n_neighbors: Optional[Int] = None, return_distance: Bool = True) raises -> TopKResult[Self.dtype]:
         return self._query.kneighbors(X, n_neighbors, return_distance)
 
+    def kneighbors(
+        self, X: Self.Input,
+        n_neighbors: Optional[Int] = None, return_distance: Bool = True,
+    ) raises -> TopKResult[Self.dtype]:
+        return self._query.kneighbors(X, n_neighbors, return_distance)
+
     def radius_neighbors(self, X: Optional[nm.NDArray[Self.dtype]] = None,
                          radius: Optional[Float64] = None, return_distance: Bool = True,
                          sort_results: Bool = False) raises -> RadiusResult[Self.dtype]:

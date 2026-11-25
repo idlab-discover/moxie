@@ -3,31 +3,34 @@ import numojo as nm
 from numojo import NDArray, Shape
 from std.math import isfinite
 
+from moxie.covariance._elliptic_envelope import EllipticEnvelope
 from moxie.covariance._empirical_covariance import CovarianceModel, EmpiricalCovariance
+from moxie.covariance._engines import RobustCovarianceState
+from moxie.covariance._robust_covariance import MinCovDet, RobustFit
 from moxie.covariance._shrunk_covariance_adaptive import LedoitWolf, OAS
 from moxie.covariance._shrunk_covariance_fixed import ShrunkCovariance
 from moxie.covariance._state import validate_location, validate_square
 from moxie.serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 
 
-def _write_array[dtype: DType](
+def _write_array[dtype: DType, wire_dtype: DType = dtype](
     mut archive: ModelArchive, name: String, array: NDArray[dtype],
 ) raises:
     var dimensions = List[Int]()
-    var values = List[Scalar[dtype]](capacity=array.size)
+    var values = List[Scalar[wire_dtype]](capacity=array.size)
     dimensions.append(array.shape[0])
     var stride = Int(array.strides[0])
     if array.ndim == 1:
         for i in range(array.shape[0]):
             # NuMojo's flat item() skips strides for rank-one arrays.
-            values.append(array.unsafe_get(i * stride))
+            values.append(array.unsafe_get(i * stride).cast[wire_dtype]())
     else:
         dimensions.append(array.shape[1])
         var column_stride = Int(array.strides[1])
         for i in range(array.shape[0]):
             for j in range(array.shape[1]):
-                values.append(array.unsafe_get(i * stride + j * column_stride))
-    archive.add_array[dtype](name, dimensions, values)
+                values.append(array.unsafe_get(i * stride + j * column_stride).cast[wire_dtype]())
+    archive.add_array[wire_dtype](name, dimensions, values)
 
 
 def _read_array[dtype: DType](
@@ -103,6 +106,7 @@ def _write_state[dtype: DType](
 
 def _read_state[dtype: DType](
     archive: ModelArchive, mut reader: BinaryReader[_], allow_widened: Bool = True,
+    extra_fitted_arrays: Int = 0,
 ) raises -> CovarianceModel[dtype]:
     var model = CovarianceModel[dtype]()
 
@@ -114,7 +118,7 @@ def _read_state[dtype: DType](
         var widened = reader.boolean()
         if widened and not allow_widened:
             raise Error("ModelSchemaError: estimator has no widened covariance")
-        var expected = 2 + Int(stored) + Int(widened) + Int(widened and stored)
+        var expected = 2 + Int(stored) + Int(widened) + Int(widened and stored) + extra_fitted_arrays
         if len(archive.payloads) != expected:
             raise Error("ModelSchemaError: unexpected covariance arrays")
         model.state.location_ = _read_array[dtype](archive, "location_", features, 1)
@@ -277,5 +281,183 @@ struct OASSchema[dtype: DType = DType.float64](ModelSchema):
         )
         model._model = _read_state[Self.dtype](archive, reader, allow_widened=False)
         model._shrinkage = _read_shrinkage(reader, model.__sklearn_is_fitted__())
+        reader.finish()
+        return model^
+
+
+def _write_robust_config[dtype: DType](
+    store_precision: Bool, assume_centered: Bool, support_fraction: Optional[Float64],
+    random_state: Optional[Int],
+) -> BinaryWriter:
+    var writer = _write_config[dtype](store_precision, assume_centered)
+    writer.boolean(Bool(support_fraction))
+    if support_fraction:
+        writer.scalar[DType.float64](support_fraction.value())
+    writer.boolean(Bool(random_state))
+    if random_state:
+        writer.integer(random_state.value())
+    return writer^
+
+
+def _read_support_fraction(mut reader: BinaryReader[_]) raises -> Optional[Float64]:
+    if reader.boolean():
+        return reader.scalar[DType.float64]()
+    return None
+
+
+def _read_random_state(mut reader: BinaryReader[_]) raises -> Optional[Int]:
+    if reader.boolean():
+        return reader.integer()
+    return None
+
+
+def _validate_mask(mask: NDArray[DType.bool], samples: Int) raises:
+    if mask.ndim != 1 or mask.shape[0] != samples:
+        raise Error("ModelSchemaError: invalid robust support shape")
+    for i in range(samples):
+        if mask.unsafe_get(i * Int(mask.strides[0])):
+            return
+    raise Error("ModelSchemaError: empty robust support")
+
+
+def _read_mask(archive: ModelArchive, name: String, samples: Int) raises -> NDArray[DType.bool]:
+    var payload = archive.array(name)
+    if len(payload.shape) != 1 or payload.shape[0] != samples:
+        raise Error(String("ModelSchemaError: invalid shape for ", name))
+    var values = payload.values[DType.uint32]()
+    var mask = nm.zeros[DType.bool](Shape(samples))
+    for i in range(samples):
+        if values[i] > 1:
+            raise Error(String("ModelSchemaError: invalid boolean value in ", name))
+        mask.unsafe_set(i, values[i] != 0)
+    return mask^
+
+
+def _validate_robust[dtype: DType](fit: RobustFit[dtype]) raises:
+    if Bool(fit.robust) != fit.model.is_fitted():
+        raise Error("ModelSchemaError: inconsistent robust fitted state")
+    if fit.robust:
+        ref robust = fit.robust.value()
+        if not fit.model._covariance64:
+            raise Error("ModelSchemaError: missing widened robust covariance")
+        var features = fit.model.state.fitted.n_features_in_.value()
+        var samples = robust.dist_.size
+        if robust.dist_.ndim != 1 or samples < 2:
+            raise Error("ModelSchemaError: invalid robust distance shape")
+        validate_location(robust.raw_location_, features)
+        validate_square(robust.raw_covariance_, features)
+        _validate_mask(robust.raw_support_, samples)
+        _validate_mask(robust.support_, samples)
+
+
+def _write_robust[dtype: DType](
+    mut archive: ModelArchive, mut writer: BinaryWriter, fit: RobustFit[dtype],
+) raises:
+    _write_state(archive, writer, fit.model)
+    _validate_robust(fit)
+    if fit.robust:
+        ref robust = fit.robust.value()
+        writer.integer(robust.dist_.size)
+        _write_array(archive, "raw_location_", robust.raw_location_)
+        _write_array(archive, "raw_covariance_", robust.raw_covariance_)
+        _write_array[DType.bool, DType.uint32](archive, "raw_support_", robust.raw_support_)
+        _write_array[DType.bool, DType.uint32](archive, "support_", robust.support_)
+        _write_array(archive, "dist_", robust.dist_)
+
+
+def _read_robust[dtype: DType](
+    archive: ModelArchive, mut reader: BinaryReader[_],
+) raises -> RobustFit[dtype]:
+    var fit = RobustFit[dtype]()
+    fit.model = _read_state[dtype](archive, reader, extra_fitted_arrays=5)
+    if fit.model.is_fitted():
+        var features = fit.model.state.fitted.n_features_in_.value()
+        var samples = reader.integer()
+        if samples < 2:
+            raise Error("ModelSchemaError: invalid robust distance shape")
+        fit.robust = RobustCovarianceState[dtype](
+            fit.model.state.copy(),
+            _read_array[dtype](archive, "raw_location_", features, 1),
+            _read_array[dtype](archive, "raw_covariance_", features, 2),
+            _read_mask(archive, "raw_support_", samples),
+            _read_mask(archive, "support_", samples),
+            _read_array[dtype](archive, "dist_", samples, 1),
+        )
+    _validate_robust(fit)
+    return fit^
+
+
+def _validate_offset(fitted: Bool, offset: Float64) raises:
+    if not isfinite(offset) or (not fitted and offset != 0.0):
+        raise Error("ModelSchemaError: invalid elliptic envelope offset")
+
+
+struct MinCovDetSchema[dtype: DType = DType.float64](ModelSchema):
+    comptime Model = MinCovDet[Self.dtype]
+    comptime TYPE_ID = "moxie.covariance.MinCovDet"
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self.TYPE_ID, 1)
+        var writer = _write_robust_config[Self.dtype](
+            model.store_precision, model.assume_centered, model.support_fraction, model.random_state,
+        )
+        _write_robust(archive, writer, model._fit)
+        archive.manifest = writer^.finish()
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self.TYPE_ID, 1)
+        archive.validate()
+        var reader = BinaryReader(Span(archive.manifest))
+        _check_dtype[Self.dtype](reader)
+        var model = Self.Model(
+            store_precision=reader.boolean(),
+            assume_centered=reader.boolean(),
+            support_fraction=_read_support_fraction(reader),
+            random_state=_read_random_state(reader),
+        )
+        model._fit = _read_robust[Self.dtype](archive, reader)
+        reader.finish()
+        return model^
+
+
+struct EllipticEnvelopeSchema[dtype: DType = DType.float64](ModelSchema):
+    comptime Model = EllipticEnvelope[Self.dtype]
+    comptime TYPE_ID = "moxie.covariance.EllipticEnvelope"
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self.TYPE_ID, 1)
+        var writer = _write_robust_config[Self.dtype](
+            model.store_precision, model.assume_centered, model.support_fraction, model.random_state,
+        )
+        writer.scalar[DType.float64](model.contamination)
+        _write_robust(archive, writer, model._fit)
+        var fitted = model.__sklearn_is_fitted__()
+        _validate_offset(fitted, model._offset)
+        if fitted:
+            writer.scalar[DType.float64](model._offset)
+        archive.manifest = writer^.finish()
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self.TYPE_ID, 1)
+        archive.validate()
+        var reader = BinaryReader(Span(archive.manifest))
+        _check_dtype[Self.dtype](reader)
+        var model = Self.Model(
+            store_precision=reader.boolean(),
+            assume_centered=reader.boolean(),
+            support_fraction=_read_support_fraction(reader),
+            random_state=_read_random_state(reader),
+            contamination=reader.scalar[DType.float64](),
+        )
+        model._fit = _read_robust[Self.dtype](archive, reader)
+        if model.__sklearn_is_fitted__():
+            model._offset = reader.scalar[DType.float64]()
+            _validate_offset(True, model._offset)
         reader.finish()
         return model^

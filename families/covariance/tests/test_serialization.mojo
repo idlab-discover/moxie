@@ -3,6 +3,7 @@ from moxie.covariance import (
     EmpiricalCovariance, EmpiricalCovarianceSchema,
     ShrunkCovariance, ShrunkCovarianceSchema,
     LedoitWolf, LedoitWolfSchema, OAS, OASSchema,
+    MinCovDet, MinCovDetSchema, EllipticEnvelope, EllipticEnvelopeSchema,
 )
 from moxie.serialization import ModelSchema, dumps, load_model, save_model
 from numojo import NDArray, NDArrayStrides, Shape, zeros
@@ -177,13 +178,114 @@ def check_models[dtype: DType](X: NDArray[dtype], probe: NDArray[dtype], path: S
     assert_equal(oas_restored.score(X), refit.score(X))
 
 
+def check_robust[dtype: DType](X: NDArray[dtype], probe: NDArray[dtype], path: String) raises:
+    comptime MCDSchema = MinCovDetSchema[dtype]
+    comptime EnvelopeSchema = EllipticEnvelopeSchema[dtype]
+    var mcd = MinCovDet[dtype](store_precision=False, support_fraction=0.75, random_state=0)
+    var empty_mcd = roundtrip[MCDSchema](mcd, path)
+    assert_false(empty_mcd.__sklearn_is_fitted__())
+    assert_equal(empty_mcd.support_fraction.value(), 0.75)
+    assert_equal(empty_mcd.random_state.value(), 0)
+    with assert_raises():
+        _ = empty_mcd.mahalanobis(probe)
+
+    _ = mcd.fit(X)
+    _ = mcd.set_params(store_precision=True, assume_centered=True, support_fraction=0.9)
+    var restored_mcd = roundtrip[MCDSchema](mcd, path)
+    assert_true(restored_mcd.store_precision)
+    assert_true(restored_mcd.assume_centered)
+    assert_equal(restored_mcd.support_fraction.value(), 0.9)
+    assert_false(Bool(restored_mcd.precision_()))
+    assert_equal(restored_mcd.n_features_in_(), X.shape[1])
+    inference(
+        "mcd", restored_mcd.score(probe), mcd.score(probe),
+        restored_mcd.mahalanobis(probe), mcd.mahalanobis(probe), probe.shape[0],
+    )
+    emit("mcd_raw_location", restored_mcd.raw_location_())
+    emit("mcd_raw_covariance", restored_mcd.raw_covariance_())
+    emit("mcd_raw_support", restored_mcd.raw_support_())
+    emit("mcd_support", restored_mcd.support_())
+    emit("mcd_dist", restored_mcd.dist_())
+    _ = restored_mcd.correct_covariance(X)
+    _ = mcd.correct_covariance(X)
+    _ = restored_mcd.reweight_covariance(X)
+    _ = mcd.reweight_covariance(X)
+    assert_true(dumps(MCDSchema.encode(restored_mcd)) == dumps(MCDSchema.encode(mcd)))
+    assert_true(Bool(restored_mcd.precision_()))
+
+    var envelope = EllipticEnvelope[dtype](contamination=0.2)
+    var empty_envelope = roundtrip[EnvelopeSchema](envelope, path)
+    assert_false(empty_envelope.__sklearn_is_fitted__())
+    assert_false(Bool(empty_envelope.random_state))
+    assert_false(Bool(empty_envelope.support_fraction))
+    with assert_raises():
+        _ = empty_envelope.predict(probe)
+    with assert_raises():
+        _ = empty_envelope.offset_()
+
+    _ = envelope.set_params(random_state=0)
+    _ = envelope.fit(X)
+    _ = envelope.set_params(contamination=0.4, store_precision=False)
+    var restored_envelope = roundtrip[EnvelopeSchema](envelope, path)
+    assert_equal(restored_envelope.contamination, 0.4)
+    assert_false(restored_envelope.store_precision)
+    assert_true(Bool(restored_envelope.precision_()))
+    assert_equal(restored_envelope.offset_(), envelope.offset_())
+    var labels = restored_envelope.predict(probe)
+    var decisions = restored_envelope.decision_function(probe)
+    var expected_labels = envelope.predict(probe)
+    var expected_decisions = envelope.decision_function(probe)
+    for i in range(probe.shape[0]):
+        assert_equal(labels.item(i), expected_labels.item(i))
+        assert_equal(decisions.item(i), expected_decisions.item(i))
+    emit_scalar("envelope_offset", restored_envelope.offset_())
+    emit("envelope_predict", labels)
+    emit("envelope_decision", decisions)
+    emit("envelope_score_samples", restored_envelope.score_samples(probe))
+    emit("envelope_mahalanobis", restored_envelope.mahalanobis(probe))
+
+
+def invalid_robust_archive(X: NDArray[DType.float32]) raises:
+    comptime Schema = MinCovDetSchema[DType.float32]
+    var model = MinCovDet[DType.float32](random_state=0)
+    _ = model.fit(X)
+    var archive = Schema.encode(model)
+    with assert_raises():
+        _ = EllipticEnvelopeSchema[DType.float32].decode(archive)
+    for ref payload in archive.payloads:
+        if payload.name == "raw_support_":
+            payload.data[0] = 2
+    with assert_raises():
+        _ = Schema.decode(archive)
+
+    archive = Schema.encode(model)
+    for ref payload in archive.payloads:
+        if payload.name == "dist_":
+            payload.shape = [1, X.shape[0]]
+    with assert_raises():
+        _ = Schema.decode(archive)
+
+    model._fit.robust = None
+    with assert_raises():
+        _ = Schema.encode(model)
+
+    var envelope = EllipticEnvelope[DType.float32](random_state=0)
+    _ = envelope.fit(X)
+    envelope._offset = nan[DType.float64]()
+    with assert_raises():
+        _ = EllipticEnvelopeSchema[DType.float32].encode(envelope)
+
+
 def run_case[dtype: DType](mut tokens: Tokens, path: String) raises:
     var X = tokens.matrix[dtype]()
     var probe = tokens.matrix[dtype]()
+    var robust_X = tokens.matrix[dtype]()
     check_models(X, probe, path)
+    check_robust(robust_X, probe, path)
     comptime if dtype == DType.float32:
         strided_state(rebind[NDArray[DType.float32]](X))
         invalid_archives(rebind[NDArray[DType.float32]](X^))
+        invalid_robust_archive(rebind[NDArray[DType.float32]](robust_X^))
 
 
 def main() raises:

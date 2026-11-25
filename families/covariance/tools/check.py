@@ -5,7 +5,8 @@ ROOT=Path(__file__).resolve().parents[1]
 MOXIE=ROOT.parents[1]
 ASSEMBLY=MOXIE/'shared/assembly'
 ALGORITHMS = ('empirical', 'shrinkage', 'robust', 'graphical')
-SCHEMAS = {'EmpiricalCovarianceSchema', 'ShrunkCovarianceSchema', 'LedoitWolfSchema', 'OASSchema'}
+SCHEMAS = {'EmpiricalCovarianceSchema', 'ShrunkCovarianceSchema', 'LedoitWolfSchema', 'OASSchema',
+           'MinCovDetSchema', 'EllipticEnvelopeSchema'}
 CONSUMERS=[ROOT/'tests/consumers'/n for n in ('a','b')]
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 def environment(c):

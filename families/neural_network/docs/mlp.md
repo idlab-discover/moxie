@@ -25,6 +25,19 @@ and scores weighted or unweighted accuracy. Its binary probability result has
 two columns, including the one-class case supported by scikit-learn.
 Multiclass probability columns follow the learned class order.
 
+For multilabel classification, pass a dense integer matrix of zeros and ones
+with at least two columns. Each column represents a label, and `classes_()`
+returns the column indices in order. All columns remain part of the class
+domain even when a batch has no positive entries for a label. Each column
+uses a logistic output. `predict_proba` returns the independent positive
+class probabilities, and `predict_log_proba` returns their logs. `predict`
+returns an indicator matrix in `label_dtype`, using a strict threshold of 0.5.
+`score` uses subset accuracy, so a row counts as correct only when every
+indicator agrees. A single-column target uses the single-label contract.
+The native interface uses integer indicators of the declared label dtype,
+including for predictions and column indices. Choose a label dtype wide
+enough to represent those indices.
+
 Use `MLPClassifier[dtype, label_dtype]` or `MLPRegressor[dtype]` to specialize
 the input dtype. Defaults are Float64 features and Int64 classifier labels.
 Features are finite rank-2 NuMojo arrays. Regression targets and sample weights
@@ -97,9 +110,10 @@ fit, where pinned scikit-learn requires history from a prior stochastic fit.
 Set `early_stopping=True` with SGD or Adam. The validation set takes
 `ceil(validation_fraction * n_samples)` rows from the same RNG stream used for
 initialization and minibatch shuffling. One-output classifiers stratify by
-class. Multiclass classifiers and regressors use an unstratified split. Sample
-weights follow their rows and apply to both the training objective and the
-validation score. The split requires at least two validation rows.
+class. Multiclass and multilabel classifiers and regressors use an
+unstratified split. Sample weights follow their rows and apply to both the
+training objective and the validation score. The split requires at least two
+validation rows.
 
 After each epoch, the trainer records the held-out accuracy or R². Patience
 uses `tol` and `n_iter_no_change`, including the adaptive SGD rate reduction.
@@ -130,9 +144,15 @@ used to create it. A fresh ordinary fit starts a new optimizer and history.
 
 When updating an unfitted classifier, pass the full class domain as a
 nonempty rank-1 array of the label dtype. The method sorts and deduplicates it.
-Later batches may contain a subset of those classes. If supplied again, the
-class domain must match. When `warm_start=True`, each incremental batch must contain
-the full class domain, as in scikit-learn.
+Later single-label batches may contain a subset of those classes. If supplied
+again, the class domain must match. When `warm_start=True`, each single-label
+incremental batch must contain the full class domain, as in scikit-learn.
+
+For multilabel `partial_fit`, the first class domain must contain the indicator
+column indices, `0` through `n_outputs - 1`. The pinned scikit-learn requires
+the argument on the first call and derives the domain from the matrix.
+Moxie also checks that the supplied values agree with that domain. Every
+incremental or warm-start batch retains the same indicator width and target kind.
 
 ```mojo
 var classifier = MLPClassifier(solver="sgd", random_state=42)
@@ -154,6 +174,5 @@ incremental contract limits every successful call to one stochastic epoch.
 Continuing a fit requires the same input width, hidden topology, output shape
 and output activation. Start a fresh ordinary fit to change these boundaries.
 
-Multilabel classification remains open.
 Ordinary supervised, weighted and probability traits remain available for
 typed pipelines and dense CV.

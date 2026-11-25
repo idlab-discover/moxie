@@ -17,7 +17,7 @@ missing files and conflicting ownership. The `mlp` target compiles only the
 public ordinary-fit, warm-start and validation-stopping MLP tests and their directly affected
 compositions.
 The `mlp-incremental` target compiles the public incremental trait and error
-contracts and tests 160 successive estimator snapshots, including updates
+contracts and tests 200 successive estimator snapshots, including updates
 after ordinary fit. It checks the next draw of explicit RNG streams,
 class domains and missing classes, and runs the public comparison below.
 
@@ -26,10 +26,10 @@ Numerical comparisons run original method bodies from local scikit-learn revisio
 with complete RNG state, six public RBM lifecycle workloads, three Float64
 incremental workloads, 32 MLP initialization/packing cases, 40 MLP
 forward/gradient fixtures, 76 L-BFGS fixtures and 200 stochastic training
-snapshots, plus 72 public estimator fits, 216 warm-start snapshots, 48
-validation-stopping fits and 160 incremental sequence snapshots. The validation
+snapshots, plus 84 public estimator fits, 252 warm-start snapshots, 56
+validation-stopping fits and 200 incremental sequence snapshots. The validation
 fixtures use the pinned shuffle splitters and cover weighted and unweighted
-binary, one-class and multiclass classification, squared-error single- and
+binary, one-class, multiclass and multilabel classification, squared-error single- and
 multi-output regression, Poisson regression and adaptive SGD. They compare
 validation history and the restored parameters.
 The public comparison checks parameters, probabilities, predictions, weighted

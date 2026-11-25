@@ -3,7 +3,7 @@
 from numojo import NDArray, Shape, zeros
 from moxie._random import RandomState
 from moxie.neural_network import MLPClassifier, MLPRegressor
-from mlp_dump import emit, emit_model
+from mlp_dump import emit, emit_model, indicators
 
 
 def data[dtype: DType](step: Int) raises -> Tuple[NDArray[dtype], NDArray[dtype]]:
@@ -25,18 +25,22 @@ def classifier[dtype: DType](solver: String, explicit: Bool, count: Int) raises:
         learning_rate="adaptive" if explicit else "invscaling", learning_rate_init=0.03,
         tol=10.0, n_iter_no_change=1,
     )
-    var domain = zeros[DType.int64](Shape(count))
-    for index in range(count):
-        domain.unsafe_set(index, Int64(3 * (count - index - 1) - 4))
+    var domain = zeros[DType.int64](Shape(3 if count == 0 else count))
+    for index in range(domain.size):
+        domain.unsafe_set(index, Int64(2 - index if count == 0 else 3 * (count - index - 1) - 4))
     for step in range(5):
         var batch = data[dtype](step)
         ref X = batch[0]
         ref weights = batch[1]
-        var y = zeros[DType.int64](Shape(X.shape[0]))
-        for row in range(y.size):
-            # The first seeded batch omits the final declared class.
-            var present = count - 1 if step == 0 and not explicit else count
-            y.unsafe_set(row, Int64(3 * ((row + step) % present) - 4))
+        var y: NDArray[DType.int64]
+        if count == 0:
+            y = indicators(X.shape[0], step)
+        else:
+            y = zeros[DType.int64](Shape(X.shape[0]))
+            for row in range(y.size):
+                # The first seeded batch omits the final declared class.
+                var present = count - 1 if step == 0 and not explicit else count
+                y.unsafe_set(row, Int64(3 * ((row + step) % present) - 4))
         if explicit:
             if step == 0:
                 _ = clf.fit(X, y, rng, sample_weight=weights)
@@ -110,7 +114,7 @@ def regressor[dtype: DType](solver: String, explicit: Bool, poisson: Bool) raise
 def cases[dtype: DType]() raises:
     for solver in ["sgd", "adam"]:
         for explicit in [False, True]:
-            for count in [2, 3]:
+            for count in [0, 2, 3]:
                 classifier[dtype](solver, explicit, count)
             for poisson in [False, True]:
                 regressor[dtype](solver, explicit, poisson)

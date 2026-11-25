@@ -464,7 +464,17 @@ struct Forest[
         scorer.n_outputs_ = self.n_outputs_
         return scorer._score(prediction, y, sample_weight)
 
-comptime RandomForestClassifier[multi_output: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False] = Forest[True, False, multi_output, label_dtype, string_labels]
+comptime RandomForestClassifier[
+    multi_output: Bool = False,
+    label_dtype: DType = DType.float64,
+    string_labels: Bool = False,
+    feature_dtype: DType = DType.float32,
+] = Forest[True, False, multi_output, label_dtype, string_labels, feature_dtype]
 comptime RandomForestRegressor[feature_dtype: DType = DType.float32] = Forest[False, feature_dtype=feature_dtype]
-comptime ExtraTreesClassifier[multi_output: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False] = Forest[True, True, multi_output, label_dtype, string_labels]
-comptime ExtraTreesRegressor = Forest[False, True]
+comptime ExtraTreesClassifier[
+    multi_output: Bool = False,
+    label_dtype: DType = DType.float64,
+    string_labels: Bool = False,
+    feature_dtype: DType = DType.float32,
+] = Forest[True, True, multi_output, label_dtype, string_labels, feature_dtype]
+comptime ExtraTreesRegressor[feature_dtype: DType = DType.float32] = Forest[False, True, feature_dtype=feature_dtype]

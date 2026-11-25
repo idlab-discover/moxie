@@ -5,6 +5,9 @@ import warnings
 import numpy as np
 import sklearn
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier, ExtraTreesRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from forest_parity import make_data, bits
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,34 +19,62 @@ def main():
     configurations = []
     for cls in (RandomForestClassifier, ExtraTreesClassifier, RandomForestRegressor, ExtraTreesRegressor):
         classifier = cls in (RandomForestClassifier, ExtraTreesClassifier)
-        configurations.extend((cls, classifier, variant) for variant in range(5))
-    for index, (cls, classifier, variant) in enumerate(configurations):
+        configurations.extend((cls, classifier, variant, np.float32, False) for variant in range(5))
+    configurations += [(cls, classifier, variant, np.float64, False)
+                       for cls, classifier, variant, _, _ in configurations]
+    configurations += [(RandomForestClassifier, True, 0, np.float64, True),
+                       (RandomForestRegressor, False, 4, np.float64, True)]
+    fits = 0
+    for index, (cls, classifier, variant, dtype, pipeline) in enumerate(configurations):
+        fixture_index = index % 20
         extra = cls in (ExtraTreesClassifier, ExtraTreesRegressor)
         spec = {'weights': variant in (2, 3), 'nan': variant == 4}
         if classifier:
             spec['classes'] = [2, 2] if variant == 3 else [2 if variant == 2 else 3]
         elif variant == 3:
             spec['outputs'] = 2
-        X, y, w, Q = make_data(index, spec)
+        X, y, w, Q = make_data(fixture_index, spec)
+        if dtype == np.float64:
+            # Perturb the source beyond Float32 precision while keeping the
+            # rounded tree inputs identical to the original fixture.
+            X, Q = (a.astype(dtype) * (1 + 2 ** -30) for a in (X, Q))
         criterion = ('entropy' if variant == 1 else 'gini') if classifier else ('absolute_error' if variant == 1 else 'squared_error')
         cw = ('dict' if variant == 2 else 'balanced_subsample' if variant == 3 else 'none') if classifier else 'none'
         bootstrap = not extra or variant >= 2
         oob = bootstrap
-        grow = 11 if variant == 4 else 0
-        params = dict(n_estimators=7, criterion=criterion, bootstrap=bootstrap, oob_score=oob, random_state=41+index)
+        grow = 11 if variant == 4 and not pipeline else 0
+        seed = 41 + fixture_index
+        params = dict(n_estimators=7, criterion=criterion, bootstrap=bootstrap, oob_score=oob, random_state=seed)
         if classifier:
             params['class_weight'] = {-3: 2.5, 7: .5} if cw == 'dict' else None if cw == 'none' else cw
         model = cls(**params)
         outputs = 1 if y.ndim == 1 else y.shape[1]
-        commands += [' '.join(map(str, [index, int(classifier), int(extra), len(X), X.shape[1], outputs, len(Q), 7, criterion, int(bootstrap), int(oob), 41+index, cw, grow])),
-                     'X '+bits(X, np.float32), 'Y '+bits(y), 'Q '+bits(Q, np.float32), 'W '+('none' if w is None else bits(w))]
+        header = (
+            index, int(classifier), int(extra), len(X), X.shape[1], outputs, len(Q),
+            7, criterion, int(bootstrap), int(oob), seed, cw, grow,
+            np.dtype(dtype).itemsize * 8, 'pipeline' if pipeline else 'forest',
+        )
+        commands.extend([
+            ' '.join(map(str, header)), 'X ' + bits(X, dtype), 'Y ' + bits(y),
+            'Q ' + bits(Q, dtype), 'W ' + ('none' if w is None else bits(w)),
+        ])
         expected.append(('CASE', str(index)))
-        for phase in range(2 if grow else 1):
-            if phase:
-                model.set_params(n_estimators=grow, warm_start=True)
+        if pipeline:
+            transformer = StandardScaler() if classifier else SimpleImputer()
+            pipe = make_pipeline(transformer, model)
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                model.fit(X, y, sample_weight=w)
+                pipe.fit(X, y)
+            expected.extend([('PIPE_PRED', pipe.predict(Q)), ('PIPE_SCORE', pipe.score(X, y))])
+            X, Q = transformer.transform(X), transformer.transform(Q)
+        for phase in range(2 if grow else 1):
+            fits += 1
+            if phase:
+                model.set_params(n_estimators=grow, warm_start=True)
+            if not pipeline:
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    model.fit(X, y, sample_weight=w)
             pred = model.predict(Q)
             expected.append(('SHAPE', f'{pred.ndim} {len(Q)} {outputs} {X.shape[1]}'))
             expected.extend([('PRED', pred), ('IMP', model.feature_importances_), ('SCORE', model.score(X, y)), ('APPLY', model.apply(Q))])
@@ -82,17 +113,21 @@ def main():
             continue
         if tag in ('APPLY', 'SAMPLES'):
             actual = np.fromstring(payload, dtype=np.int64, sep=' ')
-        elif tag in ('SCORE', 'OOB'):
+        elif tag in ('SCORE', 'OOB', 'PIPE_SCORE'):
             actual = np.array([float(payload)])
         else:
             actual = np.fromstring(payload, dtype=np.int64, sep=' ').view(np.float64)
         want = np.asarray(want).ravel()
-        if tag in ('IMP', 'SCORE', 'OOB', 'LOG'):
+        if tag in ('IMP', 'SCORE', 'OOB', 'LOG', 'PIPE_SCORE'):
             # Tree impurity ulps and libm log/score summation order differ.
             np.testing.assert_allclose(actual, want, rtol=1e-12, atol=1e-14, equal_nan=True, err_msg=f'{case} {tag}')
         else:
             np.testing.assert_array_equal(actual, want, err_msg=f'{case} {tag}')
-    print(f'PASS public forests: {len(configurations)} configurations, 24 fits; labels, shapes, predictions, probabilities, leaves and bootstrap rows exact')
+    print(
+        f'PASS public forests: {len(configurations)} Float32/Float64 configurations, '
+        f'{fits} fits, including two Float64 pipelines; labels, shapes, predictions, '
+        'probabilities, leaves and bootstrap rows exact'
+    )
 
 
 if __name__ == '__main__':

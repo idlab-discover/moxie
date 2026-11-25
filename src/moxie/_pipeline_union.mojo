@@ -326,7 +326,10 @@ def _validate_union(names: List[String], n_jobs: Optional[Int], weights: UnionWe
                 raise Error("ValueError: weight names must belong to transformer_list")
 
 
-struct FeatureUnion[B: UnionBranches](TransformerMixin, FitTransformer, UnsupervisedEstimator, UnionFeatureNames, UnionInputFeatures):
+struct FeatureUnion[B: UnionBranches](
+    TransformerMixin, FitTransformer, UnsupervisedEstimator,
+    UnionFeatureNames, UnionInputFeatures, InputFeatureCount,
+):
     comptime Input = NDArray[Self.B.dtype]
     comptime Target = Self.Input
     comptime Transformed = Self.Input
@@ -370,6 +373,8 @@ struct FeatureUnion[B: UnionBranches](TransformerMixin, FitTransformer, Unsuperv
         return self.transformer_list.__sklearn_is_fitted__()
     def n_features_in_(self) raises -> Int:
         return self.transformer_list.input_feature_count()
+    def get_n_features_in(self) raises -> Int:
+        return self.n_features_in_()
     def _validate(self, X: Self.Input) raises:
         _validate_union(self.transformer_list.names(), self.n_jobs, self.transformer_weights)
         if X.ndim != 2:

@@ -11,7 +11,7 @@ from moxie._feature_metadata import InputFeatureCount
 from moxie.frozen import FrozenEstimator
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.preprocessing import StandardScaler
-from moxie.pipeline import Pipeline, FeatureUnion, union_step
+from moxie.pipeline import Pipeline, FeatureUnion, make_pipeline, union_step
 from moxie.compose import ColumnTransformer, ColumnEntry
 from moxie.model_selection import (
     CVAdapter, TypedScorer, IndexArray, IndexSplit, KFold, cross_val_score,
@@ -197,6 +197,37 @@ def frozen_pipeline_final() raises:
     assert_same(pipe.predict_proba(X), reference.predict_proba(scaled))
 
 
+def input_width[E: InputFeatureCount](estimator: E) raises -> Int:
+    return estimator.get_n_features_in()
+
+
+def frozen_composition_width() raises:
+    var X = dataset(26, 0.0)
+    var y = labels(26)
+    var wider = nm.zeros[DType.float64](nm.Shape(26, 4))
+    var pipe = make_pipeline(StandardScaler(), LDA())
+    var unfitted_pipe = FrozenEstimator(clone(pipe))
+    with assert_raises():
+        _ = input_width(unfitted_pipe)
+    _ = pipe.fit(X, y)
+    var frozen_pipe = FrozenEstimator(pipe^)
+    _ = frozen_pipe.fit(wider, y)
+    var pipeline_width = input_width(clone(frozen_pipe))
+    assert_equal(pipeline_width, 2)
+
+    var union = FeatureUnion(union_step[DType.float64]("scale", StandardScaler()))
+    var unfitted_union = FrozenEstimator(clone(union))
+    with assert_raises():
+        _ = input_width(unfitted_union)
+    _ = union.fit(wider)
+    _ = union.fit(X)
+    var frozen_union = FrozenEstimator(union^)
+    _ = frozen_union.fit(wider)
+    var union_width = input_width(clone(frozen_union))
+    assert_equal(union_width, 2)
+    print("composition_width", pipeline_width, union_width)
+
+
 def kfold_splits(n: Int) raises -> List[IndexSplit]:
     var cursor = KFold(n_splits=3).split(n)
     var splits = List[IndexSplit]()
@@ -275,6 +306,7 @@ def main() raises:
     frozen_classifier()
     frozen_pipeline_prefix()
     frozen_pipeline_final()
+    frozen_composition_width()
     frozen_cross_validation()
     frozen_union_and_columns()
     frozen_float32()

@@ -74,6 +74,11 @@ also rejected. This is deliberately stricter than Python's mutable
 | `FeatureNamesOut` (`moxie._feature_metadata`) | `get_feature_names_out(input_features=None)`, so `Pipeline.get_feature_names_out` works through a frozen step |
 | `InputFeatureCount` | `get_n_features_in()`, the native counterpart of delegated `n_features_in_` |
 
+Wrapped `Pipeline` and `FeatureUnion` instances expose the first child's input
+width through `get_n_features_in()`. The query uses the child's learned state.
+`tests/frozen/compare_composition_width.py` compares both widths exactly against
+a build of the pinned scikit-learn revision after frozen fit and clone.
+
 Each capability is conditional on the wrapped type's trait conformance. Missing
 capabilities fail compilation, and configuration-dependent errors from supported
 methods propagate unchanged. Associated result types, shapes, and dtypes are

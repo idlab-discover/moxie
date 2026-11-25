@@ -137,7 +137,9 @@ branch, not the first active one. Estimators opt into `UnionInputFeatures` with
 `n_features_in_(self) raises -> Int`, or implement the shared
 `InputFeatureCount.get_n_features_in` contract. `ColumnTransformer` supports
 feature names and counts directly in a union. No duplicate feature-count state is stored
-in the union. A first dropped branch, an unfitted passthrough, or an estimator
+in the union. `FeatureUnion.get_n_features_in()` exposes the same query through
+`InputFeatureCount`, including when a union is wrapped by `FrozenEstimator`.
+A first dropped branch, an unfitted passthrough, or an estimator
 without this capability raises. The method form and optional capability traits
 are explicit Mojo adaptations; a family may provide a thin forwarding adapter.
 Dense arrays carry no string column metadata, so `feature_names_in_` is absent.

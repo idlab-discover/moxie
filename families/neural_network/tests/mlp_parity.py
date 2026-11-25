@@ -36,6 +36,10 @@ def load_reference():
     return module
 
 
+def indicators(rows, step=0):
+    return ((rows[:, None] + step) >> np.arange(3)) & 1
+
+
 def fixtures(module, warm_start, early_stopping):
     rows = np.arange(8)
     for dtype in (np.float32, np.float64):
@@ -55,9 +59,9 @@ def fixtures(module, warm_start, early_stopping):
                         tol=0.01, n_iter_no_change=2,
                         learning_rate="adaptive" if weighted else "constant",
                     )
-                for classes in (1, 2, 3):
-                    y = 3 * (rows % classes) - 4
-                    yield module.MLPClassifier(**params), X, y[:, None], weights, weighted, True
+                for classes in (0, 1, 2, 3):
+                    y = indicators(rows) if classes == 0 else (3 * (rows % classes) - 4)[:, None]
+                    yield module.MLPClassifier(**params), X, y, weights, weighted, True
                 for kind in range(3):
                     y = 1 + X[:, 0] - X[:, 1]
                     if kind == 1:

@@ -10,11 +10,7 @@ from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
 
 
-def pipelines() raises:
-    var X = arange[DType.float32](24).reshape(Shape(12, 2))
-    var y = zeros[DType.int64](Shape(12))
-    for row in range(y.size):
-        y.unsafe_set(row, Int64(row % 3))
+def pipelines(X: NDArray[DType.float32], y: NDArray[DType.int64]) raises:
     var model = MLPClassifier[DType.float32]([4], solver="lbfgs", random_state=1, max_iter=4)
     var pipe = make_pipeline(StandardScaler[DType.float32](), clone(model))
     assert_equal(pipe.transformer_name, "standardscaler")
@@ -27,6 +23,7 @@ def pipelines() raises:
     assert_equal(actual.shape, expected.shape)
     for i in range(actual.size):
         assert_equal(actual.unsafe_get(i), expected.unsafe_get(i))
+    assert_equal(pipe.predict(X).shape, y.shape)
     assert_equal(pipe.score(X, y), model.score(X_scaled, y))
     assert_equal(pipe.n_features_in_(), 2)
     var fresh = clone(pipe)
@@ -55,6 +52,14 @@ def cross_validation() raises:
 
 
 def main() raises:
-    pipelines()
+    var X = arange[DType.float32](24).reshape(Shape(12, 2))
+    var labels = zeros[DType.int64](Shape(12))
+    var indicators = zeros[DType.int64](Shape(12, 2))
+    for row in range(12):
+        labels.unsafe_set(row, Int64(row % 3))
+        indicators.unsafe_set(2 * row, Int64(row % 2 == 0))
+        indicators.unsafe_set(2 * row + 1, Int64(row % 3 == 0))
+    pipelines(X, labels)
+    pipelines(X, indicators)
     cross_validation()
     print("PASS StandardScaler MLP pipeline, clone and weighted MLP cross-validation")

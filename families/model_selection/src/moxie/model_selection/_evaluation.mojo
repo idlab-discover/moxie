@@ -1,5 +1,7 @@
 """Estimator-independent lifecycle seam; no CV evaluation engine."""
-from moxie.base import BaseEstimator, SupervisedScorer, clone
+from moxie.base import BaseEstimator, Predictor, SupervisedScorer, clone
+from numojo import Item, NDArray
+from std.math import isfinite
 
 trait TypedScorer(Movable, Deinitable):
     comptime Estimator: BaseEstimator & Deinitable
@@ -39,6 +41,81 @@ struct EstimatorScore[
             rebind[Self.E.Target](y),
             rebind[Optional[Self.E.SampleWeight]](metadata),
         )
+
+
+def _dense_prediction[E: Predictor, X: Movable, dtype: DType](
+    estimator: E, X_test: X,
+) raises -> NDArray[dtype]:
+    comptime assert E.Prediction == NDArray[dtype], (
+        "Supply a prediction function when predict does not return the scorer's NDArray type"
+    )
+    return rebind_var[NDArray[dtype]](estimator.predict(rebind[E.Input](X_test)))
+
+
+struct NegMeanSquaredError[
+    E: Predictor & Deinitable,
+    XType: Movable & Deinitable,
+    dtype: DType = DType.float64,
+    predict: def(E, XType) thin raises -> NDArray[dtype] = _dense_prediction[E, XType, dtype],
+](TypedScorer, Copyable):
+    """Score dense regression predictions with negated, uniform-average MSE."""
+
+    comptime Estimator = Self.E
+    comptime Input = Self.XType
+    comptime Target = NDArray[Self.dtype]
+    comptime Metadata = Optional[Self.Target]
+
+    def __init__(out self):
+        comptime assert Self.Input == Self.E.Input, "Input must match the estimator"
+        comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, (
+            "Expected Float32 or Float64 targets and predictions"
+        )
+
+    def __init__(out self, *, copy: Self):
+        pass
+
+    def score(
+        self, estimator: Self.Estimator, X: Self.Input,
+        y: Self.Target, metadata: Self.Metadata,
+    ) raises -> Float64:
+        var predicted = Self.predict(estimator, X)
+        if y.ndim < 1 or y.ndim > 2 or predicted.ndim < 1 or predicted.ndim > 2:
+            raise Error("ValueError: expected vector or matrix regression targets and predictions")
+        var rows = y.shape[0]
+        var outputs = 1 if y.ndim == 1 else y.shape[1]
+        var predicted_outputs = 1 if predicted.ndim == 1 else predicted.shape[1]
+        if rows == 0 or outputs == 0 or rows != predicted.shape[0] or outputs != predicted_outputs:
+            raise Error("ValueError: expected matching nonempty regression targets and predictions")
+
+        var weight_sum = Float64(rows)
+        if metadata:
+            ref weights = metadata.value()
+            if weights.ndim != 1 or weights.shape[0] != rows:
+                raise Error("ValueError: expected one sample weight per row")
+            weight_sum = 0.0
+            for row in range(rows):
+                var weight = weights[Item(row)]
+                if not isfinite(weight):
+                    raise Error("ValueError: sample weights must be finite")
+                weight_sum += Float64(weight)
+            if weight_sum == 0.0:
+                raise Error("ZeroDivisionError: weights sum to zero")
+
+        var loss: Float64 = 0.0
+        for output in range(outputs):
+            var squared_error: Float64 = 0.0
+            for row in range(rows):
+                var observed = y[Item(row)] if y.ndim == 1 else y[Item(row, output)]
+                var estimate = predicted[Item(row)] if predicted.ndim == 1 else predicted[Item(row, output)]
+                if not isfinite(observed) or not isfinite(estimate):
+                    raise Error("ValueError: regression targets and predictions must be finite")
+                var residual = observed - estimate
+                var term = residual * residual
+                if metadata:
+                    term *= metadata.value()[Item(row)]
+                squared_error += Float64(term)
+            loss += squared_error / weight_sum
+        return -(loss / Float64(outputs))
 
 
 trait FitAdapter(Movable):

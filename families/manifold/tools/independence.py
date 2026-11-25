@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory(prefix='moxie-manifold-independent-') as folder
     isolated = Path(folder)
     shutil.copytree(ROOT / 'builds/deps', isolated / 'deps')
     assert not any(p.is_symlink() for p in (isolated / 'deps').rglob('*'))
-    for name in ('classical_mds', 'trustworthiness', 'deferred'):
+    for name in ('classical_mds', 'trustworthiness', 'spectral'):
         source = isolated / (name + '.mojo')
         shutil.copy2(ROOT / 'tests' / ('test_' + name + '.mojo'), source)
         binary = isolated / name

@@ -1,6 +1,7 @@
 # manifold family interfaces
 
-Moxie owns ClassicalMDS, trustworthiness and the manifold capability contracts.
+Moxie owns dense TSNE, Isomap, MDS, SMACOF, LLE, ClassicalMDS, trustworthiness,
+and the manifold capability contracts.
 It uses scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 Read [the shared contract](../../../docs/interfaces.md) for typed parameter records,
 in-place fit, associated array types, and other Mojo-specific differences.
@@ -49,5 +50,5 @@ The extension and ownership contract is [plumbing.md](plumbing.md); the authoriz
 exclusions and required explicit dense settings are [scope.md](scope.md).
 The verified public reference roster is the ten exports in sklearn.manifold's
 `__all__`, including ClassicalMDS, smacof, locally_linear_embedding,
-spectral_embedding and trustworthiness. ClassicalMDS and trustworthiness are
-implemented; the remaining algorithm exports raise explicit unsupported errors.
+spectral_embedding and trustworthiness. See [dense spectral embedding](spectral.md)
+for the supported affinities and solver.

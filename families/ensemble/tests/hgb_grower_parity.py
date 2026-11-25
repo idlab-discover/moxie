@@ -1,15 +1,24 @@
-"""Compare complete binned trees and predictions against the pinned grower."""
+"""Compare complete trees and binned and raw predictions against sklearn."""
 from itertools import product
 from pathlib import Path
 import subprocess
 
 import numpy as np
+import sklearn
 from sklearn.ensemble._hist_gradient_boosting.grower import TreeGrower
 
 from hgb_splitting_parity import bits64
 
 
 BUILDS = Path(__file__).resolve().parents[1] / "builds"
+
+
+def thresholds_for_feature(count, categorical):
+    if not categorical:
+        return np.arange(count - 1, dtype=np.float64) * 0.375 - 2.75
+    if count < 200:
+        return np.linspace(2, 254, count, dtype=int).astype(np.float64)
+    return np.arange(count, dtype=np.float64)
 
 
 def make_case(
@@ -41,12 +50,32 @@ def make_case(
         shrinkage=shrinkage, n_threads=1,
     )
     grower.grow()
-    thresholds = [
-        np.arange(count if cat else max(0, count - 1), dtype=np.float64)
-        for count, cat in zip(counts, categorical)
-    ]
+    thresholds = [thresholds_for_feature(count, cat) for count, cat in zip(counts, categorical)]
     predictor = grower.make_predictor(thresholds)
     predictions = predictor.predict_binned(query, n_bins - 1, n_threads=1)
+
+    raw_query = np.empty(query.shape)
+    known_bitsets = np.zeros((np.count_nonzero(categorical), 8), dtype=np.uint32)
+    feature_map = np.zeros(n_features, dtype=np.uint32)
+    cat_index = 0
+    for feature, (count, cat, edges) in enumerate(zip(counts, categorical, thresholds)):
+        if cat:
+            feature_map[feature] = cat_index
+            for code in edges.astype(int):
+                known_bitsets[cat_index, code // 32] |= np.uint32(1 << (code % 32))
+            cat_index += 1
+        for row, code in enumerate(query[:, feature]):
+            if code == n_bins - 1:
+                value = [np.nan, -1.0, 255.0][row % 3] if cat else np.nan
+            elif cat:
+                value = edges[code] if code < count else 0.0
+            elif code >= len(edges):
+                value = [-np.inf, np.inf, 1e301][row % 3]
+            else:
+                value = [edges[code], np.nextafter(edges[code], np.inf),
+                         np.nextafter(edges[code], -np.inf)][row % 3]
+            raw_query[row, feature] = value
+    raw_predictions = predictor.predict(raw_query, known_bitsets, feature_map, n_threads=1)
 
     expected = [[grower.n_nodes, len(grower.finalized_leaves)]]
     remaining = [grower.root]
@@ -68,6 +97,7 @@ def make_case(
             remaining.extend((node.right_child, node.left_child))
     expected.extend([int(row)] for row in grower.splitter.partition)
     expected.extend([value] for value in bits64(predictions))
+    expected.extend([value] for value in bits64(raw_predictions))
 
     fields = [
         n_rows, n_features, n_bins, int(unit_hessian), max_leaves or 0, max_depth or 0,
@@ -80,6 +110,9 @@ def make_case(
     if not unit_hessian:
         fields.extend(hessians.view(np.int32))
     fields.extend(query.ravel())
+    for edges in thresholds:
+        fields.extend(bits64(edges))
+    fields.extend(bits64(raw_query.ravel()))
     return " ".join(map(str, fields)), expected, (grower.n_nodes, categorical_splits, n_rows, len(query))
 
 
@@ -160,6 +193,7 @@ def generated_cases():
 
 
 def main():
+    assert Path(sklearn.__file__).resolve().is_relative_to(BUILDS / "oracle-env")
     cases = [*targeted_cases(), *generated_cases()]
     fixtures = BUILDS / "hgb_grower_fixtures.txt"
     fixtures.write_text("".join(f"{case[0]}\n" for _, case in cases))
@@ -178,7 +212,8 @@ def main():
     nodes, cat, positions, predictions = map(sum, zip(*(case[2] for _, case in cases)))
     print(
         f"hgb grower parity: {len(cases)} cases, {nodes} nodes ({cat} categorical splits), "
-        f"{positions} partition positions and {predictions} binned predictions matched bit for bit"
+        f"{positions} partition positions, {predictions} binned predictions and "
+        f"{predictions} raw predictions matched bit for bit"
     )
 
 

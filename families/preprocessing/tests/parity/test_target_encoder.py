@@ -19,7 +19,8 @@ import numpy as np
 from harness import Driver, oracle
 
 oracle()
-from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn import config_context
+from sklearn.model_selection import GroupKFold, KFold, StratifiedGroupKFold, StratifiedKFold
 from sklearn.preprocessing import TargetEncoder
 
 warnings.simplefilter('ignore')
@@ -35,7 +36,7 @@ def expect(case, name, value, kind='array'):
 d.prelude('''
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import seed_global_random_state, RandomState
-from moxie.model_selection import IndexSplit, KFold, StratifiedKFold
+from moxie.model_selection import GroupKFold, IndexSplit, KFold, SplitLabels, StratifiedGroupKFold, StratifiedKFold
 from moxie.preprocessing._vocabulary import CategoryKind, StringKind, StringNaNKind, NumericKind
 from moxie.preprocessing._label import LabelKind, StringLabels, NumericLabels
 from moxie.preprocessing._target_encoder import kfold_test_folds, stratified_kfold_test_folds
@@ -182,7 +183,7 @@ def native_args(kind, kw):
         if k == 'categories':
             rows = ', '.join('[' + ', '.join(mojo_value(kind, x) for x in cats) + ']' for cats in v)
             parts.append(f'categories=Optional[List[List[Optional[{DOMAIN_T[kind]}]]]]([{rows}])')
-        elif k == 'cv' and isinstance(v, (KFold, StratifiedKFold)):
+        elif k == 'cv' and isinstance(v, (KFold, StratifiedKFold, GroupKFold, StratifiedGroupKFold)):
             shuffle = 'True' if v.shuffle else 'False'
             parts.append(f'cv={type(v).__name__}({v.n_splits}, shuffle={shuffle}, random_state={v.random_state})')
         elif k == 'cv' and isinstance(v, list):
@@ -211,7 +212,13 @@ def text(v):
     return str(v)
 
 
-def run_case(tag, kind, y, kw, *, column_y=False, global_seed=None, test=True):
+def grouped_fit_transform(encoder, X, y, groups):
+    with config_context(enable_metadata_routing=True):
+        encoder.cv.set_split_request(groups=True)
+        return encoder.fit_transform(X, y, groups=groups)
+
+
+def run_case(tag, kind, y, kw, *, column_y=False, global_seed=None, test=True, groups=None):
     Xtr, Xte = DATA[kind]
     label_kind, y_expr = target(y.reshape(-1, 1) if column_y else y)
     native = f'TargetEncoder[{KIND[kind]}, {label_kind}]'
@@ -222,8 +229,15 @@ def run_case(tag, kind, y, kw, *, column_y=False, global_seed=None, test=True):
         body.append(f'seed_global_random_state({global_seed})')
         np.random.seed(global_seed)
     ref = TargetEncoder(**sklearn_kw(kind, kw))
-    expected = ref.fit_transform(Xtr, y.reshape(-1, 1) if column_y else y)
-    body += ['emit("fit", enc.fit_transform(Xtr, y))',
+    y_ref = y.reshape(-1, 1) if column_y else y
+    native_groups = ''
+    if groups is None:
+        expected = ref.fit_transform(Xtr, y_ref)
+    else:
+        group_expr = d.strings(groups.tolist()) if groups.dtype.kind == 'U' else d.input(groups)
+        native_groups = f', groups=SplitLabels({group_expr})'
+        expected = grouped_fit_transform(ref, Xtr, y_ref, groups)
+    body += [f'emit("fit", enc.fit_transform(Xtr, y{native_groups}))',
              'for k in range(len(enc.encodings_)):\n    emit("enc_" + String(k), enc.encodings_[k])',
              'emit("mean", enc.target_mean_)',
              'emit_names("type", [enc.target_type_])',
@@ -291,6 +305,17 @@ run_case('explicit_kfold', 's', y_cont, dict(cv=KFold(4, shuffle=True, random_st
 run_case('explicit_kfold_binary', 's', y_bin, dict(cv=KFold(4), shuffle=True, random_state=42))
 run_case('explicit_stratified', 's', y_multi_s, dict(cv=StratifiedKFold(4, shuffle=True, random_state=42)))
 run_case('explicit_stratified_global', 's', y_bin, dict(cv=StratifiedKFold(4, shuffle=True)), global_seed=42)
+group_ids = np.arange(n, dtype=np.int64) % 9
+group_names = np.asarray([f'team-{i}' for i in group_ids])
+run_case('group_kfold_int', 's', y_cont, dict(cv=GroupKFold(4)), groups=group_ids)
+run_case('group_kfold_shuffled', 's', y_cont,
+         dict(cv=GroupKFold(4, shuffle=True, random_state=42)), groups=group_names)
+run_case('group_kfold_global', 's', y_cont, dict(cv=GroupKFold(4, shuffle=True)),
+         global_seed=42, groups=group_names)
+run_case('stratified_group_kfold', 's', y_multi_s, dict(cv=StratifiedGroupKFold(4)),
+         groups=group_ids)
+run_case('stratified_group_kfold_shuffled', 's', y_bin, dict(cv=StratifiedGroupKFold(4, shuffle=True, random_state=42)),
+         groups=group_names)
 test_parts = [np.arange(start, n, 3, dtype=np.int64)[::-1] for start in range(3)]
 custom_cv = [
     (np.resize(test_parts[(i + 1) % 3][::2], 13), test)
@@ -408,6 +433,20 @@ for tag, splits in [
            f'var enc = TargetEncoder({native_args("s", dict(cv=splits))})\n'
            f'_ = enc.fit_transform(X, {d.input(y_cont)})')
     expect(f'err_{tag}', 'error', 'must cover each sample index exactly once', 'error')
+
+for tag, splitter, groups, needle in [
+    ('group_missing', GroupKFold(4), None, 'groups are required'),
+    ('group_length', GroupKFold(4), group_ids[:-1], 'matching length'),
+    ('group_count', GroupKFold(4), group_ids % 2, 'exceeds group count'),
+    ('group_target', StratifiedGroupKFold(4), group_ids, 'Supported target types'),
+]:
+    sk_raises(lambda: grouped_fit_transform(TargetEncoder(cv=splitter), S, y_cont, groups))
+    native_groups = '' if groups is None else f', groups=SplitLabels({d.input(groups)})'
+    d.case(f'err_{tag}',
+           f'var X: List[CategoricalColumn[StringCategories]] = {columns("s", S)}\n'
+           f'var enc = TargetEncoder({native_args("s", dict(cv=splitter))})\n'
+           f'_ = enc.fit_transform(X, {d.input(y_cont)}{native_groups})')
+    expect(f'err_{tag}', 'error', needle, 'error')
 
 out = d.run(imports='from moxie.preprocessing import TargetEncoder, TargetEncoderSplits')
 

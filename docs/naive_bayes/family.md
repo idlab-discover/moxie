@@ -63,11 +63,12 @@ strided views, for
 `fit`, `partial_fit`, prediction and `score`. sklearn's array-valued `alpha` is
 the native keyword `alpha_values`, an owned `(n_features,)` Float64 NDArray
 that takes precedence over scalar `alpha`; `set_params(alpha=...)` clears it.
-Their `class_count_` `(C,)`, `feature_count_` and `feature_log_prob_` `(C,F)`
-and ComplementNB's `feature_all_` `(F,)` are Float64 NDArrays, read with
-`.item(...)`. `class_log_prior_` is a List. For NDArray queries, the probability,
-log probability and joint log probability methods return Float64 NDArrays of
-shape `(n_samples, n_classes)`, including for Float32 and integer features.
+Their `class_count_` and `class_log_prior_` have shape `(C,)`. The
+`feature_count_` and `feature_log_prob_` arrays have shape `(C,F)`, and
+ComplementNB's `feature_all_` has shape `(F,)`. Read these Float64 NDArrays with
+`.item(...)`. For NDArray queries, the probability, log probability and joint log
+probability methods return Float64 NDArrays of shape `(n_samples, n_classes)`,
+including for Float32 and integer features.
 List queries return nested Lists and are converted to dense arrays internally.
 
 `BernoulliNB` (implemented in `moxie._nb_bernoulli`) accepts boolean, integer
@@ -78,11 +79,11 @@ The default target domain uses List[Int]; fit and partial_fit accept a Float64
 scalar or List[Float64] weights. Pass `sample_weight=weights.copy()` for a List
 on array overloads.
 
-Bernoulli learned `class_count_` `(C,)`, `feature_count_` `(C,F)`, and
-`feature_log_prob_` `(C,F)` are now Float64 NDArrays for both input interfaces;
-use `.item(c)` or `.item(c, f)` instead of nested List indexing. `class_log_prior_`
-remains a List. The constructor and `BernoulliNBParams` also accept
-`alpha_values`, an owned rank-one Float64 NDArray of length `n_features`.
+Bernoulli learned `class_count_` and `class_log_prior_` are Float64 NDArrays of
+shape `(C,)`. Its `feature_count_` and `feature_log_prob_` have shape `(C,F)`
+and the same dtype. Use `.item(c)` or `.item(c, f)` with either input interface.
+The constructor and `BernoulliNBParams` also accept `alpha_values`, an owned
+rank-one Float64 NDArray of length `n_features`.
 It takes precedence over scalar `alpha`; `set_params(alpha=...)` clears it.
 Clone, copy and parameter records own independent vector storage. The original
 five positional `BernoulliNBParams` arguments remain valid; the optional vector
@@ -139,9 +140,10 @@ configured minimum); previously allocated category buffers do not shrink.
 `CategoricalNB` accepts boolean, integer and Float32/Float64 NDArray features
 for fitting, incremental
 updates, prediction and scoring, including strided views. List features remain
-supported. Its `class_count_` is a Float64 NDArray `(n_classes,)`; category counts
-and feature log probabilities use one independently owned Float64 array per
-feature. `n_categories_` and `class_log_prior_` remain Lists. Array probability
+supported. Its `class_count_` and `class_log_prior_` are Float64 NDArrays of shape
+`(n_classes,)`. Category counts and feature log probabilities use one independently
+owned Float64 array per feature. `n_categories_` is an Int64 NDArray of shape
+`(n_features,)`. Read each learned vector with `.item(index)`. Array probability
 outputs are Float64 NDArrays `(n_samples, n_classes)`; List features produce List
 probabilities. Construction can raise on allocation.
 
@@ -290,9 +292,15 @@ to the same estimator, following the [shared native contract](../interfaces.md).
   the same trait) takes an explicit `CVAdapter` / `TypedScorer`; `GaussianNB` with
   `exploit_incremental_learning=True` drives `partial_fit` through an
   `IncrementalCVAdapter`. See `notebooks/naive_bayes/plot_learning_curve.ipynb`.
-- `moxie.calibration.CalibratedClassifierCV` takes a `CalibrationEstimator`
-  adapter; no adapter ships for these classifiers yet. A forwarding adapter
-  is about 40 lines (see `notebooks/naive_bayes/plot_calibration_curve.ipynb`).
+- `moxie.calibration.adapt_classifier` wraps all five default Naive Bayes
+  specializations for `CalibratedClassifierCV`. For example, use
+  `CalibratedClassifierCV(adapt_classifier(BernoulliNB()), cv=2)`.
+  The adapter accepts Float64 features and exactly representable integral
+  labels in a Float64 vector. It converts targets to the native `List[Int]`
+  domain, forwards optional weights, and uses probabilities in fitted class
+  order. Pass a fitted `FrozenEstimator` handle to calibrate on separate
+  data while preserving its fitted state.
+  See [the calibration contract](../calibration/family.md#classifier-adapter).
 
 ## Supported scope and numerical behavior
 
@@ -310,8 +318,13 @@ each batch. Negative weights raise even where sklearn accepts them. All-zero
 rejection matches the pinned reference. Explicit priors must be finite and nonnegative; Gaussian priors must also sum to one. Unknown
 incremental labels raise consistently for every model.
 
-`force_alpha=False` floors each scalar or vector alpha entry to `1e-10`; the
-floor is applied without emitting a Python-style warning. `force_alpha=True` preserves zero alpha.
+`force_alpha=False` floors each scalar or vector alpha entry to `1e-10`.
+All four discrete classifiers record one `moxie.warnings.FitWarning` in
+`fit_warnings` when an entry is floored. The record has category
+`UserWarning` and the pinned scikit-learn message. Each successful `fit` or
+`partial_fit` replaces the list. Failed calls preserve it, fitted copies own
+their records, and unfitted clones start with an empty list. Read the list on
+the fitted estimator or pipeline child. `force_alpha=True` preserves zero alpha.
 Degenerate likelihoods can consequently produce infinities or NaNs, just as
 in sklearn; these are not replaced by fabricated uniform probabilities.
 Normalization follows `scipy.special.logsumexp`: a row whose maximum is

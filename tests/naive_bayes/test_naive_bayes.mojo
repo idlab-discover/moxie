@@ -264,7 +264,7 @@ def test_counts_and_params() raises:
     assert_equal(model.class_count_.item(1), 2.0)
     assert_equal(model.feature_count_.item(1, 0), 4.0)
     assert_true(abs(exp(model.feature_log_prob_.item(1, 0)) - 5.0 / 6.0) < 1e-7)
-    assert_true(abs(exp(model.class_log_prior_[1]) - 2.0 / 3.0) < 1e-7)
+    assert_true(abs(exp(model.class_log_prior_.item(1)) - 2.0 / 3.0) < 1e-7)
     var prior: List[Float64] = [0.25, 0.75]
     var configured = MultinomialNB(class_prior=prior^)
     var params = configured.get_params()
@@ -376,8 +376,8 @@ def test_categorical_minima() raises:
     var model = CategoricalNB(min_categories_values=minima.copy(), fit_prior=False)
     minima[0] = 9
     _ = model.fit(X, y)
-    assert_equal(model.n_categories_[0], 3)
-    assert_equal(model.n_categories_[1], 4)
+    assert_equal(model.n_categories_.item(0), Int64(3))
+    assert_equal(model.n_categories_.item(1), Int64(4))
     assert_equal(model.category_count_[0].shape[1], 3)
     assert_equal(model.category_count_[1].shape[1], 4)
     var query: List[List[Float64]] = [[0.0, 3.0]]
@@ -397,13 +397,13 @@ def test_categorical_minima() raises:
     _ = model.set_params(params)
     params.min_categories_values.value()[0] = 6
     _ = model.partial_fit(X, y)
-    assert_equal(model.n_categories_[0], 5)
+    assert_equal(model.n_categories_.item(0), Int64(5))
     assert_equal(model.class_count_.item(0), 4.0)
     # Smaller per-batch minima do not discard earlier category counts.
     var smaller: List[Int] = [0, 2]
     _ = model.set_params(min_categories_values=Optional[Optional[List[Int]]](smaller.copy()))
     _ = model.partial_fit(X, y)
-    assert_equal(model.n_categories_[0], 2)
+    assert_equal(model.n_categories_.item(0), Int64(2))
     assert_equal(model.category_count_[0].shape[1], 5)
     _ = model.fit(X, y)
     assert_equal(model.category_count_[0].shape[1], 2)
@@ -422,19 +422,19 @@ def test_categorical_minima() raises:
     _ = model.set_params(min_categories=Optional[Optional[Int]](6))
     assert_false(Bool(model.min_categories_values))
     _ = model.fit(X, y)
-    assert_equal(model.n_categories_[0], 6)
-    assert_equal(model.n_categories_[1], 6)
+    assert_equal(model.n_categories_.item(0), Int64(6))
+    assert_equal(model.n_categories_.item(1), Int64(6))
     _ = model.set_params(min_categories=Optional[Optional[Int]](Optional[Int](None)))
     _ = model.fit(X, y)
-    assert_equal(model.n_categories_[0], 2)
+    assert_equal(model.n_categories_.item(0), Int64(2))
     # A vector supplied alongside a scalar has precedence.
     _ = model.set_params(min_categories=Optional[Optional[Int]](10),
                      min_categories_values=Optional[Optional[List[Int]]](smaller.copy()))
     _ = model.fit(X, y)
-    assert_equal(model.n_categories_[0], 2)
+    assert_equal(model.n_categories_.item(0), Int64(2))
     _ = model.set_params(min_categories_values=Optional[Optional[List[Int]]](Optional[List[Int]](None)))
     _ = model.fit(X, y)
-    assert_equal(model.n_categories_[0], 10)
+    assert_equal(model.n_categories_.item(0), Int64(10))
 
 
 def main() raises:

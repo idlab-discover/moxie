@@ -1,8 +1,9 @@
 # Adapted from scikit-learn; authors: scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
-"""Dense Gaussian process classification with a binary Laplace posterior."""
+"""Dense Gaussian process classification with independent Laplace posteriors."""
 
 from numojo import NDArray, Shape, zeros
+from std.math import abs
 from std.sys import stderr
 
 from moxie._labels import encode_column
@@ -21,7 +22,7 @@ from ._laplace import (
 )
 from ._optimization import LBFGSBOptimizer, check_restart_bounds, restart_initial_theta, select_best
 from ._plumbing import Dense64, LatentMoments, OptimizationResult, validate_likelihood
-from .kernels import Kernel
+from .kernels import CompoundKernel, Kernel
 
 
 @fieldwise_init
@@ -127,10 +128,121 @@ def _fit_binary(
     return _BinaryPosterior(objective^, mode^, value, warnings^)
 
 
+def _fit_pair(
+    X: Dense64,
+    first: List[Int],
+    second: List[Int],
+    kernel: Kernel,
+    params: GaussianProcessClassifierParams,
+) raises -> _BinaryPosterior:
+    # Merge the two sorted row lists to preserve the original training order.
+    var size = len(first) + len(second)
+    var rows = List[Int](capacity=size)
+    var target = zeros[DType.float64](Shape(size, 1))
+    var i = 0
+    var j = 0
+    while i < len(first) or j < len(second):
+        if j == len(second) or (i < len(first) and first[i] < second[j]):
+            rows.append(first[i])
+            i += 1
+        else:
+            target.unsafe_set(len(rows), 1.0)
+            rows.append(second[j])
+            j += 1
+    return _fit_binary(X[rows], target^, kernel.copy(), params)
+
+
+@fieldwise_init
+struct _ClassifierPosterior(Copyable, Movable):
+    """Snapshot of the fitted binary components in classification order."""
+
+    var estimators_: List[_BinaryPosterior]
+    var one_vs_one: Bool
+    var value: Float64
+    var warnings: List[String]
+
+    def kernel_(self) raises -> Kernel:
+        if len(self.estimators_) == 1:
+            return self.estimators_[0].kernel_()
+        var kernels = List[Kernel](capacity=len(self.estimators_))
+        for estimator in self.estimators_:
+            kernels.append(estimator.kernel_())
+        return CompoundKernel(kernels^)
+
+    def likelihood(
+        mut self, theta: Dense64, eval_gradient: Bool, clone_kernel: Bool
+    ) raises -> LikelihoodResult:
+        var count = len(self.estimators_)
+        if count == 1:
+            return self.estimators_[0].likelihood(theta, eval_gradient, clone_kernel)
+        if eval_gradient:
+            raise Error("NotImplementedError: likelihood gradients require binary classification")
+        var width = self.estimators_[0].objective.kernel.n_dims()
+        if theta.ndim != 1 or (theta.size != width and theta.size != count * width):
+            raise Error("ValueError: theta must contain log parameters for one or all components")
+        var trials = List[Kernel](capacity=count if not clone_kernel else 0)
+        var total: Float64 = 0.0
+        for i in range(count):
+            ref objective = self.estimators_[i].objective
+            var coordinates = (
+                theta.copy()
+                if theta.size == width
+                else theta[Slice(i * width, (i + 1) * width)]
+            )
+            var trial = objective.kernel.clone_with_theta(coordinates)
+            total += objective.likelihood(trial, False).value
+            if not clone_kernel:
+                trials.append(trial^)
+        for i in range(len(trials)):
+            self.estimators_[i].objective.kernel = trials[i].copy()
+        return LikelihoodResult(total / Float64(count), None)
+
+    def rest_probabilities(self, mut X: Dense64) raises -> Dense64:
+        var rows = X.shape[0]
+        var count = len(self.estimators_)
+        var probabilities = zeros[DType.float64](Shape(rows, count))
+        for c in range(count):
+            var latent = self.estimators_[c].latent_mean_and_variance(X.view())
+            for i in range(rows):
+                probabilities.unsafe_set(
+                    i * count + c,
+                    _positive_probability(
+                        latent.mean.unsafe_get(i), latent.variance.unsafe_get(i)
+                    ),
+                )
+        return probabilities^
+
+    def pair_scores(self, mut X: Dense64, classes: Int) raises -> Dense64:
+        var rows = X.shape[0]
+        var votes = zeros[DType.float64](Shape(rows, classes))
+        var confidence = zeros[DType.float64](Shape(rows, classes))
+        var k = 0
+        for first in range(classes):
+            for second in range(first + 1, classes):
+                var latent = self.estimators_[k].latent_mean_and_variance(X.view())
+                for i in range(rows):
+                    var mean = latent.mean.unsafe_get(i)
+                    var p = _positive_probability(mean, latent.variance.unsafe_get(i))
+                    var left = i * classes + first
+                    var right = i * classes + second
+                    var winner = right if mean > 0.0 else left
+                    votes.unsafe_set(winner, votes.unsafe_get(winner) + 1.0)
+                    confidence.unsafe_set(left, confidence.unsafe_get(left) - p)
+                    confidence.unsafe_set(right, confidence.unsafe_get(right) + p)
+                k += 1
+        for i in range(votes.size):
+            # This bounded transform breaks ties without overturning a vote.
+            var total = confidence.unsafe_get(i)
+            votes.unsafe_set(
+                i, votes.unsafe_get(i) + total / (3.0 * (abs(total) + 1.0))
+            )
+        return votes^
+
+
 struct GaussianProcessClassifier[
     dtype: DType = DType.float64, label: DType = DType.int64
 ](Copyable, GaussianProcessClassifierAPI):
-    """Dense binary Gaussian process classification using a Laplace approximation."""
+    """Dense binary, one-vs-rest and one-vs-one Gaussian process classification."""
 
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label]
@@ -140,7 +252,7 @@ struct GaussianProcessClassifier[
     comptime Params = GaussianProcessClassifierParams
 
     var _params: Self.Params
-    var _posterior: Optional[_BinaryPosterior]
+    var _posterior: Optional[_ClassifierPosterior]
     var _classes: Self.Target
     var n_features_in_: Int
 
@@ -270,10 +382,11 @@ struct GaussianProcessClassifier[
         if y.size != dense.shape[0]:
             raise Error("ValueError: X and y have different numbers of samples")
         var encoding = encode_column(y)
-        if encoding.classes.size < 2:
+        var classes = encoding.classes.size
+        if classes < 2:
             raise Error("ValueError: GaussianProcessClassifier requires at least two classes")
-        if encoding.classes.size > 2:
-            raise Error("ValueError: this GaussianProcessClassifier supports two classes per fit")
+        if classes > 2 and self._params.n_jobs.or_else(1) == 0:
+            raise Error("ValueError: n_jobs cannot be zero for multiclass classification")
         var kernel = _prior_kernel()
         if self._params.kernel:
             kernel = self._params.kernel.value().copy()
@@ -281,13 +394,41 @@ struct GaussianProcessClassifier[
             raise Error("ValueError: kernel cannot be a CompoundKernel")
 
         var features = dense.shape[1]
-        var target = zeros[DType.float64](Shape(y.size, 1))
-        for i in range(y.size):
-            target.unsafe_set(i, Float64(encoding.index.inverse.unsafe_get(i)))
-        var posterior = _fit_binary(dense^, target^, kernel^, self._params)
-        for warning in posterior.warnings:
+        ref codes = encoding.index.inverse
+        var one_vs_one = classes > 2 and self._params.multi_class == "one_vs_one"
+        var estimators = List[_BinaryPosterior]()
+        if one_vs_one:
+            var class_rows = List[List[Int]](length=classes, fill=List[Int]())
+            for i in range(codes.size):
+                class_rows[Int(codes.unsafe_get(i))].append(i)
+            for first in range(classes):
+                for second in range(first + 1, classes):
+                    estimators.append(
+                        _fit_pair(
+                            dense, class_rows[first], class_rows[second], kernel, self._params
+                        )
+                    )
+        else:
+            # The owned feature snapshot is shared internally by OvR components.
+            for c in range(1 if classes == 2 else classes):
+                var positive = Int64(1 if classes == 2 else c)
+                var target = zeros[DType.float64](Shape(y.size, 1))
+                for i in range(y.size):
+                    target.unsafe_set(i, Float64(codes.unsafe_get(i) == positive))
+                estimators.append(
+                    _fit_binary(dense.view(), target^, kernel.copy(), self._params)
+                )
+
+        var value: Float64 = 0.0
+        var warnings = List[String]()
+        for estimator in estimators:
+            value += estimator.value
+            for warning in estimator.warnings:
+                warnings.append(warning.copy())
+        for warning in warnings:
             print(warning, file=stderr)
-        self._posterior = posterior^
+        value /= Float64(len(estimators))
+        self._posterior = _ClassifierPosterior(estimators^, one_vs_one, value, warnings^)
         self._classes = encoding.classes.copy()
         self.n_features_in_ = features
         return self
@@ -300,8 +441,8 @@ struct GaussianProcessClassifier[
         self._require_fitted()
         return self._classes.size
 
-    def base_estimator_(self) raises -> _BinaryPosterior:
-        """An independent snapshot of the fitted binary component."""
+    def base_estimator_(self) raises -> _ClassifierPosterior:
+        """An independent snapshot with the fitted components in estimators_."""
         self._require_fitted()
         return self._posterior.value().copy()
 
@@ -317,7 +458,7 @@ struct GaussianProcessClassifier[
         mut self, theta: Optional[Dense64] = None,
         eval_gradient: Bool = False, clone_kernel: Bool = True,
     ) raises -> LikelihoodResult:
-        """Compute the cached evidence or evaluate an explicit log-theta vector."""
+        """Return evidence at fit or at explicit log theta, averaged for multiclass."""
         self._require_fitted()
         ref posterior = self._posterior.value()
         validate_likelihood(Bool(theta), eval_gradient)
@@ -326,22 +467,60 @@ struct GaussianProcessClassifier[
         return LikelihoodResult(posterior.value, None)
 
     def latent_mean_and_variance(self, X: Self.Input) raises -> LatentMoments:
-        """Return Float64 latent mean and variance vectors in query row order."""
+        """Return Float64 latent mean and variance vectors for a binary fit."""
         var query = self._query(X)
-        return self._posterior.value().latent_mean_and_variance(query^)
+        if self._classes.size != 2:
+            raise Error("ValueError: latent mean and variance require binary classification")
+        return self._posterior.value().estimators_[0].latent_mean_and_variance(query^)
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         var query = self._query(X)
-        var mean = self._posterior.value().posterior_mean(query^)
-        var prediction = zeros[Self.label](Shape(mean.size))
-        for i in range(mean.size):
-            var code = Int(mean.unsafe_get(i) > 0.0)
-            prediction.unsafe_set(i, self._classes.unsafe_get(code))
+        ref posterior = self._posterior.value()
+        var classes = self._classes.size
+        var rows = query.shape[0]
+        var prediction = zeros[Self.label](Shape(rows))
+        if classes == 2:
+            var mean = posterior.estimators_[0].posterior_mean(query^)
+            for i in range(rows):
+                var code = Int(mean.unsafe_get(i) > 0.0)
+                prediction.unsafe_set(i, self._classes.unsafe_get(code))
+            return prediction^
+
+        var scores = (
+            posterior.pair_scores(query, classes)
+            if posterior.one_vs_one
+            else posterior.rest_probabilities(query)
+        )
+        for i in range(rows):
+            var best = 0
+            for c in range(1, classes):
+                if scores.unsafe_get(i * classes + c) > scores.unsafe_get(i * classes + best):
+                    best = c
+            prediction.unsafe_set(i, self._classes.unsafe_get(best))
         return prediction^
 
     def predict_proba(self, X: Self.Input) raises -> Self.Probabilities:
-        """Return two Float64 columns in sorted class order."""
-        var latent = self.latent_mean_and_variance(X)
+        """Return Float64 probabilities in sorted class order for binary and OvR fits."""
+        var query = self._query(X)
+        ref posterior = self._posterior.value()
+        if posterior.one_vs_one:
+            raise Error(
+                "ValueError: one_vs_one multi-class mode does not support predicting probability estimates"
+            )
+        var classes = self._classes.size
+        if classes > 2:
+            var probabilities = posterior.rest_probabilities(query)
+            for i in range(query.shape[0]):
+                var total: Float64 = 0.0
+                for c in range(classes):
+                    total += probabilities.unsafe_get(i * classes + c)
+                if total != 0.0:
+                    for c in range(classes):
+                        var position = i * classes + c
+                        probabilities.unsafe_set(position, probabilities.unsafe_get(position) / total)
+            return probabilities^
+
+        var latent = posterior.estimators_[0].latent_mean_and_variance(query^)
         var probabilities = zeros[DType.float64](Shape(latent.mean.size, 2))
         for i in range(latent.mean.size):
             var p = _positive_probability(latent.mean.unsafe_get(i), latent.variance.unsafe_get(i))

@@ -188,7 +188,7 @@ methods, curves and native SVG displays. Its retired sibling is not a build
 dependency.
 
 [Gaussian processes](gaussian_process/README.md) now live in `src/moxie/gaussian_process/`,
-including dense regression, binary classification and kernels.
+including dense regression, classification and kernels.
 The retired sibling is not a build dependency; the dedicated GP linalg worktree
 and external optimizer remain explicit numerical dependencies.
 

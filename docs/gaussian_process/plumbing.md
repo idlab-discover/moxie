@@ -1,17 +1,15 @@
 # Gaussian-process shared plumbing
 
 The family supplies contracts and validation/retention helpers, with dense
-kernels and GaussianProcessRegressor implemented by the owners below. Root
-assembly includes these implementations. GaussianProcessClassifier remains
-unimplemented; sklearn's private binary Laplace class is not an additional public
-estimator. See [API coverage](api-surface.md) for remaining differences.
+kernels, GaussianProcessRegressor and GaussianProcessClassifier implemented by
+the owners below. Root assembly includes these implementations. See
+[API coverage](api-surface.md) for remaining differences.
 
 ## Owners and dependencies
 
 Moxie owns all modules under `src/moxie/gaussian_process/`: the `_base`
 capability contracts, `_plumbing` records and validators, `kernels`, `_gpr`,
-and private algebra, mathematical and optimizer adapters. Classification is
-unimplemented. No `_gpc` estimator is exported.
+`_gpc` and private Laplace, algebra, mathematical and optimizer adapters.
 
 General factorizations and special functions remain in the dedicated
 `../.worktrees/mojo-linalg-gaussian_process` library checkout, assembled as
@@ -160,8 +158,8 @@ For t>1 targets: mean/std `(n,t)`, covariance `(n,n,t)`, samples `(n,t,s)`;
 for a single target outputs squeeze to `(n,)`, `(n,n)`, `(n,s)` even if fit y
 had shape `(n,1)`. Sample axis is last. R2 scoring uses uniform target averaging.
 
-See the [binary classification API](classification/api.md) for the implemented
-subset of the GPC contract below.
+See the [classification API](classification/api.md) for the binary and
+multiclass contracts.
 
 GPC defaults: kernel=None, optimizer="fmin_l_bfgs_b", n_restarts_optimizer=0,
 max_iter_predict=100, warm_start=False, copy_X_train=True, random_state=None,

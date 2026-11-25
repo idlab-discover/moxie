@@ -1,6 +1,7 @@
-# Dense binary Gaussian process classification
+# Dense Gaussian process classification
 
-`GaussianProcessClassifier` uses a Laplace approximation for two classes.
+`GaussianProcessClassifier` fits binary Laplace posteriors for binary and
+multiclass classification.
 It accepts a nonempty, finite rank-two NuMojo `NDArray` of Float64 features by
 default. Use `GaussianProcessClassifier[DType.float32]` for Float32 features.
 Targets are rank-one or single-column Int64 arrays by default. The second
@@ -29,15 +30,16 @@ stream or shared default stream. Restarts follow the pinned sklearn
 classifier's exponentiation of sampled log bounds before the optimizer call.
 `max_iter_predict` limits Newton iterations. `warm_start` reuses the previous
 mode within a fit and between likelihood evaluations of a fitted component.
-A new public fit always creates a fresh component.
+A new public fit always creates fresh components.
 
-- `predict` uses the sign of the posterior latent mean. An exact zero selects
-  the first class.
-- `predict_proba` integrates the latent Gaussian with sklearn's five-term
-  error-function approximation and returns Float64 `(n_queries, 2)`. At zero
-  latent variance, it evaluates the finite limit of that approximation.
-- `latent_mean_and_variance` returns `LatentMoments` with two Float64
-  `(n_queries,)` arrays.
+- For two classes, `predict` uses the sign of the posterior latent mean. An
+  exact zero selects the first class.
+- For two classes, `predict_proba` integrates the latent Gaussian with
+  sklearn's five-term error-function approximation and returns Float64
+  `(n_queries, 2)`. At zero latent variance, it evaluates the finite limit
+  of that approximation.
+- For two classes, `latent_mean_and_variance` returns `LatentMoments` with
+  two Float64 `(n_queries,)` arrays.
 - `log_marginal_likelihood` returns a `LikelihoodResult` with a cached value
   when theta is omitted, or a value and optional analytic gradient at supplied
   log theta. `clone_kernel=False` updates the learned kernel's theta. Cached
@@ -45,7 +47,9 @@ A new public fit always creates a fresh component.
 - `score` computes accuracy, optionally with a Float64 weight vector.
 - `classes_()`, `n_classes_()`, `kernel_()` and
   `log_marginal_likelihood_value_()` read fitted metadata. `base_estimator_()`
-  returns an independent snapshot of the fitted binary component.
+  returns an independent snapshot. Its `estimators_` list has one member for
+  a binary fit, one per sorted class for OvR, or one per sorted class pair
+  for OvO.
   `n_features_in_` records the number of columns seen at fit.
 
 Both `copy_X_train` settings take an independent training snapshot, and
@@ -56,9 +60,28 @@ For example, `model.set_params(optimizer=Optional[String]())` disables
 optimization. `clone(model)` copies only configuration, while `model.copy()`
 copies fitted state. Inference requires a successful fit.
 
-Current scope is binary classification. Both sklearn `multi_class` values
-and `n_jobs` are accepted as configuration, and two-class fits use the same
-serial binary solver. Multiclass OvR and OvO are remaining work.
+## Multiclass fits
+
+`multi_class="one_vs_rest"` (the default) fits one binary classifier per
+class. `predict` selects the largest positive-class probability, breaking
+ties by sorted class order. `predict_proba` normalizes those probabilities
+by row and returns Float64 `(n_queries, n_classes)`.
+
+`multi_class="one_vs_one"` fits one classifier per sorted class pair.
+`predict` counts binary votes and uses summed positive-class probabilities
+to break ties as sklearn does. Calling `predict_proba` raises for a multiclass
+OvO fit. Both strategies use a single binary component when there are exactly
+two classes. `n_jobs` is accepted and component fits run serially. A value
+of zero raises for multiclass fits.
+
+Multiclass `kernel_()` returns a `CompoundKernel` with the component kernels
+in fit order. The log marginal likelihood is the mean of the component
+values. Supply a shared log-theta vector or concatenate a vector per
+component. For OvO with four or more classes, the concatenation has one block
+per pair. The pinned sklearn implementation checks for one block per class,
+which cannot represent all fitted pairs. Multiclass likelihood gradients and
+latent moments raise. Changing `multi_class` through `set_params` takes
+effect on the next successful fit.
 
 ## Numerical implementation
 
@@ -78,11 +101,11 @@ apply diagonal scaling and fuse reductions using Float64.
 
 The implementation follows [GPML chapter 3](https://gaussianprocess.org/gpml/chapters/RW3.pdf)
 and [chapter 5](https://gaussianprocess.org/gpml/chapters/RW5.pdf). The
-classification parity script executes pinned sklearn's GPC and kernel source
-with installed support modules and SciPy. It exercises Float32/Float64,
-fixed and optimized theta, seeded restarts, and a one-step Newton limit with
-warm-start enabled and disabled. Tolerances account for Float32 kernel
-arithmetic and stopping decisions in the reference optimizer.
+classification parity script executes pinned sklearn's GPC, kernel and
+multiclass source with installed support modules and SciPy. It exercises Float32/Float64,
+binary, OvR and OvO fits, fixed and optimized theta, seeded restarts, and a
+one-step Newton limit with warm-start enabled and disabled. Tolerances account
+for Float32 kernel arithmetic and stopping decisions in the reference optimizer.
 
 Run `python tools/gaussian_process_checks.py classification` in the locked
 environment to assemble live sources, compile the two classification probes,

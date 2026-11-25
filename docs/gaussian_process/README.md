@@ -25,7 +25,10 @@ local optima, an 80 x 80 likelihood grid, seeded restarts, `make_pipeline`,
 `cross_val_score`, `GridSearchCV` and `clone`.
 [Periodic regression](../../notebooks/gaussian_process/plot_compare_gpr_krr.ipynb)
 compares periodic and locally periodic extrapolation, posterior uncertainty,
-and fitted hyperparameters against the pinned reference. Rerun the notebooks with
+and fitted hyperparameters against the pinned reference.
+[Noisy targets](../../notebooks/gaussian_process/plot_gpr_noisy_targets.ipynb)
+compares noise-free and noisy fits with known observation variance, seeded
+optimizer restarts, and pointwise 95% posterior intervals. Rerun the notebooks with
 `pixi run -e notebooks notebooks notebooks/gaussian_process`. Ill-posed fits
 (RationalQuadratic with `alpha` bounds up to 1e15, DotProduct**2 with a rank-3
 covariance) end at different L-BFGS-B points in Moxie and sklearn because

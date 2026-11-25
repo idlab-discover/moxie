@@ -76,7 +76,9 @@ Fit and score metadata are separate optional rank-one weight arrays. Weighted
 fit requires `WeightedSupervisedEstimator`. The configured scorer receives
 score weights.
 
-Omitting `cv` generates five unshuffled folds from the current fit data.
+Omitting `cv` generates unshuffled folds from the current fit data.
+The dense adapter defaults to five folds. Set `n_splits=` on the adapter to
+choose another count while generating fresh folds on each fit.
 Classifiers use stratification for binary and multiclass targets. An estimator
 wrapper that exposes a classifier's score without implementing `ClassifierMixin`
 can choose the classifier policy with `classifier=True`, as in the
@@ -97,8 +99,9 @@ search import is required by the validation engine. Its contracts are:
   than retaining fitted state or caller aliases.
 - `default_scorer()`, supplying the wrapped estimator's default score when
   `scoring=None`. A provided scorer can use any supported estimator capability.
-- `default_cv(X, y)`, supplying five unshuffled folds for `cv=None`: stratified
-  for binary/multiclass classification, ordinary KFold otherwise.
+- `default_cv(X, y)`, supplying unshuffled folds for `cv=None`: stratified
+  for binary/multiclass classification, ordinary KFold otherwise. The dense
+  adapter defaults to five.
 
 Search adapters and their scorers are copyable. Inputs, targets, metadata and
 estimator parameter records must be deinitializable. The wrapped estimator needs
@@ -110,7 +113,7 @@ sample-aligned weights and preserves unsliced options. Pairwise inputs require
 a pairwise-aware adapter. These responsibilities are not inferred dynamically.
 
 `cv` accepts an optional materialized `List[IndexSplit]`. Supply explicit folds
-for a different fold count, grouped, temporal or custom CV. Constructors and
+for grouped, temporal or custom CV. Constructors and
 parameter records own their indices; mutating the original arrays cannot change
 search folds. Fold order and duplicate/overlapping custom test indices are
 preserved. Fold means are unweighted even when fold sizes differ.

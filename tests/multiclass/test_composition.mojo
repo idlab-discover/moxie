@@ -1,15 +1,17 @@
-"""Multiclass wrappers around RidgeClassifier inside clone, Pipeline, CV and search."""
+"""Multiclass wrappers around RidgeClassifier and refitting tree search."""
 import numojo as nm
 from numojo import NDArray, Shape, Item
-from std.testing import assert_equal, assert_true
+from std.testing import assert_equal, assert_false, assert_raises, assert_true
 from std.utils import Variant
 from moxie.base import ClassifierMixin, Predictor, clone
 from moxie.linear_model import RidgeClassifier
 from moxie.multiclass import OneVsRestClassifier, OneVsOneClassifier, OutputCodeClassifier
 from moxie.preprocessing import StandardScaler
 from moxie.pipeline import make_pipeline
+from moxie.tree import DecisionTreeClassifier
 from moxie.model_selection import (
-    GridSearchCV, IndexArray, IndexSplit, SearchAdapter, SearchScorer, StratifiedKFold,
+    DenseSupervisedAdapter, GridSearchCV, IndexArray, IndexSplit, SearchAdapter,
+    SearchScorer, StratifiedKFold,
     cross_val_score,
 )
 from moxie.model_selection._evaluation import TypedScorer
@@ -20,6 +22,11 @@ comptime Dense = NDArray[DType.float64]
 comptime Labels = NDArray[DType.int64]
 comptime OvR = OneVsRestClassifier[RidgeClassifier[]]
 comptime OvO = OneVsOneClassifier[RidgeClassifier[]]
+comptime Tree = DecisionTreeClassifier[DType.int64]
+comptime TreeRows = DenseSupervisedAdapter[
+    Tree, Labels, DType.float32, Int, weight_dtype=DType.float64
+]
+comptime TreeSearch = GridSearchCV[TreeRows]
 
 
 def dataset() raises -> Tuple[Dense, Labels]:
@@ -147,6 +154,48 @@ def cv_scores[E: ClassifierMixin & Predictor & Deinitable](estimator: E, X: Dens
     return cross_val_score[Rows[E]](estimator, X, y, Rows[E](), Acc[E](), splits, None, None)
 
 
+def configure_depth(mut tree: Tree, values: Dict[String, Int]) raises:
+    var params = tree.get_params()
+    for entry in values.items():
+        if entry.key != "max_depth":
+            raise Error("ValueError: invalid tree parameter " + entry.key)
+        params.max_depth = entry.value
+    _ = tree.set_params(params)
+
+
+def check_nested_tree_search() raises:
+    var X = nm.zeros[DType.float32](Shape(18, 1))
+    var y = Labels(Shape(18))
+    for i in range(18):
+        X[Item(i, 0)] = Float32(i)
+        y[Item(i)] = Int64(10 + i // 6)
+
+    var grid = Dict[String, List[Int]]()
+    grid["max_depth"] = [1, 2]
+    var search = TreeSearch(
+        Tree(random_state=0), grid, TreeRows(configure_depth, n_splits=3)
+    )
+    var model = OneVsRestClassifier[TreeSearch, DType.float32](search.copy())
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict(X)
+    var predicted = model.fit(X, y).predict(X)
+    assert_false(search.__sklearn_is_fitted__())
+    assert_equal(model.score(X, y), 1.0)
+    assert_equal(len(model.estimators_), 3)
+    for i in range(y.size):
+        assert_equal(predicted[Item(i)], y[Item(i)])
+    for k in range(3):
+        ref fitted = model.estimators_[k].estimator()
+        assert_equal(fitted.n_splits_(), 3)
+        assert_equal(fitted.best_params_()["max_depth"], 2 if k == 1 else 1)
+        assert_equal(fitted.best_estimator_().get_depth(), 2 if k == 1 else 1)
+
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    _ = fresh.fit(X, y)
+    assert_same(fresh.predict_proba(X), model.predict_proba(X))
+
+
 def main() raises:
     var data = dataset()
     var X = data[0].copy()
@@ -207,4 +256,5 @@ def main() raises:
     var refit = OvO(RidgeClassifier([0.01, 10.0, 1000.0][best]))
     _ = refit.fit(X, y)
     assert_same(search.best_estimator_().decision_function(X), refit.decision_function(X))
-    print("PASS: multiclass clone, Pipeline, cross_val_score and GridSearchCV composition")
+    check_nested_tree_search()
+    print("PASS: multiclass clone, Pipeline, cross_val_score and nested GridSearchCV")

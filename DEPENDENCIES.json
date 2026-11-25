@@ -514,6 +514,9 @@
         },
         "moxie.ensemble._forest": {
           "file": "src/moxie/ensemble/_forest.mojo"
+        },
+        "moxie.ensemble._hist_gradient_boosting.binning": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/binning.mojo"
         }
       },
       "assets": {
@@ -800,7 +803,8 @@
             "StackingRegressor": "moxie.ensemble._api",
             "VotingClassifier": "moxie.ensemble._api",
             "VotingRegressor": "moxie.ensemble._api"
-          }
+          },
+          "moxie.ensemble._hist_gradient_boosting": {}
         },
         "schema": 1
       }

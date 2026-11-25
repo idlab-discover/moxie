@@ -30,6 +30,7 @@
       "StackingRegressor": "moxie.ensemble._api",
       "VotingClassifier": "moxie.ensemble._api",
       "VotingRegressor": "moxie.ensemble._api"
-    }
+    },
+    "moxie.ensemble._hist_gradient_boosting": {}
   }
 }

@@ -2,6 +2,7 @@ from std.memory import bitcast
 from std.sys import argv
 
 from moxie.ensemble._hist_gradient_boosting.binning import _BinMapper
+from moxie.ensemble._hist_gradient_boosting.feature_sampling import _FeatureSampler
 from moxie.ensemble._hist_gradient_boosting.grower import grow_tree
 from moxie.ensemble._hist_gradient_boosting.predictor import make_raw_tree
 from moxie.ensemble._hist_gradient_boosting.splitting import _SplitOptions
@@ -12,7 +13,7 @@ def as_float64(bits: Int) -> Float64:
     return bitcast[DType.float64](Int64(bits))
 
 
-def run_case(fields: List[Int]) raises:
+def run_case(fields: List[Int], mut sampler: _FeatureSampler) raises:
     var n_rows = fields[0]
     var n_features = fields[1]
     var n_bins = fields[2]
@@ -32,7 +33,11 @@ def run_case(fields: List[Int]) raises:
     var shrinkage = as_float64(fields[10])
     var n_groups = fields[11]
     var n_predict = fields[12]
-    var offset = 13
+    var seed = fields[13]
+    if seed >= 0:
+        sampler = _FeatureSampler(UInt32(seed))
+    var fraction = as_float64(fields[14])
+    var offset = 15
 
     var counts = List[UInt32](capacity=n_features)
     var categorical = List[Bool](capacity=n_features)
@@ -74,6 +79,8 @@ def run_case(fields: List[Int]) raises:
         counts,
         categorical,
         monotonic,
+        feature_sampler=sampler,
+        feature_fraction_per_split=fraction,
         interaction_groups=groups,
         max_leaf_nodes=max_leaves,
         max_depth=max_depth,
@@ -154,12 +161,18 @@ def run_case(fields: List[Int]) raises:
     for i in range(raw_predictions.size):
         print(bitcast[DType.int64](raw_predictions.unsafe_get(i)))
 
+    # Probe a copy so multi-tree cases continue with the original stream.
+    var probe = sampler.copy()
+    for selected in probe.sample_mask(65, 0.5):
+        print(Int(selected))
+
 
 def main() raises:
+    var sampler = _FeatureSampler(0)
     for line in open(argv()[1], "r").read().split("\n"):
         if line.byte_length() == 0:
             continue
         var fields = List[Int]()
         for field in line.split(" "):
             fields.append(atol(String(field)))
-        run_case(fields)
+        run_case(fields, sampler)

@@ -12,7 +12,9 @@ weighted derivatives.
 
 The splitter searches the supplied feature IDs in order. Pass an empty
 span to exclude every feature. The grower computes this span from the node's
-interaction constraints and any feature subsampling. For numeric features,
+interaction constraints. An optional boolean mask selects positions in the span
+without changing their order. An empty mask leaves every position eligible.
+For numeric features,
 the splitter scans thresholds first with missing values on the right, then
 with them on the left, keeping the first strict maximum gain. The final
 nonmissing bin can isolate missing rows. The children's bounded Newton

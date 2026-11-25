@@ -46,7 +46,7 @@ def check_array(x, **kwargs):
     return x
 
 
-def main():
+def load_reference():
     assert subprocess.check_output(['git', '-C', str(ORACLE), 'rev-parse', 'HEAD'], text=True).strip() == REVISION
     source = ORACLE / 'sklearn/model_selection/_split.py'
     assert not subprocess.check_output(['git', '-C', str(ORACLE), 'diff', 'HEAD', '--', str(source)], text=True)
@@ -91,6 +91,11 @@ def main():
         for obj in namespace[name].__dict__.values():
             if hasattr(obj, '__code__'):
                 assert obj.__code__.co_filename == str(source)
+    return namespace, source, multiclass
+
+
+def main():
+    namespace, source, multiclass = load_reference()
 
     cases = []
     def add(name, args, kwargs, n, groups=None, constructor=None, y=None):

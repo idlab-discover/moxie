@@ -89,8 +89,16 @@ Use `SplitSize(3)` for an integer count and `SplitSize(0.25)` for a fraction.
 `(X_train, X_test, y_train, y_test)`; a one-array overload returns two arrays.
 Float32/Float64 features and numeric targets retain dtype and rank (one or two),
 including strided inputs. Outputs own contiguous row copies. An overload taking
-`rng` after the input arrays advances an explicit stream. More than two arrays
-and higher-rank arrays are not yet supported.
+`rng` after the input arrays advances an explicit stream.
+
+For a collection of any size with a common dtype, call
+`train_test_split(arrays, random_state=42)` with a `List[NDArray[dtype]]`.
+This overload returns a list in sklearn's interleaved train/test order. Every
+array uses the same split and retains its own rank and column count. The
+collection must be nonempty and its sample counts must agree. Use
+`stratify=SplitLabels(labels)` to stratify the collection, or pass a mutable
+`RandomState` after the collection to advance an explicit stream. Higher-rank
+arrays are unsupported.
 
 `check_cv(None)` chooses five folds; an integer chooses that fold count.
 `classifier=True` with Int64 labels selects stratification. The result is a
@@ -131,3 +139,8 @@ reference validation errors. `type_of_target` executes from the pinned
 `sklearn/utils/multiclass.py`. Native tests cover invalid
 inputs, RNG replay/advancement, ownership, cursor exhaustion, dtype and strides.
 The required-export acceptance gate remains enabled. No performance claim is made.
+
+After building the splitter tests, run the focused collection comparison with
+`pixi run python tests/train_test_split_collection_parity.py builds/train_test_split_collection`.
+It checks exact values and shapes for ordered, shuffled and stratified splits,
+including consecutive splits from one random stream.

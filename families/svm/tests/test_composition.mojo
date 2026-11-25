@@ -1,4 +1,4 @@
-"""Kernel SVMs inside clone, Pipeline, cross_val_score and GridSearchCV.
+"""Kernel SVMs inside multiclass wrappers, Pipeline, CV and search.
 
 Each composed result is checked against the same steps fitted by hand, so the
 composition adds no behavior of its own (sklearn's Pipeline/CV/search contract).
@@ -6,8 +6,9 @@ LIBSVM fitting is deterministic without probability, so the comparisons are exac
 """
 import numojo as nm
 from numojo import NDArray, Shape, Item
-from std.testing import assert_equal, assert_true
+from std.testing import assert_equal, assert_raises, assert_true
 from moxie.base import clone
+from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OneVsRestClassifier
 from moxie.svm import SVC, SVR
 from moxie.preprocessing import StandardScaler
 from moxie.pipeline import make_pipeline
@@ -28,7 +29,7 @@ def dataset() raises -> Tuple[Dense, Labels]:
         var label = i % 3
         X[Item(i, 0)] = Float64(label) * 1.2 + Float64((i * 7) % 5) / 3
         X[Item(i, 1)] = Float64((i * 5) % 11) / 4 - Float64(label)
-        X[Item(i, 2)] = 100.0 + Float64((i * 3) % 7) * 10
+        X[Item(i, 2)] = 10.0 + Float64((i * 3) % 7)
         y.append(Float64(label * 2 - 1))
     return (X^, y^)
 
@@ -123,6 +124,60 @@ struct CSearch(SearchAdapter):
         return stratified(y)
 
 
+def check_multiclass(X: Dense, y: Labels) raises:
+    var target = IndexArray(Shape(len(y)))
+    for i in range(len(y)):
+        target[Item(i)] = Int64(y[i])
+
+    var ovr = OneVsRestClassifier(BinaryAdapter(SVC(kernel="linear")))
+    with assert_raises(contains="NotFittedError"):
+        _ = ovr.predict(X)
+    _ = ovr.fit(X, target)
+    assert_equal(len(ovr.estimators_), 3)
+    var decisions = ovr.decision_function(X)
+    assert_equal(decisions.shape, Shape(X.shape[0], 3))
+    # OvR trains one ordinary binary SVC per sorted class.
+    for column in range(3):
+        var label = Int64(2 * column - 1)
+        assert_equal(ovr.classes_[Item(column)], label)
+        var codes = Labels(capacity=len(y))
+        for actual in y:
+            codes.append(1.0 if actual == Float64(label) else 0.0)
+        var binary = SVC(kernel="linear")
+        var margins = binary.fit(X, codes).decision_function(X)
+        for i in range(len(y)):
+            assert_equal(decisions[Item(i, column)], margins[Item(i)])
+
+    var ovo = OneVsOneClassifier(BinaryAdapter(SVC(kernel="linear")))
+    _ = ovo.fit(X, target)
+    assert_equal(len(ovo.estimators_), 3)
+    assert_true(not ovo.pairwise_indices_)
+
+    # A precomputed component fits on each pair's square training submatrix.
+    var precomputed = OneVsOneClassifier(BinaryAdapter(SVC(kernel="precomputed")))
+    with assert_raises(contains="square kernel matrix"):
+        _ = precomputed.fit(X, target)
+    var train_kernel = X @ X.T()
+    _ = precomputed.fit(train_kernel, target)
+    assert_true(Bool(precomputed.pairwise_indices_))
+    ref indices = precomputed.pairwise_indices_.value()
+    assert_equal(len(indices), 3)
+    for pair in range(3):
+        assert_equal(indices[pair].size, 40)
+
+    # Queries keep one column per original training sample and can be rectangular.
+    var rows = IndexArray(Shape(7))
+    for i in range(rows.size):
+        rows[Item(i)] = Int64(i * 5)
+    var queries = _rows(X, rows)
+    var query_kernel = _rows(train_kernel, rows)
+    var expected = ovo.predict(queries)
+    var actual = precomputed.predict(query_kernel)
+    assert_equal(actual.shape, expected.shape)
+    for i in range(actual.size):
+        assert_equal(actual[Item(i)], expected[Item(i)])
+
+
 def main() raises:
     var data = dataset()
     var X = data[0].copy()
@@ -138,6 +193,12 @@ def main() raises:
     _ = copied.fit(X, y)
     assert_same(model.predict(X), copied.predict(X))
     assert_same(model.dual_coef_, copied.dual_coef_)
+    var fitted_copy = model.copy()
+    assert_true(fitted_copy.__sklearn_is_fitted__())
+    assert_same(model.predict(X), fitted_copy.predict(X))
+    var coefficient = model.dual_coef_[Item(0, 0)]
+    fitted_copy.dual_coef_[Item(0, 0)] = coefficient + 1.0
+    assert_equal(model.dual_coef_[Item(0, 0)], coefficient)
 
     # Pipeline: scaling then SVC equals the manual composition.
     var pipe = make_pipeline(StandardScaler(), SVC(C=2.0))
@@ -145,6 +206,7 @@ def main() raises:
     var scaler = StandardScaler()
     _ = scaler.fit(X)
     var Xs = scaler.transform(X)
+    check_multiclass(Xs, y)
     var manual = SVC(C=2.0)
     _ = manual.fit(Xs, y)
     assert_same(pipe.predict(X), manual.predict(Xs))
@@ -176,7 +238,7 @@ def main() raises:
     var grid = Dict[String, List[Float64]]()
     grid["C"] = cs.copy()
     var search = GridSearchCV[CSearch](SVC(), grid, CSearch(), cv=stratified(y))
-    search.fit(X, y, None, None)
+    _ = search.fit(X, y, None, None)
     var means = search.cv_results_().mean_test_score.copy()
     var best = 0
     for i in range(3):
@@ -189,7 +251,7 @@ def main() raises:
     var refit = SVC(C=cs[best])
     _ = refit.fit(X, y)
     assert_same(search.best_estimator_().predict(X), refit.predict(X))
-    print("PASS: SVC/SVR clone, Pipeline, cross_val_score and GridSearchCV composition")
+    print("PASS: SVM multiclass, clone, Pipeline, cross_val_score and GridSearchCV composition")
 
 
 def cross_val_score_svc(template: SVC[], X: Dense, y: Labels, splits: List[IndexSplit]) raises -> Dense:

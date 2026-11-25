@@ -25,6 +25,9 @@
       },
       "id": "moxie",
       "modules": {
+        "moxie._multiclass_contracts": {
+          "file": "src/moxie/_multiclass_contracts.mojo"
+        },
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },

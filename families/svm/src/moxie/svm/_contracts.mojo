@@ -70,7 +70,7 @@ struct TrainingSnapshot(Copyable, Movable):
 
 
 @fieldwise_init
-struct KernelModel(Movable):
+struct KernelModel(Copyable, Movable):
     """Owned engine result; internal LIBSVM signs, no public binary sign flip."""
     var support: Indices
     var support_vectors: Dense

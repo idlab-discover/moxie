@@ -7,6 +7,7 @@ from moxie.svm._libsvm import LibSVM
 from moxie.svm._classification import Gamma, Probability, class_scores, support_counts, linear_coefficients, public_support, checked_int32
 from moxie.svm._linear import ClassWeight, _labels, _codes, _weights, _class_weights
 from moxie.svm._base import ProbabilisticSVC, SupportVectorRegressor, OneClassSupportVector
+from moxie._multiclass_contracts import PairwiseInput
 from moxie._random import RandomState, entropy_state
 
 @fieldwise_init
@@ -28,7 +29,9 @@ struct SVCParams[Label: Copyable & Comparable & Deinitable = Float64](Copyable, 
     var random_state: Int
 
 
-struct SVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticSVC):
+struct SVC[Label: Copyable & Comparable & Deinitable = Float64](
+    ProbabilisticSVC, Copyable, PairwiseInput,
+):
     comptime Params = SVCParams[Self.Label]
     comptime Input = Dense
     comptime SampleWeight = Dense
@@ -162,6 +165,10 @@ struct SVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticSVC
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(C=self.C.copy(), kernel=self.kernel.copy(), degree=self.degree.copy(), gamma=self.gamma.copy(), coef0=self.coef0.copy(), tol=self.tol.copy(), shrinking=self.shrinking.copy(), cache_size=self.cache_size.copy(), verbose=self.verbose.copy(), max_iter=self.max_iter.copy(), probability=self.probability.copy(), class_weight=self.class_weight.copy(), decision_function_shape=self.decision_function_shape.copy(), break_ties=self.break_ties.copy(), random_state=self.random_state.copy())
+
+    def pairwise_input(self) -> Bool:
+        """Report whether composition must subset both axes of the input."""
+        return self.kernel == "precomputed"
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._model)

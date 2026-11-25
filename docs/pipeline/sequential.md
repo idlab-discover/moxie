@@ -48,7 +48,7 @@ Names are unique within each container. Names, child instances, and typed child
 parameters are available as `transformer_name`, `estimator_name`, `transformer`,
 and `estimator`. Assigning a same-type child replaces that instance, preserving
 its state; changing a static type requires constructing a new pipeline. When
-the pipeline is wrapped in `FrozenEstimator`, [positional step access](../frozen/api.md#positional-access-to-pipeline-steps)
+the pipeline is wrapped in `FrozenEstimator`, [positional and named step access](../frozen/api.md#access-to-pipeline-steps)
 borrows these same children immutably.
 
 `PipelineParams` holds both names and both child parameter records. `deep` is

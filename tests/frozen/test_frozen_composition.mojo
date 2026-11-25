@@ -188,6 +188,9 @@ def frozen_pipeline_steps() raises:
     var pipe = make_pipeline(StandardScaler(), LDA())
     var unfitted = FrozenEstimator(clone(pipe))
     assert_false(unfitted.step[0]().__sklearn_is_fitted__())
+    assert_false(
+        unfitted.named_step[StandardScaler[]]("standardscaler").__sklearn_is_fitted__()
+    )
     assert_false(unfitted.step[1]().__sklearn_is_fitted__())
     with assert_raises(contains="NotFittedError"):
         _ = unfitted.step[1]().predict(X)
@@ -203,8 +206,18 @@ def frozen_pipeline_steps() raises:
     assert_true(Pointer(to=frozen.step[0]()) == Pointer(to=cloned.step[-2]()))
     assert_true(Pointer(to=frozen.step[1]()) == Pointer(to=nested.step[-1]()))
 
-    var scaled = cloned.step[0]().transform(X)
-    var predictions = nested.step[-1]().predict(scaled)
+    var prefix_name = String("standardscaler")
+    ref prefix = cloned.named_step[StandardScaler[]](prefix_name)
+    ref final_step = nested.named_step[LDA]("lineardiscriminantanalysis")
+    assert_true(Pointer(to=prefix) == Pointer(to=frozen.step[0]()))
+    assert_true(Pointer(to=final_step) == Pointer(to=frozen.step[1]()))
+    with assert_raises(contains="KeyError"):
+        _ = frozen.named_step[StandardScaler[]]("missing")
+    with assert_raises(contains="TypeError"):
+        _ = frozen.named_step[StandardScaler[]]("lineardiscriminantanalysis")
+
+    var scaled = prefix.transform(X)
+    var predictions = final_step.predict(scaled)
     assert_equal(predictions, frozen.predict(X))
     print("composition_step_shape", scaled.shape[0], scaled.shape[1])
     for i in range(scaled.size):
@@ -220,6 +233,14 @@ def frozen_pipeline_steps() raises:
         frozen_transformers.step[1]().transform(first),
         frozen_transformers.transform(X),
     )
+
+    var two_scalers = make_pipeline(StandardScaler(), StandardScaler())
+    _ = two_scalers.fit(X)
+    var frozen_scalers = FrozenEstimator(two_scalers^)
+    ref first_scaler = frozen_scalers.named_step[StandardScaler[]]("standardscaler-1")
+    ref last_scaler = frozen_scalers.named_step[StandardScaler[]]("standardscaler-2")
+    assert_true(Pointer(to=first_scaler) == Pointer(to=frozen_scalers.step[0]()))
+    assert_true(Pointer(to=last_scaler) == Pointer(to=frozen_scalers.step[1]()))
 
 
 def kfold_splits(n: Int) raises -> List[IndexSplit]:

@@ -61,6 +61,15 @@ def _validate_pipeline_names(first: String, last: String) raises:
     validate_names([first, last], ["steps", "memory", "verbose", "transform_input"])
 
 
+def _named_step_index(name: StringSpan, first: String, last: String) raises -> Int:
+    # If public field edits introduce duplicate names, sklearn selects the last.
+    if name == last:
+        return 1
+    if name == first:
+        return 0
+    raise Error(t"KeyError: no pipeline step named '{name}'")
+
+
 def _pipeline_feature_names[P: TransformerMixin, E: BaseEstimator](
     first: P, last: E, first_name: String, last_name: String,
     input_features: Optional[List[String]],
@@ -118,6 +127,9 @@ struct Pipeline[
     var estimator_name: String
     var transformer: Self.P
     var estimator: Self.E
+
+    def _step_index(self, name: StringSpan) raises -> Int:
+        return _named_step_index(name, self.transformer_name, self.estimator_name)
 
     # Each stored step lives for the supplied immutable borrow of the pipeline.
     def _prefix_step[origin: ImmOrigin](
@@ -378,6 +390,9 @@ struct TransformerPipeline[
     var estimator_name: String
     var transformer: Self.P
     var estimator: Self.E
+
+    def _step_index(self, name: StringSpan) raises -> Int:
+        return _named_step_index(name, self.transformer_name, self.estimator_name)
 
     # Each stored step lives for the supplied immutable borrow of the pipeline.
     def _prefix_step[origin: ImmOrigin](

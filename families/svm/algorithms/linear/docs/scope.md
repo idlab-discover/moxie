@@ -45,9 +45,11 @@ Its matrix product and axis reduction reuse existing numerical owners.
   that cannot be represented exactly as Float64 should not use that adapter.
 - None RNG is an estimator-owned native entropy context, not Python's global
   singleton. Integer seeds reset on every fit. Explicit mutable streams use
-  `fit_with_random_state`. Python warnings machinery, reflection, metadata
-  routing and bindings remain outside the native interface. Both estimators
-  support [native model files](api.md#native-model-files).
+  `fit_with_random_state`. Both estimators support
+  [sample-weight requests](api.md#sample-weight-requests) and
+  [native model files](api.md#native-model-files). Parent-side metadata
+  forwarding, Python warnings machinery, reflection and bindings remain outside
+  the linear estimator interface.
 - Kernel SVMs and their probability fitting are not implemented by this child.
 
 ## Validation

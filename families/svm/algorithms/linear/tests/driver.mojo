@@ -57,6 +57,10 @@ def main() raises:
             cursor += 2
     if regression:
         var model = LinearSVR(loss=loss, dual=dual.copy(), C=c, epsilon=epsilon, tol=tol, fit_intercept=fit, intercept_scaling=scale, max_iter=limit, random_state=seed)
+        # Requests govern parent routing only. Direct weighted calls still work.
+        _ = model.set_fit_request(sample_weight=False).set_score_request(
+            sample_weight="evaluation_weight"
+        )
         if single:
             model.fit(x.astype[DType.float32](), y, sw.copy())
         else:
@@ -71,6 +75,10 @@ def main() raises:
         print(model.score(x, y, sw.copy()))
     else:
         var model = LinearSVC(loss=loss, penalty=penalty, dual=dual.copy(), multi_class=multi, class_weight=costs.copy(), C=c, tol=tol, fit_intercept=fit, intercept_scaling=scale, max_iter=limit, random_state=seed)
+        # Requests govern parent routing only. Direct weighted calls still work.
+        _ = model.set_fit_request(sample_weight=False).set_score_request(
+            sample_weight="evaluation_weight"
+        )
         if single:
             model.fit(x.astype[DType.float32](), labels, sw.copy())
         else:

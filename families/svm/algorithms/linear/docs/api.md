@@ -63,6 +63,26 @@ intercept_scaling=1.0)` returns a Float64 bound. It accepts the same native labe
 lists. Use loss="log" for the L1 logistic bound; no logistic estimator is
 exported by this child. See [scope.md](scope.md) for restrictions and evidence.
 
+## Sample-weight requests
+
+`LinearSVC` and `LinearSVR` use the shared
+[sample-weight request API](../../../../../docs/interfaces.md#sample-weight-requests).
+Configure fit and score independently through fluent setters:
+
+```mojo
+_ = classifier.set_fit_request(sample_weight="training_weight").set_score_request(
+    sample_weight=True
+)
+var requests = classifier.get_metadata_routing()
+```
+
+`True` requests `sample_weight`, `False` declines it, and `None` resets the
+request to unset. A string requests a weight by an ASCII identifier. Omitting
+the keyword retains the current request. The getter returns an owned copy, and
+configuration clones retain both requests. Native setters are always available.
+Parents can use the returned requests to resolve metadata. Direct calls to
+`fit` and `score` use the explicitly supplied weights.
+
 ## Native model files
 
 Use the experimental [model file API](../../../../../docs/serialization.md)
@@ -79,15 +99,16 @@ save_model[LinearSVRSchema](regressor, "regressor.moxie")
 var restored_regressor = load_model[LinearSVRSchema]("regressor.moxie")
 ```
 
-Choose the same classifier label type on save and load. Schema version 1
+Choose the same classifier label type on save and load. Schema version 2
 supports String, Int, Int32, Int64, Float32, and Float64 labels, including
 explicit class weights. Both schemas preserve current configuration, fitted or
 unfitted state, and the estimator-owned random stream. Fitted loads restore
 independent coefficients and intercepts without retraining. Settings changed
 after fit apply to a subsequent fit. A stream borrowed through
 `fit_with_random_state` is owned by the caller.
-Loading reconstructs `fit_warnings` from the saved fit status, including for
-existing version 1 archives.
+Version 2 preserves both sample-weight requests. Version 1 archives load with
+both requests unset. Both versions reconstruct `fit_warnings` from the saved
+fit status.
 
 The linear child test runner includes file round trips and malformed-state
 checks. The linear wrapper parity driver serializes and restores each

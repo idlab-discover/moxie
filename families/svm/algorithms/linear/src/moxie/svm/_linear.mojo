@@ -3,6 +3,11 @@
 import numojo as nm
 from std.math import isfinite, floor
 from moxie.base import WeightedSupervisedEstimator
+from moxie.metadata_routing import (
+    FitScoreMetadataRequest,
+    SampleWeightRequest,
+    SampleWeightUpdate,
+)
 from moxie.warnings import FitWarning
 from moxie.svm._contracts import Dense, LinearModel, LinearOptions, validate_matrix, validate_vector
 from moxie.svm._liblinear import LibLinear
@@ -237,6 +242,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
     var n_iter_: Int
     var fit_status_: Int
     var fit_warnings: List[FitWarning]
+    var _metadata: FitScoreMetadataRequest
     var _rng: RandomState
     var classes_: List[Self.Label]
 
@@ -259,6 +265,9 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
         self.n_iter_ = 0
         self.fit_status_ = 0
         self.fit_warnings = []
+        self._metadata = FitScoreMetadataRequest(
+            SampleWeightRequest(), SampleWeightRequest()
+        )
         self._rng = entropy_state()
         self.classes_ = List[Self.Label]()
 
@@ -280,8 +289,32 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
         self.max_iter = params.max_iter.copy()
         return self
 
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure the sample weights requested from a parent during fit."""
+        self._metadata.fit.set(sample_weight)
+        return self
+
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure the sample weights requested from a parent during score."""
+        self._metadata.score.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        """Return an independent copy of the fit and score requests."""
+        return self._metadata.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(penalty=self.penalty.copy(), loss=self.loss.copy(), multi_class=self.multi_class.copy(), class_weight=self.class_weight.copy(), dual=self.dual.copy(), tol=self.tol.copy(), C=self.C.copy(), fit_intercept=self.fit_intercept.copy(), intercept_scaling=self.intercept_scaling.copy(), verbose=self.verbose.copy(), random_state=self.random_state.copy(), max_iter=self.max_iter.copy())
+        var cloned = Self(penalty=self.penalty.copy(), loss=self.loss.copy(), multi_class=self.multi_class.copy(), class_weight=self.class_weight.copy(), dual=self.dual.copy(), tol=self.tol.copy(), C=self.C.copy(), fit_intercept=self.fit_intercept.copy(), intercept_scaling=self.intercept_scaling.copy(), verbose=self.verbose.copy(), random_state=self.random_state.copy(), max_iter=self.max_iter.copy())
+        cloned._metadata = self._metadata.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self.n_features_in_ > 0
@@ -479,6 +512,7 @@ struct LinearSVR(SupportVectorRegressor):
     var n_iter_: Int
     var fit_status_: Int
     var fit_warnings: List[FitWarning]
+    var _metadata: FitScoreMetadataRequest
     var _rng: RandomState
 
     def __init__(out self, *, epsilon: Float64 = 0.0, loss: String = "epsilon_insensitive", dual: Dual = "auto", tol: Float64 = 1e-4, C: Float64 = 1.0, fit_intercept: Bool = True, intercept_scaling: Float64 = 1.0, verbose: Int = 0, random_state: Int = -1, max_iter: Int = 1000) raises:
@@ -498,6 +532,9 @@ struct LinearSVR(SupportVectorRegressor):
         self.n_iter_ = 0
         self.fit_status_ = 0
         self.fit_warnings = []
+        self._metadata = FitScoreMetadataRequest(
+            SampleWeightRequest(), SampleWeightRequest()
+        )
         self._rng = entropy_state()
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
@@ -516,8 +553,32 @@ struct LinearSVR(SupportVectorRegressor):
         self.max_iter = params.max_iter.copy()
         return self
 
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure the sample weights requested from a parent during fit."""
+        self._metadata.fit.set(sample_weight)
+        return self
+
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure the sample weights requested from a parent during score."""
+        self._metadata.score.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        """Return an independent copy of the fit and score requests."""
+        return self._metadata.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(epsilon=self.epsilon.copy(), loss=self.loss.copy(), dual=self.dual.copy(), tol=self.tol.copy(), C=self.C.copy(), fit_intercept=self.fit_intercept.copy(), intercept_scaling=self.intercept_scaling.copy(), verbose=self.verbose.copy(), random_state=self.random_state.copy(), max_iter=self.max_iter.copy())
+        var cloned = Self(epsilon=self.epsilon.copy(), loss=self.loss.copy(), dual=self.dual.copy(), tol=self.tol.copy(), C=self.C.copy(), fit_intercept=self.fit_intercept.copy(), intercept_scaling=self.intercept_scaling.copy(), verbose=self.verbose.copy(), random_state=self.random_state.copy(), max_iter=self.max_iter.copy())
+        cloned._metadata = self._metadata.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self.n_features_in_ > 0

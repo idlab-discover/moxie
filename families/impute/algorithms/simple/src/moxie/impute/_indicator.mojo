@@ -1,6 +1,7 @@
 """Dense missing indicators using the family-owned missingness layout."""
 import numojo as nm
 from std.utils import Variant
+from moxie._categorical import CategoricalColumn, CategoryDomain
 from moxie._feature_metadata import FeatureNamesOut
 from moxie.base import UnsupervisedEstimator, TransformerMixin, FitTransformer
 from moxie.impute._plumbing import MissingValue, missing_mask, FeatureLayout, validate_matrix
@@ -134,6 +135,51 @@ struct MissingIndicator[dtype: DType = DType.float64](UnsupervisedEstimator, Tra
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
         _ = self.fit(X, y)
         return self.transform(X)
+
+    def _categorical_mask[Domain: CategoryDomain](
+        self, X: List[CategoricalColumn[Domain]],
+    ) raises -> Self.Transformed:
+        if not self._params.missing_values.is_nan:
+            raise Error("ValueError: categorical indicators require the column missing tag")
+        if len(X) == 0 or X[0].rows() == 0:
+            raise Error("ValueError: input must have samples and features")
+        var rows = X[0].rows()
+        var width = len(X)
+        var mask = nm.zeros[DType.bool](nm.Shape(rows, width))
+        for j in range(width):
+            if X[j].rows() != rows:
+                raise Error("ValueError: categorical columns must have matching rows")
+            var column_mask = X[j].missing_mask()
+            for i in range(rows):
+                mask.unsafe_set(i * width + j, column_mask.unsafe_get(i))
+        return mask^
+
+    def fit[Domain: CategoryDomain](
+        mut self, X: List[CategoricalColumn[Domain]],
+    ) raises -> ref[self] Self:
+        self.fit_mask(self._categorical_mask(X))
+        return self
+
+    def fit_named[Domain: CategoryDomain](
+        mut self, X: List[CategoricalColumn[Domain]], feature_names: List[String],
+    ) raises:
+        if len(feature_names) != len(X):
+            raise Error("ValueError: feature_names length mismatch")
+        _ = self.fit(X)
+        self.feature_names_in_ = feature_names.copy()
+
+    def transform[Domain: CategoryDomain](
+        self, X: List[CategoricalColumn[Domain]],
+    ) raises -> Self.Transformed:
+        self._layout.state.check_features(len(X))
+        return self._layout.indicator(self._categorical_mask(X))
+
+    def fit_transform[Domain: CategoryDomain](
+        mut self, X: List[CategoricalColumn[Domain]],
+    ) raises -> Self.Transformed:
+        var mask = self._categorical_mask(X)
+        self.fit_mask(mask)
+        return self._layout.indicator(mask)
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         self._layout.state.check_features(self.n_features_in_)

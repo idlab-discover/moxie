@@ -60,11 +60,25 @@ def check[dtype: DType]() raises:
     custom.fit(X, splits=splits)
     assert_equal(custom.alpha_(), model.alpha_())
     assert_equal(custom.error_norm(model.covariance_()), 0)
+    custom.set_params(n_jobs=-1)
+    custom.fit(X, splits=splits)
+    assert_equal(custom.alpha_(), model.alpha_())
+    assert_equal(custom.error_norm(model.covariance_()), 0)
+    assert_equal(clone(custom).n_jobs.value(), -1)
+    custom.set_params(n_jobs=0)
+    with assert_raises(contains="n_jobs == 0"):
+        custom.fit(X, splits=splits)
+    assert_equal(custom.alpha_(), model.alpha_())
+    assert_equal(custom.error_norm(model.covariance_()), 0)
     # Strided reads and independent fitted snapshots.
     var strided = X.view_with_layout(Shape(27, 4), NDArrayStrides(8, 1), 0)
-    var smaller = GraphicalLassoCV[dtype](alphas=explicit, cv=3)
+    var smaller = GraphicalLassoCV[dtype](alphas=explicit, cv=3, n_jobs=8)
     smaller.fit(strided)
     assert_equal(smaller.n_features_in_(), 4)
+    var serial = GraphicalLassoCV[dtype](alphas=explicit, cv=3, n_jobs=Int.MIN)
+    serial.fit(strided)
+    assert_equal(smaller.alpha_(), serial.alpha_())
+    assert_equal(smaller.error_norm(serial.covariance_()), 0)
     var prior = model.alpha_()
     model.alphas = AlphaGrid(0)
     with assert_raises():
@@ -84,9 +98,6 @@ def check[dtype: DType]() raises:
     assert_false(lars_clone.__sklearn_is_fitted__())
     lars.fit(strided)
     assert_equal(lars.n_features_in_(), 4)
-    bad = GraphicalLassoCV[dtype](n_jobs=2)
-    with assert_raises():
-        bad.fit(X)
     bad = GraphicalLassoCV[dtype](cv=54)
     with assert_raises():
         bad.fit(X)

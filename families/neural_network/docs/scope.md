@@ -6,11 +6,12 @@ cloning and feature names. Float64 partial_fit is implemented. Float32 partial_f
 explicitly raises because sklearn promotes its input to Float64 and the native
 learned-state transition remains unfinished. See the [RBM scope](../algorithms/rbm/docs/scope.md).
 
-The private MLP engine handles parameters, forward propagation, weighted batch
-losses, backpropagation, full-batch L-BFGS and minibatch SGD and Adam. Both
-public MLP estimators are raising declarations. Validation-set early stopping
-and public warm-start, incremental and supervised estimator contracts remain
-open. See the [engine scope](../shared/mlp_engine/docs/scope.md).
+The [MLP estimators](mlp.md) implement ordinary fit with dense Float32/Float64
+features, integer single-label classification, single- and multi-output
+regression, optional sample weights, L-BFGS, SGD and Adam. SGD and Adam also
+support one-epoch `partial_fit`. Validation-set early stopping and warm-start
+refitting remain open. See the
+[engine scope](../shared/mlp_engine/docs/scope.md) for private trainer coverage.
 
 Dense finite rank-2 inputs, both dtypes and arbitrary valid strides use NuMojo
 storage and Moxie RNG. Sparse inputs, implicit densification, Python reflection,
@@ -26,7 +27,9 @@ lifecycle sequences in both dtypes (partial_fit/Gibbs after fit, a shared
 explicit RNG context, verbose output text, n_iter=0, set_params refit, strided
 input), RBM pipeline/union/clone composition, 32 MLP initialization/packing
 cases, 40 dense MLP forward/gradient fixtures, and L-BFGS and stochastic
-training fixtures.
+training fixtures, and 72 public MLP fits with native state, clone, pipeline
+and weighted CV contracts. Incremental checks compare 160 sequence snapshots
+against the same reference and exercise the native incremental traits.
 It also checks core ownership,
 licenses and an isolated public consumer. Tolerances are Float32 3e-5 and Float64 2e-12 for RBM;
 MLP parameters use relative 1e-14 and absolute 1e-15. These account for scalar

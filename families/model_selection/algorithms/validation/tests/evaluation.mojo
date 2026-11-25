@@ -1,5 +1,5 @@
 from moxie.dummy import DummyRegressor as _DummyRegressor
-from moxie.model_selection import TypedScorer, ParameterAdapter, DefaultCVAdapter, PredictionAdapter, cross_validate, cross_val_score, cross_val_predict, KFold, IndexArray, IndexSplit, ErrorPolicy
+from moxie.model_selection import TypedScorer, ParameterAdapter, DefaultCVAdapter, PredictionAdapter, cross_validate, cross_val_score, cross_val_predict, KFold, StratifiedKFold, SplitLabels, IndexArray, IndexSplit, ErrorPolicy
 from moxie.model_selection._split import _rows
 from numojo import NDArray, Shape, Item, zeros
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
@@ -23,8 +23,9 @@ struct Adapter(PredictionAdapter, DefaultCVAdapter, ParameterAdapter):
     comptime Scorer = Scorer
     comptime Value = String
     comptime PredictionDType = DType.float64
-    def __init__(out self):
-        pass
+    var stratified: Bool
+    def __init__(out self, stratified: Bool = False):
+        self.stratified = stratified
     def n_samples(self, X: Dense, y: Dense) raises -> Int:
         if X.ndim != 2 or y.ndim != 1 or X.shape[0] != y.shape[0]:
             raise Error("ValueError: invalid dense shapes")
@@ -53,7 +54,11 @@ struct Adapter(PredictionAdapter, DefaultCVAdapter, ParameterAdapter):
         return Scorer(False)
     def default_cv(self, X: Dense, y: Dense) raises -> List[IndexSplit]:
         var splits = List[IndexSplit]()
-        var cursor = KFold(4).split(self.n_samples(X, y))
+        var n = self.n_samples(X, y)
+        var cursor = (
+            StratifiedKFold(2).split(n, y=SplitLabels(y))
+            if self.stratified else KFold(4).split(n)
+        )
         while True:
             var pair = cursor.next()
             if not pair:

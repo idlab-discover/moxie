@@ -3,13 +3,16 @@
 """Dense round-robin imputation with independently owned fitted regressors."""
 
 import numojo as nm
+from std.atomic import Atomic
 from std.math import abs, inf, isfinite, sqrt
 from std.builtin.sort import sort
+from std.memory import ArcPointer, Pointer
 from std.utils import Variant
 from moxie.base import Predictor, SupervisedEstimator
 from moxie._feature_metadata import FeatureNamesOut
 from moxie._random import RandomState, check_random_state
 from moxie.linear_model._bayes import BayesianRidge
+from moxie.preprocessing._special_math import ndtr, ndtri
 from moxie.impute._base import Imputer
 from moxie.impute._simple import SimpleImputer
 from moxie.impute._indicator import MissingIndicator
@@ -24,6 +27,80 @@ from moxie.impute._plumbing import (
 
 comptime IterativeRegressor = SupervisedEstimator & Predictor & Copyable & Deinitable
 comptime IterativeBound = Variant[Float64, List[Float64]]
+
+
+trait IterativePosteriorRegressor(Predictor):
+    """Optional uncertainty capability for a custom iterative regressor."""
+
+    def predict_std(
+        self, X: Self.Input,
+    ) raises -> Tuple[Self.Prediction, Self.Prediction]:
+        ...
+
+
+struct _PosteriorState(Movable):
+    var rng: Optional[RandomState]
+    var active: Atomic[DType.int32]
+
+    def __init__(out self, var rng: RandomState):
+        self.rng = rng^
+        self.active = Atomic[DType.int32](0)
+
+
+struct _PosteriorLease(Movable):
+    var _state: ArcPointer[_PosteriorState]
+
+    def __init__(out self, var state: ArcPointer[_PosteriorState]):
+        var expected = Int32(0)
+        while not state[].active.compare_exchange(expected, Int32(1)):
+            expected = Int32(0)
+        self._state = state^
+
+    def __getitem__(mut self) -> ref[self] Optional[RandomState]:
+        # Only the lease holder may access the mutable RNG. The Arc keeps
+        # the storage alive, and the returned borrow cannot outlive the lease.
+        var state = Pointer(to=self._state[]).unsafe_mut_cast[True]()
+        return Pointer(to=state[].rng).unsafe_origin_cast[origin_of(self)]()[]
+
+    def __deinit__(deinit self):
+        self._state[].active.store(Int32(0))
+
+
+struct _PosteriorStream(Copyable, Movable):
+    var _state: ArcPointer[_PosteriorState]
+
+    def __init__(out self, var rng: RandomState):
+        self._state = ArcPointer(_PosteriorState(rng^))
+
+    def __init__(out self, *, copy: Self):
+        self = Self(copy.snapshot())
+
+    def lease(self) -> _PosteriorLease:
+        return _PosteriorLease(self._state.copy())
+
+    def snapshot(self) -> RandomState:
+        var lease = self.lease()
+        return lease[].value().copy()
+
+
+def _truncated_draw(
+    mean: Float64, deviation: Float64, lower: Float64, upper: Float64, uniform: Float64,
+) -> Float64:
+    # The caller only samples intervals containing the mean. Interpolate the
+    # smaller normal tail to avoid rounding a near-one probability to one.
+    var a = (lower - mean) / deviation
+    var b = (upper - mean) / deviation
+    if max(-a, b) <= 1e-8:
+        # The Gaussian density is constant to Float64 precision on this interval.
+        return (1.0 - uniform) * lower + uniform * upper
+    var p = (1.0 - uniform) * ndtr(a) + uniform * ndtr(b)
+    var z: Float64
+    if p <= 0.5:
+        z = ndtri(p)
+    else:
+        var q = (1.0 - uniform) * ndtr(-a) + uniform * ndtr(-b)
+        z = -ndtri(q)
+    return min(max(mean + deviation * z, lower), upper)
 
 
 @fieldwise_init
@@ -193,6 +270,7 @@ struct IterativeImputer[
     var feature_names_in_: Optional[List[String]]
     var indicator_: Optional[MissingIndicator[Self.dtype]]
     var random_state_: Optional[RandomState]
+    var _posterior_stream: Optional[_PosteriorStream]
     var _min: List[Float64]
     var _max: List[Float64]
 
@@ -244,6 +322,7 @@ struct IterativeImputer[
         self.feature_names_in_ = None
         self.indicator_ = None
         self.random_state_ = None
+        self._posterior_stream = None
         self._min = List[Float64]()
         self._max = List[Float64]()
 
@@ -317,8 +396,13 @@ struct IterativeImputer[
         return self.n_features_in_ != 0
 
     def _validate_params(self) raises:
-        if self._params.sample_posterior:
-            raise Error("NotImplementedError: IterativeImputer sample_posterior=True")
+        comptime if Self.R != BayesianRidge[Self.dtype] and not conforms_to(
+            Self.R, IterativePosteriorRegressor,
+        ):
+            if self._params.sample_posterior:
+                raise Error(
+                    "ValueError: sample_posterior requires an IterativePosteriorRegressor",
+                )
         if self._params.max_iter < 0 or not isfinite(self._params.tol) or self._params.tol < 0:
             raise Error("ValueError: max_iter and finite tol must be nonnegative")
         if self._params.n_nearest_features and self._params.n_nearest_features.value() < 1:
@@ -397,6 +481,7 @@ struct IterativeImputer[
 
     def _apply_step(
         self, mut X: Self.Input, mask: nm.NDArray[DType.bool], step: Self.Step,
+        mut rng: Optional[RandomState],
     ) raises:
         var feature = step.feat_idx
         var rows = List[Int]()
@@ -406,17 +491,56 @@ struct IterativeImputer[
         if len(rows) == 0:
             return
         var query = Self._gather(X, rows, step.neighbor_feat_idx)
-        var prediction = rebind_var[Self.Input](
-            step.estimator.predict(rebind[Self.R.Input](query)),
-        )
-        if prediction.ndim != 1 or prediction.shape[0] != len(rows):
-            raise Error("ValueError: iterative regressor must predict one value per row")
+        var prediction: Self.Input
+        var deviations: Optional[Self.Input] = None
+        if self._params.sample_posterior:
+            var posterior = Self._predict_std(step.estimator, query)
+            Self._validate_prediction(posterior[1], len(rows))
+            prediction = posterior[0].view()
+            deviations = posterior[1].view()
+        else:
+            prediction = rebind_var[Self.Input](
+                step.estimator.predict(rebind[Self.R.Input](query)),
+            )
+        Self._validate_prediction(prediction, len(rows))
+        var lower = self._min[feature]
+        var upper = self._max[feature]
         for i in range(len(rows)):
             var value = Float64(prediction.unsafe_get(i * prediction.strides[0]))
             if not isfinite(value):
                 raise Error("ValueError: iterative regressor predicted a nonfinite value")
-            value = min(max(value, self._min[feature]), self._max[feature])
+            if deviations:
+                ref std = deviations.value()
+                var deviation = Float64(std.unsafe_get(i * std.strides[0]))
+                if not isfinite(deviation):
+                    raise Error("ValueError: iterative regressor predicted a nonfinite deviation")
+                if deviation > 0 and value >= lower and value <= upper:
+                    var uniform: Float64
+                    if rng:
+                        uniform = rng.value().random_sample()
+                    else:
+                        var stream = check_random_state()
+                        uniform = stream[].random_sample()
+                    value = _truncated_draw(value, deviation, lower, upper, uniform)
+            value = min(max(value, lower), upper)
             X.unsafe_set(rows[i] * X.shape[1] + feature, value.cast[Self.dtype]())
+
+    @staticmethod
+    def _validate_prediction(prediction: Self.Input, rows: Int) raises:
+        if prediction.ndim != 1 or prediction.shape[0] != rows:
+            raise Error("ValueError: iterative regressor must predict one value per row")
+
+    @staticmethod
+    def _predict_std(estimator: Self.R, X: Self.Input) raises -> Tuple[Self.Input, Self.Input]:
+        comptime if Self.R == BayesianRidge[Self.dtype]:
+            return rebind[BayesianRidge[Self.dtype]](estimator).predict_std(X)
+        elif conforms_to(Self.R, IterativePosteriorRegressor):
+            comptime assert conforms_to(Self.R, IterativePosteriorRegressor)
+            return rebind_var[Tuple[Self.Input, Self.Input]](
+                estimator.predict_std(rebind[Self.R.Input](X)),
+            )
+        else:
+            raise Error("ValueError: sample_posterior requires an IterativePosteriorRegressor")
 
     def _iterate(
         mut self, mut filled: Self.Input, mask: nm.NDArray[DType.bool], mut rng: Optional[RandomState],
@@ -437,11 +561,13 @@ struct IterativeImputer[
         if self._params.n_nearest_features and self._params.n_nearest_features.value() < width:
             weights = _correlations(filled)
         var scale = Float64(0)
-        for i in range(filled.size):
-            if not mask.unsafe_get(i):
-                scale = max(scale, abs(Float64(filled.unsafe_get(i))))
+        var previous = Optional[Self.Input]()
+        if not self._params.sample_posterior:
+            for i in range(filled.size):
+                if not mask.unsafe_get(i):
+                    scale = max(scale, abs(Float64(filled.unsafe_get(i))))
+            previous = filled.copy()
         var tolerance = self._params.tol * scale
-        var previous = filled.copy()
         if self._params.verbose > 0:
             print("[IterativeImputer] Completing matrix with shape", filled.shape)
         for iteration in range(self._params.max_iter):
@@ -452,21 +578,24 @@ struct IterativeImputer[
                     width, feature, self._params.n_nearest_features, weights, rng,
                 )
                 var step = self._fit_step(filled, mask, feature, neighbors)
-                self._apply_step(filled, mask, step)
+                self._apply_step(filled, mask, step, rng)
                 self.imputation_sequence_.append(step^)
             self.n_iter_ = iteration + 1
+            if self._params.verbose > 1:
+                print("[IterativeImputer] Ending imputation round", self.n_iter_, "/", self._params.max_iter)
+            if not previous:
+                continue
             # Matrix infinity norm: the largest absolute row sum.
+            ref snapshot = previous.value()
             var change = Float64(0)
             for i in range(filled.shape[0]):
                 var row_change = Float64(0)
                 for j in range(width):
                     var offset = i * width + j
                     var updated = filled.unsafe_get(offset)
-                    row_change += Float64(abs(updated - previous.unsafe_get(offset)))
-                    previous.unsafe_set(offset, updated)
+                    row_change += Float64(abs(updated - snapshot.unsafe_get(offset)))
+                    snapshot.unsafe_set(offset, updated)
                 change = max(change, row_change)
-            if self._params.verbose > 1:
-                print("[IterativeImputer] Ending imputation round", self.n_iter_, "/", self._params.max_iter)
             if self._params.verbose > 0:
                 print("[IterativeImputer] Change:", change, "scaled tolerance:", tolerance)
             if change < tolerance:
@@ -512,13 +641,17 @@ struct IterativeImputer[
         var mask = next._initial_mask(original_mask)
         var rng: Optional[RandomState] = None
         if self._params.random_state:
-            rng = (
-                self.random_state_.value().copy() if self.random_state_
-                else RandomState(self._params.random_state.value())
-            )
+            if self._posterior_stream:
+                rng = self._posterior_stream.value().snapshot()
+            elif self.random_state_:
+                rng = self.random_state_.value().copy()
+            else:
+                rng = RandomState(self._params.random_state.value())
         # Lease the default stream only around draws, so an inner estimator
         # can draw from that stream during its own fit or predict.
         next._iterate(filled, mask, rng)
+        if rng and self._params.sample_posterior:
+            next._posterior_stream = _PosteriorStream(rng.value().copy())
         if not rng:
             var stream = check_random_state()
             rng = stream[].copy()
@@ -536,9 +669,20 @@ struct IterativeImputer[
         var filled = self.initial_imputer_.transform(X)
         var mask = self._initial_mask(original_mask)
         if len(self.imputation_sequence_) > 0 and not nm.all(mask):
-            for step in self.imputation_sequence_:
-                self._apply_step(filled, mask, step)
+            if self._posterior_stream:
+                var lease = self._posterior_stream.value().lease()
+                self._replay(filled, mask, lease[])
+            else:
+                var rng: Optional[RandomState] = None
+                self._replay(filled, mask, rng)
         return self._finish(filled^, original_mask)
+
+    def _replay(
+        self, mut filled: Self.Input, mask: nm.NDArray[DType.bool],
+        mut rng: Optional[RandomState],
+    ) raises:
+        for step in self.imputation_sequence_:
+            self._apply_step(filled, mask, step, rng)
 
     @staticmethod
     def _promote_integer_input[input_dtype: DType](

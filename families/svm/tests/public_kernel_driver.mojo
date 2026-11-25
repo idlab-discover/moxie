@@ -2,6 +2,13 @@
 from std.sys import argv
 import numojo as nm
 from moxie.svm import SVC, NuSVC, SVR, NuSVR, OneClassSVM, Gamma, ClassWeight
+from moxie.serialization import ModelSchema, load_model, save_model
+from moxie.svm.kernel_serialization import SVCSchema, NuSVCSchema, SVRSchema, NuSVRSchema, OneClassSVMSchema
+
+
+def restore[Schema: ModelSchema](model: Schema.Model, path: String) raises -> Schema.Model:
+    save_model[Schema](model, path)
+    return load_model[Schema](path)
 
 
 def emit[dtype: DType](name: String, a: nm.NDArray[dtype]) raises:
@@ -80,6 +87,8 @@ def main() raises:
             _ = model.fit(x.astype[DType.float32](), labels, sw.copy())
         else:
             _ = model.fit(x, labels, sw.copy())
+        if len(args) == 3:
+            model = restore[SVCSchema[]](model, String(args[2]))
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)
@@ -106,6 +115,8 @@ def main() raises:
             _ = model.fit(x.astype[DType.float32](), labels, sw.copy())
         else:
             _ = model.fit(x, labels, sw.copy())
+        if len(args) == 3:
+            model = restore[NuSVCSchema[]](model, String(args[2]))
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)
@@ -132,6 +143,8 @@ def main() raises:
             _ = model.fit(x.astype[DType.float32](), sample_weight=sw.copy())
         else:
             _ = model.fit(x, sample_weight=sw.copy())
+        if len(args) == 3:
+            model = restore[OneClassSVMSchema](model, String(args[2]))
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)
@@ -153,6 +166,8 @@ def main() raises:
             _ = model.fit(x.astype[DType.float32](), y, sw.copy())
         else:
             _ = model.fit(x, y, sw.copy())
+        if len(args) == 3:
+            model = restore[SVRSchema](model, String(args[2]))
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)
@@ -172,6 +187,8 @@ def main() raises:
             _ = model.fit(x.astype[DType.float32](), y, sw.copy())
         else:
             _ = model.fit(x, y, sw.copy())
+        if len(args) == 3:
+            model = restore[NuSVRSchema](model, String(args[2]))
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)

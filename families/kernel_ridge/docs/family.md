@@ -180,7 +180,11 @@ Pass GP hyperparameters on the kernel object. Nonempty `kernel_params` are
 rejected. As in sklearn's pairwise dispatcher, fit supplies both matrices
 explicitly, so a `WhiteKernel` contributes zero even during fit. The
 [periodic regression notebook](../../../notebooks/kernel_ridge/plot_compare_gpr_krr.ipynb)
-compares default and tuned predictions with sklearn using typed candidates.
+uses a typed search adapter to set alpha and the wrapped kernel together.
+It replays the 500 candidates drawn by sklearn's `RandomizedSearchCV` as one
+ordered `GridSearchCV` dimension of complete parameter records. This keeps
+each sampled triple together. The notebook compares every fold score, mean
+and rank, the winning parameters, and the full-data refit predictions.
 
 To provide a custom whole-matrix callable, implement `MatrixKernel` with
 `evaluate_matrix` returning a `FloatingArray` containing a finite rank-two

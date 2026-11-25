@@ -13,7 +13,7 @@ from .kernel_ridge import (
     ScalarOrVector,
     FloatingArray,
     FittedArray,
-    RowKernel,
+    MatrixKernel,
 )
 from ._kernel_ridge._estimator import NoKernel
 from ._kernel_ridge._api import WeightRequest, validate_request, unchanged
@@ -51,7 +51,7 @@ def _read_request(mut reader: BinaryReader) raises -> WeightRequest:
 trait NativeKernelAdapter:
     """Trusted, compile-time codec for one native kernel's validated state."""
 
-    comptime Kernel: RowKernel & Copyable & Deinitable
+    comptime Kernel: MatrixKernel & Copyable & Deinitable
 
     @staticmethod
     def identifier() -> String:
@@ -70,7 +70,7 @@ trait NativeKernelAdapter:
         ...
 
 
-struct _NoKernelAdapter[Metric: RowKernel & Copyable & Deinitable](
+struct _NoKernelAdapter[Metric: MatrixKernel & Copyable & Deinitable](
     NativeKernelAdapter
 ):
     comptime Kernel = Self.Metric
@@ -145,7 +145,7 @@ def _read_array[
 
 struct KernelRidgeSchema[
     dtype: DType = DType.float64,
-    Metric: RowKernel & Copyable & Deinitable = NoKernel,
+    Metric: MatrixKernel & Copyable & Deinitable = NoKernel,
     Adapter: NativeKernelAdapter = _NoKernelAdapter[Metric],
 ](ModelSchema):
     """Schema 3 (reads schemas 1 and 2) with an opt-in, compile-time native kernel state adapter.

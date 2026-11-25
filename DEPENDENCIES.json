@@ -92,6 +92,9 @@
         "moxie._kernel_ridge._estimator": {
           "file": "src/moxie/_kernel_ridge/_estimator.mojo"
         },
+        "moxie._kernel_ridge._gp_kernel": {
+          "file": "src/moxie/_kernel_ridge/_gp_kernel.mojo"
+        },
         "moxie._kernel_ridge._kernels": {
           "file": "src/moxie/_kernel_ridge/_kernels.mojo"
         },

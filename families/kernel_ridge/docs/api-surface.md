@@ -14,7 +14,7 @@ numerical tolerances.
 | Learned attributes | `dual_coef_`, `X_fit_`, `n_features_in_`, optional `feature_names_in_` |
 | Dense data | Mixed Float32/Float64 and Int32/Int64, strided matrices, vector/multioutput targets |
 | Dtypes | Runtime Float32/Float64 coefficient/prediction variants; kernel-, weight- and alpha-dependent promotion |
-| Kernels | All named kernels, precomputed matrices and typed native callables |
+| Kernels | All named kernels, precomputed matrices, typed row and matrix callables, and Gaussian-process kernels through `GaussianProcessKernel` |
 | Weights | Scalar/vector fit and score weights; target-specific alpha |
 | Sparse feature inputs | Not implemented; reference accepts CSR and CSC |
 | Feature names | Explicit `feature_names` keyword on fit/predict/score; exact ordered validation |

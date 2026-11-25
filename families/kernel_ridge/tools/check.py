@@ -69,6 +69,7 @@ def main():
     elif mode == 'parity':
         run(sys.executable, ROOT / 'tests/check_api_reference.py')
         run(sys.executable, ROOT / 'tests/check_parity.py')
+        run(sys.executable, ROOT / 'tests/check_gp_kernel_parity.py')
         run(sys.executable, ROOT / 'tests/check_dtype_parity.py')
         run(sys.executable, ROOT / 'tests/check_numerics_parity.py')
         run(sys.executable, ROOT / 'tests/check_dense64_parity.py')

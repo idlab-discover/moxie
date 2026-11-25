@@ -2738,7 +2738,8 @@
             "MLPRegressorAPI": "moxie.neural_network._base",
             "RBMTransformer": "moxie.neural_network._base",
             "MLPClassifier": "moxie.neural_network._api",
-            "MLPRegressor": "moxie.neural_network._api"
+            "MLPRegressor": "moxie.neural_network._api",
+            "MLPParams": "moxie.neural_network._mlp_model"
           }
         },
         "schema": 1
@@ -2757,8 +2758,8 @@
         "moxie.neural_network._api": {
           "file": "src/moxie/neural_network/_api.mojo"
         },
-        "moxie.neural_network._api_types": {
-          "file": "src/moxie/neural_network/_api_types.mojo"
+        "moxie.neural_network._mlp_model": {
+          "file": "src/moxie/neural_network/_mlp_model.mojo"
         }
       },
       "path": "families/neural_network"

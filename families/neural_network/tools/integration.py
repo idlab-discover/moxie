@@ -15,6 +15,7 @@ DEPS = FAMILY / 'builds/deps'
 RBM = FAMILY / 'algorithms/rbm'
 ENGINE = FAMILY / 'shared/mlp_engine'
 FLAGS = ['-O3', '--fp-mode=contract=off', '-I', str(DEPS)]
+MLP_TESTS = ('test_mlp', 'test_mlp_composition', 'mlp_dump')
 
 
 def run(*args, cwd=CORE):
@@ -41,6 +42,21 @@ def assemble():
     print('PASS neural-network core ownership, source bytes and license assets', flush=True)
 
 
+def build_public_mlp():
+    for name in MLP_TESTS:
+        run('mojo', 'build', *FLAGS, FAMILY / 'tests' / f'{name}.mojo',
+            '-o', FAMILY / 'builds' / name)
+
+
+def test_public_mlp():
+    for name in MLP_TESTS[:2]:
+        run(FAMILY / 'builds' / name)
+
+
+def parity_public_mlp():
+    run(sys.executable, FAMILY / 'tests/mlp_parity.py')
+
+
 def build():
     assemble()
     run('mojo', 'precompile', DEPS / 'moxie', '-I', DEPS, '-o', FAMILY / 'builds/core.mojoc')
@@ -55,6 +71,7 @@ def build():
         (owner / 'builds').mkdir(parents=True, exist_ok=True)
         target = owner / 'builds' / (source.stem if source.parent.name == 'tests' else 'example')
         run('mojo', 'build', *FLAGS, '-I', RBM / 'tests', source, '-o', target)
+    build_public_mlp()
 
 
 def test():
@@ -65,6 +82,7 @@ def test():
     subprocess.run([ENGINE / 'builds/objective_dump'], check=True, stdout=subprocess.DEVNULL)
     subprocess.run([ENGINE / 'builds/lbfgs_dump'], check=True, stdout=subprocess.DEVNULL)
     subprocess.run([ENGINE / 'builds/stochastic_dump'], check=True, stdout=subprocess.DEVNULL)
+    test_public_mlp()
     run(sys.executable, FAMILY / 'tools/check.py', 'test')
 
 
@@ -73,7 +91,8 @@ def parity():
                  ENGINE / 'tests/parameter_parity.py', ENGINE / 'tests/objective_parity.py',
                  ENGINE / 'tests/lbfgs_parity.py', ENGINE / 'tests/stochastic_parity.py']:
         run(sys.executable, path)
-    print('PASS supported subset parity; public MLP training and Float32 RBM partial_fit remain open', flush=True)
+    parity_public_mlp()
+    print('PASS supported neural-network subset parity', flush=True)
 
 
 def independence():
@@ -96,6 +115,11 @@ if __name__ == '__main__':
     os.environ['OMP_NUM_THREADS'] = '1'
     os.environ['OPENBLAS_NUM_THREADS'] = '1'
     action = sys.argv[1]
+    if action == 'mlp':
+        assemble()
+        build_public_mlp()
+        test_public_mlp()
+        parity_public_mlp()
     if action in ('build', 'test', 'parity', 'all'):
         build()
     if action in ('test', 'all'):
@@ -104,5 +128,5 @@ if __name__ == '__main__':
         parity()
     if action in ('independence', 'all'):
         independence()
-    if action not in ('build', 'test', 'parity', 'independence', 'all'):
+    if action not in ('build', 'test', 'parity', 'independence', 'all', 'mlp'):
         raise ValueError(action)

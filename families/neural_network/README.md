@@ -1,12 +1,9 @@
 # Neural networks in Moxie
 
-`moxie.neural_network` exports the implemented dense `BernoulliRBM` subset,
-`MLPClassifierAPI`, `MLPRegressorAPI` and `RBMTransformer` traits. `MLPClassifier`
-and `MLPRegressor` preserve their public declarations but raise
-`NotImplementedError`; neither trains a model. Private `_mlp_engine` supplies
-initialization, parameter packing, forward propagation, batch losses and
-backpropagation. Private trainers supply full-batch L-BFGS and minibatch SGD
-and Adam.
+`moxie.neural_network` exports dense `BernoulliRBM`, `MLPClassifier` and
+`MLPRegressor`. The MLP estimators support ordinary dense Float32 and Float64
+training with L-BFGS, SGD and Adam. See the [MLP API](docs/mlp.md) for fitted
+state, constructor options and composition examples.
 
 From the Moxie root:
 

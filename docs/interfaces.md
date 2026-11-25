@@ -254,8 +254,8 @@ integration and persistence remain outside the supported contract. The retired
 standalone checkout is not a build dependency.
 
 [Neural networks](../families/neural_network/README.md) are owned by Moxie, with a
-dense BernoulliRBM subset and private MLP parameter helpers. MLP estimators remain
-raising declarations. See the family scope for explicit deferrals.
+dense BernoulliRBM subset and ordinary dense MLP classifier and regressor fit.
+See the family scope for supported solver and lifecycle contracts.
 
 [Semi-supervised learning](../families/semi_supervised/README.md) is owned by Moxie,
 including dense LabelPropagation, LabelSpreading and SelfTrainingClassifier.

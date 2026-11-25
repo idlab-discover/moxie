@@ -26,6 +26,7 @@ from std.math import isnan
 from numojo import NDArray, Shape, Item
 from moxie._categorical import CategoricalColumn
 from moxie._random import RandomState, check_random_state
+from moxie.base import FitTransformer
 from moxie.preprocessing._base import TargetPreprocessor
 from moxie.preprocessing._common import (
     matrix, vector, check_fitted, check_set_output, check_names_length, feature_names_in,
@@ -309,7 +310,7 @@ struct TargetEncoderParams[K: CategoryKind](Copyable):
 struct TargetEncoder[
     K: CategoryKind = StringKind, Y: LabelKind = NumericLabels[DType.float64],
     L: Copyable & Deinitable = Y.Labels,
-](TargetPreprocessor, NativeFeatureNamesOut):
+](TargetPreprocessor, FitTransformer, NativeFeatureNamesOut, Copyable):
     """Encode categories by shrunk target means; Float64 output.
 
     `K` is the feature kind (as for OneHotEncoder) and `Y` the target label
@@ -605,7 +606,13 @@ struct TargetEncoder[
         self.feature_names_in_ = feature_names.copy()
         return self
 
-    def fit_transform(mut self, X: Self.Input, y: Self.L) raises -> NDArray[DType.float64]:
+    def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
+        """Support FitTransformer composition while requiring a target."""
+        if not y:
+            raise Error("ValueError: TargetEncoder requires y")
+        return self.fit_transform(X, y.value())
+
+    def fit_transform(mut self, X: Self.Input, y: Self.L) raises -> Self.Transformed:
         """Fit on all rows, then return the cross-fitted encoding of X.
 
         Folds shuffle with `random_state` (an integer reseeds a fresh

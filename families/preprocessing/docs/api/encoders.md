@@ -28,8 +28,10 @@ The difference matters for OrdinalEncoder. A NaN-style missing value is encoded
 as `encoded_missing_value` and never grouped as infrequent. A `None` category
 gets an ordinary integer code and may be infrequent. Columns can have different
 dictionaries; each is matched to the fitted categories by value. All columns in
-one encoder share a kind. Mixed string/numeric tables need one encoder per kind,
-because Moxie has no heterogeneous table yet.
+one encoder share a kind. A
+[native ColumnTable](../../../../docs/compose/named-columns.md) can send its
+string columns to an encoder and its floating-point columns to separate
+numeric transformers.
 
 ```mojo
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories
@@ -151,6 +153,8 @@ Behavior follows sklearn:
   The folds are sklearn's `KFold` for continuous targets. For a classified
   target whose `type_of_target(y)` is binary or multiclass they are
   `StratifiedKFold`. Shuffling defaults to on.
+- The `FitTransformer` overload accepts the optional target used by generic
+  composition and raises `ValueError` when it receives `None`.
 - Explicit `categories` may leave training values unknown. In `fit_transform`
   every unknown row ends with the last fold's training mean, because sklearn
   overwrites all unknown rows once per fold.

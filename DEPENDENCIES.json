@@ -23,6 +23,9 @@
         "moxie.serialization_snappy": {
           "file": "src/moxie/serialization_snappy.mojo"
         },
+        "moxie.metrics._classification": {
+          "file": "src/moxie/metrics/_classification.mojo"
+        },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
         },
@@ -535,6 +538,11 @@
             "DummyRegressorSchema": "moxie.dummy_serialization",
             "LinearDiscriminantAnalysis": "moxie.discriminant_analysis",
             "QuadraticDiscriminantAnalysis": "moxie.discriminant_analysis"
+          },
+          "moxie.metrics": {
+            "accuracy_score": "moxie.metrics._classification",
+            "hamming_loss": "moxie.metrics._classification",
+            "zero_one_loss": "moxie.metrics._classification"
           },
           "moxie.utils": {
             "FittedState": "moxie.utils.validation",

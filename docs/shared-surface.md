@@ -35,8 +35,9 @@ not implemented. Estimator families document their own modules.
 
 [Dense classification metrics](metrics/classification.md) are available from
 `moxie.metrics`. The module exports agreement scores, confusion matrices,
-balanced accuracy, precision, recall, F1, F-beta, and per-label
-precision/recall/F-score/support. These functions support sample weights.
+balanced accuracy, precision, recall, F1, F-beta, per-label
+precision/recall/F-score/support, and text and typed classification reports.
+These functions support sample weights.
 Scalar metrics can be called from a `moxie.model_selection.TypedScorer`.
 
 Estimator `score` methods provide accuracy for `ClassifierMixin`, R² for

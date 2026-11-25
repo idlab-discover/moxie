@@ -35,6 +35,9 @@
         "moxie.metrics._precision_recall": {
           "file": "src/moxie/metrics/_precision_recall.mojo"
         },
+        "moxie.metrics._report": {
+          "file": "src/moxie/metrics/_report.mojo"
+        },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
         },
@@ -613,9 +616,13 @@
           },
           "moxie.metrics": {
             "AveragedClassificationScores": "moxie.metrics._precision_recall",
+            "ClassificationReport": "moxie.metrics._report",
+            "ClassificationReportRow": "moxie.metrics._report",
             "ClassificationScores": "moxie.metrics._precision_recall",
             "accuracy_score": "moxie.metrics._classification",
             "balanced_accuracy_score": "moxie.metrics._confusion",
+            "classification_report": "moxie.metrics._report",
+            "classification_report_dict": "moxie.metrics._report",
             "confusion_matrix": "moxie.metrics._confusion",
             "f1_score": "moxie.metrics._precision_recall",
             "fbeta_score": "moxie.metrics._precision_recall",

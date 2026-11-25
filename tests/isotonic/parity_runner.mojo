@@ -108,6 +108,22 @@ def run_cases[dtype: DType]() raises:
                     _ = check_increasing(x, y)
             else:
                 assert_equal(check_increasing(x, y), fields[3] == "true")
+        elif kind == "fit_warnings":
+            var x = vector[dtype](String(fields[1]))
+            var y = vector[dtype](String(fields[2]))
+            var direction = Increasing(True)
+            if fields[3] == "auto":
+                direction = Increasing(String("auto"))
+            var model = IsotonicRegression[dtype](increasing=direction^)
+            if fields[4] == "-":
+                _ = model.fit(x, y)
+            else:
+                _ = model.fit(x, y, sample_weight=vector[dtype](String(fields[4])))
+            assert_equal(model.increasing_, fields[5] == "true")
+            assert_equal(2 * len(model.fit_warnings), len(fields) - 6, context)
+            for i in range(len(model.fit_warnings)):
+                assert_equal(model.fit_warnings[i].category, String(fields[6 + 2 * i]), context)
+                assert_equal(model.fit_warnings[i].message, String(fields[7 + 2 * i]), context)
         elif kind == "interpolator":
             var x = vector[dtype](String(fields[1]))
             var y = vector[dtype](String(fields[2]))

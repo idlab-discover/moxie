@@ -97,6 +97,13 @@ from all original samples, before weight filtering. Zero rank correlation
 selects increasing; an undefined correlation (constant input or singleton)
 selects decreasing.
 
+After fitting, read `model.fit_warnings` for the reference warning categories
+and messages in occurrence order. An automatic fit can record
+`ConstantInputWarning` and a `UserWarning` about the 95% Spearman confidence
+interval. A successful refit replaces the records, a failed fit preserves
+them, and a fitted copy owns its own records. Unfitted clones start empty.
+See the [shared fit-warning contract](../interfaces.md#fit-warnings).
+
 Prediction interpolates between retained thresholds, uses exact values at
 thresholds, and handles out-of-range inputs according to `out_of_bounds`.
 A single retained X threshold predicts a constant everywhere for all three
@@ -123,9 +130,9 @@ same-dtype list of the same length and never sorts its inputs.
 The vectors must have equal lengths. Infinities participate in ranking. Empty
 vectors, NaN values and constant inputs give undefined correlation and return
 `False`.
-Python's confidence-interval and constant-input warnings are not emitted;
-small-sample R² warnings are also not emitted. The corresponding numerical
-results are covered by native and reference-comparison tests.
+Direct calls to `check_increasing` return only the direction. Small-sample
+R² returns NaN without a diagnostic record. Fit diagnostics are available
+through `fit_warnings`.
 
 ## Composition
 
@@ -188,6 +195,8 @@ Use `IsotonicRegressionSchema[DType.float32]` for Float32. The schema stores
 the current configuration separately from fitted state, including configuration
 changed since the last fit. It restores independent threshold Lists without
 refitting. Constructor values retain their normal fit-time validation.
+Fit diagnostics describe the current instance's last successful fit.
+They start empty after loading an archive.
 Fitted thresholds must be finite, with strictly ascending X, monotone y in
 the fitted direction, and a domain matching the two endpoints.
 
@@ -210,11 +219,11 @@ for in-place fitting and typed configuration differences.
 `pixi run python tools/isotonic_checks.py test` covers trait conformance,
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
 strided arrays, direction, bounds, weighted R², and native persistence.
-`pixi run python tools/isotonic_checks.py parity` compares 654 Float64 and
-487 Float32 deterministic cases, including scaler pipeline predictions,
-interpolator reconstruction and validation edge cases, against the pinned
-Python module and Cython tie engine. The scikit-learn support wheel and SciPy
-come from the locked Pixi environment. Float64 uses
+`pixi run python tools/isotonic_checks.py parity` compares 666 Float64 and
+499 Float32 deterministic cases, including scaler pipeline predictions,
+interpolator reconstruction, validation edges and automatic-fit diagnostics,
+against the pinned Python module and Cython tie engine. The scikit-learn
+support wheel and SciPy come from the locked Pixi environment. Float64 uses
 `atol=rtol=2e-12` and Float32 uses `atol=rtol=2e-6` to allow for differences
 in rounding and reduction order.
 Threshold counts, X thresholds, domain, direction, and NaN locations must match. Fixture generation

@@ -45,9 +45,25 @@ def main() raises:
 
     # Spearman with tied ranks: rho = 0.447 > 0, so "auto" picks increasing.
     var automatic = IsotonicRegression(increasing="auto")
+    assert_equal(len(automatic.fit_warnings), 0)
     _ = automatic.fit([0.0, 1, 2, 3], [0.0, 1, 0, 1])
     assert_true(automatic.increasing_)
     close(automatic.y_thresholds_, [0.0, 0.5, 0.5, 1])
+    assert_equal(len(automatic.fit_warnings), 1)
+    assert_equal(automatic.fit_warnings[0].category, "UserWarning")
+    var fitted_copy = automatic.copy()
+    fitted_copy.fit_warnings[0].category = "copy"
+    assert_equal(len(clone(automatic).fit_warnings), 0)
+    with assert_raises(contains="positive weight"):
+        _ = automatic.fit(
+            [0.0, 0, 0, 0], [1.0, 2, 3, 4],
+            sample_weight=List[Float64]([0.0, 0, 0, 0]),
+        )
+    assert_equal(len(automatic.fit_warnings), 1)
+    assert_equal(automatic.fit_warnings[0].category, "UserWarning")
+    _ = automatic.fit([0.0, 1, 2, 3], [0.0, 1, 2, 3])
+    assert_equal(len(automatic.fit_warnings), 0)
+    assert_equal(fitted_copy.fit_warnings[0].category, "copy")
 
     # set_params then refit replaces the learned state; clone keeps the new
     # configuration but no fitted buffers.

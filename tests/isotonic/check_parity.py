@@ -143,6 +143,35 @@ def main():
         assert expected.dtype == dtype
         add("pipeline", x, y, query, expected)
 
+    def fit_warnings():
+        for x, y, mode, weights in [
+            ([0], [1], "auto", None),
+            ([0, 0], [1, 2], "auto", None),
+            ([0, 0, 0, 0], [1, 2, 3, 4], "auto", None),
+            ([0, 1, 2, 3], [1, 1, 1, 1], "auto", None),
+            ([0, 1, 2], [0, 2, 1], "auto", None),
+            ([0, 1, 2, 3], [0, 2, 1, 3], "auto", None),
+            ([0, 1, 2, 3], [3, 1, 2, 0], "auto", None),
+            ([0, 1, 2, 3], [0, 1, 2, 3], "auto", None),
+            ([0, 1, 2, 3], [3, 2, 1, 0], "auto", None),
+            (list(range(8)), [0, 2, 1, 3, 4, 5, 6, 7], "auto", None),
+            ([0, 1, 2, 3], [0, 2, 1, 3], "fixed", None),
+            ([0, 1, 2, 3], [0, 2, 1, 3], "auto", [1, 1, 0, 1]),
+        ]:
+            x, y = np.asarray(x, dtype=dtype), np.asarray(y, dtype=dtype)
+            weights = None if weights is None else np.asarray(weights, dtype=dtype)
+            model = reference.IsotonicRegression(
+                increasing="auto" if mode == "auto" else True,
+            )
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                model.fit(x, y, sample_weight=weights)
+            records_flat = [
+                text for item in caught
+                for text in (item.category.__name__, str(item.message))
+            ]
+            add("fit_warnings", x, y, mode, weights, model.increasing_, *records_flat)
+
     def validation_edges():
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
@@ -183,6 +212,7 @@ def main():
     pipeline()
     serialization()
     validation_edges()
+    fit_warnings()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(240):
@@ -237,6 +267,7 @@ def main():
     pipeline()
     serialization()
     validation_edges()
+    fit_warnings()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(150):

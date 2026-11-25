@@ -3,7 +3,7 @@
 Float32/Float64 NDArray trait interface with retained List overloads; see docs/isotonic/api.md.
 Behavior follows sklearn.isotonic (BSD-3-Clause; see docs/isotonic/THIRD_PARTY_NOTICES).
 """
-from std.math import isfinite, isnan
+from std.math import isfinite, isnan, sqrt
 from std.utils import Variant
 from moxie.base import (
     FitTransformer,
@@ -13,6 +13,8 @@ from moxie.base import (
 )
 from moxie._isotonic_adapters import IsotonicCVAdapter, IsotonicScorer, IsotonicSearchValue
 from moxie.utils.validation import check_is_fitted
+from moxie.warnings import FitWarning
+from numax.core.libm import log
 from numojo import NDArray, array
 
 
@@ -114,19 +116,16 @@ def _ranks[dtype: DType = DType.float64](values: List[Scalar[dtype]]) -> List[Fl
     return ranks^
 
 
-def check_increasing[dtype: DType = DType.float64](x: List[Scalar[dtype]], y: List[Scalar[dtype]]) raises -> Bool:
-    """Return the sign of Spearman's rank correlation, with average tied ranks.
-
-    Infinities participate in ranking. NaNs, fewer than two samples,
-    and constant inputs produce an undefined correlation and return False.
-    """
+def _spearman_correlation[dtype: DType](
+    x: List[Scalar[dtype]], y: List[Scalar[dtype]],
+) raises -> Float64:
     if len(x) != len(y):
         raise Error("ValueError: inconsistent numbers of samples")
     if len(x) < 2:
-        return False
+        return Float64("nan")
     for i in range(len(x)):
         if isnan(x[i]) or isnan(y[i]):
-            return False
+            return Float64("nan")
     var rx = _ranks(x)
     var ry = _ranks(y)
     var center = Float64(len(x) - 1) / 2.0
@@ -139,7 +138,45 @@ def check_increasing[dtype: DType = DType.float64](x: List[Scalar[dtype]], y: Li
         covariance += dx * dy
         variance_x += dx * dx
         variance_y += dy * dy
-    return variance_x > 0 and variance_y > 0 and covariance >= 0
+    if variance_x == 0 or variance_y == 0:
+        return Float64("nan")
+    return covariance / sqrt(variance_x * variance_y)
+
+
+def check_increasing[dtype: DType = DType.float64](
+    x: List[Scalar[dtype]], y: List[Scalar[dtype]],
+) raises -> Bool:
+    """Return the sign of Spearman's rank correlation, with average tied ranks.
+
+    Infinities participate in ranking. NaNs, fewer than two samples,
+    and constant inputs produce an undefined correlation and return False.
+    """
+    return _spearman_correlation(x, y) >= 0
+
+
+def _direction_warnings(rho: Float64, samples: Int) -> List[FitWarning]:
+    var warnings = List[FitWarning]()
+    if samples < 2:
+        return warnings^
+    if isnan(rho):
+        # Fit validates finiteness, so an undefined rho here means constant input.
+        warnings.append(FitWarning(
+            "ConstantInputWarning",
+            "An input array is constant; the correlation coefficient is not defined.",
+        ))
+    var magnitude = abs(rho)
+    if samples > 3 and (isnan(rho) or magnitude < 1.0):
+        # The inverse Fisher transform preserves sign. Test the interval before
+        # transforming back, including an endpoint of zero.
+        var radius = 1.96 / sqrt(Float64(samples - 3))
+        var fisher = 0.5 * log((1.0 + magnitude) / (1.0 - magnitude))
+        if isnan(rho) or fisher <= radius:
+            warnings.append(FitWarning(
+                "UserWarning",
+                "Confidence interval of the Spearman correlation coefficient spans zero. "
+                "Determination of ``increasing`` may be suspect.",
+            ))
+    return warnings^
 
 
 def isotonic_regression(
@@ -267,6 +304,7 @@ struct IsotonicRegression[dtype: DType = DType.float64](
     var X_thresholds_: List[Scalar[Self.dtype]]
     var y_thresholds_: List[Scalar[Self.dtype]]
     var increasing_: Bool
+    var fit_warnings: List[FitWarning]
     var _fitted: Bool
     var _bounds_error: Bool
 
@@ -288,6 +326,7 @@ struct IsotonicRegression[dtype: DType = DType.float64](
         self.X_thresholds_ = List[Scalar[Self.dtype]]()
         self.y_thresholds_ = List[Scalar[Self.dtype]]()
         self.increasing_ = True
+        self.fit_warnings = []
         self._fitted = False
         self._bounds_error = False
 
@@ -378,13 +417,16 @@ struct IsotonicRegression[dtype: DType = DType.float64](
         ):
             raise Error("ValueError: out_of_bounds must be nan, clip, or raise")
         var direction: Bool
+        var warnings = List[FitWarning]()
         if self.increasing.isa[Bool]():
             direction = self.increasing[Bool]
         else:
             if self.increasing[String] != "auto":
                 raise Error("ValueError: increasing must be a Bool or auto")
             # sklearn infers direction before filtering nonpositive weights.
-            direction = check_increasing(X, y)
+            var rho = _spearman_correlation(X, y)
+            direction = rho >= 0
+            warnings = _direction_warnings(rho, len(X))
         var weights = _weights[Self.dtype](len(X), sample_weight)
         var order = _order(X, y)
         var unique_x = List[Scalar[Self.dtype]]()
@@ -435,6 +477,7 @@ struct IsotonicRegression[dtype: DType = DType.float64](
         self.X_thresholds_ = thresholds_x^
         self.y_thresholds_ = thresholds_y^
         self.increasing_ = direction
+        self.fit_warnings = warnings^
         self._bounds_error = self.out_of_bounds == "raise"
         self._fitted = True
 

@@ -63,6 +63,52 @@ Use `adapter.estimator` to inspect the underlying model, and use the adapter's
 typed `get_params` and `set_params` to configure it. A fitted copy owns its
 state independently, while `clone` returns an unfitted adapter.
 
+## Decision tree components
+
+```mojo
+from moxie.multiclass import OneVsRestClassifier
+from moxie.tree import DecisionTreeClassifier
+
+comptime Tree = DecisionTreeClassifier[DType.int64]
+var model = OneVsRestClassifier[Tree, DType.float32](Tree(random_state=0))
+_ = model.fit(X, y)
+```
+
+The tree's generic input type is Float32. Supply Float32 feature matrices
+to fit and predict, converting at the boundary if needed. The wrapper owns
+the outer label domain and fits the tree on rank-one Int64 binary codes.
+The native tree returns one Float64 probability matrix per output. OvR,
+OvO and OutputCode use column 1 of the single binary matrix. The `tree`
+production parity group exercises all three wrappers with unrestricted
+depth and `max_depth=2`.
+
+## K-nearest neighbors components
+
+```mojo
+from numojo import NDArray
+from moxie.multiclass import OneVsRestClassifier
+from moxie.neighbors import KNeighborsClassifier
+
+var model = OneVsRestClassifier(KNeighborsClassifier[Y=NDArray[DType.int64]](3))
+_ = model.fit(X, y)
+```
+
+Select `Y=NDArray[DType.int64]` for the inner binary targets. The wrapper
+handles encoding and decoding its own labels. For Float32 features, select
+`KNeighborsClassifier[DType.float32, Y=NDArray[DType.int64]]` and the
+corresponding wrapper feature dtype. KNN returns a list of probability
+matrices, including for one output. Each wrapper extracts the positive-class
+column from the single `(n_samples, 2)` Float64 matrix. A fitted component
+copy retains its query state, and `clone` keeps the configuration for a new
+fit. The KNN production parity group covers feature matrices, uniform and
+distance weights, and all three wrappers.
+For OvO with precomputed distances, use the same component with
+`metric="precomputed"`. Fit takes the square training distance matrix and
+prediction takes one column per original training row. The wrapper gathers
+each class pair's distances and records the selected training rows in
+`pairwise_indices_`. The `knn-precomputed` production parity group checks
+these indices, decisions, predictions and scores against scikit-learn.
+
 ## Behavioral distinctions
 
 One-vs-rest, one-vs-one and output-code wrappers clone component estimators. Available methods depend on wrapped estimator capabilities; probability and partial_fit are not universal.

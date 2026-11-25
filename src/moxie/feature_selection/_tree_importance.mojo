@@ -1,9 +1,7 @@
 """Dense single-output adapter for the adopted native decision-tree classifier."""
 import numojo as nm
-from std.os import abort
 from moxie.base import ClassifierMixin, LogProbabilityPredictor, WeightedSupervisedEstimator
 from moxie.tree import DecisionTreeClassifier
-from moxie.tree._records import TreeData
 from moxie._labels import StringTarget
 from ._model_importance import SelectionClassLabels
 
@@ -25,30 +23,7 @@ struct DecisionTreeClassifierImportance[dt: DType = DType.float64, label_dtype: 
         self.model = model^
 
     def __init__(out self, *, copy: Self):
-        # Copyable cannot raise; default construction has no user parameters.
-        try:
-            self.model = Self.Model()
-        except error:
-            abort("DecisionTreeClassifierImportance: copy allocation failed: " + String(error))
-        # Copy the adopted model snapshot without refitting or retaining aliases.
-        self.model.params = copy.model.params.copy()
-        self.model.classes_ = copy.model.classes_.copy()
-        self.model.n_classes_ = copy.model.n_classes_.copy()
-        self.model.feature_names_in_ = copy.model.feature_names_in_.copy()
-        self.model.feature_importances_ = copy.model.feature_importances_.copy()
-        self.model._encoder = copy.model._encoder.copy()
-        self.model.is_categorical_ = copy.model.is_categorical_.copy()
-        self.model.n_outputs_ = copy.model.n_outputs_
-        self.model.n_features_in_ = copy.model.n_features_in_
-        self.model.max_features_ = copy.model.max_features_
-        self.model._fitted = copy.model._fitted
-        self.model.tree_ = TreeData(
-            copy.model.tree_.n_features, copy.model.tree_.n_classes.copy(),
-            copy.model.tree_.n_categories.copy(), copy.model.tree_.n_outputs,
-            copy.model.tree_.max_n_classes, copy.model.tree_.max_depth,
-            copy.model.tree_.node_count, copy.model.tree_.capacity,
-            copy.model.tree_.nodes.copy(), copy.model.tree_.value.copy(),
-        )
+        self.model = copy.model.copy()
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return self.model.get_params(deep)

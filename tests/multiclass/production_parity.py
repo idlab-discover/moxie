@@ -4,13 +4,14 @@ The other runners use paired test doubles to isolate wrapper logic. This one
 wraps real Moxie estimators and their sklearn counterparts:
 
 - `moxie.linear_model.RidgeClassifier` (decision_function component),
-- `moxie.tree.DecisionTreeClassifier` through the dense
-  `moxie.feature_selection.DecisionTreeClassifierImportance` adapter
-  (predict_proba component; the tree's own API returns List probabilities), and
+- `moxie.tree.DecisionTreeClassifier` with native Float32 features, Int64
+  component targets and one Float64 probability matrix per output, and
 - `moxie.svm.SVC` and `moxie.svm.LinearSVC`,
   `moxie.discriminant_analysis.LinearDiscriminantAnalysis`, and
   `moxie.naive_bayes.GaussianNB` through `BinaryAdapter` for the native List
   targets. GaussianNB also exercises incremental OvR and OvO updates.
+- `moxie.neighbors.KNeighborsClassifier` with Int64 array component targets
+  and one native Float64 probability matrix per output.
 
 Cases cover OvR, OvO and OutputCode; 2, 3 and 5 classes; int64, float64 and
 string labels; Float32 and Float64 features; seeded OutputCode codebooks.
@@ -39,6 +40,10 @@ Tolerances:
   and 1e-5 relative / 5e-6 absolute for Float32 responses because the
   native estimator stores its running moments and computes likelihoods in
   Float32, while sklearn retains Float64 learned means and variances.
+- Uniform KNN votes use the tree probability tolerance. Distance weighting
+  allows 1e-6 relative / 1e-7 absolute for Float32, where Moxie retains
+  distances in the feature dtype before computing Float64 weights. Float64
+  distance weighting allows 1e-12 relative / 1e-14 absolute for rounding.
 """
 import argparse
 import inspect
@@ -56,8 +61,10 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.linear_model import RidgeClassifier
 from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier, OutputCodeClassifier, _predict_binary
 from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier, _classification as neighbors_classification
 from sklearn.svm import SVC, LinearSVC, _classes as svm_classes
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import _classes as tree_classes
 
 from ovr_parity import OUT, REFERENCE, REVISION, ROOT, driver, lit, matrix, parse
 
@@ -71,6 +78,8 @@ TOLERANCE = {
     "lda32": (1e-5, 5e-6),
     "gaussian-nb64": (1e-9, 1e-11),
     "gaussian-nb32": (1e-5, 5e-6),
+    "knn-distance64": (1e-12, 1e-14),
+    "knn-distance32": (1e-6, 1e-7),
 }
 
 COMPONENTS = {
@@ -79,9 +88,9 @@ COMPONENTS = {
     "ridge-noint": (lambda: RidgeClassifier(alpha=0.1, fit_intercept=False),
                     "RidgeClassifier[{dtype}](0.1, fit_intercept=False)"),
     "tree": (lambda: DecisionTreeClassifier(random_state=0),
-             "DecisionTreeClassifierImportance[{dtype}](DecisionTreeClassifier[DType.int64](random_state=0))"),
+             "DecisionTreeClassifier[DType.int64](random_state=0)"),
     "tree-depth2": (lambda: DecisionTreeClassifier(max_depth=2, random_state=0),
-                    "DecisionTreeClassifierImportance[{dtype}](DecisionTreeClassifier[DType.int64](max_depth=2, random_state=0))"),
+                    "DecisionTreeClassifier[DType.int64](max_depth=2, random_state=0)"),
     "linear-svc": (lambda: LinearSVC(dual=False, tol=1e-9, random_state=0),
                    "BinaryAdapter(LinearSVC(dual=False, tol=1e-9, random_state=0))"),
     "svc": (lambda: SVC(tol=1e-6, random_state=0),
@@ -94,22 +103,44 @@ COMPONENTS = {
             "BinaryAdapter(LinearDiscriminantAnalysis[{dtype}]())"),
     "gaussian-nb": (GaussianNB,
                     "BinaryAdapter(GaussianNB[IntListDomain, {dtype}]())"),
+    "knn": (lambda: KNeighborsClassifier(n_neighbors=3),
+            "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3)"),
+    "knn-distance": (lambda: KNeighborsClassifier(n_neighbors=3, weights="distance"),
+                     'KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3, weights="distance")'),
+    "knn-precomputed": (
+        lambda: KNeighborsClassifier(n_neighbors=3, metric="precomputed"),
+        'KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3, metric="precomputed")',
+    ),
+    "knn-precomputed-distance": (
+        lambda: KNeighborsClassifier(n_neighbors=3, metric="precomputed", weights="distance"),
+        'KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3, metric="precomputed", weights="distance")',
+    ),
 }
 COMPONENT_TYPE = {
     "ridge": "RidgeClassifier[{dtype}]", "ridge-noint": "RidgeClassifier[{dtype}]",
-    "tree": "DecisionTreeClassifierImportance[{dtype}]",
-    "tree-depth2": "DecisionTreeClassifierImportance[{dtype}]",
+    "tree": "DecisionTreeClassifier[DType.int64]",
+    "tree-depth2": "DecisionTreeClassifier[DType.int64]",
     "linear-svc": "BinaryAdapter[LinearSVC[]]",
     "svc": "BinaryAdapter[SVC[]]",
     "svc-probability": "BinaryAdapter[SVC[]]",
     "svc-precomputed": "BinaryAdapter[SVC[]]",
     "lda": "BinaryAdapter[LinearDiscriminantAnalysis[{dtype}]]",
     "gaussian-nb": "BinaryAdapter[GaussianNB[IntListDomain, {dtype}]]",
+    "knn": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
+    "knn-distance": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
+    "knn-precomputed": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
+    "knn-precomputed-distance": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
 }
 SVC_COMPONENTS = ("svc", "svc-probability", "svc-precomputed")
+KNN_PRECOMPUTED = ("knn-precomputed", "knn-precomputed-distance")
+PAIRWISE_COMPONENTS = ("svc-precomputed", *KNN_PRECOMPUTED)
 OUTPUT_CODE_RESPONSE = {
-    "gaussian-nb": ("predict_proba", "Item(i, 1)"),
-    "svc": ("decision_function", "Item(i)"),
+    "tree": ("predict_proba", "response[0][Item(i, 1)]"),
+    "tree-depth2": ("predict_proba", "response[0][Item(i, 1)]"),
+    "gaussian-nb": ("predict_proba", "response[Item(i, 1)]"),
+    "knn": ("predict_proba", "response[0][Item(i, 1)]"),
+    "knn-distance": ("predict_proba", "response[0][Item(i, 1)]"),
+    "svc": ("decision_function", "response[Item(i)]"),
 }
 STRINGS = ["setosa", "versicolor", "virginica", "", "zeta"]
 
@@ -121,7 +152,7 @@ def cases(components):
         for component in components:
             if component == "svc-probability" and wrapper != "ovr":
                 continue
-            if component == "svc-precomputed" and wrapper != "ovo":
+            if component in PAIRWISE_COMPONENTS and wrapper != "ovo":
                 continue
             for k in (2, 3, 5):
                 for labels in ("int64", "float64", "string", "float32-features"):
@@ -129,13 +160,14 @@ def cases(components):
                         continue
                     if labels != "int64" and k != 3:
                         continue
-                    n = 12 * k
-                    y = np.tile(np.arange(k), 12)
+                    repeats = 6 if component in KNN_PRECOMPUTED else 12
+                    n = repeats * k
+                    y = np.tile(np.arange(k), repeats)
                     rng.shuffle(y)
                     X = rng.normal(size=(n, 4)) + y[:, None] * np.array([0.8, -0.5, 0.3, 0.0])
                     Xt = rng.normal(size=(15, 4)) + rng.integers(0, k, 15)[:, None] * 0.6
-                    dtype = "float32" if labels == "float32-features" else "float64"
-                    if dtype == "float32":
+                    dtype = "float32" if labels == "float32-features" or component.startswith("tree") else "float64"
+                    if labels == "float32-features":
                         X, Xt = X.astype(np.float32), Xt.astype(np.float32)
                     if labels == "string":
                         target = np.array([STRINGS[v] for v in y])
@@ -145,6 +177,11 @@ def cases(components):
                         target = y * 3 - 7
                     if component == "svc-precomputed":
                         X, Xt = X @ X.T, Xt @ X.T
+                    if component in KNN_PRECOMPUTED:
+                        X, Xt = (
+                            np.linalg.norm(rows[:, None, :] - X[None, :, :], axis=2)
+                            for rows in (X, Xt)
+                        )
                     for code_size, seed in (((1.5, 0), (2.0, 3)) if wrapper == "oc" else ((None, None),)):
                         result.append(dict(
                             name=f"{wrapper}-{component}-k{k}-{labels}" + (f"-size{code_size}-seed{seed}" if seed is not None else ""),
@@ -193,7 +230,7 @@ def reference(c):
         assert not hasattr(model, "predict_proba")
     if c["wrapper"] == "ovr" and hasattr(model, "predict_proba"):
         out["proba"] = model.predict_proba(c["Xt"]).tolist()
-    if c["component"] == "svc-precomputed":
+    if c["component"] in PAIRWISE_COMPONENTS:
         out["pairwise_indices"] = [indices.tolist() for indices in model.pairwise_indices_]
     if c["wrapper"] == "oc":
         out["code_book"] = model.code_book_.tolist()
@@ -222,9 +259,9 @@ from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OutputCodeClassi
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.linear_model import RidgeClassifier
 from moxie.naive_bayes import GaussianNB, IntListDomain
+from moxie.neighbors import KNeighborsClassifier
 from moxie.svm import LinearSVC, SVC
 from moxie.tree import DecisionTreeClassifier
-from moxie.feature_selection import DecisionTreeClassifierImportance
 from std.testing import assert_raises
 
 
@@ -295,9 +332,8 @@ def emit(name: String, y: StringTarget) raises:
         if "code_book" in ref:
             body.append("    emit('code_book', m.code_book_)")
             if c["component"] in OUTPUT_CODE_RESPONSE:
-                method, index = OUTPUT_CODE_RESPONSE[c["component"]]
-                value = f"response[{index}]"
-                if c["dtype"] == "float32":
+                method, value = OUTPUT_CODE_RESPONSE[c["component"]]
+                if c["component"] == "gaussian-nb" and c["dtype"] == "float32":
                     value = f"Float64({value})"
                 body += [
                     "    var scores = NDArray[DType.float64](Shape(Xt.shape[0], len(m.estimators_)))",
@@ -327,6 +363,10 @@ def tolerance(c, key):
         return TOLERANCE["lda32" if c["dtype"] == "float32" else "lda64"]
     if c["component"] == "gaussian-nb":
         return TOLERANCE["gaussian-nb32" if c["dtype"] == "float32" else "gaussian-nb64"]
+    if c["component"] in ("knn", "knn-precomputed"):
+        return TOLERANCE["tree"]
+    if c["component"] in ("knn-distance", "knn-precomputed-distance"):
+        return TOLERANCE["knn-distance32" if c["dtype"] == "float32" else "knn-distance64"]
     if c["component"].startswith("tree"):
         return (1e-14, 1e-15) if key == "decision" else TOLERANCE["tree"]
     return TOLERANCE["ridge32" if c["dtype"] == "float32" else "ridge64"]
@@ -346,18 +386,27 @@ def run_native(group, all_cases, expected):
 def main():
     groups = {
         "ridge-tree": ("ridge", "ridge-noint", "tree", "tree-depth2"),
+        "tree": ("tree", "tree-depth2"),
         "linear-svc": ("linear-svc",),
         "svc": SVC_COMPONENTS,
         "lda": ("lda",),
         "gaussian-nb": ("gaussian-nb",),
+        "knn": ("knn", "knn-distance"),
+        "knn-precomputed": KNN_PRECOMPUTED,
     }
     parser = argparse.ArgumentParser()
     parser.add_argument("--group", choices=("all", *groups), default="all")
     selection = parser.parse_args().group
     all_cases, expected, got = [], [], []
     for group, components in groups.items():
+        if selection == "all" and group == "tree":
+            continue  # The combined ridge-tree group already covers native trees.
         if selection not in ("all", group):
             continue
+        if group in ("ridge-tree", "tree"):
+            assert Path(inspect.getfile(tree_classes)).read_bytes() == (
+                REFERENCE / "sklearn/tree/_classes.py"
+            ).read_bytes(), "install the pinned local scikit-learn checkout"
         if group in ("linear-svc", "svc"):
             assert Path(inspect.getfile(svm_classes)).read_bytes() == (
                 REFERENCE / "sklearn/svm/_classes.py"
@@ -365,6 +414,10 @@ def main():
         if group == "lda":
             assert Path(inspect.getfile(discriminant_analysis)).read_bytes() == (
                 REFERENCE / "sklearn/discriminant_analysis.py"
+            ).read_bytes(), "install the pinned local scikit-learn checkout"
+        if group in ("knn", "knn-precomputed"):
+            assert Path(inspect.getfile(neighbors_classification)).read_bytes() == (
+                REFERENCE / "sklearn/neighbors/_classification.py"
             ).read_bytes(), "install the pinned local scikit-learn checkout"
         batch = cases(components)
         if group == "gaussian-nb":

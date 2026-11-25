@@ -49,19 +49,21 @@ probabilities, decision values, incremental updates and fluent calls.
 
 Production components: `moxie.linear_model.RidgeClassifier` satisfies the
 binary component contract directly (decision values; Float32 or Float64
-features). `moxie.tree.DecisionTreeClassifier` does through the dense
-`moxie.feature_selection.DecisionTreeClassifierImportance` adapter, which
-exposes `NDArray` probabilities. `moxie.svm.SVC` and `moxie.svm.LinearSVC` work through
+features). `moxie.tree.DecisionTreeClassifier` works directly with Float32
+features and an Int64 component target. See [tree composition](family.md#decision-tree-components).
+`moxie.svm.SVC` and `moxie.svm.LinearSVC` work through
 [`BinaryAdapter`](family.md#binary-adapter-for-numeric-list-labels), which
 converts its binary labels between `NDArray` and numeric `List` values.
 `moxie.discriminant_analysis.LinearDiscriminantAnalysis` works through the
 same adapter with its default `Int` labels and Float32 or Float64 features.
 `moxie.naive_bayes.GaussianNB` works through the adapter in both feature dtypes,
 including incremental OvR and OvO with the default List labels.
+`moxie.neighbors.KNeighborsClassifier` works with dense feature matrices and
+an explicit Int64 array target type. See [KNN composition](family.md#k-nearest-neighbors-components).
 `tests/multiclass/production_parity.py` compares all three wrappers around
-these production components against pinned sklearn. Pass `--group svc`,
-`--group linear-svc`, `--group lda` or `--group gaussian-nb` to check one
-component after assembly. The SVC group checks RBF margins in all three
+these production components against pinned sklearn. Pass `--group tree`, `--group svc`,
+`--group linear-svc`, `--group lda`, `--group gaussian-nb` or `--group knn` to
+check one component after assembly. The SVC group checks RBF margins in all three
 wrappers, OvR with probability enabled, and OvO with a precomputed kernel,
 including the training indices retained for each class pair.
 The GaussianNB group checks the reference's string OvO incremental error, then

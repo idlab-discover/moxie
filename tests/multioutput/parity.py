@@ -14,6 +14,7 @@ REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 def oracle():
     import numpy as np
     import sklearn.multioutput
+    from sklearn import config_context
     from sklearn.linear_model import _logistic
     from sklearn.model_selection import _split, _validation
     from sklearn.model_selection import KFold
@@ -24,6 +25,7 @@ def oracle():
     from sklearn.dummy import DummyRegressor, __file__ as dummy_source
     from sklearn.discriminant_analysis import __file__ as lda_source
     from sklearn.svm import _classes as svm_classes
+    from sklearn.utils import _metadata_requests, metadata_routing
     from sklearn.utils import validation as utils_validation
     path = REFERENCE / 'sklearn/multioutput.py'
     for relative, source in [
@@ -38,6 +40,8 @@ def oracle():
         ('sklearn/tree/_classes.py', Path(_classes.__file__)),
         ('sklearn/svm/_classes.py', Path(svm_classes.__file__)),
         ('sklearn/utils/validation.py', Path(utils_validation.__file__)),
+        ('sklearn/utils/_metadata_requests.py', Path(_metadata_requests.__file__)),
+        ('sklearn/utils/metadata_routing.py', Path(metadata_routing.__file__)),
     ]:
         expected = subprocess.check_output(['git', '-C', str(REFERENCE), 'show', f'{REVISION}:{relative}'])
         if source.read_bytes() != expected:
@@ -88,6 +92,14 @@ def oracle():
     expected['ClassifierChainRandom'] = random_chain.predict(query).ravel().tolist()
     weighted = module.MultiOutputRegressor(DummyRegressor()).fit(X, y, sample_weight=np.arange(1, 5))
     expected['MultiOutputRegressorWeightedFit'] = weighted.predict(query).ravel().tolist()
+    with config_context(enable_metadata_routing=True):
+        requested = DummyRegressor().set_fit_request(sample_weight=True)
+        for name, model in [
+            ('MultiOutputRegressor', module.MultiOutputRegressor(requested)),
+            ('RegressorChain', module.RegressorChain(requested, cv=2)),
+        ]:
+            model.fit(X, y, sample_weight=np.arange(1, 5))
+            expected[name + 'RoutedFit'] = model.predict(query).ravel().tolist()
     expected.update(components(module, np))
     expected.update(classifier_components(module, np))
     print(json.dumps(expected))
@@ -260,6 +272,14 @@ def classifier_components(module, np):
         ).fit(X, binary, sample_weight=weights)
     integer_targets = multiclass.astype(np.int64)
     list_bayes = module.MultiOutputClassifier(GaussianNB(), n_jobs=2).fit(X, integer_targets, sample_weight=weights)
+    with config_context(enable_metadata_routing=True):
+        requested = GaussianNB().set_fit_request(sample_weight='row_weights')
+        routed = module.MultiOutputClassifier(requested, n_jobs=2).fit(
+            X, integer_targets, row_weights=weights,
+        )
+        routed_chain = module.ClassifierChain(
+            requested, chain_method='predict_proba', cv=3,
+        ).fit(X, binary.astype(np.int64), row_weights=weights)
     incremental = module.MultiOutputClassifier(GaussianNB(), n_jobs=2)
     incremental.partial_fit(X[:6], integer_targets[:6], classes=list_bayes.classes_)
     incremental.partial_fit(X[6:], integer_targets[6:])
@@ -292,6 +312,9 @@ def classifier_components(module, np):
         'ComponentsSVCChainCVDecision': svc_chain.decision_function(X).ravel().tolist(),
         'ComponentsGaussianNBListLabels': list_bayes.predict(X).ravel().tolist(),
         'ComponentsGaussianNBListProba': list_bayes.predict_proba(X)[1].ravel().tolist(),
+        'ComponentsGaussianNBRoutedLabels': routed.predict(X).ravel().tolist(),
+        'ComponentsGaussianNBRoutedProba': routed.predict_proba(X)[1].ravel().tolist(),
+        'ComponentsGaussianNBChainRoutedCVProba': routed_chain.predict_proba(X).ravel().tolist(),
         'ComponentsGaussianNBListIncrementalLabels': incremental.predict(X).ravel().tolist(),
         'ComponentsGaussianNBListIncrementalProba': incremental.predict_proba(X)[1].ravel().tolist(),
         'ComponentsGaussianNBListChainCVLabels': list_chain.predict(X).ravel().tolist(),

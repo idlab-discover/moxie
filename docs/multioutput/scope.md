@@ -38,8 +38,10 @@ original sample order.
 - The default `cv=None` uses true preceding targets. Native splitter and
   class-response diagnostics use Mojo errors for invalid folds and handle
   undersized classes silently.
-- Incremental sample weights, arbitrary fit metadata, Python reflection,
-  metadata routing and feature-name propagation are not implemented.
+- Ordinary fit supports routing a component's sample-weight request from a
+  typed metadata map. Incremental sample weights, arbitrary metadata, parent
+  routing through a wrapper, Python reflection and feature-name propagation
+  remain unsupported.
 - Component inputs must match the wrapper's feature array type. Regressor
   component targets and predictions use the declared NDArray type. Classifier
   components also accept a list of scalars of the declared label dtype, or

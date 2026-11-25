@@ -10,6 +10,7 @@ from moxie.base import (BaseEstimator, SupervisedEstimator, Predictor, Probabili
     WeightedSupervisedEstimator, ClassifierMixin, clone)
 from moxie._labels import encode_column
 from moxie.dummy import Label
+from moxie.metadata_routing import FitScoreMetadataRequestProvider
 from moxie._multioutput_contracts import MultiOutputClassifierAPI, MultiOutputRegressorAPI, MultiOutputProbability
 from moxie._multioutput import (
     validate_targets, clone_outputs, target_column, stack_predictions,
@@ -237,6 +238,24 @@ def _prediction_vector[T: Movable, label: DType](var values: T) raises -> NDArra
         for i in range(len(labels)):
             result.unsafe_set(i, Scalar[label](labels[i]))
         return result^
+
+
+def _route_fit_weights[E: BaseEstimator](
+    estimator: E, metadata: Dict[String, NDArray[DType.float64]],
+) raises -> Optional[NDArray[DType.float64]]:
+    if len(metadata) == 0:
+        return None
+    comptime if conforms_to(E, FitScoreMetadataRequestProvider):
+        if len(metadata) == 1:
+            var requests = estimator.get_metadata_routing()
+            # The request also diagnoses an unset request for the standard name.
+            var weights = requests.fit.route(metadata)
+            if weights:
+                comptime if conforms_to(E, WeightedSupervisedEstimator):
+                    return weights^
+                else:
+                    raise Error("ValueError: component does not support sample weights")
+    raise Error("ValueError: unexpected fit metadata for multioutput estimator")
 
 
 def _fit_component[E: SupervisedEstimator, dtype: DType, label: DType](
@@ -600,6 +619,17 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         self._fit(X, y, sample_weight.copy())
         return self
 
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        metadata_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[metadata_origin] metadata: Dict[String, Self.SampleWeight],
+    ) raises -> ref[self] Self:
+        var weights = _route_fit_weights(self.estimator, metadata)
+        self._fit(X, y, weights^)
+        return self
+
     def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
         _features(X)
         validate_targets(y, X.shape[0])
@@ -730,6 +760,17 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Self.SampleWeight) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
         self._fit(X, y, sample_weight.copy())
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        metadata_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[metadata_origin] metadata: Dict[String, Self.SampleWeight],
+    ) raises -> ref[self] Self:
+        var weights = _route_fit_weights(self.estimator, metadata)
+        self._fit(X, y, weights^)
         return self
 
     def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
@@ -935,6 +976,17 @@ struct RegressorChain[
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Self.SampleWeight) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
         self._fit_native_cv(X, y, sample_weight.copy(), self.cv.copy())
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        metadata_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[metadata_origin] metadata: Dict[String, Self.SampleWeight],
+    ) raises -> ref[self] Self:
+        var weights = _route_fit_weights(self.estimator, metadata)
+        self._fit_native_cv(X, y, weights^, self.cv.copy())
         return self
 
     def _fit_native_cv[C: Copyable & Deinitable](
@@ -1162,6 +1214,17 @@ struct ClassifierChain[
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Self.SampleWeight) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
         self._fit_native_cv(X, y, sample_weight.copy(), self.cv.copy())
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        metadata_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[metadata_origin] metadata: Dict[String, Self.SampleWeight],
+    ) raises -> ref[self] Self:
+        var weights = _route_fit_weights(self.estimator, metadata)
+        self._fit_native_cv(X, y, weights^, self.cv.copy())
         return self
 
     def _fit_native_cv[C: Copyable & Deinitable](

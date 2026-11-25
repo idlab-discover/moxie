@@ -111,6 +111,33 @@ def main() raises:
     parity["ComponentsGaussianNBListLabels"](list_bayes.predict(X))
     parity["ComponentsGaussianNBListProba"](list_bayes.predict_proba(X)[1])
 
+    var metadata = Dict[String, NDArray[DType.float64]]()
+    metadata["sample_weight"] = weights.copy()
+    with assert_raises(contains="UnsetMetadataPassedError"):
+        _ = list_bayes.fit(X, integer_targets, metadata=metadata)
+    _ = list_bayes.estimator.set_fit_request(sample_weight=False)
+    with assert_raises(contains="unexpected fit metadata"):
+        _ = list_bayes.fit(X, integer_targets, metadata=metadata)
+    assert_equal(list_bayes.predict(X).item(0, 1), Int64(8))
+
+    _ = list_bayes.estimator.set_fit_request(sample_weight="row_weights")
+    var routed = clone(list_bayes)
+    metadata["row_weights"] = weights.copy()
+    with assert_raises(contains="unexpected fit metadata"):
+        _ = routed.fit(X, integer_targets, metadata=metadata)
+    assert_equal(len(routed.estimators_), 0)
+    metadata = Dict[String, NDArray[DType.float64]]()
+    metadata["row_weights"] = weights.copy()
+    _ = routed.fit(X, integer_targets, metadata=metadata)
+    parity["ComponentsGaussianNBRoutedLabels"](routed.predict(X))
+    parity["ComponentsGaussianNBRoutedProba"](routed.predict_proba(X)[1])
+
+    var routed_chain = ClassifierChain(
+        clone(list_bayes.estimator), chain_method="predict_proba", cv=3,
+    )
+    _ = routed_chain.fit(X, binary.astype[DType.int64](), metadata=metadata)
+    parity["ComponentsGaussianNBChainRoutedCVProba"](routed_chain.predict_proba(X))
+
     var incremental = clone(list_bayes)
     var first_X = nm.zeros[DType.float64](Shape(6, 1))
     var second_X = first_X.copy()

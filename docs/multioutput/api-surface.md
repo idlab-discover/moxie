@@ -48,6 +48,15 @@ some components updated. When multiple parallel tasks fail, the wrapper
 reports the error from the lowest target-column index.
 `fit(X, Y, sample_weight=weights)` requires a component with weighted-fit support.
 
+All four wrappers also accept `fit(X, Y, metadata=weights_by_name)` with a
+`Dict[String, NDArray[DType.float64]]`. This call uses the component's
+`FitScoreMetadataRequestProvider` fit request. A `True` request accepts
+`"sample_weight"`, and an alias accepts that key. A lone standard key
+with an unset request raises `UnsetMetadataPassedError`. Declined, unrequested,
+and extra keys raise a Mojo error. An empty map uses ordinary unweighted fit.
+The direct `sample_weight=` overload passes weights without routing. Chains use
+their configured CV for routed fits and pass weights to full-data links only.
+
 Chain constructors accept `order=None`, `random_state=None`,
 `random_order=False`, `verbose=False`, and `cv=None`. `ClassifierChain` also
 accepts a `chain_method` string, defaulting to `"predict"`, or a preference

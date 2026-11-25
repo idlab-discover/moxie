@@ -88,6 +88,7 @@ def test_typed_targets_and_strided_weights() raises:
         min_samples_leaf=1,
         random_state=5,
         early_stopping=True,
+        scoring=String("accuracy"),
         validation_fraction=None,
         n_iter_no_change=2,
         tol=100,
@@ -121,12 +122,15 @@ def test_string_labels_and_explicit_validation() raises:
         min_samples_leaf=1,
         random_state=2,
         early_stopping=True,
+        scoring=String("balanced_accuracy"),
         class_weight=class_weights^,
     )
     _ = model.fit(X, y, X_val=X.view(), y_val=y.copy())
     assert_equal(model.classes_[0], "ant")
     assert_equal(model.classes_[1], "owl")
     assert_equal(model.score(X, y), 1.0)
+    assert_equal(model.train_score_.unsafe_get(0), 0.5)
+    assert_equal(model.validation_score_.unsafe_get(0), 0.5)
     assert_equal(model.validation_score_.size, 5)
     var unknown = StringTarget(["cat", "owl", "owl", "ant", "ant", "ant"])
     with assert_raises(contains="ValueError"):
@@ -170,9 +174,9 @@ def test_invalid_targets_parameters_and_holdout() raises:
     _ = model.set_params(params)
     with assert_raises(contains="class"):
         _ = model.fit(X, y)
-    params.scoring = String("accuracy")
+    params.scoring = String("roc_auc")
     _ = model.set_params(params)
-    with assert_raises(contains="scoring=loss"):
+    with assert_raises(contains="unsupported histogram classification scorer"):
         _ = model.fit(X, y)
     assert_equal(model.n_iter_, 1)
     assert_equal(model.classes_.size, 4)

@@ -38,12 +38,22 @@ are used as supplied. Binary fits support monotonic constraints by feature
 position. All fits support per-node feature subsampling, interaction constraints,
 and [explicit categorical columns](hgb-categorical.md).
 
-Early stopping monitors negative log loss. The default `"auto"` activates it
-above 10,000 rows. With early stopping enabled, the default holdout is a seeded
-stratified split. Supply a fraction or count in a `Variant[Int, Float64]`, set
-`validation_fraction=None` to monitor training loss, or supply both `X_val` and
-`y_val` to use explicit validation data. Each score history starts with the
-intercept-only score and gains one entry per fitted iteration. A fresh fit with early stopping disabled records empty histories.
+Early stopping monitors negative log loss by default. The optional string
+`scoring` also accepts `"accuracy"` or `"balanced_accuracy"`. Set
+`scoring=None` to use the classifier's default accuracy score. These two
+metrics score the predicted classes and account for training and validation
+weights.
+The classifier uses a seeded, stratified sample of 10,000 rows to calculate
+training scores when the training split exceeds that size. Loss scoring uses
+the entire training split, and all scorers use the entire holdout.
+
+The default `early_stopping="auto"` activates above 10,000 rows. With early
+stopping enabled, the default holdout is a seeded stratified split. Supply a
+fraction or count in a `Variant[Int, Float64]`, set `validation_fraction=None`
+to monitor the training score, or supply both `X_val` and `y_val` to use
+explicit validation data. Each score history starts with the intercept-only
+score and gains one entry per fitted iteration. A fresh fit with early
+stopping disabled records empty histories.
 
 `get_params()` returns a typed copy. Pass the edited record to `set_params()`
 before refitting. Configuration updates and failed fits preserve the current
@@ -73,12 +83,14 @@ Native contracts check typed and strided inputs, fluent weighted fitting,
 Float64 pipeline composition, cloning, refits, and invalid inputs. Public
 parity uses scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 Fitted attributes, label predictions, stage counts and stopping iterations
-must match exactly. Decisions, probabilities, and accuracy and loss scores
+must match exactly. Decisions, probabilities, and early-stopping scores
 use absolute and relative tolerances of 1e-12 for reduction and math rounding.
 
 The classifier reuses the family grower, classification loss and row gather,
-the model-selection stratified splitter, and the accuracy metric. Numax's
-tensor argmax requires separate tensor storage. The leaf partition update
+the model-selection stratified splitter and its class quota calculation, and
+the accuracy and balanced accuracy metrics. Scoring reads the raw margins for
+selected rows directly to avoid copying the entire margin matrix for a subset.
+Numax's tensor argmax requires separate tensor storage. The leaf partition update
 writes into a strided NuMojo margin column. The loss fills column-major
 derivative spans so the same grower can consume a class
 column without copying it. Training updates each margin column directly from

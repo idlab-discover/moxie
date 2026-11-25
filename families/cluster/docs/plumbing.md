@@ -109,7 +109,7 @@ Paths identify internal projects; scope.md distinguishes implemented and deferre
 | algorithms/agglomerative | AgglomerativeClustering, FeatureAgglomeration, linkage_tree, ward_tree | neighbors.nearest |
 | algorithms/dbscan | DBSCAN, dbscan | neighbors.nearest |
 | algorithms/optics | OPTICS, compute_optics_graph, cluster_optics_dbscan, cluster_optics_xi | neighbors.nearest |
-| algorithms/hdbscan | Dense precomputed brute hierarchy | cluster.agglomerative, cluster.centroid_engine |
+| algorithms/hdbscan | Dense precomputed brute hierarchy and flat cluster extraction | cluster.agglomerative, cluster.centroid_engine |
 | algorithms/mean_shift | MeanShift, mean_shift, estimate_bandwidth, get_bin_seeds | neighbors.nearest |
 | algorithms/birch | Birch | cluster.agglomerative |
 | algorithms/spectral | SpectralClustering, spectral_clustering | manifold.spectral, cluster.kmeans |
@@ -184,4 +184,5 @@ for CF-tree handles, optional labels, incremental behavior, and supported
 
 The private [HDBSCAN hierarchy](../algorithms/hdbscan/docs/linkage.md)
 uses the shared merge record, agglomerative union-find and centroid engine's
-NumPy-compatible index ordering for tied weights.
+NumPy-compatible index ordering for tied weights. Its [tree extraction](../algorithms/hdbscan/docs/tree.md)
+condenses that hierarchy and produces flat labels and membership probabilities.

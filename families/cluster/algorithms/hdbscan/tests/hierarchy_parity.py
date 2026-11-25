@@ -6,6 +6,7 @@ import importlib
 import json
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import sys
 import warnings
@@ -28,32 +29,41 @@ BUILD = FAMILY / "builds"
 DRIVER = BUILD / "hdbscan_hierarchy_driver"
 
 
-def pinned_oracle():
+def build_pinned_extensions(stems, files, *, source_edits=()):
     def git(*args):
         return subprocess.check_output(["git", "-C", str(SOURCE), *args], text=True)
 
-    files = [
-        REFERENCE / name for name in ("_linkage.pyx", "_reachability.pyx", "_tree.pxd", "hdbscan.py")
-    ]
-    files.append(Path("sklearn/utils/validation.py"))
     if git("rev-parse", "HEAD").strip() != REVISION or git("status", "--porcelain", "--", *files):
         raise ValueError("HDBSCAN parity requires the clean pinned sklearn sources")
 
     target = BUILD / "hdbscan-oracle"
     target.mkdir(parents=True, exist_ok=True)
     extensions = []
-    for stem in ("_reachability", "_linkage"):
+    for stem in stems:
+        name = f"moxie_oracle{stem}"
+        source = SOURCE / REFERENCE / f"{stem}.pyx"
+        declarations = source.with_suffix(".pxd")
+        if declarations.is_file():
+            # Cython resolves same-module declarations by extension name.
+            content = source.read_text()
+            for old, new in source_edits:
+                assert content.count(old) == 1, old
+                content = content.replace(old, new)
+            source = target / f"{name}.pyx"
+            if not source.exists() or source.read_text() != content:
+                source.write_text(content)
+            shutil.copy2(declarations, source.with_suffix(".pxd"))
         extensions.append(
             Extension(
-                f"moxie_oracle{stem}",
-                [str(SOURCE / REFERENCE / f"{stem}.pyx")],
+                name,
+                [str(source)],
                 include_dirs=[np.get_include()],
                 extra_compile_args=["-ffp-contract=off"],
             )
         )
     modules = cythonize(
         extensions,
-        include_path=[str(SOURCE)],
+        include_path=[str(target), str(SOURCE)],
         build_dir=str(target / "generated"),
         compiler_directives={"language_level": 3},
         quiet=True,
@@ -65,16 +75,23 @@ def pinned_oracle():
     distribution.run_command("build_ext")
 
     sys.path.insert(0, str(target))
-    reachability = importlib.import_module("moxie_oracle_reachability")
-    linkage = importlib.import_module("moxie_oracle_linkage")
+    return {stem: importlib.import_module(f"moxie_oracle{stem}") for stem in stems}
+
+
+def pinned_oracle():
+    files = [
+        REFERENCE / name for name in ("_linkage.pyx", "_reachability.pyx", "_tree.pxd", "hdbscan.py")
+    ]
+    files.append(Path("sklearn/utils/validation.py"))
+    extensions = build_pinned_extensions(("_reachability", "_linkage"), files)
     scope = {
         "np": np,
         "sp": scipy.sparse,
         "issparse": issparse,
         "warn": warnings.warn,
-        "make_single_linkage": linkage.make_single_linkage,
-        "mst_from_mutual_reachability": linkage.mst_from_mutual_reachability,
-        "mutual_reachability_graph": reachability.mutual_reachability_graph,
+        "make_single_linkage": extensions["_linkage"].make_single_linkage,
+        "mst_from_mutual_reachability": extensions["_linkage"].mst_from_mutual_reachability,
+        "mutual_reachability_graph": extensions["_reachability"].mutual_reachability_graph,
     }
     for path, functions in [
         (files[-1], {"_allclose_dense_sparse"}),

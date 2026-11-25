@@ -452,6 +452,9 @@
       "modules": {
         "moxie.cluster._hdbscan_linkage": {
           "file": "src/moxie/cluster/_hdbscan_linkage.mojo"
+        },
+        "moxie.cluster._hdbscan_tree": {
+          "file": "src/moxie/cluster/_hdbscan_tree.mojo"
         }
       },
       "assets": {

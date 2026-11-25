@@ -121,7 +121,33 @@ def check[dtype: DType]() raises:
     assert_equal(model.transform(query).unsafe_get(0), SIMD[dtype, 1](100))
 
 
+def check_integer_promotion() raises:
+    var X = nm.zeros[DType.int32](nm.Shape(4, 3))
+    var data: List[Int32] = [1, 2, -1, 3, 4, 3, -1, 6, 5, 8, 8, 7]
+    for i in range(len(data)):
+        X.unsafe_set(i, data[i])
+    var model = KNNImputer(n_neighbors=2, missing_values=MissingValue[DType.float64](-1))
+    var output: nm.NDArray[DType.float64] = model.fit_transform(X)
+    assert_equal(output.shape[0], 4)
+    assert_equal(output.shape[1], 3)
+    assert_equal(output.unsafe_get(2), Float64(4))
+    assert_equal(output.unsafe_get(6), Float64(5.5))
+    assert_equal(X.unsafe_get(2), Int32(-1))
+    var refit = clone(model)
+    with assert_raises():
+        _ = refit.transform(X)
+    assert_equal(refit.fit(X).transform(X).unsafe_get(6), Float64(5.5))
+    var empty = nm.zeros[DType.int32](nm.Shape(4, 0))
+    with assert_raises():
+        _ = refit.fit(empty)
+    assert_equal(refit.transform(X).unsafe_get(6), Float64(5.5))
+    var complete = nm.ones[DType.uint16](nm.Shape(2, 2))
+    assert_equal(refit.fit(complete).transform(complete).shape[1], 2)
+    print("PASS: KNN integer input promotes to Float64")
+
+
 def main() raises:
+    check_integer_promotion()
     check[DType.float32]()
     check[DType.float64]()
     # Reciprocal overflow must use sklearn's exact-match weighting convention.

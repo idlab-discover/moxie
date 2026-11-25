@@ -183,6 +183,50 @@ with warnings.catch_warnings():
     lines.extend(['@no_inline',f'def case{cases}() raises:']);array('X',X,'float64')
     lines.append('    var model = KNNImputer[DType.float64, L1](n_neighbors=2, metric="callable", metric_callback=L1())')
     lines.extend(['    model.fit(X)',f'    emit("{name}", model.transform(X), model.get_feature_names_out())']);cases+=1
+    # sklearn validates integer input with FLOAT_DTYPES: Float64 before masking.
+    for dtype, mojo_type, layout, indicator in (
+        ('int64', 'Int64', 'contiguous', False),
+        ('int32', 'Int32', 'offset', True),
+        ('int64', 'Int64', 'strided', True),
+        ('uint16', 'UInt16', 'reversed', True),
+    ):
+        marker = 99 if dtype == 'uint16' else -1
+        X = np.array([[1, 2, marker], [3, 4, 3], [marker, 6, 5],
+                      [8, 8, 7], [2, marker, 4]], dtype=dtype)
+        T = np.array([[marker, 2, 3], [4, marker, marker]], dtype=dtype)
+        name = f'c{cases}'
+        lines.extend(['@no_inline', f'def case{cases}() raises:'])
+        oracle_inputs = []
+        for label, values in (('X',X),('T',T)):
+            rows, cols = values.shape
+            if layout == 'contiguous':
+                backing = values
+                view = backing
+            elif layout == 'offset':
+                backing = np.vstack([np.zeros((1, cols), dtype=dtype), values])
+                view = backing[1:, :]
+            elif layout == 'strided':
+                backing = np.zeros((rows, 2 * cols), dtype=dtype)
+                backing[:, 1::2] = values
+                view = backing[:, 1::2]
+            else:
+                backing = values
+                view = backing[::-1, ::-1]
+            oracle_inputs.append(view)
+            shape = ', '.join(map(str, backing.shape))
+            lines.append(f'    var {label}_owner = nm.zeros[DType.{dtype}](nm.Shape({shape}))')
+            for i, value in enumerate(backing.flat):
+                lines.append(f'    {label}_owner.unsafe_set({i}, {mojo_type}({int(value)}))')
+            strides = ', '.join(str(stride // view.itemsize) for stride in view.strides)
+            offset = (view.ctypes.data - backing.ctypes.data) // view.itemsize
+            lines.append(f'    var {label} = {label}_owner.view_with_layout(nm.Shape({rows}, {cols}), nm.NDArrayStrides({strides}), {offset})')
+        fitted = oracle.KNNImputer(missing_values=marker, n_neighbors=2, add_indicator=indicator).fit(oracle_inputs[0])
+        out = fitted.transform(oracle_inputs[1])
+        assert out.dtype == np.float64
+        expected[name] = (out, list(fitted.get_feature_names_out()), 'float64')
+        lines.append(f'    var model = KNNImputer(missing_values=MissingValue[DType.float64]({marker}), n_neighbors=2, add_indicator={indicator})')
+        lines.extend(['    _ = model.fit(X)', f'    emit("{name}", model.transform(T), model.get_feature_names_out())'])
+        cases += 1
 lines.append('def main() raises:')
 lines.extend(f'    case{i}()' for i in range(cases))
 source=ROOT/'builds/knn/parity.mojo';source.parent.mkdir(exist_ok=True)

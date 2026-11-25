@@ -1,12 +1,13 @@
 # Gallery fixture adapted from scikit-learn; authors: scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
-"""Structured GPR contracts and native values for the pinned sklearn oracle."""
-from numojo import Shape, zeros
+"""Structured GP contracts and native values for the pinned sklearn oracle."""
+from numojo import NDArray, Shape, zeros
 from std.testing import assert_almost_equal, assert_equal, assert_false, assert_raises
 
 from moxie.base import clone
 from moxie.gaussian_process import (
-    KernelContract, KernelEvaluation, StructuredGaussianProcessRegressor,
+    KernelContract, KernelEvaluation, StructuredGaussianProcessClassifier,
+    StructuredGaussianProcessRegressor,
 )
 from moxie.gaussian_process.kernels import Hyperparameter
 from moxie.gaussian_process._kernel_math import fexp, flog
@@ -204,9 +205,113 @@ def invalid_kernel_outputs() raises:
         _ = bad_diagonal.predict(X, return_std=True)
 
 
+def labels(values: List[Int64]) raises -> NDArray[DType.int64]:
+    var result = zeros[DType.int64](Shape(len(values)))
+    for i in range(len(values)):
+        result.unsafe_set(i, values[i])
+    return result^
+
+
+def classification_case(name: String, fixed: Bool, strategy: String) raises:
+    comptime Model = StructuredGaussianProcessClassifier[SequenceKernel, String]
+    var binary = name == "classification_gallery" or name == "classification_optimized"
+    var train: List[String] = ["AGCT", "CGA", "TAAC", "TCG", "CTTT", "TGCT"]
+    var query: List[String] = ["AAA", "ATAG", "CTC", "CT", "C"]
+    var y = labels([1, 1, 1, 0, 0, 0])
+    if not binary:
+        train = ["AAA", "CC", "GGG", "AAAT", "CCC", "GG"]
+        query = ["AA", "CCC", "G", "AT", "TG"]
+        y = labels([9, -3, 4, 9, -3, 4])
+    var model = Model(
+        SequenceKernel(0.5, fixed, 0),
+        optimizer="fmin_l_bfgs_b" if binary and not fixed else Optional[String](),
+        multi_class=strategy,
+        copy_X_train=False,
+    )
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict(query)
+    _ = model.fit(train, y)
+
+    emit(name, "classes", model.classes_().astype[DType.float64]())
+    var prediction = model.predict(query)
+    emit(name, "prediction", prediction.astype[DType.float64]())
+    emit(name, "score", vector([model.score(train, y)]))
+    emit(name, "lml", vector([model.log_marginal_likelihood().value]))
+    var kernels = model.kernel_()
+    var theta = List[Float64]()
+    for kernel in kernels:
+        var part = kernel.theta()
+        for i in range(part.size):
+            theta.append(part.unsafe_get(i))
+    emit(name, "theta", vector(theta))
+    assert_equal(len(kernels), 1 if binary else 3)
+    assert_equal(model.n_features_in_, 0)
+    if binary or strategy == "one_vs_rest":
+        emit(name, "probability", model.predict_proba(query))
+    else:
+        with assert_raises(contains="does not support predicting probability"):
+            _ = model.predict_proba(query)
+    if binary:
+        var moments = model.latent_mean_and_variance(query)
+        emit(name, "mean", moments.mean)
+        emit(name, "variance", moments.variance)
+        var result = model.log_marginal_likelihood(kernels[0].theta(), eval_gradient=True)
+        emit(name, "gradient", result.gradient.value())
+    else:
+        with assert_raises(contains="require binary classification"):
+            _ = model.latent_mean_and_variance(query)
+        emit(name, "shared_lml", vector([model.log_marginal_likelihood(vector([-0.8])).value]))
+        emit(name, "component_lml", vector([
+            model.log_marginal_likelihood(vector([-0.8, -0.6, -0.4])).value
+        ]))
+
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_equal(fresh.get_params().kernel.value().similarity, 0.5)
+    var fitted_copy = model.copy()
+    train[0] = "T"
+    assert_equal(model.base_estimator_().estimators_[0].objective.X[0], "AGCT" if binary else (
+        "CC" if strategy == "one_vs_one" else "AAA"
+    ))
+    assert_equal(model.predict(query).item(0), prediction.item(0))
+    _ = model.fit(train, y)
+    assert_equal(fitted_copy.predict(query).item(0), prediction.item(0))
+    with assert_raises(contains="at least one structured sample"):
+        _ = model.predict(List[String]())
+    with assert_raises(contains="different numbers of samples"):
+        _ = model.fit(query, y)
+    with assert_raises(contains="at least two classes"):
+        _ = model.fit(query, labels([1, 1, 1, 1, 1]))
+    assert_equal(model.n_classes_(), 2 if binary else 3)
+    with assert_raises(contains="explicit non-vector kernel"):
+        _ = model.set_params(kernel=Optional[SequenceKernel]())
+    assert_equal(model.get_params().kernel.value().similarity, 0.5)
+
+
+def invalid_classification_kernel_outputs() raises:
+    comptime Model = StructuredGaussianProcessClassifier[SequenceKernel, String]
+    var X: List[String] = ["A", "AA"]
+    var y = labels([0, 1])
+    var bad_covariance = Model(SequenceKernel(0.5, True, 1))
+    with assert_raises(contains="expected kernel covariance shape"):
+        _ = bad_covariance.fit(X, y)
+    var missing_gradient = Model(SequenceKernel(0.5, False, 2))
+    with assert_raises(contains="did not return a requested gradient"):
+        _ = missing_gradient.fit(X, y)
+    var bad_diagonal = Model(SequenceKernel(0.5, True, 3))
+    _ = bad_diagonal.fit(X, y)
+    with assert_raises(contains="expected kernel diagonal shape"):
+        _ = bad_diagonal.predict_proba(X)
+
+
 def main() raises:
     parity_case(True)
     parity_case(False)
     multi_target()
     invalid_kernel_outputs()
-    print("PASS structured GPR contracts")
+    classification_case("classification_gallery", True, "one_vs_rest")
+    classification_case("classification_optimized", False, "one_vs_rest")
+    classification_case("classification_ovr", False, "one_vs_rest")
+    classification_case("classification_ovo", False, "one_vs_one")
+    invalid_classification_kernel_outputs()
+    print("PASS structured GP contracts")

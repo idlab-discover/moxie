@@ -8,9 +8,9 @@ from std.collections import InlineArray
 from std.math import abs, inf, nan, sqrt
 
 from ._algebra import CholeskyAlgebra
-from ._gpr import LikelihoodResult
+from ._gpr import LikelihoodResult, _covariance_copy
 from ._kernel_math import fexp, flog
-from ._plumbing import Dense64, LikelihoodObjective, ObjectiveEvaluation
+from ._plumbing import Dense64, KernelContract, LikelihoodObjective, ObjectiveEvaluation
 from .kernels import Kernel
 
 
@@ -158,9 +158,9 @@ def _gradient(
     return result^
 
 
-struct _LaplaceObjective(Copyable, LikelihoodObjective):
-    var kernel: Kernel
-    var X: Dense64
+struct _LaplaceObjective[K: KernelContract](Copyable, LikelihoodObjective):
+    var kernel: Self.K
+    var X: Self.K.Input
     var y: Dense64
     var max_iter: Int
     var warm_start: Bool
@@ -168,8 +168,8 @@ struct _LaplaceObjective(Copyable, LikelihoodObjective):
 
     def __init__(
         out self,
-        var kernel: Kernel,
-        var X: Dense64,
+        var kernel: Self.K,
+        var X: Self.K.Input,
         var y: Dense64,
         max_iter: Int,
         warm_start: Bool,
@@ -188,15 +188,25 @@ struct _LaplaceObjective(Copyable, LikelihoodObjective):
         return _posterior_mode(covariance, self.y, self.max_iter, self.latent)
 
     def likelihood(
-        mut self, kernel: Kernel, eval_gradient: Bool
+        mut self, kernel: Self.K, eval_gradient: Bool
     ) raises -> LikelihoodResult:
         var evaluation = kernel.evaluate(self.X, eval_gradient=eval_gradient)
-        var mode = self.mode(evaluation.covariance)
+        var n = self.y.size
+        var covariance: Dense64
+        comptime if Self.K == Kernel:
+            covariance = evaluation.covariance.view()
+        else:
+            covariance = _covariance_copy(evaluation.covariance, n, n)
+        var mode = self.mode(covariance)
         if not eval_gradient:
             return LikelihoodResult(mode.value, None)
-        var gradient = _gradient(
-            evaluation.covariance, evaluation.gradient.value(), self.y, mode
-        )
+        if not evaluation.gradient:
+            raise Error("ValueError: the kernel did not return a requested gradient")
+        ref derivatives = evaluation.gradient.value()
+        if derivatives.shape != Shape(n, n, len(kernel.theta())):
+            raise Error("ValueError: expected kernel gradient shape (n, n, n_dims)")
+        var dense = derivatives.view() if derivatives.is_c_contiguous() else derivatives.contiguous()
+        var gradient = _gradient(covariance, dense, self.y, mode)
         return LikelihoodResult(mode.value, gradient^)
 
     def evaluate(

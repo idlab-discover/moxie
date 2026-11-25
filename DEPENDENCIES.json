@@ -780,6 +780,7 @@
           "moxie.gaussian_process": {
             "GaussianProcessClassifier": "moxie.gaussian_process._gpc",
             "GaussianProcessClassifierParams": "moxie.gaussian_process._gpc",
+            "StructuredGaussianProcessClassifier": "moxie.gaussian_process._gpc",
             "LatentMoments": "moxie.gaussian_process._plumbing",
             "GaussianProcessClassifierAPI": "moxie.gaussian_process._base",
             "GaussianProcessPosterior": "moxie.gaussian_process._base",

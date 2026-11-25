@@ -5,6 +5,8 @@ Supported exports are `IsotonicRegression`, `isotonic_regression`, and
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 The module also exports `IsotonicCVAdapter`, `IsotonicScorer`, and
 `IsotonicSearchValue` for [model selection](api.md#composition).
+`moxie.isotonic_serialization` provides `IsotonicRegressionSchema[dtype]`
+for [native persistence](api.md#persistence).
 
 Dense Float64 and Float32 NDArrays and lists support weighted PAVA, increasing/decreasing
 fits, automatic direction, predictor tie consolidation, threshold compression,
@@ -30,8 +32,8 @@ snapshot is consumed.
 
 Language adaptations include compile-time dtype selection, explicit conversion
 of integer/mixed-dtype inputs, same-dtype weight vectors, fluent in-place fit and typed
-parameter records. Python warnings, reflection, bindings, pandas output,
-metadata routing and serialization are separate binding work. Direct `f_` is a
+parameter records. Python warnings, reflection, bindings, pandas output, and
+metadata routing are separate binding work. Direct `f_` is a
 native method; feature-name inputs are accepted and ignored. See [API](api.md)
 for validation differences and copy/ownership semantics.
 
@@ -48,9 +50,9 @@ tests cover invalid shapes, empty/nonfinite inputs, weight errors, unfitted
 access and failed refits; compile-failure checks reject missing predictor
 capability and implicit mixed-dtype conversion. Parity executes the pinned
 local Python module and a locally compiled copy of its Cython tie engine:
-624 Float64 cases and 457 Float32 cases, including weighted scores and scaler
-pipeline predictions. Threshold counts, X thresholds, domain and direction
-must match exactly. Value tolerances
+627 Float64 cases and 460 Float32 cases, including weighted scores, scaler
+pipeline predictions, and interpolator reconstruction. Threshold counts,
+X thresholds, domain and direction must match exactly. Value tolerances
 are `2e-12` for Float64 and `2e-6` for Float32, allowing pooling/reduction order
 and rounding differences. Python and SciPy are validation tools only.
 

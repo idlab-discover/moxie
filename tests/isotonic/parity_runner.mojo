@@ -4,6 +4,8 @@ from std.testing import assert_equal, assert_raises
 from numojo import array
 from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
+from moxie.isotonic_serialization import IsotonicRegressionSchema
+from moxie.serialization import dumps, loads
 from std.math import isfinite, isnan
 from moxie.isotonic import (
     IsotonicRegression,
@@ -135,6 +137,11 @@ def run_cases[dtype: DType]() raises:
             else:
                 var weights = vector[dtype](String(fields[3]))
                 _ = model.fit(x_array, target, sample_weight=array(weights, [len(weights)]))
+            if kind == "serialization":
+                comptime Schema = IsotonicRegressionSchema[dtype]
+                _ = model.set_params(out_of_bounds=String(fields[14]))
+                var wire = dumps(Schema.encode(model))
+                model = Schema.decode(loads(wire))
             compare(
                 model.X_thresholds_,
                 vector[dtype](String(fields[8])),
@@ -148,18 +155,24 @@ def run_cases[dtype: DType]() raises:
             )
             var query = vector[dtype](String(fields[10]))
             var query_array = array(query, [len(query)])
-            var predictions = model.predict(query_array)
-            assert_equal(predictions.ndim, 1)
-            compare(
-                predictions.tolist(),
-                vector[dtype](String(fields[11])),
-                context + " predict",
-            )
-            compare(
-                model.transform(query),
-                vector[dtype](String(fields[11])),
-                context + " transform",
-            )
+            if kind == "serialization" and fields[11] == "-":
+                with assert_raises(contains="outside"):
+                    _ = model.predict(query_array)
+                with assert_raises(contains="outside"):
+                    _ = model.transform(query)
+            else:
+                var predictions = model.predict(query_array)
+                assert_equal(predictions.ndim, 1)
+                compare(
+                    predictions.tolist(),
+                    vector[dtype](String(fields[11])),
+                    context + " predict",
+                )
+                compare(
+                    model.transform(query),
+                    vector[dtype](String(fields[11])),
+                    context + " transform",
+                )
             if model.increasing_ != (fields[12] == "true"):
                 raise Error(context + ": fitted direction mismatch")
             compare(

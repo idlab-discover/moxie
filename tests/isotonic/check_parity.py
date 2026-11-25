@@ -90,7 +90,8 @@ def main():
         np.testing.assert_allclose(expected, independent, rtol=2e-12, atol=2e-12)
         add("kernel", y, w, low, high, increasing, expected)
 
-    def estimator(x, y, w=None, low=None, high=None, direction=True, mode="clip", query=None, score=False):
+    def estimator(x, y, w=None, low=None, high=None, direction=True, mode="clip",
+                  query=None, score=False, restored_mode=None):
         x, y = np.asarray(x, dtype=dtype), np.asarray(y, dtype=dtype)
         w = None if w is None else np.asarray(w, dtype=dtype)
         model = reference.IsotonicRegression(
@@ -99,15 +100,37 @@ def main():
         if query is None:
             query = np.linspace(model.X_min_, model.X_max_, 31)
         query = np.asarray(query, dtype=dtype)
-        expected = model.predict(query)
-        fields = ["score" if score else "estimator", x, y, w, low, high, direction,
+        kind = "score" if score else "estimator"
+        if restored_mode is not None:
+            kind = "serialization"
+            model.set_params(out_of_bounds=restored_mode)
+            restored = reference.IsotonicRegression()
+            restored.__setstate__(model.__getstate__())
+            model = restored
+        try:
+            expected = model.predict(query)
+        except ValueError as error:
+            if restored_mode != "raise" or "interpolation range" not in str(error):
+                raise
+            expected = None
+        else:
+            if restored_mode is not None:
+                assert expected.dtype == dtype
+        fields = [kind, x, y, w, low, high, direction,
                   mode, model.X_thresholds_, model.y_thresholds_, query, expected,
                   model.increasing_, [model.X_min_, model.X_max_]]
         if score:
             target = rng.normal(size=len(query)).astype(dtype)
             sw = rng.uniform(0.01, 2, size=len(query)).astype(dtype)
             fields += [target, sw, [model.score(query, target, sample_weight=sw)]]
+        if restored_mode is not None:
+            fields.append(restored_mode)
         add(*fields)
+
+    def serialization():
+        for mode, restored_mode in [("raise", "nan"), ("nan", "raise"), ("raise", "clip")]:
+            estimator([0, 1, 2], [3, 2, 1], direction="auto", mode=mode,
+                      query=[-1, 0.5, 1.5, 3], restored_mode=restored_mode)
 
     def pipeline():
         x = np.asarray([7, -2, 3, 3, 10, 16], dtype=dtype)
@@ -121,6 +144,7 @@ def main():
         add("pipeline", x, y, query, expected)
 
     pipeline()
+    serialization()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(240):
@@ -173,6 +197,7 @@ def main():
     records = []
     dtype = np.float32
     pipeline()
+    serialization()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(150):

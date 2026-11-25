@@ -215,6 +215,9 @@
         "moxie.isotonic": {
           "file": "src/moxie/isotonic.mojo"
         },
+        "moxie.isotonic_serialization": {
+          "file": "src/moxie/isotonic_serialization.mojo"
+        },
         "moxie._isotonic_adapters": {
           "file": "src/moxie/_isotonic_adapters.mojo"
         },

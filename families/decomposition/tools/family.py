@@ -180,6 +180,8 @@ def serialization_check():
         "incremental_pca": "driver",
         "truncated_svd": "driver",
         "factor_analysis": "driver",
+        "fastica": "driver",
+        "kernel_pca": "driver",
     }
     names = selected() if os.environ.get("MOXIE_ESTIMATORS") else drivers
     unsupported = set(names) - drivers.keys()

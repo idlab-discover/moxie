@@ -2,6 +2,8 @@
 from std.sys import argv
 from moxie.decomposition import KernelPCA
 from moxie.decomposition._kernel_pca import KernelPower
+from moxie.decomposition_serialization import KernelPCASchema
+from moxie.serialization import dumps, loads
 from decomposition_testing import emit, emit_scalar, read_matrix
 
 
@@ -21,6 +23,8 @@ def evaluate[dtype: DType]() raises:
         alpha=Float64(String(a[12])), degree=Float64(String(a[13])),
         coef0=Float64(String(a[14])))
     var z = model.fit_transform(x)
+    comptime Schema = KernelPCASchema[dtype]
+    model = Schema.decode(loads(dumps(Schema.encode(model))))
     emit("fit", z)
     emit("values", model.eigenvalues_.value())
     emit("vectors", model.eigenvectors_.value())

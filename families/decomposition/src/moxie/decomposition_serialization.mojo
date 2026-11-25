@@ -1,11 +1,13 @@
 """Native state schemas for the runtime dense decomposition estimators."""
 
 from std.math import isfinite, isinf, isnan
-from numojo import NDArray, Shape, zeros
+from numojo import NDArray, Shape, array, zeros
 from .decomposition._pca import PCA, ComponentCount, IteratedPower
 from .decomposition._incremental_pca import IncrementalPCA
 from .decomposition._truncated_svd import TruncatedSVD
 from .decomposition._factor_analysis import FactorAnalysis
+from .decomposition._fastica import FastICA, WhitenOption
+from .decomposition._kernel_pca import KernelPCA, KernelPower
 from .serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 
 
@@ -131,7 +133,7 @@ def _write_array[dtype: DType](
     for axis in range(len(shape)):
         if value.shape[axis] != shape[axis]:
             raise Error("ModelSchemaError: invalid shape for " + name)
-    var nonnegative = name == "singular_values_" or name == "explained_variance_"
+    var nonnegative = name in ("singular_values_", "explained_variance_", "eigenvalues_")
     var positive = name == "noise_variance_"
     var values = List[Scalar[dtype]](capacity=value.size)
     for i in range(shape[0]):
@@ -162,7 +164,7 @@ def _read_array[dtype: DType](
     if len(shape) == 2:
         dimensions = Shape(shape[0], shape[1])
     var array = zeros[dtype](dimensions)
-    var nonnegative = name == "singular_values_" or name == "explained_variance_"
+    var nonnegative = name in ("singular_values_", "explained_variance_", "eigenvalues_")
     var positive = name == "noise_variance_"
     for i in range(len(values)):
         var value = values[i]
@@ -515,4 +517,275 @@ struct FactorAnalysisSchema[dtype: DType = DType.float64](ModelSchema):
         model.noise_variance_ = _read_array[DType.float64](archive, "noise_variance_", state.fitted, [state.features])
         model.mean_ = _read_array[DType.float64](archive, "mean_", state.fitted, [state.features])
         model.n_features_in_ = state.features
+        return model^
+
+
+def _write_float_params(mut writer: BinaryWriter, params: Optional[Dict[String, Float64]]):
+    writer.boolean(Bool(params))
+    if params:
+        ref values = params.value()
+        writer.uint(UInt64(len(values)))
+        for entry in values.items():
+            writer.string(entry.key)
+            writer.scalar(entry.value)
+
+
+def _read_float_params(mut reader: BinaryReader) raises -> Optional[Dict[String, Float64]]:
+    if not reader.boolean():
+        return None
+    var count = reader.count(reader.remaining() // 16)
+    var params = Dict[String, Float64]()
+    for _ in range(count):
+        var key = reader.string()
+        if key in params:
+            raise Error("ModelSchemaError: duplicate numeric parameter " + key)
+        params[key] = reader.scalar[DType.float64]()
+    return params^
+
+
+def _write_ica_initial_weights(mut archive: ModelArchive, initial: NDArray[DType.float64]) raises:
+    var shape = List[Int](capacity=initial.ndim)
+    for axis in range(initial.ndim):
+        shape.append(initial.shape[axis])
+    var values = List[Float64](capacity=initial.size)
+    # Configuration can contain any array accepted by the constructor.
+    # Materialize views in logical row order, preserving scalar bits.
+    if initial.is_c_contiguous():
+        for i in range(initial.size):
+            values.append(initial.unsafe_get(i))
+    elif initial.size:
+        var dense = initial.contiguous()
+        for i in range(dense.size):
+            values.append(dense.unsafe_get(i))
+    archive.add_array("w_init", shape, values)
+
+
+def _read_ica_initial_weights(archive: ModelArchive) raises -> NDArray[DType.float64]:
+    var payload = archive.array("w_init")
+    var values = payload.values[DType.float64]()
+    if not payload.shape:
+        var scalar = array(values, [1])
+        return scalar[0]
+    return array(values, payload.shape)
+
+
+def _check_ica_state(state: _ComponentState, iterations: Int, centered: Bool) raises:
+    state.validate(minimum_features=1, minimum_rank=1)
+    if state.fitted:
+        if iterations < 1 or (not centered and state.rank != state.features):
+            raise Error("ModelSchemaError: invalid fitted FastICA metadata")
+    elif iterations or centered:
+        raise Error("ModelSchemaError: unfitted FastICA has learned metadata")
+
+
+struct FastICASchema[dtype: DType = DType.float64](ModelSchema):
+    """Version 1 of dense FastICA state, including the private unmixing matrix."""
+
+    comptime Model = FastICA[Self.dtype]
+    comptime _type_id = "moxie.decomposition.FastICA"
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self._type_id, 1)
+        var writer = BinaryWriter()
+        writer.uint(UInt64(dtype_code[Self.dtype]()))
+        _write_optional_int(writer, model.n_components)
+        writer.string(model.algorithm)
+        writer.boolean(model.whiten.isa[Bool]())
+        if model.whiten.isa[Bool]():
+            writer.boolean(model.whiten[Bool])
+        else:
+            writer.string(model.whiten[String])
+        writer.string(model.fun)
+        _write_float_params(writer, model.fun_args)
+        writer.integer(model.max_iter)
+        writer.scalar(model.tol)
+        writer.boolean(Bool(model.w_init))
+        if model.w_init:
+            _write_ica_initial_weights(archive, model.w_init.value())
+        writer.string(model.whiten_solver)
+        _write_optional_int(writer, model.random_state)
+
+        var state = _component_state(model.components_, model.n_features_in_)
+        var centered = Bool(model.mean_)
+        _check_ica_state(state, model.n_iter_, centered)
+        state.write(writer)
+        writer.integer(model.n_iter_)
+        writer.boolean(centered)
+        archive.manifest = writer^.finish()
+        _write_array(archive, "components_", model.components_, state.fitted, [state.rank, state.features])
+        _write_array(archive, "mixing_", model.mixing_, state.fitted, [state.features, state.rank])
+        _write_array(archive, "_unmixing", model._unmixing, state.fitted, [state.rank, state.rank])
+        _write_array(archive, "mean_", model.mean_, centered, [state.features])
+        _write_array(archive, "whitening_", model.whitening_, centered, [state.rank, state.features])
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self._type_id, 1)
+        archive.validate()
+        var reader = BinaryReader(archive.manifest)
+        _check_dtype[Self.dtype](reader)
+        var model = Self.Model(_read_optional_int(reader))
+        model.algorithm = reader.string()
+        if reader.boolean():
+            model.whiten = WhitenOption(reader.boolean())
+        else:
+            model.whiten = WhitenOption(reader.string())
+        model.fun = reader.string()
+        model.fun_args = _read_float_params(reader)
+        model.max_iter = reader.integer()
+        model.tol = reader.scalar[DType.float64]()
+        var has_init = reader.boolean()
+        if has_init:
+            model.w_init = _read_ica_initial_weights(archive)
+        model.whiten_solver = reader.string()
+        model.random_state = _read_optional_int(reader)
+        var state = _ComponentState.read(reader)
+        model.n_iter_ = reader.integer()
+        var centered = reader.boolean()
+        reader.finish()
+        _check_ica_state(state, model.n_iter_, centered)
+        if len(archive.payloads) != Int(has_init) + 3 * Int(state.fitted) + 2 * Int(centered):
+            raise Error("ModelSchemaError: unexpected FastICA array count")
+        model.n_features_in_ = state.features
+        model.components_ = _read_array[Self.dtype](archive, "components_", state.fitted, [state.rank, state.features])
+        model.mixing_ = _read_array[Self.dtype](archive, "mixing_", state.fitted, [state.features, state.rank])
+        model._unmixing = _read_array[Self.dtype](archive, "_unmixing", state.fitted, [state.rank, state.rank])
+        model.mean_ = _read_array[Self.dtype](archive, "mean_", centered, [state.features])
+        model.whitening_ = _read_array[Self.dtype](archive, "whitening_", centered, [state.rank, state.features])
+        return model^
+
+
+@fieldwise_init
+struct _KernelPCAState(Movable):
+    var fitted: Bool
+    var samples: Int
+    var features: Int
+    var rank: Int
+    var gamma: Float64
+    var kernel_mean: Float64
+    var has_inverse: Bool
+
+    def validate(self) raises:
+        if self.fitted:
+            if (
+                self.samples < 1 or self.features < 1
+                or self.rank < 0 or self.rank > self.samples
+                or not isfinite(self.gamma) or self.gamma < 0 or not isfinite(self.kernel_mean)
+            ):
+                raise Error("ModelSchemaError: invalid fitted KernelPCA metadata")
+        elif self.samples or self.features or self.rank or self.gamma != 0 or self.kernel_mean != 0 or self.has_inverse:
+            raise Error("ModelSchemaError: unfitted KernelPCA has learned metadata")
+
+    def write(self, mut writer: BinaryWriter):
+        writer.boolean(self.fitted)
+        writer.integer(self.samples)
+        writer.integer(self.features)
+        writer.integer(self.rank)
+        writer.scalar(self.gamma)
+        writer.scalar(self.kernel_mean)
+        writer.boolean(self.has_inverse)
+
+    @staticmethod
+    def read(mut reader: BinaryReader) raises -> Self:
+        return Self(reader.boolean(), reader.integer(), reader.integer(), reader.integer(),
+            reader.scalar[DType.float64](), reader.scalar[DType.float64](), reader.boolean())
+
+
+struct KernelPCASchema[dtype: DType = DType.float64](ModelSchema):
+    """Version 1 of dense KernelPCA state, including centering and inverse maps."""
+
+    comptime Model = KernelPCA[Self.dtype]
+    comptime _type_id = "moxie.decomposition.KernelPCA"
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self._type_id, 1)
+        var writer = BinaryWriter()
+        writer.uint(UInt64(dtype_code[Self.dtype]()))
+        _write_optional_int(writer, model.n_components)
+        writer.string(model.kernel)
+        writer.boolean(Bool(model.gamma))
+        if model.gamma:
+            writer.scalar(model.gamma.value())
+        writer.scalar(model.degree)
+        writer.scalar(model.coef0)
+        _write_float_params(writer, model.kernel_params)
+        writer.scalar(model.alpha)
+        writer.boolean(model.fit_inverse_transform)
+        writer.string(model.eigen_solver)
+        writer.scalar(model.tol)
+        _write_optional_int(writer, model.max_iter)
+        writer.boolean(model.iterated_power.isa[Int]())
+        if model.iterated_power.isa[Int]():
+            writer.integer(model.iterated_power[Int])
+        else:
+            writer.string(model.iterated_power[String])
+        writer.boolean(model.remove_zero_eig)
+        _write_optional_int(writer, model.random_state)
+        writer.boolean(model.copy_X)
+        _write_optional_int(writer, model.n_jobs)
+
+        var samples = 0
+        if model.X_fit_:
+            ref training = model.X_fit_.value()
+            if training.ndim != 2:
+                raise Error("ModelSchemaError: invalid shape for X_fit_")
+            samples = training.shape[0]
+        var rank = 0
+        if model.eigenvalues_:
+            rank = model.eigenvalues_.value().size
+        var state = _KernelPCAState(Bool(model.eigenvalues_), samples, model.n_features_in_,
+            rank, model.gamma_, model._kernel_all, Bool(model.dual_coef_))
+        state.validate()
+        state.write(writer)
+        archive.manifest = writer^.finish()
+        _write_array(archive, "eigenvalues_", model.eigenvalues_, state.fitted, [state.rank])
+        _write_array(archive, "eigenvectors_", model.eigenvectors_, state.fitted, [state.samples, state.rank])
+        _write_array(archive, "X_fit_", model.X_fit_, state.fitted, [state.samples, state.features])
+        _write_array(archive, "_kernel_mean", model._kernel_mean, state.fitted, [state.samples])
+        _write_array(archive, "X_transformed_fit_", model.X_transformed_fit_, state.has_inverse, [state.samples, state.rank])
+        _write_array(archive, "dual_coef_", model.dual_coef_, state.has_inverse, [state.samples, state.features])
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self._type_id, 1)
+        archive.validate()
+        var reader = BinaryReader(archive.manifest)
+        _check_dtype[Self.dtype](reader)
+        var model = Self.Model(_read_optional_int(reader))
+        model.kernel = reader.string()
+        if reader.boolean():
+            model.gamma = reader.scalar[DType.float64]()
+        model.degree = reader.scalar[DType.float64]()
+        model.coef0 = reader.scalar[DType.float64]()
+        model.kernel_params = _read_float_params(reader)
+        model.alpha = reader.scalar[DType.float64]()
+        model.fit_inverse_transform = reader.boolean()
+        model.eigen_solver = reader.string()
+        model.tol = reader.scalar[DType.float64]()
+        model.max_iter = _read_optional_int(reader)
+        if reader.boolean():
+            model.iterated_power = KernelPower(reader.integer())
+        else:
+            model.iterated_power = KernelPower(reader.string())
+        model.remove_zero_eig = reader.boolean()
+        model.random_state = _read_optional_int(reader)
+        model.copy_X = reader.boolean()
+        model.n_jobs = _read_optional_int(reader)
+        var state = _KernelPCAState.read(reader)
+        reader.finish()
+        state.validate()
+        _check_arrays(archive, state.fitted, 4 + 2 * Int(state.has_inverse))
+        model.n_features_in_ = state.features
+        model.gamma_ = state.gamma
+        model._kernel_all = state.kernel_mean
+        model.eigenvalues_ = _read_array[Self.dtype](archive, "eigenvalues_", state.fitted, [state.rank])
+        model.eigenvectors_ = _read_array[Self.dtype](archive, "eigenvectors_", state.fitted, [state.samples, state.rank])
+        model.X_fit_ = _read_array[Self.dtype](archive, "X_fit_", state.fitted, [state.samples, state.features])
+        model._kernel_mean = _read_array[Self.dtype](archive, "_kernel_mean", state.fitted, [state.samples])
+        model.X_transformed_fit_ = _read_array[Self.dtype](archive, "X_transformed_fit_", state.has_inverse, [state.samples, state.rank])
+        model.dual_coef_ = _read_array[Self.dtype](archive, "dual_coef_", state.has_inverse, [state.samples, state.features])
         return model^

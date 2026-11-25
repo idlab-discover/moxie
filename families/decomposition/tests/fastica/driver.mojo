@@ -3,6 +3,8 @@ from std.sys import argv
 from numojo import NDArray
 from moxie.decomposition import FastICA, fastica
 from moxie.decomposition._fastica import WhitenOption
+from moxie.decomposition_serialization import FastICASchema
+from moxie.serialization import dumps, loads
 from decomposition_testing import emit, emit_scalar, read_matrix
 
 
@@ -38,6 +40,8 @@ def evaluate[dtype: DType]() raises:
         emit("sources", model.fit_transform(x))
     else:
         model.fit(x)
+    comptime Schema = FastICASchema[dtype]
+    model = Schema.decode(loads(dumps(Schema.encode(model))))
     emit("components", model.components_.value())
     emit("mixing", model.mixing_.value())
     if model.mean_: emit("mean", model.mean_.value())

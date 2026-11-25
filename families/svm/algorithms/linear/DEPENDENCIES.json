@@ -30,6 +30,9 @@
         },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
+        },
+        "moxie.serialization": {
+          "file": "src/moxie/serialization.mojo"
         }
       },
       "path": "../../../.."
@@ -256,6 +259,9 @@
         },
         "moxie.svm._linear": {
           "file": "src/moxie/svm/_linear.mojo"
+        },
+        "moxie.svm.linear_serialization": {
+          "file": "src/moxie/svm/linear_serialization.mojo"
         }
       },
       "path": "."

@@ -13,6 +13,7 @@ import subprocess
 import warnings
 
 import numpy as np
+from sklearn import config_context
 import sklearn.svm._base as installed_base
 import sklearn.svm._classes as installed_classes
 
@@ -120,7 +121,7 @@ def native(x, y, sw, query, kind, config, single=False, expect_error=False, roun
         return None
     assert result.returncode == 0, result.stdout + result.stderr
     lines = iter(result.stdout.splitlines())
-    arrays = {"fit_warnings": []}
+    arrays = {"fit_warnings": [], "requests": {}}
     assert not any(line.startswith(("ConvergenceWarning:", "FutureWarning:"))
                    for line in result.stdout.splitlines())
     assert not result.stderr, result.stderr
@@ -128,6 +129,10 @@ def native(x, y, sw, query, kind, config, single=False, expect_error=False, roun
         if line.startswith("WARNING "):
             _, category, message = line.split(" ", 2)
             arrays["fit_warnings"].append((category, message))
+            continue
+        if line.startswith("REQUEST "):
+            _, method, value = line.split()
+            arrays["requests"][method] = value
             continue
         words = line.split()
         if not words or words[0] not in ("ARRAY", "LIST", "SCALAR"):
@@ -148,6 +153,11 @@ def compare_fit_warnings(expected, got):
 
 
 def compare(expected, got, query, kind, config):
+    routing = expected.get_metadata_routing()
+    requests = {"fit": str(routing.fit.requests["sample_weight"])}
+    if kind != 2:
+        requests["score"] = str(routing.score.requests["sample_weight"])
+    assert got["requests"] == requests, (got["requests"], requests)
     for field in ("support_", "n_support_"):
         np.testing.assert_array_equal(got[field], getattr(expected, field), err_msg=field)
     for field in ("support_vectors_", "dual_coef_", "intercept_"):
@@ -174,6 +184,14 @@ def compare(expected, got, query, kind, config):
         np.testing.assert_allclose(got["prediction"], expected.predict(query), rtol=3e-5, atol=3e-6)
     if config["kernel"] == "linear":
         np.testing.assert_allclose(got["coef_"], expected.coef_, rtol=3e-5, atol=3e-6)
+
+
+def configure_metadata(model, kind):
+    with config_context(enable_metadata_routing=True):
+        model.set_fit_request(sample_weight="training_weight")
+        if kind != 2:
+            model.set_score_request(sample_weight=False)
+    return model
 
 
 def main():
@@ -212,7 +230,7 @@ def main():
                 print(name, kernel, variant, flush=True)
                 with warnings.catch_warnings(record=True) as fit_warnings:
                     warnings.simplefilter("always")
-                    expected = classes[name](**config)
+                    expected = configure_metadata(classes[name](**config), kind)
                     expected.fit(x, sample_weight=sw) if kind == 2 else expected.fit(x, y, sample_weight=sw)
                     got = native(x, y, sw, query, kind, config, single, round_trip=round_trip)
                     compare_fit_warnings(fit_warnings, got)
@@ -242,7 +260,7 @@ def main():
             print(name, edge, flush=True)
             with warnings.catch_warnings(record=True) as fit_warnings:
                 warnings.simplefilter("always")
-                expected = classes[name](**config)
+                expected = configure_metadata(classes[name](**config), kind)
                 try:
                     expected.fit(x, sample_weight=sw) if kind == 2 else expected.fit(x, y, sample_weight=sw)
                 except ValueError:

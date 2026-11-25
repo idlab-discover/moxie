@@ -3,6 +3,7 @@ from std.sys import argv
 import numojo as nm
 from moxie.svm import SVC, NuSVC, SVR, NuSVR, OneClassSVM, Gamma, ClassWeight, Probability
 from moxie.warnings import FitWarning
+from moxie.metadata_routing import SampleWeightRequest
 from moxie.serialization import ModelSchema, load_model, save_model
 from moxie.svm.kernel_serialization import SVCSchema, NuSVCSchema, SVRSchema, NuSVRSchema, OneClassSVMSchema
 
@@ -30,6 +31,16 @@ def emit_list(name: String, a: List[Float64]) raises:
 def emit_warnings(records: List[FitWarning]):
     for record in records:
         print("WARNING", record.category, record.message)
+
+
+def emit_request(method: String, request: SampleWeightRequest):
+    var value = request.value()
+    if value.isa[String]():
+        print("REQUEST", method, value[String])
+    elif value.isa[Bool]():
+        print("REQUEST", method, "True" if value[Bool] else "False")
+    else:
+        print("REQUEST", method, "None")
 
 
 def main() raises:
@@ -92,12 +103,18 @@ def main() raises:
             cursor += 2
     if kind == 0:
         var model = SVC(kernel=kernel.copy(), gamma=gamma.copy(), degree=degree, coef0=coef0, tol=tol, shrinking=shrinking, max_iter=limit, C=c, probability=probability, random_state=seed, class_weight=costs.copy(), decision_function_shape=decision_shape.copy(), break_ties=break_ties)
+        _ = model.set_fit_request(sample_weight="training_weight").set_score_request(
+            sample_weight=False
+        )
         if single:
             _ = model.fit(x.astype[DType.float32](), labels, sw.copy())
         else:
             _ = model.fit(x, labels, sw.copy())
         if len(args) == 3:
             model = restore[SVCSchema[]](model, String(args[2]))
+        var routing = model.get_metadata_routing()
+        emit_request("fit", routing.fit)
+        emit_request("score", routing.score)
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)
@@ -121,12 +138,18 @@ def main() raises:
             emit("coef_", model.coef_())
     elif kind == 1:
         var model = NuSVC(kernel=kernel.copy(), gamma=gamma.copy(), degree=degree, coef0=coef0, tol=tol, shrinking=shrinking, max_iter=limit, nu=nu, probability=probability, random_state=seed, class_weight=costs.copy(), decision_function_shape=decision_shape.copy(), break_ties=break_ties)
+        _ = model.set_fit_request(sample_weight="training_weight").set_score_request(
+            sample_weight=False
+        )
         if single:
             _ = model.fit(x.astype[DType.float32](), labels, sw.copy())
         else:
             _ = model.fit(x, labels, sw.copy())
         if len(args) == 3:
             model = restore[NuSVCSchema[]](model, String(args[2]))
+        var routing = model.get_metadata_routing()
+        emit_request("fit", routing.fit)
+        emit_request("score", routing.score)
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)
@@ -150,12 +173,14 @@ def main() raises:
             emit("coef_", model.coef_())
     elif kind == 2:
         var model = OneClassSVM(kernel=kernel.copy(), gamma=gamma.copy(), degree=degree, coef0=coef0, tol=tol, shrinking=shrinking, max_iter=limit, nu=nu)
+        _ = model.set_fit_request(sample_weight="training_weight")
         if single:
             _ = model.fit(x.astype[DType.float32](), sample_weight=sw.copy())
         else:
             _ = model.fit(x, sample_weight=sw.copy())
         if len(args) == 3:
             model = restore[OneClassSVMSchema](model, String(args[2]))
+        emit_request("fit", model.get_metadata_routing())
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)
@@ -174,12 +199,18 @@ def main() raises:
             emit("coef_", model.coef_())
     elif kind == 3:
         var model = SVR(kernel=kernel.copy(), gamma=gamma.copy(), degree=degree, coef0=coef0, tol=tol, shrinking=shrinking, max_iter=limit, C=c, epsilon=epsilon)
+        _ = model.set_fit_request(sample_weight="training_weight").set_score_request(
+            sample_weight=False
+        )
         if single:
             _ = model.fit(x.astype[DType.float32](), y, sw.copy())
         else:
             _ = model.fit(x, y, sw.copy())
         if len(args) == 3:
             model = restore[SVRSchema](model, String(args[2]))
+        var routing = model.get_metadata_routing()
+        emit_request("fit", routing.fit)
+        emit_request("score", routing.score)
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)
@@ -196,12 +227,18 @@ def main() raises:
             emit("coef_", model.coef_())
     elif kind == 4:
         var model = NuSVR(kernel=kernel.copy(), gamma=gamma.copy(), degree=degree, coef0=coef0, tol=tol, shrinking=shrinking, max_iter=limit, C=c, nu=nu)
+        _ = model.set_fit_request(sample_weight="training_weight").set_score_request(
+            sample_weight=False
+        )
         if single:
             _ = model.fit(x.astype[DType.float32](), y, sw.copy())
         else:
             _ = model.fit(x, y, sw.copy())
         if len(args) == 3:
             model = restore[NuSVRSchema](model, String(args[2]))
+        var routing = model.get_metadata_routing()
+        emit_request("fit", routing.fit)
+        emit_request("score", routing.score)
         emit("support_", model.support_)
         emit("support_vectors_", model.support_vectors_)
         emit("n_support_", model.n_support_)

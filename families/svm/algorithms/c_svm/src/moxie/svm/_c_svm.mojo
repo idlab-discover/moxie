@@ -10,6 +10,9 @@ from moxie.svm._base import ProbabilisticSVC, SupportVectorRegressor, OneClassSu
 from moxie._multiclass_contracts import PairwiseInput
 from moxie._random import RandomState, entropy_state
 from moxie.warnings import FitWarning
+from moxie.metadata_routing import (
+    FitScoreMetadataRequest, SampleWeightRequest, SampleWeightUpdate,
+)
 
 @fieldwise_init
 struct SVCParams[Label: Copyable & Comparable & Deinitable = Float64](Copyable, Movable):
@@ -64,6 +67,7 @@ struct SVC[Label: Copyable & Comparable & Deinitable = Float64](
     var n_features_in_: Int
     var n_iter_: nm.NDArray[DType.int32]
     var fit_status_: Int
+    var _metadata: FitScoreMetadataRequest
     var fit_warnings: List[FitWarning]
     var _fit_diagnostics: Optional[_KernelFitDiagnostics]
     var shape_fit_: nm.Shape
@@ -101,6 +105,9 @@ struct SVC[Label: Copyable & Comparable & Deinitable = Float64](
         self.n_features_in_ = 0
         self.n_iter_ = nm.zeros[DType.int32](nm.Shape(0))
         self.fit_status_ = 0
+        self._metadata = FitScoreMetadataRequest(
+            SampleWeightRequest(), SampleWeightRequest()
+        )
         self.fit_warnings = []
         self._fit_diagnostics = None
         self.shape_fit_ = nm.Shape(0, 0)
@@ -168,8 +175,32 @@ struct SVC[Label: Copyable & Comparable & Deinitable = Float64](
             self.random_state = random_state.value().copy()
         return self
 
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure the sample weights requested from a parent during fit."""
+        self._metadata.fit.set(sample_weight)
+        return self
+
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure the sample weights requested from a parent during score."""
+        self._metadata.score.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        """Return an independent copy of the fit and score requests."""
+        return self._metadata.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(C=self.C.copy(), kernel=self.kernel.copy(), degree=self.degree.copy(), gamma=self.gamma.copy(), coef0=self.coef0.copy(), tol=self.tol.copy(), shrinking=self.shrinking.copy(), cache_size=self.cache_size.copy(), verbose=self.verbose.copy(), max_iter=self.max_iter.copy(), probability=self.probability.copy(), class_weight=self.class_weight.copy(), decision_function_shape=self.decision_function_shape.copy(), break_ties=self.break_ties.copy(), random_state=self.random_state.copy())
+        var cloned = Self(C=self.C.copy(), kernel=self.kernel.copy(), degree=self.degree.copy(), gamma=self.gamma.copy(), coef0=self.coef0.copy(), tol=self.tol.copy(), shrinking=self.shrinking.copy(), cache_size=self.cache_size.copy(), verbose=self.verbose.copy(), max_iter=self.max_iter.copy(), probability=self.probability.copy(), class_weight=self.class_weight.copy(), decision_function_shape=self.decision_function_shape.copy(), break_ties=self.break_ties.copy(), random_state=self.random_state.copy())
+        cloned._metadata = self._metadata.copy()
+        return cloned^
 
     def pairwise_input(self) -> Bool:
         """Report whether composition must subset both axes of the input."""
@@ -502,6 +533,7 @@ struct SVR(SupportVectorRegressor):
     var n_features_in_: Int
     var n_iter_: Int
     var fit_status_: Int
+    var _metadata: FitScoreMetadataRequest
     var fit_warnings: List[FitWarning]
     var _fit_diagnostics: Optional[_KernelFitDiagnostics]
     var shape_fit_: nm.Shape
@@ -531,6 +563,9 @@ struct SVR(SupportVectorRegressor):
         self.n_features_in_ = 0
         self.n_iter_ = 0
         self.fit_status_ = 0
+        self._metadata = FitScoreMetadataRequest(
+            SampleWeightRequest(), SampleWeightRequest()
+        )
         self.fit_warnings = []
         self._fit_diagnostics = None
         self.shape_fit_ = nm.Shape(0, 0)
@@ -582,8 +617,32 @@ struct SVR(SupportVectorRegressor):
             self.max_iter = max_iter.value().copy()
         return self
 
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure the sample weights requested from a parent during fit."""
+        self._metadata.fit.set(sample_weight)
+        return self
+
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure the sample weights requested from a parent during score."""
+        self._metadata.score.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        """Return an independent copy of the fit and score requests."""
+        return self._metadata.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(epsilon=self.epsilon.copy(), C=self.C.copy(), kernel=self.kernel.copy(), degree=self.degree.copy(), gamma=self.gamma.copy(), coef0=self.coef0.copy(), tol=self.tol.copy(), shrinking=self.shrinking.copy(), cache_size=self.cache_size.copy(), verbose=self.verbose.copy(), max_iter=self.max_iter.copy())
+        var cloned = Self(epsilon=self.epsilon.copy(), C=self.C.copy(), kernel=self.kernel.copy(), degree=self.degree.copy(), gamma=self.gamma.copy(), coef0=self.coef0.copy(), tol=self.tol.copy(), shrinking=self.shrinking.copy(), cache_size=self.cache_size.copy(), verbose=self.verbose.copy(), max_iter=self.max_iter.copy())
+        cloned._metadata = self._metadata.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._model)

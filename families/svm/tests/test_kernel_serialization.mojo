@@ -142,6 +142,14 @@ def _check_fit_warnings(X: Dense) raises:
     assert_true("max_iter=1" in restored.fit_warnings[1].message)
 
     var archive = Schema.encode(model)
+    # Version 2 ended before the two unset request tags.
+    archive.schema_version = 2
+    for _ in range(16):
+        _ = archive.manifest.pop()
+    var v2 = Schema.decode(loads(dumps(archive)))
+    assert_equal(len(v2.fit_warnings), 2)
+    assert_true(v2.get_metadata_routing().fit.value().isa[NoneType]())
+    assert_true(v2.get_metadata_routing().score.value().isa[NoneType]())
     var invalid = archive.copy()
     invalid.manifest[len(invalid.manifest) - 8] = 2
     with assert_raises():
@@ -158,6 +166,8 @@ def _check_fit_warnings(X: Dense) raises:
         _ = archive.manifest.pop()
     var legacy = Schema.decode(loads(dumps(archive)))
     assert_equal(len(legacy.fit_warnings), 0)
+    assert_true(legacy.get_metadata_routing().fit.value().isa[NoneType]())
+    assert_true(legacy.get_metadata_routing().score.value().isa[NoneType]())
     assert_equal(legacy.fit_status_, restored.fit_status_)
     assert_true(legacy.predict(X) == restored.predict(X))
     var upgraded = _round_trip[Schema](legacy)
@@ -165,6 +175,46 @@ def _check_fit_warnings(X: Dense) raises:
 
     _ = restored.fit(X, y)
     assert_equal(len(restored.fit_warnings), 0)
+
+
+def _check_requests() raises:
+    comptime Schema = SVCSchema[]
+    var model = SVC()
+    var metadata = Dict[String, Int]()
+    metadata["sample_weight"] = 3
+    metadata["training_weight"] = 7
+    with assert_raises(contains="UnsetMetadataPassedError"):
+        _ = model.get_metadata_routing().fit.route(metadata)
+
+    _ = model.set_fit_request(sample_weight="training_weight").set_score_request(
+        sample_weight=False
+    )
+    _ = model.set_fit_request()
+    with assert_raises(contains="ASCII identifier"):
+        _ = model.set_fit_request(sample_weight="invalid-name")
+
+    var restored = _round_trip[Schema](model)
+    assert_true(not restored.__sklearn_is_fitted__())
+    var routing = restored.get_metadata_routing()
+    assert_equal(routing.fit.route(metadata).or_else(-1), 7)
+    assert_true(not routing.score.route(metadata))
+    routing.fit.set(False)
+    var cloned = clone(restored)
+    assert_equal(cloned.get_metadata_routing().fit.route(metadata).or_else(-1), 7)
+    _ = cloned.set_fit_request(sample_weight=None).set_score_request(
+        sample_weight="sample_weight"
+    )
+    with assert_raises(contains="UnsetMetadataPassedError"):
+        _ = cloned.get_metadata_routing().fit.route(metadata)
+    assert_equal(cloned.get_metadata_routing().score.route(metadata).or_else(-1), 3)
+    assert_equal(restored.get_metadata_routing().fit.route(metadata).or_else(-1), 7)
+    assert_true(not restored.get_metadata_routing().score.route(metadata))
+
+    var invalid = Schema.encode(model)
+    # Score is False, stored as the final 64-bit tag. Tag four is invalid.
+    invalid.manifest[len(invalid.manifest) - 8] = 4
+    with assert_raises(contains="metadata request tag"):
+        _ = Schema.decode(loads(dumps(invalid)))
 
 
 def _check_callable(X: Dense) raises:
@@ -179,6 +229,11 @@ def _check_callable(X: Dense) raises:
     var svr = SVR(kernel="callable")
     var nsvr = NuSVR(kernel="callable")
     var one_class = OneClassSVM(kernel="callable")
+    _ = svc.set_fit_request(sample_weight=True)
+    _ = nsvc.set_fit_request(sample_weight=True)
+    _ = svr.set_fit_request(sample_weight=True)
+    _ = nsvr.set_fit_request(sample_weight=True)
+    _ = one_class.set_fit_request(sample_weight=True)
     _ = svc.fit_with_kernel(X, labels, provider)
     _ = nsvc.fit_with_kernel(X, labels, provider)
     _ = svr.fit_with_kernel(x32, target, provider)
@@ -189,6 +244,13 @@ def _check_callable(X: Dense) raises:
     var restored_svr = _round_trip[SVRSchema](svr)
     var restored_nsvr = _round_trip[NuSVRSchema](nsvr)
     var restored_one_class = _round_trip[OneClassSVMSchema](one_class)
+    var metadata = Dict[String, Int]()
+    metadata["sample_weight"] = 3
+    assert_equal(restored_svc.get_metadata_routing().fit.route(metadata).or_else(-1), 3)
+    assert_equal(restored_nsvc.get_metadata_routing().fit.route(metadata).or_else(-1), 3)
+    assert_equal(restored_svr.get_metadata_routing().fit.route(metadata).or_else(-1), 3)
+    assert_equal(restored_nsvr.get_metadata_routing().fit.route(metadata).or_else(-1), 3)
+    assert_equal(restored_one_class.get_metadata_routing().route(metadata).or_else(-1), 3)
     assert_equal(len(restored_svc.fit_warnings), 1)
     assert_equal(len(restored_nsvc.fit_warnings), 1)
     assert_equal(restored_svc.fit_warnings[0].category, String("FutureWarning"))
@@ -282,6 +344,7 @@ def main() raises:
     _check_classifier(X)
     _check_other_unfitted(X)
     _check_fit_warnings(X)
+    _check_requests()
     _check_callable(X)
     _check_invalid(X)
     _check_empty_support(X)

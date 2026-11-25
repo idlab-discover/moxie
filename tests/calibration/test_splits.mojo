@@ -1,7 +1,8 @@
 from std.testing import assert_equal, assert_true, assert_raises
 import numojo as nm
-from moxie.calibration import CalibratedClassifierCV, CalibrationSplit
+from moxie.calibration import CalibratedClassifierCV, CalibrationCV, CalibrationSplit
 from moxie.base import clone
+from moxie.model_selection import KFold, LeaveOneOut, StratifiedKFold
 from moxie._calibration_algorithms import Array
 from calibration_centroid import Centroid
 
@@ -92,7 +93,48 @@ def invalid_splits() raises:
         _ = model.fit(inputs[0], inputs[1])
 
 
+def native_splitters() raises:
+    var inputs = data()
+    var cv = StratifiedKFold(3, shuffle=True, random_state=17)
+    var model = CalibratedClassifierCV(Centroid(True), cv=cv.copy())
+    _ = model.fit(inputs[0], inputs[1])
+    assert_equal(len(model.calibrated_classifiers_), 3)
+    var before = model.predict_proba(inputs[0])
+
+    var copied = clone(model)
+    assert_true(not copied.__sklearn_is_fitted__())
+    assert_equal(copied.cv[StratifiedKFold].random_state.or_else(-1), 17)
+    _ = copied.fit(inputs[0], inputs[1])
+    var after = copied.predict_proba(inputs[0])
+    for i in range(before.shape[0]):
+        for j in range(before.shape[1]):
+            assert_equal(before.item(i, j), after.item(i, j))
+
+    var params = model.get_params()
+    params.cv = KFold(4)
+    _ = model.set_params(params)
+    assert_equal(model.cv[KFold].n_splits, 4)
+    # Twelve rows can be split four ways, but each class has only three rows.
+    with assert_raises(contains="fewer than cv examples"):
+        _ = model.fit(inputs[0], inputs[1])
+    assert_equal(len(model.calibrated_classifiers_), 3)
+    assert_equal(model.predict_proba(inputs[0]).item(0, 0), before.item(0, 0))
+
+    _ = model.set_params(cv=CalibrationCV(StratifiedKFold(4)))
+    with assert_raises(contains="fewer than cv examples"):
+        _ = model.fit(inputs[0], inputs[1])
+
+    var unseeded = CalibratedClassifierCV(Centroid(True), cv=KFold(3, shuffle=True))
+    with assert_raises(contains="application RNG context"):
+        _ = unseeded.fit(inputs[0], inputs[1])
+
+    var leave_one_out = CalibratedClassifierCV(Centroid(True), cv=LeaveOneOut())
+    with assert_raises(contains="LeaveOneOut cross-validation"):
+        _ = leave_one_out.fit(inputs[0], inputs[1])
+
+
 def main() raises:
     missing_classes()
     invalid_splits()
+    native_splitters()
     print("PASS: custom split and missing-class contracts")

@@ -2,6 +2,7 @@
 from std.sys import argv
 from std.math import isfinite
 import numojo as nm
+from moxie.model_selection import KFold, StratifiedKFold
 from moxie.calibration import (
     CalibratedClassifierCV,
     calibration_curve,
@@ -163,10 +164,20 @@ def main() raises:
                 or display.line_.value().alpha != 0.8
             ):
                 raise Error(context + ": display metadata differs")
-        elif kind == "cv" or kind == "cv_splits" or kind == "cv_default":
+        elif (
+            kind == "cv" or kind == "cv_splits" or kind == "cv_default"
+            or kind == "cv_kfold" or kind == "cv_kfold_shuffled"
+            or kind == "cv_stratified_shuffled"
+        ):
             var cv: CalibrationCV = 3
             if kind == "cv_default":
                 cv = None
+            elif kind == "cv_kfold":
+                cv = KFold(3)
+            elif kind == "cv_kfold_shuffled":
+                cv = KFold(3, shuffle=True, random_state=17)
+            elif kind == "cv_stratified_shuffled":
+                cv = StratifiedKFold(3, shuffle=True, random_state=17)
             elif kind == "cv_splits":
                 var splits = List[CalibrationSplit]()
                 for split in fields[11].split(";"):

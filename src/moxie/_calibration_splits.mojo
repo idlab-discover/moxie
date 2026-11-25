@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
-"""Materialized cross-validation splits for calibration."""
+"""Cross-validation configuration and split materialization for calibration."""
+from numojo import Item, Shape, zeros
 from std.utils import Variant
 from ._calibration_algorithms import Array
+from .model_selection import IndexArray, KFold, LeaveOneOut, SplitCursor, StratifiedKFold
 
 
 @fieldwise_init
@@ -10,7 +12,9 @@ struct CalibrationSplit(Copyable, Movable):
     var test: List[Int]
 
 
-comptime CalibrationCV = Variant[type_of(None), Int, List[CalibrationSplit]]
+comptime CalibrationCV = Variant[
+    type_of(None), Int, List[CalibrationSplit], KFold, StratifiedKFold, LeaveOneOut
+]
 
 
 def validate_splits(
@@ -40,61 +44,65 @@ def validate_splits(
                 )
 
 
-def stratified_splits(
-    labels: Array, folds: Int, explicit_count: Bool
-) raises -> List[CalibrationSplit]:
-    if folds < 2 or folds > labels.size:
-        raise Error(
-            "ValueError: cv must be between 2 and the number of samples"
-        )
-    var first_order = List[Int]()
-    for i in range(labels.size):
-        var label = Int(labels.item(i))
-        var seen = False
-        for previous in first_order:
-            seen = seen or previous == label
-        if not seen:
-            first_order.append(label)
-    var fold_ids = List[Int]()
-    for _ in range(labels.size):
-        fold_ids.append(0)
-    var offset = 0
-    var largest = 0
-    for label in first_order:
-        var count = 0
-        for i in range(labels.size):
-            if Int(labels.item(i)) == label:
-                count += 1
-        largest = max(largest, count)
-        if explicit_count and count < folds:
-            raise Error("ValueError: fewer than cv examples for a class")
-        var allocation = List[Int]()
-        for fold in range(folds):
-            var allocated = 0
-            for k in range(count):
-                if (offset + k) % folds == fold:
-                    allocated += 1
-            allocation.append(allocated)
-        var fold = 0
-        var used = 0
-        for i in range(labels.size):
-            if Int(labels.item(i)) == label:
-                while used == allocation[fold]:
-                    fold += 1
-                    used = 0
-                fold_ids[i] = fold
-                used += 1
-        offset += count
-    if largest < folds:
-        raise Error("ValueError: cv exceeds the size of every class")
-    var result = List[CalibrationSplit]()
-    for fold in range(folds):
-        var train = List[Int]()
-        var test = List[Int]()
-        for i in range(labels.size):
-            if fold_ids[i] == fold:
-                test.append(i)
-            else:
-                train.append(i)
-        result.append(CalibrationSplit(train^, test^))
+def _index_list(indices: IndexArray) raises -> List[Int]:
+    var result = List[Int](capacity=indices.size)
+    for i in range(indices.size):
+        result.append(Int(indices[Item(i)]))
     return result^
+
+
+def _materialize[C: SplitCursor & Deinitable](var cursor: C) raises -> List[CalibrationSplit]:
+    var result = List[CalibrationSplit]()
+    while True:
+        var next = cursor.next()
+        if not next:
+            break
+        var split = next.take()
+        result.append(
+            CalibrationSplit(_index_list(split.train), _index_list(split.test))
+        )
+    return result^
+
+
+def _check_fold_count(labels: IndexArray, n_classes: Int, n_splits: Int) raises:
+    if n_splits < 2:
+        raise Error("ValueError: cv must have at least two splits")
+    var counts = List[Int]()
+    for _ in range(n_classes):
+        counts.append(0)
+    for i in range(labels.size):
+        counts[Int(labels[Item(i)])] += 1
+    for count in counts:
+        if count < n_splits:
+            raise Error("ValueError: fewer than cv examples for a class")
+
+
+def resolve_splits(
+    cv: CalibrationCV, labels: Array, n_classes: Int
+) raises -> List[CalibrationSplit]:
+    if cv.isa[List[CalibrationSplit]]():
+        return cv[List[CalibrationSplit]].copy()
+    if cv.isa[LeaveOneOut]():
+        raise Error(
+            "ValueError: LeaveOneOut cross-validation does not allow"
+            " all classes to be present in test splits"
+        )
+
+    var codes = zeros[DType.int64](Shape(labels.size))
+    for i in range(labels.size):
+        codes[Item(i)] = Int64(labels.item(i))
+
+    if cv.isa[KFold]():
+        var splitter = cv[KFold].copy()
+        _check_fold_count(codes, n_classes, splitter.n_splits)
+        return _materialize(splitter.split(labels.size))
+    if cv.isa[StratifiedKFold]():
+        var splitter = cv[StratifiedKFold].copy()
+        _check_fold_count(codes, n_classes, splitter.n_splits)
+        return _materialize(splitter.split(labels.size, y=codes^))
+
+    var folds = 5
+    if cv.isa[Int]():
+        folds = cv[Int]
+        _check_fold_count(codes, n_classes, folds)
+    return _materialize(StratifiedKFold(folds).split(labels.size, y=codes^))

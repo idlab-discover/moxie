@@ -37,9 +37,15 @@ means five stratified folds. Explicit integers of at least two require each
 class to have at least `cv` samples, as in sklearn. With `cv=None`, smaller
 minority classes are allowed when the largest class has at least five samples.
 The reference warns for that case; the native implementation emits no warning.
+Pass a native `moxie.model_selection.KFold` or `StratifiedKFold` directly as
+`cv`. The model stores the splitter configuration and generates folds from the
+current training data at each fit. As in sklearn, each class must have at least
+`n_splits` samples, and `LeaveOneOut` raises at fit time. Shuffled splitters
+require an integer `random_state` because calibration uses the splitters' native
+seeded entry point. The same seed reproduces the folds on repeated fits.
+
 `cv` also accepts `List[CalibrationSplit]`, where each split owns `train` and
-`test` index lists. This is the native equivalent of sklearn's iterable of
-index pairs. Materialize splitter output before passing it to the constructor.
+`test` index lists. Use this representation for externally generated folds.
 Index order and repeated training indices are preserved. Negative and
 out-of-range indices, empty folds and empty split lists raise errors.
 With `ensemble=False`, test indices must include every sample exactly once.
@@ -88,7 +94,9 @@ base estimator. Its nested typed parameters remain accessible through
 provided. Change the record and call `set_params(params)`; refit to use the new
 configuration. The keyword overload `set_params(estimator=..., method=...,
 cv=..., n_jobs=..., ensemble=...)` updates only the named parameters; resetting
-`n_jobs` to None requires the full record. `fit` and `set_params` return a mutable borrow of the calibrator, following
+`n_jobs` to None requires the full record. Wrap a splitter as
+`CalibrationCV(splitter)` when using the optional `cv` keyword in `set_params`.
+`fit` and `set_params` return a mutable borrow of the calibrator, following
 Moxie's fluent estimator contract. The family adapter's optional-weight `fit`
 method remains a no-result operation.
 
@@ -203,7 +211,8 @@ and uses the pinned validation wheels for compiled kernels and dependencies.
 It compares native output arrays against that reference, including weighted
 and unweighted fitting, constant and extreme scores, duplicate scores, curve
 boundaries, binary and multiclass outputs, ensemble modes, frozen adapters,
-materialized splits, missing classes and default minority-class splits.
+materialized splits, missing classes, default minority-class splits, and
+explicit KFold and seeded shuffled KFold and StratifiedKFold.
 Additional checks compare Float32 and string-label curves and native display
 statistics, labels and metadata with the reference. SVG structure and native
 ownership/overlay behavior have separate contract tests.

@@ -6,80 +6,6 @@ Implemented estimators and functions live in their own modules.
 """
 from moxie.manifold._api_types import APIValue
 
-struct LocallyLinearEmbedding(Movable):
-
-    "API scaffold for sklearn.manifold._locally_linear.LocallyLinearEmbedding. Operations are deferred."
-
-    var n_neighbors: APIValue
-
-    var n_components: APIValue
-
-    var reg: APIValue
-
-    var eigen_solver: APIValue
-
-    var tol: APIValue
-
-    var max_iter: APIValue
-
-    var method: APIValue
-
-    var hessian_tol: APIValue
-
-    var modified_tol: APIValue
-
-    var neighbors_algorithm: APIValue
-
-    var random_state: APIValue
-
-    var n_jobs: APIValue
-
-    var embedding_: APIValue
-
-    var reconstruction_error_: APIValue
-
-    var n_features_in_: APIValue
-
-    var feature_names_in_: APIValue
-
-    var nbrs_: APIValue
-
-    def get_metadata_routing(mut self) raises -> APIValue:
-        "Scikit-learn signature: get_metadata_routing(self)."
-        raise Error("NotImplementedError: LocallyLinearEmbedding.get_metadata_routing is an API scaffold")
-
-    def get_params(mut self, deep: Some[Movable] = True) raises -> APIValue:
-        "Scikit-learn signature: get_params(self, deep=True)."
-        raise Error("NotImplementedError: LocallyLinearEmbedding.get_params is an API scaffold")
-
-    def set_params(mut self, params: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_params(self, **params)."
-        raise Error("NotImplementedError: LocallyLinearEmbedding.set_params is an API scaffold")
-
-    def set_output(mut self, *, transform: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_output(self, *, transform=None)."
-        raise Error("NotImplementedError: LocallyLinearEmbedding.set_output is an API scaffold")
-
-    def fit_transform(mut self, X: Some[Movable], y: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: fit_transform(self, X, y=None)."
-        raise Error("NotImplementedError: LocallyLinearEmbedding.fit_transform is an API scaffold")
-
-    def get_feature_names_out(mut self, input_features: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: get_feature_names_out(self, input_features=None)."
-        raise Error("NotImplementedError: LocallyLinearEmbedding.get_feature_names_out is an API scaffold")
-
-    def __init__(out self, *, n_neighbors: Some[Movable] = 5, n_components: Some[Movable] = 2, reg: Some[Movable] = 0.001, eigen_solver: Some[Movable] = "auto", tol: Some[Movable] = 1e-06, max_iter: Some[Movable] = 100, method: Some[Movable] = "standard", hessian_tol: Some[Movable] = 0.0001, modified_tol: Some[Movable] = 1e-12, neighbors_algorithm: Some[Movable] = "auto", random_state: Some[Movable] = None, n_jobs: Some[Movable] = None) raises:
-        "Scikit-learn signature: __init__(self, *, n_neighbors=5, n_components=2, reg=0.001, eigen_solver='auto', tol=1e-06, max_iter=100, method='standard', hessian_tol=0.0001, modified_tol=1e-12, neighbors_algorithm='auto', random_state=None, n_jobs=None)."
-        raise Error("NotImplementedError: LocallyLinearEmbedding.__init__ is an API scaffold")
-
-    def fit(mut self, X: Some[Movable], y: Some[Movable] = None) raises:
-        "Scikit-learn signature: fit(self, X, y=None)."
-        raise Error("NotImplementedError: LocallyLinearEmbedding.fit is an API scaffold")
-
-    def transform(mut self, X: Some[Movable]) raises -> APIValue:
-        "Scikit-learn signature: transform(self, X)."
-        raise Error("NotImplementedError: LocallyLinearEmbedding.transform is an API scaffold")
-
 struct SpectralEmbedding(Movable):
 
     "API scaffold for sklearn.manifold._spectral_embedding.SpectralEmbedding. Operations are deferred."
@@ -133,10 +59,6 @@ struct SpectralEmbedding(Movable):
     def fit_transform(mut self, X: Some[Movable], y: Some[Movable] = None) raises -> APIValue:
         "Scikit-learn signature: fit_transform(self, X, y=None)."
         raise Error("NotImplementedError: SpectralEmbedding.fit_transform is an API scaffold")
-
-def locally_linear_embedding(X: Some[Movable], *, n_neighbors: Some[Movable], n_components: Some[Movable], reg: Some[Movable] = 0.001, eigen_solver: Some[Movable] = "auto", tol: Some[Movable] = 1e-06, max_iter: Some[Movable] = 100, method: Some[Movable] = "standard", hessian_tol: Some[Movable] = 0.0001, modified_tol: Some[Movable] = 1e-12, random_state: Some[Movable] = None, n_jobs: Some[Movable] = None) raises -> APIValue:
-    "Scikit-learn signature: locally_linear_embedding(X, *, n_neighbors, n_components, reg=0.001, eigen_solver='auto', tol=1e-06, max_iter=100, method='standard', hessian_tol=0.0001, modified_tol=1e-12, random_state=None, n_jobs=None)."
-    raise Error("NotImplementedError: locally_linear_embedding is an API scaffold")
 
 def spectral_embedding(adjacency: Some[Movable], *, n_components: Some[Movable] = 8, eigen_solver: Some[Movable] = None, random_state: Some[Movable] = None, eigen_tol: Some[Movable] = "auto", norm_laplacian: Some[Movable] = True, drop_first: Some[Movable] = True) raises -> APIValue:
     "Scikit-learn signature: spectral_embedding(adjacency, *, n_components=8, eigen_solver=None, random_state=None, eigen_tol='auto', norm_laplacian=True, drop_first=True)."

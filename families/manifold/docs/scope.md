@@ -1,15 +1,14 @@
 # Dense-only scope
 
 This project implements dense contracts, validation, owned snapshots,
-dense TSNE, Isomap, MDS, ClassicalMDS and trustworthiness. See [dense t-SNE](tsne.md),
-[dense Isomap](isomap.md), [dense MDS and SMACOF](mds.md), and [algorithm support](algorithms.md) for settings,
+dense TSNE, Isomap, MDS, LLE, ClassicalMDS and trustworthiness. See [dense t-SNE](tsne.md),
+[dense Isomap](isomap.md), [dense MDS and SMACOF](mds.md), [dense LLE](lle.md), and [algorithm support](algorithms.md) for settings,
 native API differences and parity coverage. Tests cover Float32 and Float64,
 finite nonempty rank-two inputs, contiguous and offset or negative-stride
 views, square pairwise matrices, dense fixed-k neighbor tables, signed
 symmetric spectral operators and coordinate shape checks.
 
-Dense work remains open for SpectralEmbedding and
-spectral_embedding, and all four LLE reconstruction methods.
+Dense work remains open for SpectralEmbedding and spectral_embedding.
 See [plumbing.md](plumbing.md) for ownership and dependencies.
 
 Sparse containers, conversions, arithmetic, graph-returning APIs and solvers
@@ -30,8 +29,7 @@ validate the mathematical equivalence, not call that intermediate a sparse API.
 Dense TSNE supports the default `method="barnes_hut"` and `method="exact"`.
 Spectral defaults to
 `affinity="nearest_neighbors"`, so select dense `"rbf"`, `"precomputed"` or a
-native dense callable. LLE selects `eigen_solver="dense"` for dense operator
-assembly. Spectral's default `eigen_solver=None` resolves to ARPACK: the child
+native dense callable. LLE uses a dense operator and eigensolve for both `"dense"` and `"auto"`. Spectral's default `eigen_solver=None` resolves to ARPACK: the child
 must expose and document supported dense solver selection and reject excluded
 solver settings; this scaffold supplies no solver under any name. Never silently
 change defaults or treat missing dense branches as sparse exclusions.

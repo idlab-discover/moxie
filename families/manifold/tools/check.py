@@ -14,7 +14,7 @@ from compiler_limits import compiler_command
 CONSUMERS = [ROOT / 'tests/consumers' / name for name in ('a', 'b')]
 FLAGS = ['-O3', '--fp-mode=contract=off']
 CONTRACTS = ('contracts', 'capabilities', 'family', 'plumbing', 'trustworthiness',
-             'classical_mds', 'deferred', 'tsne', 'isomap', 'mds')
+             'classical_mds', 'deferred', 'tsne', 'isomap', 'mds', 'lle')
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -180,7 +180,7 @@ if __name__ == '__main__':
         target = ROOT / 'builds/test_trustworthiness'
         compile_file(ROOT / 'tests/test_trustworthiness.mojo', target)
         run(target)
-    elif action in ('isomap', 'mds'):
+    elif action in ('isomap', 'mds', 'lle'):
         for consumer in (ROOT, *CONSUMERS):
             assemble(consumer)
             target = consumer / f'builds/test_{action}'

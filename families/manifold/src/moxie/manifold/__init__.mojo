@@ -2,11 +2,10 @@
 from ._base import EmbeddingEstimator, OutOfSampleEmbedding
 
 # Public scikit-learn API scaffold.
-from ._api import (
-    LocallyLinearEmbedding,
-    SpectralEmbedding,
-    locally_linear_embedding,
-    spectral_embedding,
+from ._api import SpectralEmbedding, spectral_embedding
+from ._locally_linear import (
+    LocallyLinearEmbedding, LocallyLinearEmbeddingParams,
+    LocallyLinearEmbeddingResult, locally_linear_embedding,
 )
 from ._t_sne import TSNE, TSNEParams, TSNEMetricParams, trustworthiness
 from ._classical_mds import ClassicalMDS

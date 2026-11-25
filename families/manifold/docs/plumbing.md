@@ -1,6 +1,6 @@
 # Manifold plumbing
 
-This directory owns manifold contracts, validation, dense TSNE, Isomap, MDS, ClassicalMDS
+This directory owns manifold contracts, validation, dense TSNE, Isomap, MDS, LLE, ClassicalMDS
 and trustworthiness.
 Existing `EmbeddingEstimator` and `OutOfSampleEmbedding` remain unchanged.
 Public imports follow sklearn.manifold; `_plumbing` is a private native exchange
@@ -13,7 +13,7 @@ module. Its records are not new sklearn public exports.
 | manifold.scaffold (this project) | `_base`, `_plumbing`, dense ownership and exchange validation | foundation.readiness, numerics, random, assembly |
 | `algorithms/mds/` | MDS, ClassicalMDS, smacof; stress/disparities and classical scaling | scaffold, isotonic.regression, decomposition.svd_engine |
 | `algorithms/spectral/` | SpectralEmbedding, spectral_embedding; affinities, Laplacians, connectivity diagnostics | scaffold, neighbors.nearest, decomposition.svd_engine |
-| `algorithms/lle/` | LocallyLinearEmbedding, locally_linear_embedding; local reconstruction | scaffold, neighbors.nearest, decomposition.svd_engine |
+| `_locally_linear.mojo`, `_lle_reconstruction.mojo` | LocallyLinearEmbedding, locally_linear_embedding; local reconstruction and held-out projection | neighbors.nearest, shared linalg, decomposition.svd_engine, mojo-linalg |
 | `algorithms/tsne/` | TSNE, trustworthiness; exact and fixed-k probabilities, Barnes–Hut forces, KL optimization and rank diagnostics | scaffold, neighbors.nearest, decomposition.pca |
 | `_isomap.mojo` | Isomap; graph shortest paths and held-out projection | neighbors.nearest, decomposition.kernel_pca, preprocessing.KernelCenterer |
 

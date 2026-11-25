@@ -1,8 +1,8 @@
 # Public manifold API
 
 The native implementations are documented in [ClassicalMDS and trustworthiness](algorithms.md),
-[dense TSNE](tsne.md), [dense Isomap](isomap.md), and [dense MDS and SMACOF](mds.md). LocallyLinearEmbedding,
-SpectralEmbedding and their public helpers remain scaffold declarations.
+[dense TSNE](tsne.md), [dense Isomap](isomap.md), [dense MDS and SMACOF](mds.md), and [dense LLE](lle.md).
+SpectralEmbedding and spectral_embedding remain scaffold declarations.
 
 Public names and callable parameter names/defaults follow the local scikit-learn
 checkout. Newly declared constructors and operations raise `NotImplementedError`

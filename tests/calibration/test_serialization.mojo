@@ -17,8 +17,12 @@ from moxie.calibration_serialization import (
     CalibratedCategoricalNBClassifierCVSchema,
     CalibratedClassifierCVSchema,
     CalibratedComplementNBClassifierCVSchema,
+    CalibratedFrozenBernoulliNBClassifierCVSchema,
+    CalibratedFrozenCategoricalNBClassifierCVSchema,
+    CalibratedFrozenComplementNBClassifierCVSchema,
     CalibratedFrozenGaussianNBClassifierCVSchema,
     CalibratedFrozenLDAClassifierCVSchema,
+    CalibratedFrozenMultinomialNBClassifierCVSchema,
     CalibratedFrozenQDAClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
     CalibratedLDAClassifierCVSchema,
@@ -299,6 +303,104 @@ def test_frozen_gaussian(X: Dense, y: Dense) raises:
     )
     with assert_raises(contains="requires the built-in frozen GaussianNB adapter"):
         _ = FrozenSchema.encode(custom)
+
+
+def check_frozen_count[E: CalibrationEstimator, //, FrozenSchema: ModelSchema](
+    empty_adapter: E, prefit_adapter: E, X: Dense, y: Dense, file: String,
+) raises where FrozenSchema.Model == CalibratedClassifierCV[E]:
+    var model = CalibratedClassifierCV(empty_adapter.copy(), cv=3)
+    check_unfitted[FrozenSchema](model, X)
+    var empty = rebind_var[CalibratedClassifierCV[E]](
+        FrozenSchema.decode(FrozenSchema.encode(rebind[FrozenSchema.Model](model)))
+    )
+    assert_true(empty.estimator.is_frozen())
+    assert_false(empty.estimator.__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = empty.fit(X, y)
+
+    _ = model.set_params(estimator=prefit_adapter.copy())
+    save_model[FrozenSchema](rebind[FrozenSchema.Model](model), file)
+    var restored_prefit = rebind_var[CalibratedClassifierCV[E]](
+        load_model[FrozenSchema](file)
+    )
+    assert_false(restored_prefit.__sklearn_is_fitted__())
+    assert_true(restored_prefit.estimator.is_frozen())
+    assert_true(restored_prefit.estimator.__sklearn_is_fitted__())
+    _ = restored_prefit.fit(X, y)
+    _ = model.fit(X, y)
+    assert_equal_predictions(model, restored_prefit, X, y)
+
+    _ = model.set_params(estimator=empty_adapter.copy(), method="isotonic")
+    save_model[FrozenSchema](rebind[FrozenSchema.Model](model), file)
+    var restored = rebind_var[CalibratedClassifierCV[E]](
+        load_model[FrozenSchema](file)
+    )
+    assert_true(restored.estimator.is_frozen())
+    assert_false(restored.estimator.__sklearn_is_fitted__())
+    assert_equal(restored.method, "isotonic")
+    assert_equal(len(restored.calibrated_classifiers_), 1)
+    ref fold = restored.calibrated_classifiers_[0]
+    assert_true(fold.estimator.is_frozen())
+    assert_true(fold.estimator.__sklearn_is_fitted__())
+    assert_equal(fold.method, "sigmoid")
+    assert_equal_predictions(model, restored, X, y)
+    assert_false(clone(restored).__sklearn_is_fitted__())
+
+    var malformed = FrozenSchema.encode(rebind[FrozenSchema.Model](restored))
+    malformed.payloads[len(malformed.payloads) - 1].name = "unexpected"
+    with assert_raises(contains="unexpected calibration child array"):
+        _ = rebind_var[CalibratedClassifierCV[E]](
+            FrozenSchema.decode(loads(dumps(malformed)))
+        )
+
+
+def test_frozen_counts(X: Dense, y: Dense) raises:
+    var labels = List[Int](capacity=y.size)
+    var categories = Dense(nm.Shape(y.size, 2))
+    for i in range(y.size):
+        labels.append(Int(y.item(i)))
+        categories[nm.Item(i, 0)] = y.item(i)
+        categories[nm.Item(i, 1)] = Float64(i % 2)
+
+    var multinomial = MultinomialNB(alpha=0.25)
+    _ = multinomial.fit(X, labels)
+    check_frozen_count[CalibratedFrozenMultinomialNBClassifierCVSchema](
+        adapt_classifier(FrozenEstimator(MultinomialNB())),
+        adapt_classifier(FrozenEstimator(multinomial^)),
+        X, y, "builds/calibration-frozen-multinomial-model.moxie",
+    )
+    var complement = ComplementNB(alpha=0.25, norm=True)
+    _ = complement.fit(X, labels)
+    check_frozen_count[CalibratedFrozenComplementNBClassifierCVSchema](
+        adapt_classifier(FrozenEstimator(ComplementNB())),
+        adapt_classifier(FrozenEstimator(complement^)),
+        X, y, "builds/calibration-frozen-complement-model.moxie",
+    )
+    var bernoulli = BernoulliNB(alpha=0.25, binarize=0.75)
+    _ = bernoulli.fit(X, labels)
+    check_frozen_count[CalibratedFrozenBernoulliNBClassifierCVSchema](
+        adapt_classifier(FrozenEstimator(BernoulliNB())),
+        adapt_classifier(FrozenEstimator(bernoulli^)),
+        X, y, "builds/calibration-frozen-bernoulli-model.moxie",
+    )
+    var categorical = CategoricalNB(min_categories_values=List[Int]([4, 3]))
+    _ = categorical.fit(categories, labels)
+    check_frozen_count[CalibratedFrozenCategoricalNBClassifierCVSchema](
+        adapt_classifier(FrozenEstimator(CategoricalNB())),
+        adapt_classifier(FrozenEstimator(categorical^)),
+        categories, y, "builds/calibration-frozen-categorical-model.moxie",
+    )
+
+    def read_classes(estimator: FrozenEstimator[MultinomialNB[]]) raises -> Dense:
+        return Dense(nm.Shape(0))
+
+    var custom = CalibratedClassifierCV(
+        ClassifierCalibrationAdapter(
+            FrozenEstimator(MultinomialNB()), read_classes, "MultinomialNB",
+        )
+    )
+    with assert_raises(contains="requires the built-in frozen MultinomialNB adapter"):
+        _ = CalibratedFrozenMultinomialNBClassifierCVSchema.encode(custom)
 
 
 def test_gaussian(X: Dense, y: Dense) raises:
@@ -631,6 +733,7 @@ def main() raises:
     test_lda_fold_fit_warnings(X, y)
     test_gaussian(X, y)
     test_frozen_gaussian(X, y)
+    test_frozen_counts(X, y)
     test_multinomial(X, y)
     test_complement(X, y)
     test_bernoulli(X, y)

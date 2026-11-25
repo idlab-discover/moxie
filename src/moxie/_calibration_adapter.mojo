@@ -112,7 +112,9 @@ def adapt_classifier(
     def classes(model: FrozenEstimator[MultinomialNB[]]) raises -> Array:
         return _numeric_classes(model.estimator().classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "MultinomialNB")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "MultinomialNB")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(
@@ -132,7 +134,9 @@ def adapt_classifier(
     def classes(model: FrozenEstimator[ComplementNB[]]) raises -> Array:
         return _numeric_classes(model.estimator().classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "ComplementNB")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "ComplementNB")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(
@@ -152,7 +156,9 @@ def adapt_classifier(
     def classes(model: FrozenEstimator[BernoulliNB[]]) raises -> Array:
         return _numeric_classes(model.estimator().classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "BernoulliNB")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "BernoulliNB")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(
@@ -172,7 +178,9 @@ def adapt_classifier(
     def classes(model: FrozenEstimator[CategoricalNB[]]) raises -> Array:
         return _numeric_classes(model.estimator().classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "CategoricalNB")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "CategoricalNB")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(

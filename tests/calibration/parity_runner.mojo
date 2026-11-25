@@ -25,8 +25,12 @@ from moxie.calibration_serialization import (
     CalibratedCategoricalNBClassifierCVSchema,
     CalibratedClassifierCVSchema,
     CalibratedComplementNBClassifierCVSchema,
+    CalibratedFrozenBernoulliNBClassifierCVSchema,
+    CalibratedFrozenCategoricalNBClassifierCVSchema,
+    CalibratedFrozenComplementNBClassifierCVSchema,
     CalibratedFrozenGaussianNBClassifierCVSchema,
     CalibratedFrozenLDAClassifierCVSchema,
+    CalibratedFrozenMultinomialNBClassifierCVSchema,
     CalibratedFrozenQDAClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
     CalibratedLDAClassifierCVSchema,
@@ -439,6 +443,36 @@ def main() raises:
                 var estimator = GaussianNB()
                 _ = estimator.fit(train_x, labels)
                 compare_serialized[CalibratedFrozenGaussianNBClassifierCVSchema](
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            elif kind == "production_frozen_multinomial":
+                var estimator = MultinomialNB(alpha=0.25)
+                _ = estimator.fit(train_x, labels)
+                compare_serialized[CalibratedFrozenMultinomialNBClassifierCVSchema](
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            elif kind == "production_frozen_complement":
+                var estimator = ComplementNB(alpha=0.25, norm=True)
+                _ = estimator.fit(train_x, labels)
+                compare_serialized[CalibratedFrozenComplementNBClassifierCVSchema](
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            elif kind == "production_frozen_bernoulli":
+                var estimator = BernoulliNB(alpha=0.25, binarize=1.5)
+                _ = estimator.fit(train_x, labels)
+                compare_serialized[CalibratedFrozenBernoulliNBClassifierCVSchema](
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            elif kind == "production_frozen_categorical":
+                var estimator = CategoricalNB(
+                    alpha=0.25, min_categories_values=List[Int]([4, 3, 5]),
+                )
+                _ = estimator.fit(train_x, labels)
+                compare_serialized[CalibratedFrozenCategoricalNBClassifierCVSchema](
                     adapt_classifier(FrozenEstimator(estimator^)),
                     x, y, w, q, expected, fields, context,
                 )

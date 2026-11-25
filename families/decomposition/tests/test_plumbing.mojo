@@ -1,7 +1,7 @@
 from numojo import NDArray, Shape, Item, NDArrayStrides, arange, zeros
 from moxie.decomposition import (
     DictionaryLearning, MiniBatchDictionaryLearning, SparsePCA, MiniBatchSparsePCA,
-    dict_learning, dict_learning_online,
+    dict_learning_online,
 )
 from moxie.decomposition._contracts import (
     validate_matrix, validate_mean, validate_projection, owned_matrix,
@@ -91,8 +91,6 @@ def unsupported_apis() raises:
     with assert_raises(contains="NotImplementedError: MiniBatchSparsePCA.__init__"):
         _ = MiniBatchSparsePCA()
     var x = zeros[DType.float64](Shape(2, 2))
-    with assert_raises(contains="NotImplementedError: dict_learning is an API scaffold"):
-        _ = dict_learning(x, 2, alpha=1.0)
     with assert_raises(contains="NotImplementedError: dict_learning_online is an API scaffold"):
         _ = dict_learning_online(x)
 

@@ -11,9 +11,10 @@ from ._api import (
     MiniBatchDictionaryLearning,
     MiniBatchSparsePCA,
     SparsePCA,
-    dict_learning,
     dict_learning_online,
 )
+
+from ._dictionary import DictionaryLearningResult, dict_learning
 
 from ._pca import PCA, PCAParams
 

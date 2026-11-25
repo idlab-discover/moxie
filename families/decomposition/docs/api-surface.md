@@ -17,7 +17,8 @@ reserved declaration does not mean its algorithm is implemented.
 | LatentDirichletAllocation | [Batch/online variational Bayes and scores](lda.md) |
 | KernelPCA | [Named/precomputed kernels and learned inverse maps](kernel_pca.md) |
 | SparseCoder, sparse_encode | [Threshold, Lasso CD, OMP, LARS and Lasso LARS coding](sparse_coding.md) |
-| DictionaryLearning, MiniBatchDictionaryLearning, dict_learning, dict_learning_online | Raising declarations; dense dictionary optimization remains unfinished |
+| dict_learning | [Batch dense dictionary factorization](dictionary.md) |
+| DictionaryLearning, MiniBatchDictionaryLearning, dict_learning_online | Raising declarations |
 | SparsePCA, MiniBatchSparsePCA | Raising declarations; dense dictionary-fitting prerequisites remain unfinished |
 
 The family also exports randomized_svd from its shared SVD engine and typed

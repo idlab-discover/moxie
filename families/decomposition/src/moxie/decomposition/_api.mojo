@@ -353,10 +353,6 @@ struct SparsePCA(Movable):
         "Scikit-learn signature: inverse_transform(self, X)."
         raise Error("NotImplementedError: SparsePCA.inverse_transform is an API scaffold")
 
-def dict_learning(X: Some[Movable], n_components: Some[Movable], *, alpha: Some[Movable], max_iter: Some[Movable] = 100, tol: Some[Movable] = 1e-08, method: Some[Movable] = "lars", n_jobs: Some[Movable] = None, dict_init: Some[Movable] = None, code_init: Some[Movable] = None, callback: Some[Movable] = None, verbose: Some[Movable] = False, random_state: Some[Movable] = None, return_n_iter: Some[Movable] = False, positive_dict: Some[Movable] = False, positive_code: Some[Movable] = False, method_max_iter: Some[Movable] = 1000) raises -> APIValue:
-    "Scikit-learn signature: dict_learning(X, n_components, *, alpha, max_iter=100, tol=1e-08, method='lars', n_jobs=None, dict_init=None, code_init=None, callback=None, verbose=False, random_state=None, return_n_iter=False, positive_dict=False, positive_code=False, method_max_iter=1000)."
-    raise Error("NotImplementedError: dict_learning is an API scaffold")
-
 def dict_learning_online(X: Some[Movable], n_components: Some[Movable] = 2, *, alpha: Some[Movable] = 1, max_iter: Some[Movable] = 100, return_code: Some[Movable] = True, dict_init: Some[Movable] = None, callback: Some[Movable] = None, batch_size: Some[Movable] = 256, verbose: Some[Movable] = False, shuffle: Some[Movable] = True, n_jobs: Some[Movable] = None, method: Some[Movable] = "lars", random_state: Some[Movable] = None, positive_dict: Some[Movable] = False, positive_code: Some[Movable] = False, method_max_iter: Some[Movable] = 1000, tol: Some[Movable] = 0.001, max_no_improvement: Some[Movable] = 10) raises -> APIValue:
     "Scikit-learn signature: dict_learning_online(X, n_components=2, *, alpha=1, max_iter=100, return_code=True, dict_init=None, callback=None, batch_size=256, verbose=False, shuffle=True, n_jobs=None, method='lars', random_state=None, positive_dict=False, positive_code=False, method_max_iter=1000, tol=0.001, max_no_improvement=10)."
     raise Error("NotImplementedError: dict_learning_online is an API scaffold")

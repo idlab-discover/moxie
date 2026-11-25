@@ -29,24 +29,32 @@ types remain available as estimator associated types, including `Samples`.
 Caller-owned streams use `moxie._random.RandomState` with `fit_with_rng`,
 `fit_predict_with_rng` and `sample_with_rng`.
 
-## GaussianMixture persistence
+## Native persistence
 
 ```mojo
-from moxie.mixture_serialization import GaussianMixtureSchema
+from moxie.mixture_serialization import BayesianGaussianMixtureSchema, GaussianMixtureSchema
 from moxie.serialization import save_model, load_model
 
 comptime Schema = GaussianMixtureSchema[DType.float64]
 save_model[Schema](gaussian, "gaussian.moxie")
 var restored = load_model[Schema]("gaussian.moxie")
+
+comptime BayesianSchema = BayesianGaussianMixtureSchema[DType.float64]
+save_model[BayesianSchema](bayesian, "bayesian.moxie")
+var restored_bayesian = load_model[BayesianSchema]("bayesian.moxie")
 ```
 
 The [experimental native archive](../serialization.md) stores fitted or
 unfitted Float32 and Float64 models. Loading requires the matching schema dtype
 and reconstructs independent arrays without refitting. The archive preserves
 constructor settings separately from learned state, including pending parameter
-updates after fit, all five learned arrays and the convergence history and
-warning. Configuration arrays preserve logical values in C order. Fit still
-validates their suitability for the training data. Caller-owned RNG streams
+updates after fit. Both schemas store the Gaussian arrays and convergence
+history and warning. The Bayesian schema also stores resolved priors, posterior
+mean precision and degrees of freedom, and both layouts of posterior weight
+concentration. Configuration arrays preserve logical values in C order. Fit
+still validates their suitability for the training data. After editing
+structural settings such as covariance type, refit with `warm_start=False`
+or restore the fitted settings before inference. Caller-owned RNG streams
 remain with the caller.
 
 ## Validation
@@ -57,11 +65,16 @@ sources and checks. Compiler flags are `-O3 --fp-mode=contract=off`; the lock
 retains Mojo 1.0.0 and MAX 26.5.0. Python, NumPy, SciPy and sklearn are validation
 and tooling dependencies only.
 
-For Gaussian archive parity, set `MOXIE_GAUSSIAN_ROUNDTRIP=1` and run
-`pixi run python tests/mixture/gaussian/parity.py` after building. The native
-runner saves and restores each successful fit in memory before inference or a
-subsequent warm start. The family test also exercises file round trips and
-invalid archives.
+For archive parity, run the corresponding command after building:
+
+```sh
+MOXIE_GAUSSIAN_ROUNDTRIP=1 pixi run python tests/mixture/gaussian/parity.py
+MOXIE_BAYESIAN_ROUNDTRIP=1 pixi run python tests/mixture/bayesian/parity.py
+```
+
+Each runner saves and restores every successful fit in memory before inference
+or a subsequent warm start. The family tests also exercise file round trips
+and invalid archives.
 
 Tests cover the original family contracts and both child suites, concrete public
 imports with generic fluent dispatch, independent fitted copies, two isolated

@@ -24,7 +24,8 @@ class/weight handling, and `l1_min_c` bounds. Their restrictions are in the
 - Kernel `coef_()` is a method, with an error for nonlinear kernels. Native
   callable kernels use an explicit `KernelProvider` for fit and inference.
 - Typed parameter records replace dynamic Python dictionaries. Native errors
-  use descriptive prefixes; convergence diagnostics print a warning message.
+  use descriptive prefixes. Linear estimators record convergence diagnostics
+  in `fit_warnings`; kernel convergence diagnostics print a warning message.
   Python warning filters and deprecation-warning machinery are not reproduced.
 - Classifiers reject weights that remove every positive-weight sample from a
   class. This avoids upstream's inconsistent original-label/compacted-model

@@ -3,10 +3,20 @@
 import numojo as nm
 from std.math import isfinite, floor
 from moxie.base import WeightedSupervisedEstimator
+from moxie.warnings import FitWarning
 from moxie.svm._contracts import Dense, LinearModel, LinearOptions, validate_matrix, validate_vector
 from moxie.svm._liblinear import LibLinear
 from moxie.svm._base import SupportVectorClassifier, SupportVectorRegressor
 from moxie._random import RandomState, entropy_state
+
+def _linear_fit_warnings(status: Int) -> List[FitWarning]:
+    if status == 1:
+        return [FitWarning(
+            "ConvergenceWarning",
+            "Liblinear failed to converge, increase the number of iterations.",
+        )]
+    return []
+
 
 struct Dual(Copyable, Movable):
     var value: String
@@ -226,6 +236,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
     var n_features_in_: Int
     var n_iter_: Int
     var fit_status_: Int
+    var fit_warnings: List[FitWarning]
     var _rng: RandomState
     var classes_: List[Self.Label]
 
@@ -247,6 +258,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
         self.n_features_in_ = 0
         self.n_iter_ = 0
         self.fit_status_ = 0
+        self.fit_warnings = []
         self._rng = entropy_state()
         self.classes_ = List[Self.Label]()
 
@@ -342,8 +354,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
         self.n_features_in_ = X.shape[1]
         self.coef_ = model.coef.copy()
         self.intercept_ = model.intercept.copy()
-        if self.fit_status_ != 0:
-            print("ConvergenceWarning: Liblinear failed to converge, increase max_iter.")
+        self.fit_warnings = _linear_fit_warnings(model.fit_status)
         if self.verbose > 0:
             print("[LibLinear] iterations:", self.n_iter_)
         return self
@@ -467,6 +478,7 @@ struct LinearSVR(SupportVectorRegressor):
     var n_features_in_: Int
     var n_iter_: Int
     var fit_status_: Int
+    var fit_warnings: List[FitWarning]
     var _rng: RandomState
 
     def __init__(out self, *, epsilon: Float64 = 0.0, loss: String = "epsilon_insensitive", dual: Dual = "auto", tol: Float64 = 1e-4, C: Float64 = 1.0, fit_intercept: Bool = True, intercept_scaling: Float64 = 1.0, verbose: Int = 0, random_state: Int = -1, max_iter: Int = 1000) raises:
@@ -485,6 +497,7 @@ struct LinearSVR(SupportVectorRegressor):
         self.n_features_in_ = 0
         self.n_iter_ = 0
         self.fit_status_ = 0
+        self.fit_warnings = []
         self._rng = entropy_state()
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
@@ -541,8 +554,7 @@ struct LinearSVR(SupportVectorRegressor):
         self.n_features_in_ = X.shape[1]
         self.coef_ = model.coef.reshape(nm.Shape(X.shape[1]))
         self.intercept_ = model.intercept.copy()
-        if self.fit_status_ != 0:
-            print("ConvergenceWarning: Liblinear failed to converge, increase max_iter.")
+        self.fit_warnings = _linear_fit_warnings(model.fit_status)
         if self.verbose > 0:
             print("[LibLinear] iterations:", self.n_iter_)
         return self

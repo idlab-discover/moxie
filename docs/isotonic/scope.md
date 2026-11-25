@@ -3,6 +3,8 @@
 Supported exports are `IsotonicRegression`, `isotonic_regression`, and
 `check_increasing` in `moxie.isotonic`, based on scikit-learn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
+The module also exports `IsotonicCVAdapter`, `IsotonicScorer`, and
+`IsotonicSearchValue` for [model selection](api.md#composition).
 
 Dense Float64 and Float32 NDArrays and lists support weighted PAVA, increasing/decreasing
 fits, automatic direction, predictor tie consolidation, threshold compression,

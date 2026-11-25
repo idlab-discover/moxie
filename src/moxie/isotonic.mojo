@@ -11,6 +11,7 @@ from moxie.base import (
     TransformerMixin,
     WeightedSupervisedEstimator,
 )
+from moxie._isotonic_adapters import IsotonicCVAdapter, IsotonicScorer, IsotonicSearchValue
 from moxie.utils.validation import check_is_fitted
 from numojo import NDArray, array
 

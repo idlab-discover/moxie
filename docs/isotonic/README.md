@@ -5,6 +5,9 @@ in `src/moxie/isotonic.mojo`. Import them from `moxie.isotonic`.
 The estimator accepts Float32 and Float64 NDArrays and supports one-column
 pipelines. Concrete List overloads and List thresholds are also available.
 
+`IsotonicCVAdapter` and `IsotonicScorer` support KFold scoring and typed
+parameter search with NDArrays or one-dimensional Lists.
+
 See [API and adaptations](api.md), [supported scope](scope.md), and
 [license notices](THIRD_PARTY_NOTICES). The [example](../../examples/isotonic.mojo)
 runs as `builds/examples/isotonic` after a root build.
@@ -16,10 +19,12 @@ and generic calls, dtype preservation, and rejected mixed-dtype inputs.
 `test_reference_edges.mojo` pins hand-derived reference values for pooling,
 crossed bounds, negative score weights, tied-rank direction, refit after
 `set_params` and the documented `check_increasing` validation difference.
+`test_model_selection.mojo` checks weighted and unweighted KFold scores,
+grid-search ranking and refitted predictions against the pinned reference.
 The root shared-contract tests cover missing prediction capabilities.
 An isolated consumer assembles the current Moxie manifest and exercises all
-three exports and both estimator dtypes. Ownership checks verify the assembled
-module matches the Moxie source.
+three estimator and helper exports and both estimator dtypes. Ownership checks
+verify the assembled module matches the Moxie source.
 
 The parity runner executes the clean local scikit-learn source at
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`, including its compiled Cython tie

@@ -15,7 +15,7 @@ from hgb_splitting_parity import bits64
 BUILDS = Path(__file__).resolve().parents[1] / "builds"
 
 
-def cases():
+def loss_scored_cases():
     for index, (loss, q, X, query, y, _, weights, stages) in enumerate(loss_cases()):
         yield loss, q, X, query, y, weights, stages, 0, 0, False, index, 0, 0
     for seed in (0, 41, 421):
@@ -64,15 +64,39 @@ def cases():
             yield "squared_error", 0.5, X, query, y, weights, 12, mode, 1, sampled, seed, initial, 12
 
 
+def cases():
+    for case in loss_scored_cases():
+        yield (*case, "loss")
+
+    rng = np.random.default_rng(17)
+    X = rng.normal(size=(151, 2))
+    y = np.exp(X[:, 0] / 2) + 1
+    query = X[:19]
+    weights = rng.uniform(0.1, 2, len(y))
+    for scorer in (None, "r2", "neg_mean_absolute_error", "neg_mean_squared_error",
+                   "neg_root_mean_squared_error"):
+        for mode in (1, 2, 3):
+            for weighted in (False, True):
+                yield ("poisson", 0.5, X, query, y, weights if weighted else None,
+                       15, mode, 0, False, 17, 0, 0, scorer)
+        yield ("squared_error", 0.5, X, query, y, weights, 15, 2, 0, False, 17, 2, 0, scorer)
+
+    X = rng.normal(size=(10_043, 2))
+    y = X[:, 0] + rng.normal(size=len(X))
+    weights = rng.uniform(0.1, 2, len(y))
+    for scorer in (None, "neg_mean_squared_error"):
+        yield ("squared_error", 0.5, X, X[:11], y, weights, 8, 1, 0, False, 23, 0, 0, scorer)
+
+
 def explicit_validation(query):
     return np.arange(len(query)) / 12, np.linspace(0.5, 2, len(query))
 
 
 def fixture(case):
-    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial, categories = case
+    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial, categories, scoring = case
     fields = [
         loss, *bits64([q]), *X.shape, len(query), stages, int(weights is not None),
-        mode, constraints, int(sampled), seed, initial, categories,
+        mode, constraints, int(sampled), seed, initial, categories, scoring or "none",
         *bits64(X.ravel()), *bits64(query.ravel()), *bits64(y),
     ]
     if weights is not None:
@@ -84,7 +108,7 @@ def fixture(case):
 
 
 def reference(case):
-    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial, categories = case
+    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial, categories, scoring = case
     validation_size = {1: None, 5: 9}.get(mode, 0.1)
     validation = {}
     if mode == 3:
@@ -96,6 +120,7 @@ def reference(case):
         max_bins=16, max_leaf_nodes=5, max_depth=2 if initial else 3, learning_rate=0.125,
         min_samples_leaf=3, l2_regularization=0.25, max_features=0.6 if sampled else 1.0,
         validation_fraction=validation_size, n_iter_no_change=3, tol=0.125, random_state=seed,
+        scoring=scoring,
         categorical_features=[i for i in range(X.shape[1]) if categories & (1 << i)],
         monotonic_cst=[1, 1, 0, 0] if constraints == 1 else None,
         interaction_cst={1: [[0, 1], [2, 3]], 2: "pairwise", 3: "no_interactions"}.get(constraints),
@@ -128,7 +153,7 @@ def main():
     with threadpool_limits(limits=1):
         for index, case in enumerate(all_cases):
             attrs, r2, train, val, stages, prediction = reference(case)
-            context = f"case {index} {case[0]}, mode={case[7]}, seed={case[10]}"
+            context = f"case {index} {case[0]}, mode={case[7]}, seed={case[10]}, scoring={case[-1]}"
             actual_attrs = list(map(int, next(records).split()))
             if actual_attrs[4]:
                 actual_attrs.extend(int(next(records)) for _ in range(actual_attrs[1]))

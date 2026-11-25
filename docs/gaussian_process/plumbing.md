@@ -160,6 +160,9 @@ For t>1 targets: mean/std `(n,t)`, covariance `(n,n,t)`, samples `(n,t,s)`;
 for a single target outputs squeeze to `(n,)`, `(n,n)`, `(n,s)` even if fit y
 had shape `(n,1)`. Sample axis is last. R2 scoring uses uniform target averaging.
 
+See the [binary classification API](classification/api.md) for the implemented
+subset of the GPC contract below.
+
 GPC defaults: kernel=None, optimizer="fmin_l_bfgs_b", n_restarts_optimizer=0,
 max_iter_predict=100, warm_start=False, copy_X_train=True, random_state=None,
 multi_class="one_vs_rest", n_jobs=None. It owns `base_estimator_`, `kernel_`,

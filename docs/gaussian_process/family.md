@@ -1,7 +1,7 @@
 # gaussian_process family interfaces
 
-This repository implements dense regression and kernels alongside shared capability
-contracts. Classification remains unimplemented. See [API coverage](api-surface.md).
+This repository implements dense regression, binary classification and kernels
+alongside shared capability contracts. See [API coverage](api-surface.md).
 It uses scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 Read [the shared contract](../interfaces.md) for typed parameter records,
 in-place fit, associated array types, and other Mojo-specific differences.

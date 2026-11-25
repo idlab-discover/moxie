@@ -1,0 +1,89 @@
+# Dense binary Gaussian process classification
+
+`GaussianProcessClassifier` uses a Laplace approximation for two classes.
+It accepts a nonempty, finite rank-two NuMojo `NDArray` of Float64 features by
+default. Use `GaussianProcessClassifier[DType.float32]` for Float32 features.
+Targets are rank-one or single-column Int64 arrays by default. The second
+dtype parameter selects Float32 or Float64 integral-valued categorical labels. Predictions
+are rank one with the original label dtype and probability columns are in
+sorted class order.
+
+```mojo
+from moxie.gaussian_process import GaussianProcessClassifier
+from numojo import arange, Shape, zeros
+
+def main() raises:
+    var X = arange[DType.float64](0.0, 4.0).reshape(Shape(4, 1))
+    var y = zeros[DType.int64](Shape(4))
+    y.unsafe_set(2, 1)
+    y.unsafe_set(3, 1)
+    var model = GaussianProcessClassifier()
+    var probabilities = model.fit(X, y).predict_proba(X)
+    print(probabilities)
+```
+
+The default kernel is a fixed unit `ConstantKernel * RBF`. An explicit kernel
+with free parameters uses bounded L-BFGS-B by default. `optimizer=None` uses the
+configured hyperparameters. `n_restarts_optimizer` draws from the seeded
+stream or shared default stream. Restarts follow the pinned sklearn
+classifier's exponentiation of sampled log bounds before the optimizer call.
+`max_iter_predict` limits Newton iterations. `warm_start` reuses the previous
+mode within a fit and between likelihood evaluations of a fitted component.
+A new public fit always creates a fresh component.
+
+- `predict` uses the sign of the posterior latent mean. An exact zero selects
+  the first class.
+- `predict_proba` integrates the latent Gaussian with sklearn's five-term
+  error-function approximation and returns Float64 `(n_queries, 2)`. At zero
+  latent variance, it evaluates the finite limit of that approximation.
+- `latent_mean_and_variance` returns `LatentMoments` with two Float64
+  `(n_queries,)` arrays.
+- `log_marginal_likelihood` returns a `LikelihoodResult` with a cached value
+  when theta is omitted, or a value and optional analytic gradient at supplied
+  log theta. `clone_kernel=False` updates the learned kernel's theta. Cached
+  evidence and posterior factors retain the fit values.
+- `score` computes accuracy, optionally with a Float64 weight vector.
+- `classes_()`, `n_classes_()`, `kernel_()` and
+  `log_marginal_likelihood_value_()` read fitted metadata. `base_estimator_()`
+  returns an independent snapshot of the fitted binary component.
+  `n_features_in_` records the number of columns seen at fit.
+
+Both `copy_X_train` settings take an independent training snapshot, and
+Float32 input is widened before kernel computation. `get_params` returns the
+typed configuration and `set_params` supports named partial updates. For
+nullable settings, pass a typed inner `Optional` to set or clear the value.
+For example, `model.set_params(optimizer=Optional[String]())` disables
+optimization. `clone(model)` copies only configuration, while `model.copy()`
+copies fitted state. Inference requires a successful fit.
+
+Current scope is binary classification. Both sklearn `multi_class` values
+and `n_jobs` are accepted as configuration, and two-class fits use the same
+serial binary solver. Multiclass OvR and OvO are remaining work.
+
+## Numerical implementation
+
+Algorithm 3.1 factors `I + sqrt(W) K sqrt(W)` and uses triangular solves.
+Algorithm 3.2 reuses the factor for latent variance. Algorithm 5.1 contracts
+kernel derivatives against shared terms, without a new dense matrix per
+hyperparameter. The factorization and triangular solves use the family's
+existing `CholeskyAlgebra` over mojo-linalg. Numax `linalg.cholesky` and
+`linalg.matvec` operate on TensorLike layouts with compile-time extents for
+these paths. The family adapters already accept runtime-shaped NuMojo arrays,
+and the products use the authorized NuMojo rank-two `@` path with column
+right-hand sides. Numax `core.libm.erf` supplies the high-accuracy scalar erf
+because the weighted mixture amplifies approximation error. The likelihood
+uses the same Float64 exp and log as the kernel engine, with a correction for
+rounding in `log(1 + z)`. The loops
+apply diagonal scaling and fuse reductions using Float64.
+
+The implementation follows [GPML chapter 3](https://gaussianprocess.org/gpml/chapters/RW3.pdf)
+and [chapter 5](https://gaussianprocess.org/gpml/chapters/RW5.pdf). The
+classification parity script executes pinned sklearn's GPC and kernel source
+with installed support modules and SciPy. It exercises Float32/Float64,
+fixed and optimized theta, seeded restarts, and a one-step Newton limit with
+warm-start enabled and disabled. Tolerances account for Float32 kernel
+arithmetic and stopping decisions in the reference optimizer.
+
+Run `python tools/gaussian_process_checks.py classification` in the locked
+environment to assemble live sources, compile the two classification probes,
+and run the contracts and pinned parity.

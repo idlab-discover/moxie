@@ -302,6 +302,12 @@
         "moxie.gaussian_process.kernels": {
           "file": "src/moxie/gaussian_process/kernels.mojo"
         },
+        "moxie.gaussian_process._gpc": {
+          "file": "src/moxie/gaussian_process/_gpc.mojo"
+        },
+        "moxie.gaussian_process._laplace": {
+          "file": "src/moxie/gaussian_process/_laplace.mojo"
+        },
         "moxie.gaussian_process._gpr": {
           "file": "src/moxie/gaussian_process/_gpr.mojo"
         },
@@ -635,6 +641,9 @@
           "moxie._discriminant_analysis": {},
           "moxie._projection": {},
           "moxie.gaussian_process": {
+            "GaussianProcessClassifier": "moxie.gaussian_process._gpc",
+            "GaussianProcessClassifierParams": "moxie.gaussian_process._gpc",
+            "LatentMoments": "moxie.gaussian_process._plumbing",
             "GaussianProcessClassifierAPI": "moxie.gaussian_process._base",
             "GaussianProcessPosterior": "moxie.gaussian_process._base",
             "GaussianProcessRegressorAPI": "moxie.gaussian_process._base",

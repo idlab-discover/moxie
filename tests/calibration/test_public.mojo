@@ -1,5 +1,6 @@
 """Isolated consumer using production classifiers through calibration."""
 import numojo as nm
+from std.math import nan
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from std.sys import argv
 from moxie.base import clone, SupervisedEstimator
@@ -53,6 +54,60 @@ def test_default_classifier(X: Array, y: Array) raises:
             assert_equal(cloned_probability.item(i, j), first.item(i, j))
 
 
+def test_float32_features(X: Array, y: Array) raises:
+    var rows = X.shape[0]
+    var owner = nm.full[DType.float32](nm.Shape(rows, 4), Float32(999))
+    var strided = owner.view_with_layout(
+        nm.Shape(rows, 2), nm.NDArrayStrides(-4, 2), 4 * (rows - 1)
+    )
+    var column_major = nm.NDArray[DType.float32](X.shape, order="F")
+    var weight = Array(nm.Shape(rows))
+    for i in range(rows):
+        weight[nm.Item(i)] = Float64(i + 1)
+        for j in range(2):
+            var value = Float32(X.item(i, j))
+            strided[nm.Item(i, j)] = value
+            column_major[nm.Item(i, j)] = value
+
+    var empty = nm.zeros[DType.float32](nm.Shape(0, 2))
+    var model = CalibratedClassifierCV(cv=3, ensemble=False)
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict_proba(empty)
+    var expected_model = clone(model)
+    var x64 = column_major.astype[DType.float64]()
+    var expected = expected_model.fit(x64, y, weight.copy()).predict_proba(x64)
+    var actual = model.fit(strided, y, sample_weight=weight.copy()).predict_proba(column_major)
+    var predictions = model.predict(strided)
+    var expected_predictions = expected_model.predict(x64)
+    assert_equal(model.score(strided, y, weight.copy()), expected_model.score(x64, y, weight^))
+    assert_equal(model.n_features_in_, 2)
+    assert_equal(model.classes_.item(0), -3)
+    assert_equal(model.classes_.item(1), 7)
+    assert_false(clone(model).__sklearn_is_fitted__())
+
+    with assert_raises(contains="nonempty matrix"):
+        _ = model.fit(empty, y)
+    var wrong_width = nm.ones[DType.float32](nm.Shape(rows, 1))
+    with assert_raises(contains="inconsistent feature count"):
+        _ = model.predict(wrong_width)
+    var invalid = column_major.copy()
+    invalid[nm.Item(0, 0)] = nan[DType.float32]()
+    with assert_raises(contains="input must be finite"):
+        _ = model.fit(invalid, y)
+    var preserved = model.predict_proba(strided)
+    for i in range(rows):
+        assert_equal(predictions.item(i), expected_predictions.item(i))
+        for j in range(2):
+            assert_equal(actual.item(i, j), expected.item(i, j))
+            assert_equal(preserved.item(i, j), expected.item(i, j))
+
+    var refit = model.fit(column_major, y).predict_proba(strided)
+    var expected_refit = expected_model.fit(x64, y).predict_proba(x64)
+    for i in range(rows):
+        for j in range(2):
+            assert_equal(refit.item(i, j), expected_refit.item(i, j))
+
+
 def main() raises:
     var X = nm.zeros[DType.float64](nm.Shape(30, 2))
     var y = nm.zeros[DType.float64](nm.Shape(30))
@@ -61,6 +116,7 @@ def main() raises:
         X[nm.Item(i, 1)] = Float64(i % 11) / 3
         y[nm.Item(i)] = -3.0 if i % 2 == 0 else 7.0
     test_default_classifier(X, y)
+    test_float32_features(X, y)
     var base = adapt_classifier(LinearDiscriminantAnalysis())
     with assert_raises():
         _ = base.class_labels()

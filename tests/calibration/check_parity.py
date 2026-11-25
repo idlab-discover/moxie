@@ -356,6 +356,23 @@ def main():
                     assert model.calibrated_classifiers_[0].estimator.random_state == 0
                     add('default_linear_svc', X, y, sample_weight, q,
                         model.predict_proba(q), method, ensemble, model.predict(q), model.classes_)
+
+        X32 = X.astype(np.float32)
+        q32 = q.astype(np.float32)
+        for name, estimator in [('default', None), ('gaussian', gaussian())]:
+            # Match the documented widening for GaussianNB, whose sklearn
+            # implementation selects its statistics dtype from X.
+            X_ref = X32 if estimator is None else X32.astype(np.float64)
+            q_ref = q32 if estimator is None else q32.astype(np.float64)
+            for method in ('sigmoid', 'isotonic', 'temperature'):
+                y = codes if method == 'temperature' else 5 * codes - 7
+                for ensemble in (False, True):
+                    model = ref.CalibratedClassifierCV(
+                        estimator, method=method, cv=3, ensemble=ensemble
+                    ).fit(X_ref, y, sample_weight=w)
+                    add(f'float32_{name}', X32, y, w, q32, model.predict_proba(q_ref),
+                        method, ensemble, model.predict(q_ref), model.classes_,
+                        [model.score(X_ref, y, sample_weight=w)])
     fixtures = out / 'cases.txt'
     fixtures.write_text('\n'.join(records) + '\n')
     command = ['mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', 'builds/deps', '-I', 'examples/calibration_support', 'tests/calibration/parity_runner.mojo', '-o', str(out / 'runner')]

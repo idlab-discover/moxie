@@ -2,6 +2,7 @@ from std.math import abs, inf, nan
 from std.testing import assert_equal, assert_raises, assert_true
 from moxie.base import clone
 from moxie.linear_model import LogisticRegression
+from moxie.linear_model._linear_loss import LogisticLoss
 from numojo import NDArray, Shape, Strides, zeros
 
 
@@ -95,7 +96,7 @@ def contract[dtype: DType]() raises:
     var ws = zero_weights.view_with_layout(Shape(6), Strides(-1), 5)
     for i in range(6):
         zero_weights.unsafe_set(i, Scalar[dtype](i + 1))
-    var solvers: List[String] = ["lbfgs", "newton-cholesky"]
+    var solvers: List[String] = ["lbfgs", "newton-cholesky", "newton-cg"]
     for solver in solvers:
         var strided = LogisticRegression[dtype](solver=solver.copy())
         _ = strided.fit(Xs, ys, sample_weight=ws)
@@ -142,6 +143,42 @@ def contract[dtype: DType]() raises:
     assert_equal(copied.predict_log_proba(extremes).unsafe_get(1), -inf[dtype]())
 
 
+def hessian_product_contract[dtype: DType](outputs: Int, fit_intercept: Bool) raises:
+    var X = zeros[dtype](Shape(4, 2))
+    for i in range(X.size):
+        X.unsafe_set(i, Scalar[dtype](i - 4) / 4)
+    var weights = zeros[DType.float64](Shape(4))
+    weights.unsafe_set(0, 0.5)
+    weights.unsafe_set(1, -0.25)
+    weights.unsafe_set(2, 0.75)
+    var targets: List[Int] = [0, 1, max(1, outputs - 1), 0]
+    var objective = LogisticLoss(X^, targets^, weights^, outputs, 0.1, fit_intercept, False)
+    var shape = Shape((2 + Int(fit_intercept)) * outputs)
+    var current = zeros[DType.float64](shape)
+    var direction = zeros[DType.float64](shape)
+    var plus = zeros[DType.float64](shape)
+    var minus = zeros[DType.float64](shape)
+    comptime delta = 1e-5
+    for i in range(current.size):
+        var value = Float64(i + 1) / 8
+        var perturbation = Float64((i % 3) - 1)
+        current.unsafe_set(i, value)
+        direction.unsafe_set(i, perturbation)
+        plus.unsafe_set(i, value + delta * perturbation)
+        minus.unsafe_set(i, value - delta * perturbation)
+    var product = zeros[DType.float64](shape)
+    var scratch = List[Float64](length=outputs, fill=0)
+    objective.hessian_product(current, direction, product, scratch)
+    var gradient_plus = zeros[DType.float64](shape)
+    var gradient_minus = zeros[DType.float64](shape)
+    _ = objective.evaluate(plus, gradient_plus)
+    _ = objective.evaluate(minus, gradient_minus)
+    for i in range(product.size):
+        var difference = (gradient_plus.unsafe_get(i) - gradient_minus.unsafe_get(i)) / (2 * delta)
+        assert_true(abs(product.unsafe_get(i) - difference) < 1e-9)
+    assert_equal(objective.hessian.size, 0)
+
+
 def numeric_label_contract() raises:
     var X = zeros[DType.float64](Shape(3, 1))
     var y = zeros[DType.float64](Shape(3, 1))
@@ -162,5 +199,8 @@ def numeric_label_contract() raises:
 def main() raises:
     contract[DType.float64]()
     contract[DType.float32]()
+    hessian_product_contract[DType.float32](1, True)
+    hessian_product_contract[DType.float64](3, False)
+    hessian_product_contract[DType.float64](3, True)
     numeric_label_contract()
     print("PASS: dense LogisticRegression contracts in Float32 and Float64")

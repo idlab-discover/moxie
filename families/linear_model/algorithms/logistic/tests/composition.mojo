@@ -48,4 +48,5 @@ def check_pipeline(solver: String) raises:
 def main() raises:
     check_pipeline("lbfgs")
     check_pipeline("newton-cholesky")
-    print("PASS: dense LogisticRegression with both solvers through StandardScaler pipeline")
+    check_pipeline("newton-cg")
+    print("PASS: dense LogisticRegression with all three solvers through StandardScaler pipeline")

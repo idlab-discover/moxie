@@ -85,6 +85,91 @@ struct LogisticLoss[source_dtype: DType](Objective):
     ) raises -> Float64:
         return self._evaluate[True](weights, gradient)
 
+    @staticmethod
+    def _project_row(
+        X: NDArray[Self.source_dtype], row: Int, features: Int, fit_intercept: Bool,
+        coefficients: NDArray[DType.float64], mut projected: List[Float64],
+    ):
+        var outputs = len(projected)
+        for k in range(outputs):
+            projected[k] = coefficients.unsafe_get(
+                features * outputs + k
+            ) if fit_intercept else 0
+        for j in range(features):
+            var value = Float64(X.unsafe_get(row + j))
+            for k in range(outputs):
+                projected[k] += value * coefficients.unsafe_get(j * outputs + k)
+
+    def _accumulate_row(
+        self, row: Int, features: Int, projected: List[Float64],
+        mut result: NDArray[DType.float64],
+    ):
+        var outputs = len(projected)
+        for j in range(features):
+            var value = Float64(self._X.unsafe_get(row + j))
+            for k in range(outputs):
+                var index = j * outputs + k
+                result.unsafe_set(index, result.unsafe_get(index) + value * projected[k])
+        if self._fit_intercept:
+            for k in range(outputs):
+                var index = features * outputs + k
+                result.unsafe_set(index, result.unsafe_get(index) + projected[k])
+
+    @staticmethod
+    def _exp_shifted_scores(mut scores: List[Float64]) -> Tuple[Int, Float64, Float64]:
+        var peak = 0
+        for k in range(1, len(scores)):
+            if scores[k] > scores[peak]:
+                peak = k
+        var shift = scores[peak]
+        var tail = Float64(0)
+        for k in range(len(scores)):
+            scores[k] = exp(scores[k] - shift)
+            if k != peak:
+                tail += scores[k]
+        return (peak, shift, tail)
+
+    def hessian_product(
+        mut self, weights: NDArray[DType.float64], direction: NDArray[DType.float64],
+        mut result: NDArray[DType.float64], mut projected: List[Float64],
+    ) raises:
+        var features = self._X.shape[1]
+        var outputs = len(self._scores)
+        for j in range(features * outputs):
+            result.unsafe_set(j, self._l2 * direction.unsafe_get(j))
+        for j in range(features * outputs, result.size):
+            result.unsafe_set(j, 0)
+        for i in range(self._X.shape[0]):
+            var weight = self._weights.unsafe_get(i)
+            if weight == 0:
+                continue
+            var row = i * features
+            Self._project_row(self._X, row, features, self._fit_intercept, direction, projected)
+            Self._project_row(self._X, row, features, self._fit_intercept, weights, self._scores)
+            if outputs == 1:
+                var tail = exp(-abs(self._scores[0]))
+                var denominator = 1 + tail
+                projected[0] *= weight * (tail / (denominator * denominator))
+            else:
+                var (peak, _, tail) = Self._exp_shifted_scores(self._scores)
+                var center = projected[peak]
+                var inverse_sum = 1 / (1 + tail)
+                var mean_delta = Float64(0)
+                for k in range(outputs):
+                    projected[k] -= center
+                    mean_delta += (self._scores[k] * inverse_sum) * projected[k]
+                var other_mass = Float64(0)
+                for k in range(outputs):
+                    if k != peak:
+                        projected[k] = (
+                            weight * (self._scores[k] * inverse_sum)
+                            * (projected[k] - mean_delta)
+                        )
+                        other_mass += projected[k]
+                # The softmax covariance annihilates the all-ones vector.
+                projected[peak] = -other_mass
+            self._accumulate_row(row, features, projected, result)
+
     def _evaluate[
         with_hessian: Bool
     ](
@@ -117,16 +202,7 @@ struct LogisticLoss[source_dtype: DType](Objective):
             if weight == 0:
                 continue
             var row = i * features
-            for k in range(outputs):
-                self._scores[k] = weights.unsafe_get(
-                    intercept_start + k
-                ) if self._fit_intercept else 0
-            for j in range(features):
-                var value = Float64(self._X.unsafe_get(row + j))
-                for k in range(outputs):
-                    self._scores[k] += value * weights.unsafe_get(
-                        j * outputs + k
-                    )
+            Self._project_row(self._X, row, features, self._fit_intercept, weights, self._scores)
 
             # Replace raw scores with weighted pointwise gradients.
             var target = self._targets[i]
@@ -149,16 +225,11 @@ struct LogisticLoss[source_dtype: DType](Objective):
                         nonpositive_mass += weight
                     binary_curvature = abs(signed_curvature)
             else:
-                for k in range(1, outputs):
-                    if self._scores[k] > self._scores[peak]:
-                        peak = k
-                var shift = self._scores[peak]
-                var target_margin = shift - self._scores[target]
-                var tail = Float64(0)
-                for k in range(outputs):
-                    self._scores[k] = exp(self._scores[k] - shift)
-                    if k != peak:
-                        tail += self._scores[k]
+                var target_score = self._scores[target]
+                var shift: Float64
+                var tail: Float64
+                peak, shift, tail = Self._exp_shifted_scores(self._scores)
+                var target_margin = shift - target_score
                 loss += weight * (target_margin + log1p(tail))
                 var scale = weight / (1 + tail)
                 var other_mass = Float64(0)
@@ -205,20 +276,7 @@ struct LogisticLoss[source_dtype: DType](Objective):
                             + (curvature * xj) * xm,
                         )
 
-            for j in range(features):
-                var value = Float64(self._X.unsafe_get(row + j))
-                for k in range(outputs):
-                    var index = j * outputs + k
-                    gradient.unsafe_set(
-                        index,
-                        gradient.unsafe_get(index) + value * self._scores[k],
-                    )
-            if self._fit_intercept:
-                for k in range(outputs):
-                    var index = intercept_start + k
-                    gradient.unsafe_set(
-                        index, gradient.unsafe_get(index) + self._scores[k]
-                    )
+            self._accumulate_row(row, features, self._scores, gradient)
         comptime if with_hessian:
             # The native symmetric factorization consumes the lower triangle.
             self.hessian_warning = nonpositive_mass > 0.25

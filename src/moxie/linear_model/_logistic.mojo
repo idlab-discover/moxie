@@ -12,7 +12,7 @@ from moxie.linear_model._linear_base import (
     linear_decision, public_prediction,
 )
 from moxie.linear_model._linear_loss import LogisticLoss, logistic_probability
-from moxie.linear_model._logistic_solver import LogisticSolution, logistic_lbfgs, logistic_newton
+from moxie.linear_model._logistic_solver import LogisticSolution, logistic_lbfgs, logistic_newton, logistic_newton_cg
 from moxie.linear_model._ridge_labels import (
     ClassWeight, LabelEncoding, _label, accuracy, fit_labels,
 )
@@ -294,7 +294,7 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             ref seed = self.random_state.value()
             if seed < 0 or seed > 4294967295:
                 raise Error("ValueError: random_state must be in [0, 2**32 - 1]")
-        if self.solver != "lbfgs" and self.solver != "newton-cholesky":
+        if self.solver != "lbfgs" and self.solver != "newton-cholesky" and self.solver != "newton-cg":
             raise Error(String("NotImplementedError: LogisticRegression solver ", self.solver))
         if self.dual:
             raise Error("ValueError: LogisticRegression requires dual=False for the selected solver")
@@ -355,6 +355,8 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             solution = logistic_newton(
                 objective, initial^, outputs, features, self.fit_intercept, l2, self.max_iter, self.tol,
             )
+        elif self.solver == "newton-cg":
+            solution = logistic_newton_cg(objective, initial^, outputs, self.max_iter, self.tol)
         else:
             solution = logistic_lbfgs(objective, initial, self.max_iter, self.tol)
 

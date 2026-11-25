@@ -1,11 +1,11 @@
 # Dense LogisticRegression
 
 Import `LogisticRegression`, `LogisticRegressionParams` and `ClassWeight`
-from `moxie.linear_model`. The dense `lbfgs` and `newton-cholesky` solvers
-fit binary and multinomial problems with an L2 penalty or an unpenalized
-objective. The defaults are `solver="lbfgs"` and L2. Set `C` to infinity or
-pass `None` as the penalty to remove regularization. Other solvers and L1 or
-elastic-net fitting are open work.
+from `moxie.linear_model`. The dense `lbfgs`, `newton-cg` and
+`newton-cholesky` solvers fit binary and multinomial problems with an L2
+penalty or an unpenalized objective. The defaults are `solver="lbfgs"` and
+L2. Set `C` to infinity or pass `None` as the penalty to remove
+regularization. Other solvers and L1 or elastic-net fitting are open work.
 
 ```mojo
 from moxie.linear_model import ClassWeight, LogisticRegression
@@ -83,13 +83,31 @@ within the remaining budget. The pivot check differs from SciPy's reciprocal
 condition estimate, so borderline ill-conditioned systems can switch solvers
 at different iterations.
 
+Select `solver="newton-cg"` to solve each Newton step with truncated
+conjugate gradient. It stops when the maximum absolute gradient is at most
+`tol`. It streams signed binary curvature or the multinomial softmax
+covariance through a Hessian-vector product. It needs linear scratch space
+in the coefficient count and class count beyond the compact input snapshot.
+The product fuses the two design-matrix projections with row curvature. It
+avoids the projected and weighted sample-by-class arrays that separate
+NuMojo `matmul_2darray` calls would allocate. Numax `linalg.dot` takes
+fixed-size arrays or MAX tensors with compile-time lengths. This solver
+uses the optimizer dependency's contiguous NDArray dot and strong-Wolfe
+line search. That search uses bracketing and bisection, so accepted step
+lengths and iteration counts can differ from sklearn's SciPy line search.
+With unpenalized multinomial fits, a common offset across classes leaves
+the probabilities and predictions invariant. The pinned Float32 solver
+can drift along this direction. Moxie's Float64 arithmetic keeps a centered
+cold start close to centered, so raw coefficients and decision values may
+differ by that common offset.
+
 The model retains the optimizer's accepted iterate on convergence stalls and
 iteration limits. An optimization attempt with no finite accepted iterate
 raises. Mojo exposes `n_iter_` and errors. Python's convergence and
 deprecation warnings, metadata routing, callback hooks and verbose logging
 are unavailable. `n_jobs` has no effect. `random_state` and
 `intercept_scaling` are accepted configuration parameters and have no effect
-with either solver.
+with these solvers.
 
 ## Focused validation
 
@@ -103,26 +121,34 @@ python tools/linear_model_checks.py logistic-composition
 
 The first command assembles the family namespace and builds both the native
 contracts and the differential driver. The second executes the estimator and
-linear-loss Python sources at scikit-learn revision
-`4358542a1bd39af2e7e1cbace8b9fed067473c5b`, using the locked support wheel and
-SciPy. The last compiles the StandardScaler pipeline through the integrated
-namespace and checks class order, decision scores, probabilities, accuracy,
-nested clone and nested parameter updates.
+linear-loss Python sources and the Newton-CG optimizer at scikit-learn
+revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`, using the locked
+support wheel and SciPy. The last compiles the StandardScaler pipeline
+through the integrated namespace and checks class order, decision scores,
+probabilities, accuracy, nested clone and nested parameter updates.
 
-The differential suite checks binary and multinomial fits in both dtypes,
-for both solvers, including weighting, unpenalized and warm-start fits, zero
-and one iteration budgets, line-search backtracking, singular and nearly
-singular Hessian fallback, and invalid inputs. The Float64 and widened
-Float32 oracles use absolute bounds of 2e-6 for coefficients, intercepts and
-probabilities and 5e-6 for decision and log-probability values. The Float32 sklearn objective
-rounds intermediate values in the feature dtype and can stop earlier due to
-its rounded loss. Its bounds are 9e-4 and 3e-3 respectively. The pinned
-unpenalized multinomial Newton solver pads a Float32 step with Float64 zeros
-and raises a buffer dtype error. The native Float32 fit succeeds, and those
-two cases compare against the pinned solver on widened inputs. The widened
-binary log-probability comparison rounds the sigmoid to Float32 before
-computing its complement, since rounding near one is amplified by the log.
-Classification outputs are exact. Iteration counts are exact for zero- and
-one-iteration budgets, the backtracking case, and the singular (two-iteration
-budget) and nearly singular fallback cases. The other cases check iteration
-count shape and range.
+The differential suite checks binary and multinomial fits in both dtypes
+for all three solvers. Cases cover weighting, unpenalized and warm-start
+fits, zero and one iteration budgets, line-search backtracking, singular
+and nearly singular Hessians, stationary and negative-curvature Newton-CG
+starts, and invalid inputs. The native contracts compare the streamed
+Hessian-vector product against central differences of the analytic gradient
+with signed and zero weights.
+
+The Float64 and widened Float32 oracles use absolute bounds of 2e-6 for
+coefficients, intercepts and probabilities and 5e-6 for decision and
+log-probability values. The Float32 sklearn objective rounds intermediate
+values in the feature dtype and can stop earlier due to its rounded loss.
+Its bounds are 9e-4 and 3e-3 respectively. For unpenalized multinomial
+Newton-CG, the Float32 reference comparison uses class-centered coefficients
+and decision values. The widened comparison checks both arrays directly.
+Pinned unpenalized multinomial Newton-Cholesky pads a Float32 step with
+Float64 zeros and raises a buffer dtype error. The native Float32 fit
+succeeds, and those two cases compare against the pinned solver on widened
+inputs. The widened binary log-probability comparison rounds the sigmoid
+to Float32 before computing its complement, since rounding near one is
+amplified by the log. Classification outputs are exact. Iteration counts
+are exact for zero- and one-iteration budgets, the stationary start, the
+backtracking case, and the singular (two-iteration budget) and nearly
+singular fallback cases. The other cases check iteration count shape and
+range.

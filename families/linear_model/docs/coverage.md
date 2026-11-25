@@ -24,7 +24,7 @@ from the assembled package.
 | OrthogonalMatchingPursuit, orthogonal_mp, orthogonal_mp_gram, OrthogonalMatchingPursuitCV | Missing |
 | BayesianRidge | Dense empirical-Bayes fitting, full posterior covariance and predictive uncertainty; see [API and validation](../algorithms/bayesian/docs/api.md) |
 | ARDRegression | Missing |
-| LogisticRegression | [Dense binary and multinomial L-BFGS and Newton-Cholesky](../algorithms/logistic/docs/api.md) with L2 or no penalty. Other solvers and penalties remain open. |
+| LogisticRegression | [Dense binary and multinomial L-BFGS, Newton-CG and Newton-Cholesky](../algorithms/logistic/docs/api.md) with L2 or no penalty. Other solvers and penalties remain open. |
 | LogisticRegressionCV | Missing |
 | PoissonRegressor, GammaRegressor, TweedieRegressor | Missing |
 | HuberRegressor, QuantileRegressor, RANSACRegressor, TheilSenRegressor | Missing |

@@ -75,10 +75,23 @@ cases and checks signed zeros, infinities, NaNs and subnormal boundaries.
 Check caller-specific edge semantics and pinned scikit-learn parity when
 migrating callers. The scalar tolerance does not determine the tolerance of
 an estimator or a composition.
-The neighbors query engine uses algebraic fast paths and `llvm.pow.f64`
-for general Minkowski powers. Its oracle checks exercise weighted and
-unweighted queries. Numax `core.libm` has no `pow` API, and composing its
-`exp` and `log` would require separate accuracy evidence for general powers.
+
+Use `moxie._dense.pow_float64(base, exponent)` for runtime scalar Float64
+powers on CPU. It uses [LLVM's power intrinsic](https://releases.llvm.org/18.1.4/docs/LangRef.html#llvm-pow-intrinsic),
+which follows the platform libm result semantics. Numax `core.libm` has no
+`pow` API. Composing rounded `log`, multiplication, and `exp` can amplify
+rounding error for large products and requires extra logic for negative bases
+and signed zero.
+
+Run `python shared/numerics/tools/check.py pow-accuracy` from the repository
+root with the locked toolchain. The probe checks agreement within one ULP of
+the 100-digit Decimal reference rounded to Float64. It includes subnormal
+bases and results, representable exponents around underflow and overflow,
+and negative bases with integer exponents. Zero signs, infinities, and NaN
+classification are checked separately. This bound describes the sampled CPU
+results. Keep approximate floating-point flags disabled for numerical parity.
+Neighbors uses the shared primitive for general Minkowski powers and verifies
+weighted and unweighted queries against the pinned reference.
 
 Run `python tools/check_std_math_precision.py` from the repository root to
 check direct `from std.math import` declarations in production Mojo sources.

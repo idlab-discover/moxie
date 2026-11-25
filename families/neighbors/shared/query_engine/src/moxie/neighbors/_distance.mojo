@@ -1,10 +1,9 @@
 """Native dense metric kernels. See LICENSES/sklearn.txt for reference notices."""
 import numojo as nm
-from std.sys import llvm_intrinsic
 from std.math import nan, sqrt, cbrt, abs, max, min, isnan, isfinite, sin, cos, asin
 from moxie.neighbors._contracts import DenseMetric
 from moxie._linalg import covariance_inverse
-from moxie._dense import sum_axis2d
+from moxie._dense import pow_float64, sum_axis2d
 
 
 def metric_power(x: Float64, p: Float64) -> Float64:
@@ -18,7 +17,7 @@ def metric_power(x: Float64, p: Float64) -> Float64:
     if p == Float64(2)/3:
         var root = cbrt(x)
         return root * root
-    return llvm_intrinsic["llvm.pow.f64", Float64](x, p)
+    return pow_float64(x, p)
 
 
 def at[dtype: DType](x: nm.NDArray[dtype], i: Int, j: Int) raises -> Float64:

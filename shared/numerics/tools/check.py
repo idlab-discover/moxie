@@ -24,13 +24,19 @@ def verify():
         raise RuntimeError(f'Compiler mismatch: {version}')
     return target
 
-def build():
+def build(sources=None):
     deps = verify()
-    for source in sorted((ROOT / 'tests').glob('*.mojo')) + sorted((ROOT / 'examples').glob('*.mojo')):
+    if sources is None:
+        sources = sorted((ROOT / 'tests').glob('*.mojo')) + sorted((ROOT / 'examples').glob('*.mojo'))
+    for source in sources:
         subprocess.run(['mojo', 'build', '-O3', '-I', str(deps), '-I', str(ROOT/'tests'), str(source), '-o', str(ROOT/'builds'/source.stem)], check=True)
 
 if __name__ == '__main__':
     action = sys.argv[1]
+    if action == 'pow-accuracy':
+        build([ROOT/'tests/pow_driver.mojo'])
+        subprocess.run([sys.executable, str(ROOT/'tests/pow_accuracy.py')], check=True)
+        sys.exit(0)
     build()
     if action == 'test':
         subprocess.run([str(ROOT/'builds/contracts')], check=True)

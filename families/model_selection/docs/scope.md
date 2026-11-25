@@ -35,8 +35,9 @@ API declarations. No performance claim is made.
 ParameterGrid/ParameterSampler are implemented by the search child; see its
 [typed candidate scope](../algorithms/search/docs/scope.md). Serial
 cross_validate/cross_val_score/cross_val_predict accept explicit adapters and split
-lists. `cross_val_score` also accepts an adapter with default scoring and fold
-generation. See the [validation scope](../algorithms/validation/docs/scope.md)
+lists. `cross_validate`, `cross_val_score`, `validation_curve` and `learning_curve`
+also accept an adapter with default scoring and fold generation.
+See the [validation scope](../algorithms/validation/docs/scope.md)
 for tested numeric/String predictions, multioutput responses and class-column
 alignment.
 `GridSearchCV` and `RandomizedSearchCV` now implement dense serial candidate

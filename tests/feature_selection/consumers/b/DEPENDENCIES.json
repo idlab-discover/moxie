@@ -73,6 +73,59 @@
       "path": "../../../../families/svm/algorithms/linear"
     },
     {
+      "id": "svm-libsvm",
+      "path": "../../../../families/svm/shared/libsvm",
+      "modules": {
+        "moxie.svm._libsvm": {
+          "file": "src/moxie/svm/_libsvm.mojo"
+        },
+        "moxie.svm._cache": {
+          "file": "src/moxie/svm/_cache.mojo"
+        },
+        "moxie.svm._kernels": {
+          "file": "src/moxie/svm/_kernels.mojo"
+        }
+      },
+      "assets": {
+        "licenses/svm-libsvm/LIBSVM.txt": "LICENSES/LIBSVM.txt",
+        "licenses/svm-libsvm/scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.svm": {}
+        }
+      }
+    },
+    {
+      "id": "svm-c-svm",
+      "path": "../../../../families/svm/algorithms/c_svm",
+      "modules": {
+        "moxie.svm._c_svm": {
+          "file": "src/moxie/svm/_c_svm.mojo"
+        },
+        "moxie.svm._classification": {
+          "file": "src/moxie/svm/_classification.mojo"
+        }
+      },
+      "assets": {
+        "licenses/svm-c_svm/scikit-learn.txt": "SCIKIT_LEARN_LICENSE"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.svm": {
+            "SVC": "moxie.svm._c_svm",
+            "SVR": "moxie.svm._c_svm",
+            "Gamma": "moxie.svm._classification",
+            "Probability": "moxie.svm._classification",
+            "SVCParams": "moxie.svm._c_svm",
+            "SVRParams": "moxie.svm._c_svm"
+          }
+        }
+      }
+    },
+    {
       "assets": {
         "licenses/feature-selection-scikit-learn.txt": "LICENSES/feature-selection-scikit-learn.txt"
       },
@@ -100,8 +153,10 @@
             "ConfiguredScorer": "moxie.feature_selection._univariate_selection",
             "DecisionTreeClassifierImportance": "moxie.feature_selection._tree_importance",
             "LinearSVCImportance": "moxie.feature_selection._linear_svc_importance",
+            "SVCImportance": "moxie.feature_selection._svc_importance",
             "DenseSupervisedCV": "moxie.feature_selection._sequential_adapter",
             "DiscreteFeatures": "moxie.feature_selection._mutual_info",
+            "BayesianRidgeImportance": "moxie.feature_selection._linear_model_importance",
             "ElasticNetImportance": "moxie.feature_selection._linear_model_importance",
             "EstimatorCVScore": "moxie.feature_selection._sequential_adapter",
             "FeatureCount": "moxie.feature_selection._rfe",
@@ -155,13 +210,18 @@
             "mutual_info_classif": "moxie.feature_selection._mutual_info",
             "mutual_info_regression": "moxie.feature_selection._mutual_info",
             "r_regression": "moxie.feature_selection._univariate_selection",
+            "RidgeClassifierImportance": "moxie.feature_selection._ridge_classifier_importance",
             "LogisticRegressionImportance": "moxie.feature_selection._logistic_importance"
           },
           "moxie.linear_model": {
             "LinearRegression": "moxie.linear_model._least_squares",
             "LinearRegressionParams": "moxie.linear_model._least_squares",
             "LogisticRegression": "moxie.linear_model._logistic",
-            "LogisticRegressionParams": "moxie.linear_model._logistic"
+            "LogisticRegressionParams": "moxie.linear_model._logistic",
+            "RidgeClassifier": "moxie.linear_model._ridge",
+            "RidgeClassifierParams": "moxie.linear_model._ridge",
+            "BayesianRidge": "moxie.linear_model._bayes",
+            "BayesianRidgeParams": "moxie.linear_model._bayes"
           }
         },
         "schema": 1
@@ -219,6 +279,9 @@
         "moxie.feature_selection._incremental_pca_importance": {
           "file": "src/moxie/feature_selection/_incremental_pca_importance.mojo"
         },
+        "moxie.linear_model._bayes": {
+          "file": "src/moxie/linear_model/_bayes.mojo"
+        },
         "moxie.feature_selection._linear_model_importance": {
           "file": "src/moxie/feature_selection/_linear_model_importance.mojo"
         },
@@ -249,6 +312,12 @@
         "moxie.feature_selection._linear_svc_importance": {
           "file": "src/moxie/feature_selection/_linear_svc_importance.mojo"
         },
+        "moxie._multiclass_contracts": {
+          "file": "src/moxie/_multiclass_contracts.mojo"
+        },
+        "moxie.feature_selection._svc_importance": {
+          "file": "src/moxie/feature_selection/_svc_importance.mojo"
+        },
         "moxie.feature_selection._tree_importance": {
           "file": "src/moxie/feature_selection/_tree_importance.mojo"
         },
@@ -270,6 +339,9 @@
         "moxie._feature_metadata": {
           "file": "src/moxie/_feature_metadata.mojo"
         },
+        "moxie.feature_selection._ridge_classifier_importance": {
+          "file": "src/moxie/feature_selection/_ridge_classifier_importance.mojo"
+        },
         "moxie.feature_selection._logistic_importance": {
           "file": "src/moxie/feature_selection/_logistic_importance.mojo"
         },
@@ -284,6 +356,9 @@
         },
         "moxie.linear_model._logistic_solver": {
           "file": "src/moxie/linear_model/_logistic_solver.mojo"
+        },
+        "moxie.linear_model._ridge": {
+          "file": "src/moxie/linear_model/_ridge.mojo"
         },
         "moxie.linear_model._ridge_labels": {
           "file": "src/moxie/linear_model/_ridge_labels.mojo"

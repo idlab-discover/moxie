@@ -2,6 +2,8 @@
 
 from std.utils import Variant
 
+from moxie.base import BaseEstimator
+
 
 comptime _UNCHANGED = "$UNCHANGED$"
 comptime _WEIGHT = "sample_weight"
@@ -88,3 +90,11 @@ struct FitScoreMetadataRequest(Copyable, Movable):
 
     var fit: SampleWeightRequest
     var score: SampleWeightRequest
+
+
+trait FitScoreMetadataRequestProvider(BaseEstimator):
+    """Expose fit and score sample-weight requests to generic parents."""
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        """Return an independently owned snapshot of both method requests."""
+        ...

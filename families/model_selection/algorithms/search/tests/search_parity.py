@@ -15,7 +15,7 @@ ORACLE = WORKSPACE / 'scikit-learn'
 REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 if '--oracle' not in sys.argv:
     python = os.environ.get('MOXIE_REFERENCE_PYTHON', str(WORKSPACE / 'moxie/.pixi/envs/default/bin/python'))
-    subprocess.run([python, str(Path(__file__).resolve()), '--oracle'], check=True)
+    subprocess.run([python, str(Path(__file__).resolve()), '--oracle', *sys.argv[1:]], check=True)
     raise SystemExit()
 
 import numpy as np
@@ -27,6 +27,12 @@ import warnings
 assert sklearn.__version__ == '1.9.1'
 assert subprocess.check_output(['git', '-C', str(ORACLE), 'rev-parse', 'HEAD'], text=True).strip() == REVISION
 files = ['sklearn/model_selection/_search.py', 'sklearn/model_selection/_validation.py', 'sklearn/utils/_metadata_requests.py', 'sklearn/dummy.py']
+svc_only = '--svc-only' in sys.argv
+if svc_only:
+    split_source = 'sklearn/model_selection/_split.py'
+    svc_source = 'sklearn/svm/_classes.py'
+    iris_source = 'sklearn/datasets/data/iris.csv'
+    files += [split_source, svc_source, iris_source]
 assert not subprocess.check_output(['git', '-C', str(ORACLE), 'status', '--porcelain', '--', *files], text=True)
 
 def module(name, path):
@@ -50,6 +56,18 @@ for function in functions:
 exec(compile(ast.Module(body=functions, type_ignores=[]), str(ORACLE / files[1]), 'exec'), ns)
 for name in ('_fit_and_score', '_aggregate_score_dicts', '_insert_error_scores', '_normalize_score_results', '_warn_or_raise_about_fit_failures'):
     setattr(reference, name, ns[name])
+
+if svc_only:
+    from svc_search_parity import check_svc_search
+
+    split = module('sklearn.model_selection._moxie_search_split', split_source)
+    svc = module('sklearn.svm._moxie_search_svc', svc_source).SVC
+    reference.check_cv = split.check_cv
+    ns['check_cv'] = split.check_cv
+    binary = Path(sys.argv[sys.argv.index('--svc-only') + 1]).resolve()
+    check_svc_search(reference, ns['cross_val_score'], split.KFold, svc, ORACLE / iris_source, binary)
+    raise SystemExit()
+
 
 class Discrete:
     def __init__(self, values):

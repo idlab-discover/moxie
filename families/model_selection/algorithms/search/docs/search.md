@@ -178,6 +178,20 @@ python families/model_selection/algorithms/search/tests/dense_adapter_parity.py 
   builds/dense_adapter
 ```
 
+The Iris SVC parity check compares candidate order, per-fold scores, ranks,
+refit output and nested cross-validation against the pinned gallery scenario.
+The outer CV takes materialized folds. Each inner search builds fresh shuffled
+folds from its own training subset through the adapter's `default_cv`.
+Run the SVC check by itself with the root-assembled sources.
+
+```sh
+mojo build -O3 --fp-mode=contract=off -I builds/deps \
+  families/model_selection/algorithms/search/tests/svc/iris_search.mojo \
+  -o builds/iris_search
+python families/model_selection/algorithms/search/tests/search_parity.py \
+  --svc-only builds/iris_search
+```
+
 ## Results and refitting
 
 Learned values use checked accessors ending in `_()`:

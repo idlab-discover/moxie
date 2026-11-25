@@ -11,6 +11,8 @@ wraps real Moxie estimators and their sklearn counterparts:
   `moxie.discriminant_analysis.LinearDiscriminantAnalysis`, and
   `moxie.naive_bayes.GaussianNB` through `BinaryAdapter` for the native List
   targets. GaussianNB also exercises incremental OvR and OvO updates.
+- `moxie.neighbors.KNeighborsClassifier` with Int64 array component targets
+  and one native Float64 probability matrix per output.
 
 Cases cover OvR, OvO and OutputCode; 2, 3 and 5 classes; int64, float64 and
 string labels; Float32 and Float64 features; seeded OutputCode codebooks.
@@ -39,6 +41,10 @@ Tolerances:
   and 1e-5 relative / 5e-6 absolute for Float32 responses because the
   native estimator stores its running moments and computes likelihoods in
   Float32, while sklearn retains Float64 learned means and variances.
+- Uniform KNN votes use the tree probability tolerance. Distance weighting
+  allows 1e-6 relative / 1e-7 absolute for Float32, where Moxie retains
+  distances in the feature dtype before computing Float64 weights. Float64
+  distance weighting allows 1e-12 relative / 1e-14 absolute for rounding.
 """
 import argparse
 import inspect
@@ -56,6 +62,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.linear_model import RidgeClassifier
 from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier, OutputCodeClassifier, _predict_binary
 from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier, _classification as neighbors_classification
 from sklearn.svm import SVC, LinearSVC, _classes as svm_classes
 from sklearn.tree import DecisionTreeClassifier
 
@@ -71,6 +78,8 @@ TOLERANCE = {
     "lda32": (1e-5, 5e-6),
     "gaussian-nb64": (1e-9, 1e-11),
     "gaussian-nb32": (1e-5, 5e-6),
+    "knn-distance64": (1e-12, 1e-14),
+    "knn-distance32": (1e-6, 1e-7),
 }
 
 COMPONENTS = {
@@ -94,6 +103,10 @@ COMPONENTS = {
             "BinaryAdapter(LinearDiscriminantAnalysis[{dtype}]())"),
     "gaussian-nb": (GaussianNB,
                     "BinaryAdapter(GaussianNB[IntListDomain, {dtype}]())"),
+    "knn": (lambda: KNeighborsClassifier(n_neighbors=3),
+            "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3)"),
+    "knn-distance": (lambda: KNeighborsClassifier(n_neighbors=3, weights="distance"),
+                     'KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3, weights="distance")'),
 }
 COMPONENT_TYPE = {
     "ridge": "RidgeClassifier[{dtype}]", "ridge-noint": "RidgeClassifier[{dtype}]",
@@ -105,11 +118,15 @@ COMPONENT_TYPE = {
     "svc-precomputed": "BinaryAdapter[SVC[]]",
     "lda": "BinaryAdapter[LinearDiscriminantAnalysis[{dtype}]]",
     "gaussian-nb": "BinaryAdapter[GaussianNB[IntListDomain, {dtype}]]",
+    "knn": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
+    "knn-distance": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
 }
 SVC_COMPONENTS = ("svc", "svc-probability", "svc-precomputed")
 OUTPUT_CODE_RESPONSE = {
-    "gaussian-nb": ("predict_proba", "Item(i, 1)"),
-    "svc": ("decision_function", "Item(i)"),
+    "gaussian-nb": ("predict_proba", "response[Item(i, 1)]"),
+    "knn": ("predict_proba", "response[0][Item(i, 1)]"),
+    "knn-distance": ("predict_proba", "response[0][Item(i, 1)]"),
+    "svc": ("decision_function", "response[Item(i)]"),
 }
 STRINGS = ["setosa", "versicolor", "virginica", "", "zeta"]
 
@@ -222,6 +239,7 @@ from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OutputCodeClassi
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.linear_model import RidgeClassifier
 from moxie.naive_bayes import GaussianNB, IntListDomain
+from moxie.neighbors import KNeighborsClassifier
 from moxie.svm import LinearSVC, SVC
 from moxie.tree import DecisionTreeClassifier
 from moxie.feature_selection import DecisionTreeClassifierImportance
@@ -295,9 +313,8 @@ def emit(name: String, y: StringTarget) raises:
         if "code_book" in ref:
             body.append("    emit('code_book', m.code_book_)")
             if c["component"] in OUTPUT_CODE_RESPONSE:
-                method, index = OUTPUT_CODE_RESPONSE[c["component"]]
-                value = f"response[{index}]"
-                if c["dtype"] == "float32":
+                method, value = OUTPUT_CODE_RESPONSE[c["component"]]
+                if c["component"] == "gaussian-nb" and c["dtype"] == "float32":
                     value = f"Float64({value})"
                 body += [
                     "    var scores = NDArray[DType.float64](Shape(Xt.shape[0], len(m.estimators_)))",
@@ -327,6 +344,10 @@ def tolerance(c, key):
         return TOLERANCE["lda32" if c["dtype"] == "float32" else "lda64"]
     if c["component"] == "gaussian-nb":
         return TOLERANCE["gaussian-nb32" if c["dtype"] == "float32" else "gaussian-nb64"]
+    if c["component"] == "knn":
+        return TOLERANCE["tree"]
+    if c["component"] == "knn-distance":
+        return TOLERANCE["knn-distance32" if c["dtype"] == "float32" else "knn-distance64"]
     if c["component"].startswith("tree"):
         return (1e-14, 1e-15) if key == "decision" else TOLERANCE["tree"]
     return TOLERANCE["ridge32" if c["dtype"] == "float32" else "ridge64"]
@@ -350,6 +371,7 @@ def main():
         "svc": SVC_COMPONENTS,
         "lda": ("lda",),
         "gaussian-nb": ("gaussian-nb",),
+        "knn": ("knn", "knn-distance"),
     }
     parser = argparse.ArgumentParser()
     parser.add_argument("--group", choices=("all", *groups), default="all")
@@ -365,6 +387,10 @@ def main():
         if group == "lda":
             assert Path(inspect.getfile(discriminant_analysis)).read_bytes() == (
                 REFERENCE / "sklearn/discriminant_analysis.py"
+            ).read_bytes(), "install the pinned local scikit-learn checkout"
+        if group == "knn":
+            assert Path(inspect.getfile(neighbors_classification)).read_bytes() == (
+                REFERENCE / "sklearn/neighbors/_classification.py"
             ).read_bytes(), "install the pinned local scikit-learn checkout"
         batch = cases(components)
         if group == "gaussian-nb":

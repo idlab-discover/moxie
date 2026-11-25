@@ -12,7 +12,7 @@ def before(a: Float64, ai: Int, b: Float64, bi: Int) -> Bool:
     return a < b or (a == b and ai < bi)
 
 
-struct BruteForce[M: DenseMetric & Deinitable](DenseQueryBackend):
+struct BruteForce[M: DenseMetric & Deinitable](DenseQueryBackend, Copyable):
     comptime dtype = Self.M.dtype
     var _metric: Self.M
     var _fit_X: Optional[nm.NDArray[Self.dtype]]

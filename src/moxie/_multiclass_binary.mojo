@@ -97,8 +97,20 @@ def positive_probability[E: Predictor](estimator: E, X: E.Input, n_samples: Int)
             return positive_column(rebind_var[NDArray[DType.float64]](estimator.predict_proba(X)), n_samples)
         elif E.Probabilities == NDArray[DType.float32]:
             return positive_column(rebind_var[NDArray[DType.float32]](estimator.predict_proba(X)), n_samples)
+        elif E.Probabilities == List[NDArray[DType.float64]]:
+            var outputs = rebind_var[List[NDArray[DType.float64]]](
+                estimator.predict_proba(X)
+            )
+            if len(outputs) != 1 or outputs[0].ndim != 2 or outputs[0].shape[1] != 2:
+                raise Error(
+                    "ValueError: expected one binary predict_proba matrix of shape (n_samples, 2)"
+                )
+            return positive_column(outputs[0], n_samples)
         else:
-            comptime assert False, "component probabilities must be NDArray[float32/float64]"
+            comptime assert False, (
+                "component probabilities must be NDArray[float32/float64]"
+                " or a single-output List[NDArray[float64]]"
+            )
     else:
         comptime assert False, "component needs decision_function or predict_proba"
 

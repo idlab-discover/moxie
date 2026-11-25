@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import platform
+import runpy
 import subprocess
 import warnings
 import numpy as np
@@ -14,6 +15,11 @@ from check import ROOT, assemble, compile_file, run
 REFERENCE = ROOT.parents[2] / 'scikit-learn'
 REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 OUT = ROOT / 'builds/parity'
+LOGISTIC_SEED = 2801
+LOGISTIC_TOLERANCES = {
+    'float64': {'probability': 2e-5, 'decision_or_log_probability': 1e-4},
+    'float32': {'probability': 9e-4, 'decision_or_log_probability': 3e-3},
+}
 
 
 def reference(name, relative):
@@ -59,6 +65,74 @@ def ints(values):
     return 'List[Int]([' + ', '.join(str(int(v)) for v in values) + '])'
 
 
+def logistic_cases(training, logistic):
+    rng = np.random.default_rng(LOGISTIC_SEED)
+    for dtype, tolerances in LOGISTIC_TOLERANCES.items():
+        proba_tol = tolerances['probability']
+        decision_tol = tolerances['decision_or_log_probability']
+        for n_classes in (2, 3):
+            centers = [[-3., -1.], [3., -1.], [0., 4.]][:n_classes]
+            X = np.concatenate([rng.normal(center, .9, (6, 2)) for center in centers]).astype(dtype)
+            truth = np.repeat([35, -7, 12][:n_classes], 6)
+            y = truth.copy()
+            y.reshape(n_classes, 6)[:, 3:] = -1
+            query = (X[1::2] + .2).astype(dtype)
+            base = logistic(C=1.7, tol=1e-9, max_iter=500)
+            model = training.SelfTrainingClassifier(base, threshold=.8)
+            name = f'logistic_{dtype}_{n_classes}'
+            lines = [f'@no_inline\ndef {name}() raises:'] + array('X', X, dtype) + array('Q', query, dtype)
+            lines += [
+                f'    var base = LogisticRegressionAdapter(LogisticRegression[DType.{dtype}](C=1.7, tol=1e-9, max_iter=500))',
+                f'    var model = SelfTrainingClassifier[type_of(base), DType.{dtype}](base.copy(), threshold=.8)',
+                '    with assert_raises():',
+                '        _ = base.classes()',
+                '    with assert_raises():',
+                '        _ = model.predict_proba(Q)',
+            ]
+            for threshold, offset in ((.8, 0), (.95, 100)):
+                targets = np.where(y == -1, -1, y + offset)
+                model.set_params(threshold=threshold).fit(X, targets)
+                lines += [
+                    f'    _ = model.set_params(threshold={threshold}).fit(X, {ints(targets)})',
+                    f'    assert_equal(model.classes_, {ints(model.classes_)})',
+                    f'    assert_equal(model.labeled_iter_, {ints(model.labeled_iter_)})',
+                    f'    assert_equal(model.n_iter_, {model.n_iter_})',
+                    f'    assert_equal(model.termination_condition_, "{model.termination_condition_}")',
+                ]
+                for i, label in enumerate(model.transduction_):
+                    lines.append(f'    assert_equal(model.transduction_[{i}].value(), {label})'
+                                 if label != -1 else f'    assert_true(not model.transduction_[{i}])')
+                lines += check_array('model.predict_proba(Q)', model.predict_proba(query), proba_tol)
+                lines += check_array('model.predict_log_proba(Q)', model.predict_log_proba(query), decision_tol)
+                decision = model.decision_function(query)
+                lines += [f'    assert_equal(model.decision_function(Q).ndim, {decision.ndim})']
+                decision = decision.reshape(len(query), -1)
+                lines += check_array(
+                    f'model.decision_function(Q).reshape(Shape({len(query)}, {decision.shape[1]}))',
+                    decision, decision_tol)
+                lines += [f'    assert_equal(model.predict(Q), {ints(model.predict(query))})',
+                          f'    assert_equal(model.score(X, {ints(truth + offset)}), {literal(model.score(X, truth + offset))})']
+            invalid = np.where(y == -1, -1, y[0])
+            try:
+                model.fit(X, invalid)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("sklearn accepted one labeled class for logistic regression")
+            lines += [
+                '    assert_true(not base.estimator.__sklearn_is_fitted__())',
+                '    var cloned = model.__sklearn_clone__()',
+                '    assert_true(not cloned.__sklearn_is_fitted__())',
+                '    assert_equal(cloned.estimator.value().estimator.C, 1.7)',
+                '    assert_equal(cloned.threshold, .95)',
+                '    with assert_raises():',
+                f'        _ = model.fit(X, {ints(invalid)})',
+                '    with assert_raises():',
+                '        _ = model.predict(Q)',
+            ]
+            yield name, '\n'.join(lines)
+
+
 def main():
     assert subprocess.check_output(['git', '-C', str(REFERENCE), 'rev-parse', 'HEAD'], text=True).strip() == REVISION
     OUT.mkdir(parents=True, exist_ok=True)
@@ -66,11 +140,15 @@ def main():
     training = reference('reference_training', 'sklearn/semi_supervised/_self_training.py')
     nb = reference('reference_nb', 'sklearn/naive_bayes.py')
     metrics = reference('reference_metrics', 'sklearn/metrics/_classification.py')
+    # Reuse the logistic owner's pinned source loader and support-wheel checks.
+    logistic_oracle = runpy.run_path(str(ROOT.parent / 'linear_model/algorithms/logistic/tests/parity.py'))
+    logistic = logistic_oracle['oracle']()
     rng = np.random.RandomState(731)
     source = ['''from std.testing import assert_equal, assert_true, assert_raises
 from std.math import abs, isnan
 from numojo import NDArray, Shape, zeros
-from moxie.semi_supervised import LabelPropagation, LabelSpreading, SelfTrainingClassifier, GaussianNBAdapter
+from moxie.semi_supervised import LabelPropagation, LabelSpreading, SelfTrainingClassifier, GaussianNBAdapter, LogisticRegressionAdapter
+from moxie.linear_model import LogisticRegression
 from moxie.semi_supervised._contracts import DenseAffinity, ZeroMassPolicy
 from moxie.semi_supervised._probability import RowNormalizer
 from moxie._nb_gaussian import GaussianNB
@@ -185,6 +263,9 @@ struct FixtureAffinity(DenseAffinity, Copyable, Movable):
             truth = np.where(np.arange(len(y)) < 12, 0, 1)
             lines.append(f'    assert_equal(model.score(X, {ints(truth)}), {literal(estimator.score(X, truth))})')
             source.append('\n'.join(lines));cases.append(identifier)
+    for name, code in logistic_cases(training, logistic):
+        source.append(code)
+        cases.append(name)
     source.append('def main() raises:\n' + '\n'.join(f'    {case}()\n    print("PASS {case}")' for case in cases))
     path = OUT/'oracle_cases.mojo';path.write_text('\n\n'.join(source)+'\n')
     assemble(ROOT)
@@ -192,6 +273,10 @@ struct FixtureAffinity(DenseAffinity, Copyable, Movable):
     result = run(ROOT/'builds/parity_estimators', check=False)
     (OUT/'native.log').write_text(result.stdout + result.stderr)
     manifest = {'reference_revision': REVISION, 'support_sklearn_version': sklearn.__version__, 'python': platform.python_version(), 'numpy': np.__version__, 'seed':731, 'cases':len(cases), 'tolerances':{'float64':2e-9,'float32_graph':3e-5,'float32_gaussian':5e-5,'near_tie_float64':1e-14,'near_tie_float32':3e-7}, 'threads':{key:os.environ.get(key) for key in ('OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS')}, 'k_best':'input-order tie breaking; Float32 k-best oracle fixtures use var_smoothing=.05 to avoid saturated boundary ties', 'flags':['-O3','--fp-mode=contract=off'], 'source_hashes':{str(p.relative_to(REFERENCE)):hashlib.sha256(p.read_bytes()).hexdigest() for p in [REFERENCE/'sklearn/semi_supervised/_label_propagation.py',REFERENCE/'sklearn/semi_supervised/_self_training.py',REFERENCE/'sklearn/naive_bayes.py',REFERENCE/'sklearn/metrics/_classification.py']}}
+    logistic_paths = [logistic_oracle[name] for name in ('LOSS', 'LOGISTIC', 'NEWTON')]
+    manifest['source_hashes'].update(logistic_oracle['verify_reference'](logistic_paths))
+    manifest['logistic_seed'] = LOGISTIC_SEED
+    manifest['tolerances']['logistic'] = LOGISTIC_TOLERANCES
     (OUT/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     if result.returncode:
         print(result.stdout[-3000:],result.stderr[-4000:]);raise RuntimeError('native parity failed; see builds/parity/native.log')

@@ -1,8 +1,8 @@
 # Dense estimator API
 
 Import `LabelPropagation`, `LabelSpreading`, `SelfTrainingClassifier`, and
-`GaussianNBAdapter` from `moxie.semi_supervised`. Learning and inference are pure
-Mojo. The oracle is scikit-learn revision
+the classifier adapters from `moxie.semi_supervised`. Learning and inference
+are pure Mojo. The oracle is scikit-learn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 
 ## Graph estimators
@@ -107,6 +107,26 @@ training probabilities must be finite and in `[0,1]` and are never renormalized.
 
 `GaussianNBAdapter[dtype]` selects the feature and GaussianNB state dtype. It
 supports prediction, probabilities, log probabilities, and scoring. `GraphClassifierAdapter` is another concrete native adapter.
+
+```mojo
+from moxie.linear_model import LogisticRegression
+from moxie.semi_supervised import LogisticRegressionAdapter, SelfTrainingClassifier
+
+var base = LogisticRegressionAdapter(LogisticRegression(C=1.7))
+var model = SelfTrainingClassifier[type_of(base)](base^)
+_ = model.fit(X, labels)
+```
+
+`LogisticRegressionAdapter` accepts the native dense L-BFGS classifier with
+`int64` labels. It converts `List[Int]` to a rank-one target array and returns
+class labels and predictions as owned `List[Int]` values. Binary and multiclass
+prediction, probabilities, log probabilities, decision values, and scoring
+delegate to logistic regression. Probabilities and decision values use the
+self-training Float64 output contract, with the binary decision vector and
+multiclass decision matrix following the underlying classifier. For Float32
+features, construct `LogisticRegression[DType.float32]()` and specify
+`DType.float32` as the second type parameter of `SelfTrainingClassifier`.
+
 `get_params` recursively clones estimator configuration into a typed record;
 modify that record and pass it to `set_params`. Dynamic `estimator__parameter`
 routing is not implemented.
@@ -119,10 +139,10 @@ LabelSpreading())`), be cloned with `moxie.base.clone`, and be evaluated by
 `moxie.model_selection.cross_val_score` through a typed `CVAdapter` and scorer.
 `SelfTrainingClassifier` conforms only to `BaseEstimator`, because `predict` and
 `score` exist only for adapters that provide them. It therefore cannot be a
-pipeline step or a generic `SupervisedEstimator`. The only shipped self-training
-adapters are `GaussianNBAdapter` and `GraphClassifierAdapter`. Other Moxie
-classifiers, including `CalibratedClassifierCV` over `SVC` as used by the gallery
-examples, need a hand-written `ProbabilisticEstimatorAdapter`.
+pipeline step or a generic `SupervisedEstimator`. The shipped adapters are
+`GaussianNBAdapter`, `GraphClassifierAdapter`, and `LogisticRegressionAdapter`.
+Other Moxie classifiers, including `CalibratedClassifierCV` over `SVC` as used
+by the gallery examples, need a hand-written `ProbabilisticEstimatorAdapter`.
 
 ## Exclusions
 
@@ -143,3 +163,10 @@ within 1e-14 for Float64 or 3e-7 for Float32. For example, a sklearn distributio
 of `[0.5, 0.5000000000000001]` can be exactly tied in native arithmetic. Native
 argmax chooses the first class on an exact tie. Iteration counts are checked
 exactly on the oracle fixtures.
+
+The binary and multiclass logistic regression compositions use absolute
+tolerances of 2e-5 for probabilities and 1e-4 for log probabilities and decision
+values with Float64 features. The corresponding Float32 bounds are 9e-4 and
+3e-3, as in the logistic regression owner's Float32 oracle. These bounds
+account for optimizer and rounding differences between native L-BFGS and the
+pinned sklearn reference.

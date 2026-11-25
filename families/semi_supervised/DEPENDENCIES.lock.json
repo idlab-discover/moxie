@@ -282,6 +282,9 @@
         "moxie.semi_supervised._label_propagation": {
           "file": "src/moxie/semi_supervised/_label_propagation.mojo"
         },
+        "moxie.semi_supervised._logistic_adapter": {
+          "file": "src/moxie/semi_supervised/_logistic_adapter.mojo"
+        },
         "moxie.semi_supervised._probability": {
           "file": "src/moxie/semi_supervised/_probability.mojo"
         },
@@ -302,7 +305,8 @@
             "LabelSpreading": "moxie.semi_supervised._label_propagation",
             "SelfTrainingClassifier": "moxie.semi_supervised._self_training",
             "GraphClassifierAdapter": "moxie.semi_supervised._self_training",
-            "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter"
+            "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter",
+            "LogisticRegressionAdapter": "moxie.semi_supervised._logistic_adapter"
           }
         }
       }
@@ -601,6 +605,60 @@
         "src/moxie/_naive_bayes_dense.mojo": null,
         "src/moxie/_nb_gaussian.mojo": null
       }
+    },
+    {
+      "id": "logistic-owner",
+      "path": "../..",
+      "revision": "HEAD",
+      "files": {},
+      "modules": {
+        "moxie.linear_model._base": {
+          "file": "src/moxie/linear_model/_base.mojo"
+        },
+        "moxie.linear_model._contracts": {
+          "file": "src/moxie/linear_model/_contracts.mojo"
+        },
+        "moxie.linear_model._linear_base": {
+          "file": "src/moxie/linear_model/_linear_base.mojo"
+        },
+        "moxie.linear_model._linear_loss": {
+          "file": "src/moxie/linear_model/_linear_loss.mojo"
+        },
+        "moxie.linear_model._logistic": {
+          "file": "src/moxie/linear_model/_logistic.mojo"
+        },
+        "moxie.linear_model._ridge_labels": {
+          "file": "src/moxie/linear_model/_ridge_labels.mojo"
+        }
+      },
+      "assets": {
+        "licenses/linear_model-scikit-learn.txt": "families/linear_model/LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.linear_model": {}
+        }
+      }
+    },
+    {
+      "id": "mojo-optimize",
+      "path": "../../../.worktrees/mojo-optimize-linear_model",
+      "modules": {},
+      "assets": {
+        "mojo_optimize/__init__.mojo": "src/mojo_optimize/__init__.mojo",
+        "mojo_optimize/_lbfgsb_core.mojo": "src/mojo_optimize/_lbfgsb_core.mojo",
+        "mojo_optimize/_vectors.mojo": "src/mojo_optimize/_vectors.mojo",
+        "mojo_optimize/contracts.mojo": "src/mojo_optimize/contracts.mojo",
+        "mojo_optimize/history.mojo": "src/mojo_optimize/history.mojo",
+        "mojo_optimize/lbfgs.mojo": "src/mojo_optimize/lbfgs.mojo",
+        "mojo_optimize/lbfgsb.mojo": "src/mojo_optimize/lbfgsb.mojo",
+        "mojo_optimize/line_search.mojo": "src/mojo_optimize/line_search.mojo",
+        "mojo_optimize/nnls.mojo": "src/mojo_optimize/nnls.mojo"
+      },
+      "exports": null,
+      "revision": "HEAD",
+      "files": {}
     }
   ],
   "overrides": []

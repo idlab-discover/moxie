@@ -7,7 +7,7 @@ from moxie.preprocessing import StandardScaler
 from moxie.pipeline import Pipeline
 from moxie.model_selection import (
     RandomizedSearchCV, ParameterGrid, GridSearchCV, IndexArray, IndexSplit, KFold, SearchAdapter, SearchScorer,
-    CVAdapter, TypedScorer, cross_val_score,
+    DefaultCVAdapter, TypedScorer, cross_val_score,
 )
 from moxie.model_selection._split import _rows
 
@@ -111,7 +111,7 @@ struct OuterAccuracy(TypedScorer):
         return estimator.score(X, y)
 
 
-struct Outer(CVAdapter):
+struct Outer(DefaultCVAdapter):
     comptime Scorer = OuterAccuracy
 
     def __init__(out self):
@@ -132,6 +132,12 @@ struct Outer(CVAdapter):
     def fit(self, mut estimator: Search, X: Dense, y: Labels, metadata: NoneType) raises:
         _ = estimator.fit(X, y)
 
+    def default_scorer(self) -> OuterAccuracy:
+        return OuterAccuracy()
+
+    def default_cv(self, X: Dense, y: Labels) raises -> List[IndexSplit]:
+        return folds(len(y))
+
 
 def main() raises:
     var data = dataset()
@@ -141,9 +147,12 @@ def main() raises:
     grid["C"] = [0.1, 1.0, 10.0]
     var search = Search(SVC(), grid, Inner())
     var scores = cross_val_score[Outer](search, X, y, Outer(), OuterAccuracy(), folds(30), None, None)
+    var splitter_scores = cross_val_score[Outer](search, X, y, Outer(), cv=KFold(3))
+    assert_equal(splitter_scores.size, scores.size)
     var expected: List[Float64] = [0.3, 0.4, 0.3]
     for k in range(scores.size):
         assert_equal(scores.item(k), expected[k])
+        assert_equal(splitter_scores.item(k), scores.item(k))
         print("nested_cv", scores.item(k))
     assert_true(not search.__sklearn_is_fitted__())
     var cv = folds(30)

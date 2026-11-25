@@ -22,7 +22,7 @@ def _label_type[Label: Copyable & Comparable & Deinitable]() -> String:
     elif Label == Float64:
         return "float64"
     else:
-        comptime assert False, "unsupported LinearSVC archive label type"
+        comptime assert False, "unsupported SVM archive label type"
 
 
 def _write_labels[Label: Copyable & Comparable & Deinitable](
@@ -67,28 +67,28 @@ def _read_labels[Label: Copyable & Comparable & Deinitable](
         elif Label == Int64:
             label = rebind[Label](reader.scalar[DType.int64]()).copy()
         else:
-            raise Error("ModelSchemaError: unsupported LinearSVC archive label type")
+            raise Error("ModelSchemaError: unsupported SVM archive label type")
         labels.append(label^)
     return labels^
 
 
 def _class_rows[Label: Copyable & Comparable & Deinitable](
-    classes: List[Label], fitted: Bool
+    classes: List[Label], fitted: Bool, name: String = "LinearSVC",
 ) raises -> Int:
     if not fitted:
         if len(classes) != 0:
-            raise Error("ModelSchemaError: unfitted LinearSVC has classes")
+            raise Error("ModelSchemaError: unfitted " + name + " has classes")
         return 0
     if len(classes) < 2:
-        raise Error("ModelSchemaError: fitted LinearSVC needs at least two classes")
+        raise Error("ModelSchemaError: fitted " + name + " needs at least two classes")
     for i in range(len(classes)):
         comptime if Label == Float64 or Label == Float32:
             comptime dtype = DType.float64 if Label == Float64 else DType.float32
             var label = rebind[Scalar[dtype]](classes[i])
             if not isfinite(label) or label != floor(label):
-                raise Error("ModelSchemaError: non-discrete LinearSVC class")
+                raise Error("ModelSchemaError: non-discrete " + name + " class")
         if i > 0 and not (classes[i - 1] < classes[i]):
-            raise Error("ModelSchemaError: LinearSVC classes must be strictly sorted")
+            raise Error("ModelSchemaError: " + name + " classes must be strictly sorted")
     return 1 if len(classes) == 2 else len(classes)
 
 

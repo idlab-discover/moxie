@@ -9,8 +9,9 @@ settings, learned arrays and native adaptations.
 Fit and parameter setters return a mutable borrow. Cloning copies constructor
 configuration into an unfitted estimator. Kernel `coef_()` is a computed method;
 native callable kernels use a `KernelProvider` passed explicitly during fitting
-and inference. LinearSVC and LinearSVR support
-[experimental native model files](../algorithms/linear/docs/api.md#native-model-files).
+and inference. The [linear schemas](../algorithms/linear/docs/api.md#native-model-files)
+and [kernel schemas](../algorithms/c_svm/docs/api.md#native-model-files) support
+experimental native model files.
 See [scope.md](scope.md) for exclusions and edge limitations.
 
 ## Multiclass composition

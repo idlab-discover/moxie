@@ -35,8 +35,9 @@ class/weight handling, and `l1_min_c` bounds. Their restrictions are in the
   estimator-owned stream, rather than Python's process-global stream.
 - Python bindings, feature-name metadata, reflection, metadata routing, pandas
   output, and Python callable objects remain separate work.
-- LinearSVC and LinearSVR support [native model files](../algorithms/linear/docs/api.md#native-model-files).
-  Persistence for the five kernel SVM estimators remains open.
+- All seven estimators support experimental native model files.
+  See the [linear schemas](../algorithms/linear/docs/api.md#native-model-files)
+  and [kernel schemas](../algorithms/c_svm/docs/api.md#native-model-files).
 
 These are explicit limits, not claims of full Python sklearn compatibility.
 

@@ -20,8 +20,9 @@ after building. Raw outputs stay in ignored `builds/` and `docs/private/`.
 
 The complete dense contract is described in [scope](scope.md). Sparse inputs,
 Python runtime integration and metadata routing remain excluded. See the
-[linear model file API](../algorithms/linear/docs/api.md#native-model-files) for
-LinearSVC and LinearSVR persistence.
+[linear model file API](../algorithms/linear/docs/api.md#native-model-files) and
+the [kernel model file API](../algorithms/c_svm/docs/api.md#native-model-files)
+for persistence.
 The retirement record in the sibling checkout identifies the integration commit.
 
 ## Acceptance evidence

@@ -346,6 +346,20 @@
       }
     },
     {
+      "id": "svm-kernel-persistence",
+      "path": ".",
+      "modules": {
+        "moxie.svm.kernel_serialization": {
+          "file": "src/moxie/svm/kernel_serialization.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    },
+    {
       "id": "svm-one-class",
       "path": "algorithms/one_class",
       "modules": {

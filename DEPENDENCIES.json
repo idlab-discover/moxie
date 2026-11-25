@@ -2709,6 +2709,20 @@
       }
     },
     {
+      "id": "svm-kernel-persistence",
+      "path": "families/svm",
+      "modules": {
+        "moxie.svm.kernel_serialization": {
+          "file": "src/moxie/svm/kernel_serialization.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    },
+    {
       "id": "svm-one-class",
       "path": "families/svm/algorithms/one_class",
       "modules": {

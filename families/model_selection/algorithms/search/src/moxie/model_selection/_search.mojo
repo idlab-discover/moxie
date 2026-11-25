@@ -71,6 +71,7 @@ struct DenseSupervisedAdapter[
 
     var _apply_params: Optional[_ParameterApplier[Self.E, Self.V]]
     var _classifier: Bool
+    var _n_splits: Int
     var _scoring: Self.Scorer
 
     def __init__(
@@ -78,14 +79,18 @@ struct DenseSupervisedAdapter[
         apply_params: Optional[_ParameterApplier[Self.E, Self.V]] = None,
         *,
         classifier: Bool = conforms_to(Self.E, ClassifierMixin),
+        n_splits: Int = 5,
     ) where conforms_to(Self.Scorer, Defaultable):
-        self = Self(apply_params, classifier=classifier, scoring=Self.Scorer())
+        self = Self(
+            apply_params, classifier=classifier, n_splits=n_splits, scoring=Self.Scorer()
+        )
 
     def __init__(
         out self,
         apply_params: Optional[_ParameterApplier[Self.E, Self.V]] = None,
         *,
         classifier: Bool = conforms_to(Self.E, ClassifierMixin),
+        n_splits: Int = 5,
         var scoring: Self.Scorer,
     ):
         comptime assert Self.Scorer.Estimator == Self.E, "Scorer must match the estimator"
@@ -102,6 +107,7 @@ struct DenseSupervisedAdapter[
         )
         self._apply_params = apply_params
         self._classifier = classifier
+        self._n_splits = n_splits
         self._scoring = scoring^
 
     def n_samples(self, X: Self.Scorer.Input, y: Self.Scorer.Target) raises -> Int:
@@ -174,9 +180,11 @@ struct DenseSupervisedAdapter[
     def default_cv(self, X: Self.Scorer.Input, y: Self.Scorer.Target) raises -> List[IndexSplit]:
         var n = self.n_samples(X, y)
         if not self._classifier:
-            return _collect_splits(KFold(5).split(n))
+            return _collect_splits(KFold(self._n_splits).split(n))
         var labels = self._split_labels(rebind[Self.Y](y))
-        return _collect_splits(check_cv(None, labels, classifier=True).split(n, labels))
+        return _collect_splits(
+            check_cv(self._n_splits, labels, classifier=True).split(n, labels)
+        )
 
     @staticmethod
     def _split_labels(y: Self.Y) raises -> SplitLabels:

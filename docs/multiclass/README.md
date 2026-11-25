@@ -77,6 +77,12 @@ type (`tests/multiclass/test_concrete_adapters.mojo`) or stay generic over the
 estimator (`tests/multiclass/test_composition.mojo`). Using a refitting
 `GridSearchCV` as the inner component requires its adapter to expose the
 multiclass feature and binary target types and supply default fit metadata.
+The notebook wraps a refitting `GridSearchCV` over a Float32 decision tree in
+all three wrappers. It sets `n_splits=3` on the dense adapter, so each inner
+search derives its folds from the data that its wrapper passes to `fit`.
+Its parameter applier maps the integer `max_depth` candidates to the typed
+tree parameter record. The notebook compares all 15 outer fold scores for
+each tuned strategy against scikit-learn.
 
 Sparse inputs, metadata routing, mutable Python RNG objects, bindings and
 serialization remain outside the supported scope.

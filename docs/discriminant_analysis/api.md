@@ -84,8 +84,12 @@ QDA: `means_` `(K, p)`, `priors_`, `rotations_` (List of `(p, n_k)`), `scalings_
 - `svd`: two economy SVDs (within-class whitening, then between-class centroids); tall inputs
   are reduced by a Householder R factor first, which preserves singular values and right
   singular vectors. `tol` truncates singular values.
-- `lsqr`: minimum-norm least squares on the class-mean system with the gelsd cutoff
-  `eps * s_max`, like `scipy.linalg.lstsq`.
+- `lsqr` uses minimum-norm least squares on the class-mean system. With empirical
+  covariance (`shrinkage=None` or `0`, with no custom covariance estimator), it drops
+  singular values at or below `n_features * eps * s_max`, using the Float64 working
+  precision. This accounts for Jacobi SVD roundoff in null directions that can exceed
+  scikit-learn's `eps * s_max` cutoff. Shrunk and custom covariance estimates use
+  `eps * s_max`.
 - `eigen`: generalized symmetric-definite eigenproblem `Sb v = lambda Sw v` by Cholesky reduction
   (eigenvectors satisfy `V^T Sw V = I`, like `scipy.linalg.eigh(Sb, Sw)`); a singular `Sw`
   raises `LinAlgError`, as in sklearn.

@@ -144,17 +144,25 @@ def solve_lsqr[
     shrinkage: Shrinkage,
     estimator: Optional[C],
 ) raises -> _LinearSolution:
-    """Duda et al. 2.6.2: coef_ = lstsq(Sw, means.T).T (gelsd cutoff eps * s_max)."""
+    """Duda et al. 2.6.2: coef_ = lstsq(Sw, means.T).T."""
+    var p = X.shape[1]
     var means = class_means(X, codes, counts)
     var cov = class_covariance(X, codes, counts, priors, shrinkage, estimator)
-    var means_t = matrix(X.shape[1], len(counts))
+    var means_t = matrix(p, len(counts))
     for c in range(len(counts)):
-        for j in range(X.shape[1]):
+        for j in range(p):
             put(means_t, j, c, get(means, c, j))
-    var solution = checked_least_squares(cov, means_t, rtol=EPS64, context=ESTIMATOR + "(solver='lsqr')")
-    var coef = matrix(len(counts), X.shape[1])
+    var rtol = EPS64
+    if not estimator and (shrinkage.is_none() or shrinkage.is_zero()):
+        # Jacobi can report empirical covariance null directions just above
+        # eps * s_max. Use the dimension-scaled numerical rank threshold.
+        rtol *= Float64(p)
+    var solution = checked_least_squares(
+        cov, means_t, rtol=rtol, context=ESTIMATOR + "(solver='lsqr')"
+    )
+    var coef = matrix(len(counts), p)
     for c in range(len(counts)):
-        for j in range(X.shape[1]):
+        for j in range(p):
             put(coef, c, j, get(solution, j, c))
     var intercept = linear_intercept(means, coef, priors)
     return _LinearSolution(means^, coef^, intercept^, cov^, None, None, None)

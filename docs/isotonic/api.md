@@ -129,10 +129,16 @@ same-dtype list of the same length and never sorts its inputs.
 `check_increasing(x, y)` returns a Bool from Spearman's rank correlation.
 The vectors must have equal lengths. Infinities participate in ranking. Empty
 vectors, NaN values and constant inputs give undefined correlation and return
-`False`.
-Direct calls to `check_increasing` return only the direction. Small-sample
-R² returns NaN without a diagnostic record. Fit diagnostics are available
-through `fit_warnings`.
+`False`. Direct calls write reference warnings to standard error as
+`Category: message` lines, in occurrence order. A constant vector with two or
+more entries triggers `ConstantInputWarning`. For more than three pairs, the
+Fisher interval spanning zero or an undefined correlation triggers
+`UserWarning`. Automatic fit records the same diagnostics in `fit_warnings`.
+
+`score` returns NaN for a valid single-sample query and writes
+`UndefinedMetricWarning` to standard error in the same format. It validates
+score weights before issuing the warning. Moxie uses standard error for these
+direct-call diagnostics in place of Python warning filters.
 
 ## Composition
 

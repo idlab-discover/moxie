@@ -33,7 +33,9 @@ def load_reference(checkout):
     ).strip()
     if revision != REVISION:
         raise RuntimeError(f"Expected reference {REVISION}, found {revision}")
-    dirty = subprocess.check_output(["git", "-C", str(checkout), "status", "--porcelain", "--", "sklearn/isotonic.py", "sklearn/_isotonic.pyx"], text=True)
+    dirty = subprocess.check_output(["git", "-C", str(checkout), "status", "--porcelain", "--",
+                                     "sklearn/isotonic.py", "sklearn/_isotonic.pyx",
+                                     "sklearn/metrics/_regression.py"], text=True)
     if dirty:
         raise RuntimeError("Modified reference source: " + dirty)
     subprocess.run([sys.executable, str(ROOT / 'tests/isotonic/build_reference.py'),
@@ -70,12 +72,58 @@ def main():
     parser.add_argument("--sklearn-checkout", type=Path, default=ROOT.parent / "scikit-learn")
     args = parser.parse_args()
     reference = load_reference(args.sklearn_checkout.resolve())
+    regression_source = args.sklearn_checkout / "sklearn/metrics/_regression.py"
+    spec = importlib.util.spec_from_file_location(
+        "sklearn.metrics._moxie_reference_regression", regression_source
+    )
+    regression = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(regression)
     rng = np.random.default_rng(SEED)
     records = []
     dtype = np.float64
 
     def add(*values):
         records.append("|".join(map(encode, values)))
+
+    def warning_fields(caught):
+        return [
+            text for item in caught
+            for text in (item.category.__name__, str(item.message))
+        ]
+
+    def direction_check(x, y):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                expected = reference.check_increasing(x, y)
+            except ValueError:
+                expected = "error"
+        add("direction", x, y, expected, *warning_fields(caught))
+
+    def score_warnings():
+        model = reference.IsotonicRegression().fit(
+            np.asarray([0, 1], dtype=dtype), np.asarray([1, 2], dtype=dtype)
+        )
+        for kind, values, weights in [
+            ("list", [0], None),
+            ("column", [0], None),
+            ("array", [0], None),
+            ("array_weighted", [0], [2]),
+            ("array_weighted", [0], [0]),
+            ("array", [0, 1], None),
+        ]:
+            x = np.asarray(values, dtype=dtype)
+            y = x + 1
+            weights = None if weights is None else np.asarray(weights, dtype=dtype)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                try:
+                    expected = regression.r2_score(y, model.predict(x), sample_weight=weights)
+                except ValueError as error:
+                    if "at least one non-zero number" not in str(error):
+                        raise
+                    expected = "error"
+            add("score_warnings", x, y, weights, kind, expected, *warning_fields(caught))
 
     def kernel(y, w=None, low=None, high=None, increasing=True):
         y = np.asarray(y, dtype=dtype)
@@ -166,32 +214,25 @@ def main():
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 model.fit(x, y, sample_weight=weights)
-            records_flat = [
-                text for item in caught
-                for text in (item.category.__name__, str(item.message))
-            ]
-            add("fit_warnings", x, y, mode, weights, model.increasing_, *records_flat)
+            add("fit_warnings", x, y, mode, weights, model.increasing_, *warning_fields(caught))
 
     def validation_edges():
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            for x, y in [
-                ([], []),
-                ([np.nan], [1]),
-                ([0, 1, 2, 3], [0, 1, 2, np.nan]),
-                ([0, np.nan, 2], [0, 1, 2]),
-                ([0, 1, 2], [1, 2, np.inf]),
-                ([-np.inf, 0, np.inf, np.inf], [3, 2, 1, 1]),
-                ([0, 1, 2], [np.inf, np.inf, np.inf]),
-                ([], [1, 2]),
-                ([0, 1], [1]),
-            ]:
-                x, y = np.asarray(x, dtype=dtype), np.asarray(y, dtype=dtype)
-                try:
-                    expected = reference.check_increasing(x, y)
-                except ValueError:
-                    expected = "error"
-                add("direction", x, y, expected)
+        for x, y in [
+            ([], []),
+            ([np.nan], [1]),
+            ([0, 1, 2, 3], [0, 1, 2, np.nan]),
+            ([0, 0, 0, 0], [0, 1, 2, np.nan]),
+            ([0, 0, 0, 0], [0, 1, 2, 3]),
+            ([0, np.nan, 2], [0, 1, 2]),
+            ([0, 1, 2], [1, 2, np.inf]),
+            ([-np.inf, 0, np.inf, np.inf], [3, 2, 1, 1]),
+            ([0, 1, 2], [np.inf, np.inf, np.inf]),
+            ([0, 1, 2, 3], [0, 1, 2, 3]),
+            ([0, 1, 2, 3], [0, 2, 1, 3]),
+            ([], [1, 2]),
+            ([0, 1], [1]),
+        ]:
+            direction_check(np.asarray(x, dtype=dtype), np.asarray(y, dtype=dtype))
         for mode in ("nan", "clip", "raise"):
             for n in (1, 2):
                 x = np.arange(n, dtype=dtype)
@@ -200,7 +241,8 @@ def main():
                 for values in ([], [np.nan, 0.5], [-np.inf, np.nan, 0, np.inf]):
                     query = np.asarray(values, dtype=dtype)
                     try:
-                        expected = model.f_(query)
+                        with np.errstate(invalid="ignore"):
+                            expected = model.f_(query)
                     except ValueError as error:
                         if mode != "raise" or "interpolation range" not in str(error):
                             raise
@@ -213,6 +255,7 @@ def main():
     serialization()
     validation_edges()
     fit_warnings()
+    score_warnings()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(240):
@@ -259,7 +302,7 @@ def main():
             n = int(rng.integers(1, 100))
             x = rng.integers(0, max(1, n // 3), size=n).astype(float)
             y = rng.integers(0, max(1, n // 3), size=n).astype(float)
-            add("direction", x, y, reference.check_increasing(x, y))
+            direction_check(x, y)
 
     float64_records = records
     records = []
@@ -268,6 +311,7 @@ def main():
     serialization()
     validation_edges()
     fit_warnings()
+    score_warnings()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(150):
@@ -279,7 +323,7 @@ def main():
             kernel(y, w, low, high, bool(i % 2))
             w[1::7] = 0
             estimator(x, y, w, low, high, [True, False, "auto"][i % 3], ["nan", "clip", "raise"][i % 3], score=i % 3 == 1)
-            add("direction", x, y, reference.check_increasing(x, y))
+            direction_check(x, y)
         for direction in (True, False, "auto"):
             estimator([0, 1e-7, 1e-6, 2e-6, 1], [0, 2, 3, 1, 4], direction=direction)
         for mode in ("nan", "clip", "raise"):
@@ -294,23 +338,40 @@ def main():
     metadata = {"seed": SEED, "cases": len(records), "reference_revision": REVISION,
                 "python": platform.python_version(), "numpy": np.__version__,
                 "scipy": scipy.__version__, "sklearn_support_wheel": sklearn.__version__,
-                "platform": platform.platform(), "reference_hashes": {f: hashlib.sha256((args.sklearn_checkout / f).read_bytes()).hexdigest() for f in ["sklearn/isotonic.py", "sklearn/_isotonic.pyx"]}, "rtol": 2e-12, "atol": 2e-12}
+                "platform": platform.platform(), "reference_hashes": {f: hashlib.sha256((args.sklearn_checkout / f).read_bytes()).hexdigest() for f in ["sklearn/isotonic.py", "sklearn/_isotonic.pyx", "sklearn/metrics/_regression.py"]}, "rtol": 2e-12, "atol": 2e-12}
     metadata["float32"] = {"cases": len(float32_records), "rtol": 2e-6, "atol": 2e-6}
     metadata["mojo"] = subprocess.check_output(["mojo", "--version"], cwd=ROOT, text=True).strip()
     (output / "environment.json").write_text(json.dumps(metadata, indent=2) + "\n")
     binary = output / "runner"
     subprocess.run(["mojo", "build", "-O3", "--fp-mode=contract=off", "-I", "builds/deps", "tests/isotonic/parity_runner.mojo", "-o", str(binary)], cwd=ROOT, check=True)
-    result = subprocess.run([str(binary), str(fixture)], cwd=ROOT, text=True, capture_output=True)
-    (output / "result.txt").write_text(result.stdout + result.stderr)
-    print(result.stdout, end="")
-    print(result.stderr, end="")
-    result.check_returncode()
     fixture32 = output / "reference32.txt"
     fixture32.write_text("\n".join(float32_records) + "\n")
-    result32 = subprocess.run([str(binary), str(fixture32), "float32"], cwd=ROOT, text=True, capture_output=True)
-    (output / "result32.txt").write_text(result32.stdout + result32.stderr)
-    print(result32.stdout + result32.stderr, end="")
-    result32.check_returncode()
+
+    def check_runner(fixture, result_path, cases, *args):
+        result = subprocess.run(
+            [str(binary), str(fixture), *args], cwd=ROOT, text=True, capture_output=True
+        )
+        result_path.write_text(result.stdout + result.stderr)
+        if result.returncode:
+            print(result.stdout + result.stderr, end="")
+            result.check_returncode()
+        expected = []
+        for case in cases:
+            kind, *fields = case.split("|")
+            if kind in ("direction", "score_warnings"):
+                warning_fields = fields[3:] if kind == "direction" else fields[5:]
+                expected.extend(
+                    f"{category}: {message}"
+                    for category, message in zip(
+                        warning_fields[::2], warning_fields[1::2], strict=True
+                    )
+                )
+        np.testing.assert_array_equal(result.stderr.splitlines(), expected)
+        print(result.stdout, end="")
+        print(f"PASS: {len(expected)} stderr warnings match in order")
+
+    check_runner(fixture, output / "result.txt", records)
+    check_runner(fixture32, output / "result32.txt", float32_records, "float32")
 
 
 if __name__ == "__main__":

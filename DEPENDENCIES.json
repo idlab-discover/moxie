@@ -602,6 +602,12 @@
         "moxie.ensemble._hist_gradient_boosting.binning": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/binning.mojo"
         },
+        "moxie.ensemble._hist_gradient_boosting.classifier": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/classifier.mojo"
+        },
+        "moxie.ensemble._hist_gradient_boosting.common": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/common.mojo"
+        },
         "moxie.ensemble._hist_gradient_boosting.feature_sampling": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/feature_sampling.mojo"
         },
@@ -935,7 +941,8 @@
             "ExtraTreesRegressor": "moxie.ensemble._forest",
             "GradientBoostingClassifier": "moxie.ensemble._api",
             "GradientBoostingRegressor": "moxie.ensemble._api",
-            "HistGradientBoostingClassifier": "moxie.ensemble._api",
+            "HistGradientBoostingClassifier": "moxie.ensemble._hist_gradient_boosting.classifier",
+            "HistGradientBoostingClassifierParams": "moxie.ensemble._hist_gradient_boosting.classifier",
             "HistGradientBoostingRegressor": "moxie.ensemble._hist_gradient_boosting.regressor",
             "HistGradientBoostingRegressorParams": "moxie.ensemble._hist_gradient_boosting.regressor",
             "IsolationForest": "moxie.ensemble._api",

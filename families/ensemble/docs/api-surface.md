@@ -2,8 +2,9 @@
 
 RandomForestClassifier/Regressor and ExtraTreesClassifier/Regressor are
 implemented in `_forest`; see [forests.md](forests.md).
-[HistGradientBoostingRegressor](hgb-regressor.md) is implemented for dense
-numerical regression. The remaining public names and callable parameter names/defaults follow the local scikit-learn
+[HistGradientBoostingClassifier](hgb-classifier.md) and
+[HistGradientBoostingRegressor](hgb-regressor.md) support dense numerical inputs. The remaining public names and callable
+parameter names/defaults follow the local scikit-learn
 checkout as declarations. Their constructors and operations raise `NotImplementedError`
 through Mojo `Error`; they do not perform numerical work. Existing implementations
 and family traits remain intact. `BaseEnsemble` is implemented in

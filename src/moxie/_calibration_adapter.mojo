@@ -6,7 +6,9 @@ from ._calibration_estimator import (
     ClassifierCalibrationAdapter,
     MAX_INTEGRAL_LABEL,
     _adapt_linear_svc,
+    validate_integral_labels,
 )
+from .base import TransformerMixin
 from .discriminant_analysis import (
     LinearDiscriminantAnalysis,
     QuadraticDiscriminantAnalysis,
@@ -14,6 +16,8 @@ from .discriminant_analysis import (
 from .frozen import FrozenEstimator
 from .linear_model import LogisticRegression
 from .naive_bayes import GaussianNB
+from .pipeline import Pipeline
+from .svm import SVC
 from .svm._linear import LinearSVC
 
 
@@ -113,3 +117,18 @@ def adapt_classifier(
     var estimator: LinearSVC[],
 ) -> ClassifierCalibrationAdapter[LinearSVC[]]:
     return _adapt_linear_svc(estimator^)
+
+
+def adapt_classifier[P: TransformerMixin & Deinitable](
+    var estimator: Pipeline[P, SVC[]],
+) -> ClassifierCalibrationAdapter[Pipeline[P, SVC[]]]:
+    """Calibrate the decision scores of a whole dense SVC pipeline."""
+    def classes(model: Pipeline[P, SVC[]]) raises -> Array:
+        ref labels = model.estimator.classes_
+        var result = Array(nm.Shape(len(labels)))
+        for i in range(result.size):
+            result[nm.Item(i)] = labels[i]
+        validate_integral_labels(result)
+        return result^
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "Pipeline")

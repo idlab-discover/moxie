@@ -79,6 +79,30 @@ calibration targets to the classifier's native numeric list or Int64 array and
 returns its fitted classes in column order. It forwards explicit weights to
 GaussianNB, LogisticRegression and LinearSVC. LDA and QDA reject explicit weights.
 
+For a Float64 pipeline ending in `SVC[]`, pass the entire pipeline to
+`adapt_classifier`. Each calibration fold fits its own preprocessing and
+SVC. The adapter reads class order from that fold's fitted SVC and uses
+decision scores, so the SVC can keep its default probability setting.
+For multiclass calibration, use the default one-vs-rest decision shape.
+This adapter rejects explicit fit weights because SVC does not implement
+the shared weighted-fit trait.
+
+```mojo
+from moxie.calibration import CalibratedClassifierCV, adapt_classifier
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
+from moxie.svm import SVC
+
+var calibrated = CalibratedClassifierCV(
+    adapt_classifier(make_pipeline(StandardScaler(), SVC())), cv=3,
+)
+```
+
+The [Pipeline parity test](../../tests/pipeline/calibrated_pipeline_parity.py)
+compares held-out probabilities, predictions and class order after refitting
+with pinned scikit-learn for both ensemble and pooled sigmoid calibration.
+The probability tolerance allows rounding in scaling, SVC and sigmoid fitting.
+
 `ClassifierCalibrationAdapter(estimator, read_classes, name)` also supports
 custom classifiers with these input and target types and compatible response
 traits. Supply a thin Mojo function that returns the fitted class labels as

@@ -4,7 +4,7 @@ from std.iter import downcast
 from moxie._feature_metadata import InputFeatureCount
 from moxie.base import (
     BaseEstimator, SupervisedEstimator, UnsupervisedEstimator, Predictor,
-    TransformerMixin, FitTransformer, InverseTransformer, SupervisedScorer, clone,
+    TransformerMixin, FitTransformer, InverseTransformer, SupervisedScorer, ClassifierMixin, clone,
     ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, SampleScorer,
     WeightedSupervisedEstimator,
 )
@@ -81,6 +81,7 @@ struct Pipeline[
   TransformingPipeline where conforms_to(E, TransformerMixin),
   FitTransformer where conforms_to(E, TransformerMixin),
   SupervisedScorer where conforms_to(E, SupervisedScorer),
+  ClassifierMixin where conforms_to(E, ClassifierMixin),
   WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
   ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
   LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),

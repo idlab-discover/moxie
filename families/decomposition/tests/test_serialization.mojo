@@ -5,13 +5,17 @@ from std.sys import argv
 from std.testing import assert_equal, assert_raises, assert_true
 from numojo import NDArray, NDArrayStrides, Shape, zeros
 from moxie.base import clone
-from moxie.decomposition import FactorAnalysis, FastICA, KernelPCA, PCA, IncrementalPCA, TruncatedSVD
+from moxie.decomposition import (
+    FactorAnalysis, FastICA, KernelPCA, PCA, IncrementalPCA, TruncatedSVD, NMF, MiniBatchNMF,
+    LatentDirichletAllocation, SparseCoder,
+)
 from moxie.decomposition._fastica import WhitenOption
 from moxie.decomposition._kernel_pca import KernelPower
 from moxie.decomposition._pca import ComponentCount
 from moxie.decomposition_serialization import (
     FactorAnalysisSchema, FastICASchema, KernelPCASchema, PCASchema,
-    IncrementalPCASchema, TruncatedSVDSchema,
+    IncrementalPCASchema, TruncatedSVDSchema, NMFSchema, MiniBatchNMFSchema,
+    LatentDirichletAllocationSchema, SparseCoderSchema,
 )
 from moxie.serialization import dumps, loads, save_model, load_model
 
@@ -210,6 +214,10 @@ def test_factor_analysis[dtype: DType](path: String) raises:
     assert_equal(unfitted.rotation.value(), String("varimax"))
     assert_true(not unfitted.random_state)
     assert_equal(unfitted.tol, 0.001)
+    var invalid_unfitted = Schema.encode(unfitted)
+    invalid_unfitted.manifest[len(invalid_unfitted.manifest) - 8] = 1
+    with assert_raises(contains="unfitted FactorAnalysis has fit warnings"):
+        _ = Schema.decode(invalid_unfitted)
 
     _ = model.fit(X)
     _ = model.set_params(copy=False, max_iter=1, n_components=Optional[Optional[Int]](Optional[Int](0)))
@@ -230,10 +238,10 @@ def test_factor_analysis[dtype: DType](path: String) raises:
     assert_equal(model.score(X), restored.score(X))
 
     var archive = Schema.encode(restored)
-    archive.schema_version = 2
+    archive.schema_version = 3
     with assert_raises(contains="unsupported estimator type or state schema"):
         _ = Schema.decode(archive)
-    archive.schema_version = 1
+    archive.schema_version = 2
     archive.payloads[0].shape = [3, 1]
     with assert_raises(contains="invalid shape for components_"):
         _ = Schema.decode(archive)
@@ -391,8 +399,227 @@ def test_kernel_pca[dtype: DType](path: String) raises:
         _ = Schema.encode(restored)
 
 
+def positive_training_data[dtype: DType]() raises -> NDArray[dtype]:
+    var X = training_data[dtype]()
+    X.unsafe_set(2, 1)
+    X.unsafe_set(3, 3)
+    return X^
+
+
+def test_nmf[dtype: DType](path: String) raises:
+    comptime Schema = NMFSchema[dtype]
+    var X = positive_training_data[dtype]()
+    # Overcomplete fits can have more components than features.
+    var model = NMF[dtype](4, init=String("random"), max_iter=5, random_state=9,
+        alpha_W=0.03, alpha_H=0.05, l1_ratio=0.2, shuffle=True)
+    save_model[Schema](model, path)
+    var fresh = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(fresh)), dumps(Schema.encode(model)))
+    with assert_raises(contains="NotFittedError: This NMF"):
+        _ = fresh.transform(X)
+    _ = model.fit(X)
+    var W = model.transform(X)
+    var params = model.get_params()
+    params.config.n_components = NoneType()
+    params.solver = "mu"
+    params.config.beta_loss = 1.5
+    _ = model.set_params(params)
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    assert_true(restored.n_components.isa[NoneType]())
+    assert_equal(restored.n_components_, 4)
+    assert_equal(restored.beta_loss[Float64], 1.5)
+    params.config.n_components = 4
+    _ = model.set_params(params)
+    _ = restored.set_params(params)
+    same_array(restored.transform(X), model.transform(X))
+    var inverse = model.inverse_transform(W)
+    same_array(restored.inverse_transform(W), inverse)
+    assert_true(not clone(restored).__sklearn_is_fitted__())
+    model.components_.value().unsafe_set(0, 100)
+    same_array(restored.inverse_transform(W), inverse)
+
+    var archive = Schema.encode(restored)
+    archive.schema_version = 2
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = Schema.decode(archive)
+    archive.schema_version = 1
+    archive.payloads[0].shape = [3, 4]
+    with assert_raises(contains="invalid shape for components_"):
+        _ = Schema.decode(archive)
+    restored.components_.value().unsafe_set(0, -1)
+    with assert_raises(contains="invalid value in components_"):
+        _ = Schema.encode(restored)
+
+
+def test_minibatch_nmf[dtype: DType](path: String) raises:
+    comptime Schema = MiniBatchNMFSchema[dtype]
+    var X = positive_training_data[dtype]()
+    var next = X.copy()
+    next.unsafe_set(0, 8)
+    var model = MiniBatchNMF[dtype](2, init=String("random"), beta_loss=1.5,
+        batch_size=2, max_iter=7, max_no_improvement=None, forget_factor=0.4,
+        fresh_restarts=True, fresh_restarts_max_iter=5, transform_max_iter=4, random_state=6)
+    save_model[Schema](model, path)
+    var fresh = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(fresh)), dumps(Schema.encode(model)))
+    with assert_raises(contains="NotFittedError: This MiniBatchNMF"):
+        _ = fresh.transform(X)
+    _ = model.partial_fit(X)
+    var params = model.get_params()
+    params.config.n_components = String("auto")
+    params.config.beta_loss = String("frobenius")
+    params.forget_factor = 0.8
+    params.transform_max_iter = 8
+    _ = model.set_params(params)
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    assert_equal(restored.n_steps_, 1)
+    assert_equal(restored.n_iter_, 0)
+    assert_equal(restored._beta, 1.5)
+    assert_equal(restored._transform_max_iter, 4)
+    assert_true(not clone(restored).__sklearn_is_fitted__())
+    same_array(restored.transform(X), model.transform(X))
+    _ = restored.partial_fit(next)
+    _ = model.partial_fit(next)
+    assert_equal(restored.n_steps_, 2)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    same_array(restored.transform(X), model.transform(X))
+
+    var archive = Schema.encode(restored)
+    archive.schema_version = 2
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = Schema.decode(archive)
+    archive.schema_version = 1
+    archive.payloads[2].shape = [3, 2]
+    with assert_raises(contains="invalid shape for _components_denominator"):
+        _ = Schema.decode(archive)
+    restored._components_numerator = None
+    with assert_raises(contains="missing _components_numerator"):
+        _ = Schema.encode(restored)
+
+
+def test_sparse_coder[dtype: DType](path: String) raises:
+    comptime Schema = SparseCoderSchema[dtype]
+    var X = training_data[dtype]()
+    var dictionary = X.view_with_layout(Shape(2, 3), NDArrayStrides(6, 1), 3)
+    var model = SparseCoder[dtype](dictionary, transform_algorithm="threshold",
+        transform_alpha=0.0, transform_n_nonzero_coefs=2, n_jobs=1,
+        split_sign=dtype == DType.float64, positive_code=True, transform_max_iter=17)
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_true(not restored.__sklearn_is_fitted__())
+    with assert_raises(contains="has no n_features_in_"):
+        _ = restored.get_n_features_in()
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    same_array(restored.transform(X), model.transform(X))
+    var defaults = SparseCoder[dtype](dictionary)
+    var restored_defaults = Schema.decode(Schema.encode(defaults))
+    assert_equal(restored_defaults.transform_algorithm, String("omp"))
+    with assert_raises(contains="use threshold"):
+        _ = restored_defaults.transform(X)
+
+    _ = model.fit(X)
+    var replacement = X.view_with_layout(Shape(3, 3), NDArrayStrides(3, 1), 0)
+    _ = model.set_params(dictionary=replacement^)
+    save_model[Schema](model, path)
+    restored = load_model[Schema](path)
+    assert_equal(restored.dictionary.shape[0], 3)
+    assert_equal(restored.n_components_, 2)
+    assert_equal(restored.get_n_features_in(), 3)
+    assert_equal(restored.get_feature_names_out(), model.get_feature_names_out())
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    var code = restored.transform(X)
+    same_array(code, model.transform(X))
+    same_array(restored.inverse_transform(code), model.inverse_transform(code))
+    restored.dictionary.unsafe_set(0, 123)
+    assert_equal(model.dictionary.unsafe_get(0), Scalar[dtype](4))
+    assert_true(not clone(restored).__sklearn_is_fitted__())
+
+    var archive = Schema.encode(model)
+    archive.schema_version = 2
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = Schema.decode(archive)
+    archive.schema_version = 1
+    archive.payloads[0].shape = [9]
+    with assert_raises(contains="dictionary must be a nonempty matrix"):
+        _ = Schema.decode(archive)
+    model.n_components_ = 0
+    with assert_raises(contains="invalid SparseCoder fitted dimensions"):
+        _ = Schema.encode(model)
+
+
+def test_lda[dtype: DType](path: String) raises:
+    comptime Schema = LatentDirichletAllocationSchema[dtype]
+    var X = positive_training_data[dtype]()
+    var model = LatentDirichletAllocation[dtype](4, learning_method="online",
+        doc_topic_prior=0.25, topic_word_prior=0.125, batch_size=3, max_iter=2,
+        random_state=7, total_samples=200, n_jobs=1)
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_true(not restored.__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = restored.transform(X)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+
+    _ = model.fit(X)
+    save_model[Schema](model, path)
+    restored = load_model[Schema](path)
+    assert_equal(restored.bound_, model.bound_)
+    assert_equal(restored.n_iter_, model.n_iter_)
+    assert_equal(restored.score(X), model.score(X))
+    assert_equal(restored.perplexity(X), model.perplexity(X))
+    same_array(restored.transform(X), model.transform(X))
+
+    model = clone(model)
+    _ = model.partial_fit(X)
+    var params = model.get_params()
+    params.n_components = 2
+    params.doc_topic_prior = 0.5
+    params.random_state = 123
+    _ = model.set_params(params)
+    # Force the cached normal to be populated before persisting the stream.
+    if not model.random_state_.value().has_gauss():
+        _ = model.random_state_.value().standard_normal()
+    save_model[Schema](model, path)
+    restored = load_model[Schema](path)
+    assert_true(restored.random_state_.value().has_gauss())
+    assert_equal(restored.n_iter_, 0)
+    assert_equal(restored.n_components, 2)
+    assert_equal(restored.doc_topic_prior_, 0.25)
+    assert_equal(restored.get_feature_names_out(), model.get_feature_names_out())
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    _ = restored.partial_fit(X)
+    _ = model.partial_fit(X)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    assert_true(not clone(restored).__sklearn_is_fitted__())
+
+    var archive = Schema.encode(restored)
+    archive.schema_version = 2
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = Schema.decode(archive)
+    archive.schema_version = 1
+    archive.payloads[0].shape = [1, 624]
+    with assert_raises(contains="invalid shape for random_state_"):
+        _ = Schema.decode(archive)
+    archive.payloads[0].shape = [624]
+    archive.payloads[1].shape = [3, 4]
+    with assert_raises(contains="invalid shape for components_"):
+        _ = Schema.decode(archive)
+    restored.random_state_ = None
+    with assert_raises(contains="invalid fitted LDA metadata"):
+        _ = Schema.encode(restored)
+
+
 def main() raises:
     var path = String(argv()[1])
+    if len(argv()) == 3 and argv()[2] == "factor_analysis":
+        test_factor_analysis[DType.float32](path)
+        test_factor_analysis[DType.float64](path)
+        print("PASS: FactorAnalysis serialization in Float32 and Float64")
+        return
     test_pca[DType.float32](path)
     test_pca[DType.float64](path)
     test_incremental_pca[DType.float32](path)
@@ -405,6 +632,14 @@ def main() raises:
     test_fastica[DType.float64](path)
     test_kernel_pca[DType.float32](path)
     test_kernel_pca[DType.float64](path)
+    test_nmf[DType.float32](path)
+    test_nmf[DType.float64](path)
+    test_minibatch_nmf[DType.float32](path)
+    test_minibatch_nmf[DType.float64](path)
+    test_sparse_coder[DType.float32](path)
+    test_sparse_coder[DType.float64](path)
+    test_lda[DType.float32](path)
+    test_lda[DType.float64](path)
     var model = PCA[DType.float32]()
     save_model[PCASchema[DType.float32]](model, path)
     with assert_raises(contains="projection dtype mismatch"):
@@ -413,4 +648,4 @@ def main() raises:
     var archive = FactorAnalysisSchema[DType.float32].encode(factor)
     with assert_raises(contains="projection dtype mismatch"):
         _ = FactorAnalysisSchema[DType.float64].decode(archive)
-    print("PASS: PCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA and KernelPCA serialization contracts in Float32 and Float64")
+    print("PASS: ten decomposition serialization contracts in Float32 and Float64")

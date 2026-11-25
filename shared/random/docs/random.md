@@ -22,8 +22,12 @@ var independent_snapshot = rng.copy()
 isolated MT19937 state. It implements NumPy's **legacy RandomState**, not the
 new NumPy Generator API. Draw methods mutate their receiver. `.copy()` copies
 all 624 words, position and the cached normal; the copy advances independently.
-The state inspection methods expose a read-only diagnostic snapshot one word
-at a time. Python object pickling and NumPy state tuple import are binding work.
+The state inspection methods expose a snapshot one word at a time. Native
+consumers can reconstruct an owned snapshot with
+`RandomState(state_words=words^, position=position, has_gauss=has_gauss, cached_gauss=cached_gauss)`.
+Reconstruction requires 624 UInt32 words with at least one nonzero word,
+a position in 0 through 624, and a finite cached normal (zero if absent).
+Python object pickling and NumPy state tuple import are binding work.
 
 An estimator configured with an integer constructs a fresh `RandomState(seed)`
 at each point where sklearn calls `check_random_state(integer)`. An estimator

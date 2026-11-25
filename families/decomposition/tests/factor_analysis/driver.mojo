@@ -32,6 +32,7 @@ def evaluate[dtype: DType]() raises:
     emit("noise", model.noise_variance_.value())
     emit("mean", model.mean_.value())
     emit_scalar("n_iter", Float64(model.n_iter_))
+    emit_scalar("fit_warning_count", Float64(len(model.fit_warnings)))
     for i in range(len(model.loglike_)): emit_scalar("loglike", model.loglike_[i])
     emit("covariance", model.get_covariance())
     emit("precision", model.get_precision())

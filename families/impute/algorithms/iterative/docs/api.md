@@ -226,3 +226,16 @@ python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES
 mojo build -O3 --fp-mode=contract=off -I builds/deps families/impute/algorithms/iterative/tests/integration/random_forest.mojo -o builds/pr6-forest/random_forest
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python families/impute/algorithms/iterative/tests/random_forest_parity.py builds/pr6-forest/random_forest
 ```
+
+The [California housing gallery comparison](../../../../../notebooks/impute/plot_iterative_imputer_variants_comparison.ipynb)
+compares five held-out fold scores for each iterative regressor and the
+complete-data, mean and median baselines. Each fold fits its own robust scaler,
+imputer and final Bayesian ridge predictor. The native examples use a nested
+two-stage pipeline and specify the public cross-validation adapter type
+explicitly for Mojo 1.0.
+
+From the repository root with the pinned scikit-learn build available:
+
+```sh
+pixi run -e notebooks notebooks notebooks/impute/plot_iterative_imputer_variants_comparison.ipynb
+```

@@ -65,7 +65,10 @@ the native keyword `alpha_values`, an owned `(n_features,)` Float64 NDArray
 that takes precedence over scalar `alpha`; `set_params(alpha=...)` clears it.
 Their `class_count_` `(C,)`, `feature_count_` and `feature_log_prob_` `(C,F)`
 and ComplementNB's `feature_all_` `(F,)` are Float64 NDArrays, read with
-`.item(...)`; `class_log_prior_` and probabilities remain Lists.
+`.item(...)`. `class_log_prior_` is a List. For NDArray queries, the probability,
+log probability and joint log probability methods return Float64 NDArrays of
+shape `(n_samples, n_classes)`, including for Float32 and integer features.
+List queries return nested Lists and are converted to dense arrays internally.
 
 `BernoulliNB` (implemented in `moxie._nb_bernoulli`) accepts boolean, integer
 and Float32/Float64 NDArrays for all fit, partial_fit, prediction and score methods. Inputs can have
@@ -271,9 +274,16 @@ to the same estimator, following the [shared native contract](../interfaces.md).
   `StandardScaler[DType.float32]()` and `GaussianNB[dtype=DType.float32]()`.
   The scaler output must match the estimator's compile-time `Input` type.
   Direct Gaussian calls also accept Lists and other supported NDArray dtypes.
-- The four discrete classifiers currently expose `List[List[Float64]]` as their
-  trait `Input`. For a transformer that outputs NDArray, call `transform` and
-  pass the result to the classifier's NDArray overloads.
+- `make_pipeline(MinMaxScaler(), MultinomialNB())` and the corresponding
+  `ComplementNB()` pipeline take Float64 NDArrays. To match a
+  `MinMaxScaler[DType.float32]()`, use `MultinomialNB[dtype=DType.float32]()`
+  or `ComplementNB[dtype=DType.float32]()`. For these classifiers, `dtype`
+  selects the trait input type. The count statistics and array probabilities
+  use Float64, and direct calls accept all supported feature dtypes.
+  Direct array overloads infer the dtype from `X`. Use `input_dtype` when
+  naming that method parameter explicitly.
+- BernoulliNB and CategoricalNB expose `List[List[Float64]]` as their trait
+  `Input`. Pass a transformer's NDArray result to their direct array overloads.
 - `moxie.model_selection.learning_curve` (like the other CV helpers built on
   the same trait) takes an explicit `CVAdapter` / `TypedScorer`; `GaussianNB` with
   `exploit_incremental_learning=True` drives `partial_fit` through an

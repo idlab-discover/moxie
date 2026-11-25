@@ -58,7 +58,7 @@ def main() raises:
     _ = m.fit(X, y)
     assert_equal(m.predict(X)[1], 0)
     var probabilities = m.predict_proba(X)
-    assert_true(abs(probabilities[0][0] - 5.0 / 9.0) < 1e-7)
+    assert_true(abs(probabilities.item(0, 0) - 5.0 / 9.0) < 1e-7)
     var cloned = m.__sklearn_clone__()
     assert_equal(cloned.__sklearn_is_fitted__(), False)
     with assert_raises():

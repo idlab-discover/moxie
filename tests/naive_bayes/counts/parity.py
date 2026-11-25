@@ -129,7 +129,7 @@ with warnings.catch_warnings(),np.errstate(all='ignore'):
     for method in ['predict_joint_log_proba','predict_proba','predict_log_proba']:
         body.append(f'    var {method} = model.{method}(X)')
         for i,row in enumerate(getattr(oracle,method)(X)):
-            for k,v in enumerate(row): body.append(f'    close({method}[{i}][{k}], {literal(v)})')
+            for k,v in enumerate(row): body.append(f'    close({method}.item({i}, {k}), {literal(v)})')
     body.append('    var predicted = model.predict(X)')
     for i,v in enumerate(oracle.predict(X)): body.append(f'    assert_equal(predicted[{i}], {literal(v)})')
     body.append(f'    close(model.score(X, y), {literal(oracle.score(X,y))})')

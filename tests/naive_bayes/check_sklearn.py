@@ -21,7 +21,7 @@ import numpy as np
 import sklearn
 from sklearn import naive_bayes as nb
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 ROOT = Path(__file__).resolve().parents[2]
 REFERENCE = ROOT.parent / "scikit-learn"
@@ -65,7 +65,7 @@ from moxie._naive_bayes_dense import dense_from_lists, NumericDomain, StringDoma
 from moxie.naive_bayes import GaussianNB, MultinomialNB, ComplementNB, BernoulliNB, CategoricalNB
 from moxie.base import clone
 from moxie.pipeline import make_pipeline
-from moxie.preprocessing import StandardScaler
+from moxie.preprocessing import MinMaxScaler, StandardScaler
 
 @no_inline
 def close(actual: Float64, expected: Float64) raises:
@@ -568,6 +568,38 @@ lines.extend(["    var fresh = clone(pipe)",
 pipeline.fit(X, -y)
 compare("pipe.estimator.classes_", pipeline.classes_, labels=True)
 compare("pipe.predict_proba(Q)", pipeline.predict_proba(Q))
+
+# Narrow features keep Float32 scaling and use Float64 count-model outputs.
+for name, dtype, norm in (("MultinomialNB", "float64", False),
+                          ("MultinomialNB", "float32", False),
+                          ("ComplementNB", "float64", True)):
+    ident = f"case_{len(case_names)}"
+    case_names.append(ident)
+    params = "norm=True" if norm else ""
+    lines.extend([f"\n@no_inline\ndef {ident}() raises:",
+                  f"    var X = dense_from_lists({literal(X)}).astype[DType.{dtype}]()",
+                  f"    var Q = dense_from_lists({literal(Q)}).astype[DType.{dtype}]()",
+                  f"    var y: List[Int] = {literal(y)}",
+                  f"    var pipe = make_pipeline(MinMaxScaler[DType.{dtype}](), {name}[dtype=DType.{dtype}]({params}))",
+                  "    with assert_raises():",
+                  "        _ = pipe.predict_proba(Q)",
+                  "    _ = pipe.fit(X, y)"])
+    data, query = X.astype(dtype), Q.astype(dtype)
+    estimator = getattr(nb, name)(**({"norm": True} if norm else {}))
+    pipeline = make_pipeline(MinMaxScaler(), estimator).fit(data, y)
+    compare("pipe.estimator.classes_", pipeline.classes_, labels=True)
+    compare("pipe.predict(Q)", pipeline.predict(query), labels=True)
+    lines.append("    var probabilities: nm.NDArray[DType.float64] = pipe.predict_proba(Q)")
+    compare("probabilities", pipeline.predict_proba(query))
+    compare("pipe.predict_log_proba(Q)", pipeline.predict_log_proba(query))
+    lines.extend(["    var fresh = clone(pipe)",
+                  "    with assert_raises():",
+                  "        _ = fresh.predict_proba(Q)",
+                  f"    var refit_y: List[Int] = {literal(-y)}",
+                  "    _ = pipe.fit(X, refit_y)"])
+    pipeline.fit(data, -y)
+    compare("pipe.estimator.classes_", pipeline.classes_, labels=True)
+    compare("pipe.predict_proba(Q)", pipeline.predict_proba(query))
 
 # Bound compilation memory while retaining every case and its original index.
 parser = argparse.ArgumentParser(description=__doc__)

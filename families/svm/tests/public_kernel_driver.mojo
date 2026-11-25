@@ -60,6 +60,25 @@ def emit_feature_names(names: Optional[List[String]]) raises:
         print("FEATURE", name)
 
 
+def mixed_numeric_table(
+    X: nm.NDArray[DType.float64], names: List[String],
+) raises -> ColumnTable[]:
+    var rows = X.shape[0]
+    var width = X.shape[1]
+    var matrix = nm.zeros[DType.float64](nm.Shape(rows, width - 1))
+    var first = nm.zeros[DType.float32](nm.Shape(rows))
+    var remaining_names = List[String](capacity=width - 1)
+    for j in range(1, width):
+        remaining_names.append(names[j].copy())
+    for i in range(rows):
+        first.unsafe_set(i, Float32(X.unsafe_get(i * width)))
+        for j in range(1, width):
+            matrix.unsafe_set(i * (width - 1) + j - 1, X.unsafe_get(i * width + j))
+    var table = ColumnTable(matrix, remaining_names)
+    table.add_numeric(names[0], first, position=0)
+    return table^
+
+
 def main() raises:
     var args = argv()
     var contents: String
@@ -90,7 +109,8 @@ def main() raises:
     var mode = String(t[17])
     var decision_shape = String(t[18])
     var break_ties = Int(t[19]) != 0
-    var single = Int(t[20]) != 0
+    var input_kind = Int(t[20])
+    var single = input_kind == 1
     var k = Int(t[21])
     var feature_names = List[String](capacity=p)
     for i in range(p):
@@ -121,8 +141,8 @@ def main() raises:
             costs.labels.append(Float64(t[cursor]))
             costs.values.append(Float64(t[cursor + 1]))
             cursor += 2
-    var training = ColumnTable(x, feature_names)
-    var testing = ColumnTable(query, feature_names)
+    var training = mixed_numeric_table(x, feature_names) if input_kind == 2 else ColumnTable(x, feature_names)
+    var testing = mixed_numeric_table(query, feature_names) if input_kind == 2 else ColumnTable(query, feature_names)
     if kind == 0:
         var model = SVC(kernel=kernel.copy(), gamma=gamma.copy(), degree=degree, coef0=coef0, tol=tol, shrinking=shrinking, max_iter=limit, C=c, probability=probability, random_state=seed, class_weight=costs.copy(), decision_function_shape=decision_shape.copy(), break_ties=break_ties)
         _ = model.set_fit_request(sample_weight="training_weight").set_score_request(

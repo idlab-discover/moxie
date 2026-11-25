@@ -107,12 +107,14 @@ clears it, a failed fit preserves it, and an unfitted clone starts with
 `None`.
 
 Pass a [`ColumnTable`](../../../../../docs/compose/named-columns.md) to the
-same methods to read the feature names from the table. Both Float32 and
-Float64 constructor matrices are supported, including strided data. The
-table must have unique names and all columns must belong to its constructor
-matrix. Added columns raise an error. `LinearSVC` takes a native label list
-on the table overload. The estimator traits continue to use their dense
-array input type.
+same methods to read the feature names from the table. The table requires
+unique names. Float32 and Float64 constructor matrices are read directly,
+including strided matrices. Separately added Float32, Float64, Int64, and
+Bool columns are gathered in schema order into a matrix of the table's dtype.
+Bool values become zero or one, and conversion can round floating-point and
+large integer values. Text and categorical columns raise `TypeError`.
+`LinearSVC` takes a native label list on the table overload. The estimator
+traits continue to use their dense array input type.
 
 ```mojo
 from moxie.compose import ColumnTable

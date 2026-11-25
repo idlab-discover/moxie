@@ -94,7 +94,7 @@ def reference_classes():
     return classes
 
 
-def native(x, y, sw, query, kind, config, single=False, expect_error=False, round_trip=False):
+def native(x, y, sw, query, kind, config, single=False, expect_error=False, round_trip=False, *, mixed=False):
     weights = config.get("class_weight")
     mode = "balanced" if weights == "balanced" else "explicit" if isinstance(weights, dict) else "none"
     gamma = config.get("gamma", "scale")
@@ -106,7 +106,8 @@ def native(x, y, sw, query, kind, config, single=False, expect_error=False, roun
               config.get("tol", .001), int(config.get("shrinking", True)),
               int(config.get("probability", -1)), config.get("max_iter", -1),
               config.get("random_state", 42), mode, config.get("decision_function_shape", "ovr"),
-              int(config.get("break_ties", False)), int(single), len(weights) if isinstance(weights, dict) else 0,
+              int(config.get("break_ties", False)), 2 if mixed else int(single),
+              len(weights) if isinstance(weights, dict) else 0,
               *np.asarray(x, dtype=float).ravel(), *y, *sw, *np.asarray(query, dtype=float).ravel()]
     if isinstance(weights, dict):
         for label, weight in weights.items():
@@ -240,18 +241,22 @@ def main():
                 if single:
                     x, query = x.astype(np.float32), query.astype(np.float32)
                 x, query = named_inputs(x, query)
+                mixed = variant == 3 and kernel != "precomputed"
+                if mixed:
+                    x[x.columns[0]] = x.iloc[:, 0].astype(np.float32)
+                    query[query.columns[0]] = query.iloc[:, 0].astype(np.float32)
                 print(name, kernel, variant, flush=True)
                 with warnings.catch_warnings(record=True) as fit_warnings:
                     warnings.simplefilter("always")
                     expected = configure_metadata(classes[name](**config), kind)
                     expected.fit(x, sample_weight=sw) if kind == 2 else expected.fit(x, y, sample_weight=sw)
-                    got = native(x, y, sw, query, kind, config, single, round_trip=round_trip)
+                    got = native(x, y, sw, query, kind, config, single, round_trip=round_trip, mixed=mixed)
                     compare_fit_warnings(fit_warnings, got)
                     warnings.simplefilter("ignore")
                     compare(expected, got, query, kind, config)
                     if kind != 2:
                         np.testing.assert_allclose(got["score"], expected.score(x, y, sample_weight=sw), rtol=3e-5, atol=3e-6)
-                results.append(dict(estimator=name, kernel=kernel, variant=variant, iterations_native=got["n_iter_"].tolist(), iterations_reference=np.atleast_1d(expected.n_iter_).tolist()))
+                results.append(dict(estimator=name, kernel=kernel, variant=variant, mixed_numeric=mixed, iterations_native=got["n_iter_"].tolist(), iterations_reference=np.atleast_1d(expected.n_iter_).tolist()))
     for kind, name in enumerate(names):
         for edge in ("limit0", "limit1", "limit3", "masked", "constant"):
             x = rng.normal(size=(12, 3)) * .4

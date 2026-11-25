@@ -90,6 +90,9 @@ KERNELS = [
     2.0 * K.Matern(0.6, (1e-2, 10.0), nu=1.5),
     K.CompoundKernel([K.RBF(1.0), K.Matern(2.0, nu=2.5)]),
     K.CompoundKernel([K.ConstantKernel(2.0), K.WhiteKernel(0.4), K.DotProduct(1.1)]),
+    K.Exponentiation(K.RBF(0.7), 2),
+    K.RBF(0.7) ** 2,
+    (K.RBF(0.7) + K.DotProduct(0.3)) ** 2,
 ]
 
 
@@ -174,6 +177,10 @@ def reference(kernel, X, Y, float32, fd=False):
     out['stationary'] = kernel.is_stationary()
     out['vector_input'] = kernel.requires_vector_input
     out['hyperparameters'] = ''.join(f'{h.name}:{h.n_elements}:{h.fixed};' for h in kernel.hyperparameters)
+    out['raw_bounds'] = {h.name: np.zeros((0, 2)) if h.fixed else h.bounds
+                         for h in kernel.hyperparameters}
+    if isinstance(kernel, K.Exponentiation):
+        out['exponent_param'] = repr(kernel.get_params()['exponent'])
     out['params'] = ''.join(f'{k};' for k in kernel.get_params().keys())
     out['theta'] = kernel.theta
     b = kernel.bounds
@@ -217,9 +224,15 @@ def main():
             if error is not None:
                 tally.check(label, False, f'native raised {error}')
                 continue
-            for key in ('repr', 'hyperparameters', 'params'):
+            for key in ('repr', 'hyperparameters', 'params', 'exponent_param'):
+                if key not in expected:
+                    continue
                 tally.check(f'{label}:{key}', native[(index, name, key)] == expected[key],
                             f'{native[(index, name, key)]!r} != {expected[key]!r}')
+            for hyperparameter, bounds in expected['raw_bounds'].items():
+                key = f'raw_bounds:{hyperparameter}'
+                ok, detail = close(native[(index, name, key)], bounds, 0, 0)
+                tally.check(f'{label}:{key}', ok, detail)
             for key in ('stationary', 'vector_input'):
                 tally.check(f'{label}:{key}', native[(index, name, key)] == str(bool(expected[key])))
             # Float32 inputs: sklearn keeps some intermediates in float32 (e.g. DotProduct inner).

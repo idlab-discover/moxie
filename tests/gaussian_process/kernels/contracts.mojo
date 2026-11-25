@@ -76,6 +76,65 @@ def test_default_hyperparameters_and_theta() raises:
     assert_almost_equal(bounds.item(0, 0), log(1e-5), atol=1e-12)
 
 
+def test_named_hyperparameters() raises:
+    var rbf = RBF(aniso(), Bounds(0.25, 4.0))
+    var length_scale = rbf.hyperparameter_length_scale()
+    assert_equal(length_scale.name, "length_scale")
+    assert_equal(length_scale.n_elements, 3)
+    assert_equal(length_scale.bounds.item(2, 0), 0.25)
+    assert_equal(length_scale.bounds.item(2, 1), 4.0)
+    assert_equal(Matern(aniso()).hyperparameter_length_scale().n_elements, 3)
+    assert_equal(ConstantKernel().hyperparameter_constant_value().name, "constant_value")
+    assert_true(WhiteKernel(0.1, "fixed").hyperparameter_noise_level().fixed)
+    assert_equal(RationalQuadratic().hyperparameter_alpha().name, "alpha")
+    assert_equal(RationalQuadratic().hyperparameter_length_scale().name, "length_scale")
+    assert_equal(ExpSineSquared().hyperparameter_length_scale().name, "length_scale")
+    assert_equal(ExpSineSquared().hyperparameter_periodicity().name, "periodicity")
+    assert_equal(DotProduct().hyperparameter_sigma_0().name, "sigma_0")
+    assert_equal(PairwiseKernel().hyperparameter_gamma().name, "gamma")
+
+    var kernel = Exponentiation(rbf + WhiteKernel(0.1, "fixed"), 2.0)
+    var fixed = kernel.hyperparameter("kernel__k2__noise_level")
+    assert_true(fixed.fixed)
+    assert_equal(fixed.bounds.shape[0], 0)
+    kernel.set_param("kernel__k1__length_scale_bounds", Bounds(0.5, 2.0))
+    var updated = kernel.hyperparameter("kernel__k1__length_scale")
+    assert_equal(updated.name, "kernel__k1__length_scale")
+    assert_equal(updated.bounds.item(1, 0), 0.5)
+    assert_equal(length_scale.bounds.item(1, 0), 0.25)
+    with assert_raises(contains="Unknown hyperparameter"):
+        _ = kernel.hyperparameter("kernel__k2__gamma")
+
+    var invalid_alpha = RationalQuadratic(alpha_bounds=two_bounds())
+    assert_equal(invalid_alpha.hyperparameter("length_scale").n_elements, 1)
+    with assert_raises(contains="Bounds on alpha"):
+        _ = invalid_alpha.hyperparameter("alpha")
+
+
+def test_integer_exponentiation_repr_and_params() raises:
+    var power: Int = -2
+    var base = RBF()
+    var integer = Exponentiation(base, power)
+    var floating = Exponentiation(base, -2.0)
+    assert_equal(String(integer), "RBF(length_scale=1) ** -2")
+    assert_equal(String(floating), "RBF(length_scale=1) ** -2.0")
+    assert_true(integer == floating)
+    assert_equal(integer.exponent(), -2.0)
+    assert_equal(String(base ** 2), "RBF(length_scale=1) ** 2")
+    assert_equal(String(Kernel(base) ** 2.0), "RBF(length_scale=1) ** 2.0")
+    assert_equal(String(integer.clone_with_theta(integer.theta())), String(integer))
+
+    var nested = ConstantKernel() * integer
+    var copy = nested.copy()
+    copy.set_param("k2__exponent", 3)
+    assert_equal(String(copy.k2()), "RBF(length_scale=1) ** 3")
+    assert_equal(String(nested.k2()), String(integer))
+    copy.set_params(nested.get_params())
+    assert_equal(String(copy), String(nested))
+    copy.set_param("k2__exponent", 3.0)
+    assert_equal(String(copy.k2()), "RBF(length_scale=1) ** 3.0")
+
+
 def test_rational_quadratic_theta_order_is_sorted() raises:
     var k: Kernel = RationalQuadratic(length_scale=3.0, alpha=0.5)
     var specs = k.hyperparameters()

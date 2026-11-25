@@ -247,6 +247,7 @@ struct ParamValue(Copyable, Movable, Writable):
 
     var kind: Int
     var numbers: List[Float64]
+    var _integer: Optional[Int]
     var bounds: Bounds
     var text: String
     var kernels: List[Kernel]
@@ -255,6 +256,7 @@ struct ParamValue(Copyable, Movable, Writable):
     def __init__(out self, *, kind: Int):
         self.kind = kind
         self.numbers = List[Float64]()
+        self._integer = None
         self.bounds = Bounds.fixed()
         self.text = String()
         self.kernels = List[Kernel]()
@@ -269,6 +271,11 @@ struct ParamValue(Copyable, Movable, Writable):
     def __init__(out self, value: Float64):
         self = ParamValue(kind=_ParamKind.NUMBER)
         self.numbers.append(value)
+
+    @implicit
+    def __init__(out self, value: Int):
+        self = ParamValue(Float64(value))
+        self._integer = value
 
     @implicit
     def __init__(out self, value: List[Float64]):
@@ -349,7 +356,10 @@ struct ParamValue(Copyable, Movable, Writable):
 
     def write_to(self, mut writer: Some[Writer]):
         if self.kind == _ParamKind.NUMBER:
-            writer.write(_py_float(self.numbers[0]))
+            if self._integer:
+                writer.write(self._integer.value())
+            else:
+                writer.write(_py_float(self.numbers[0]))
         elif self.kind == _ParamKind.NUMBERS:
             writer.write("[")
             for i in range(len(self.numbers)):
@@ -445,6 +455,7 @@ struct _Node(Copyable, Movable):
     var value2: Float64
     var bounds2: Bounds
     var extra: Float64
+    var integer_exponent: Optional[Int]
     var metric: String
     var kwargs: Dict[String, Float64]
     var has_kwargs: Bool
@@ -457,6 +468,7 @@ struct _Node(Copyable, Movable):
         self.value2 = 0.0
         self.bounds2 = Bounds.fixed()
         self.extra = 0.0
+        self.integer_exponent = None
         self.metric = String()
         self.kwargs = Dict[String, Float64]()
         self.has_kwargs = False
@@ -686,10 +698,9 @@ struct Kernel(KernelContract, Equatable, Writable):
         return Kernel(nodes=nodes^, root=root)
 
     @staticmethod
-    def _combine(kind: Int, parts: List[Kernel], extra: Float64 = 0.0) -> Kernel:
+    def _combine(kind: Int, parts: List[Kernel]) -> Kernel:
         var nodes = List[_Node]()
         var node = _Node(kind)
-        node.extra = extra
         for part in parts:
             node.children.append(part._append_subtree(nodes, part._root))
         nodes.append(node^)
@@ -819,7 +830,10 @@ struct Kernel(KernelContract, Equatable, Writable):
                     params.set("k2__" + p2.names[i], p2.values[i].copy())
         elif node.kind == _Kind.EXPONENTIATION:
             params.set("kernel", self._subtree(node.children[0]))
-            params.set("exponent", node.extra)
+            if node.integer_exponent:
+                params.set("exponent", ParamValue(node.integer_exponent.value()))
+            else:
+                params.set("exponent", node.extra)
             if deep:
                 var p = self._params_at(node.children[0], True)
                 for i in range(len(p.names)):
@@ -922,6 +936,7 @@ struct Kernel(KernelContract, Equatable, Writable):
             self._replace(self._find_child(idx, key), value.as_kernel(key))
         elif kind == _Kind.EXPONENTIATION and key == "exponent":
             self._nodes[idx].extra = value.as_float(key)
+            self._nodes[idx].integer_exponent = value._integer
         elif kind == _Kind.COMPOUND and key == "kernels":
             var replacement = Kernel._combine(_Kind.COMPOUND, value.as_kernels(key))
             self._replace(idx, replacement)
@@ -940,35 +955,49 @@ struct Kernel(KernelContract, Equatable, Writable):
     # --- hyperparameters, theta and bounds ----------------------------------
 
     def _hyperparameters_at(
-        self, idx: Int, prefix: String, mut out: List[HyperparameterSpec]
+        self,
+        idx: Int,
+        prefix: String,
+        mut out: List[HyperparameterSpec],
+        only: Optional[String] = None,
     ) raises:
+        if only and not only.value().startswith(prefix):
+            return
         ref node = self._nodes[idx]
         var k = node.kind
         if k == _Kind.SUM or k == _Kind.PRODUCT:
-            self._hyperparameters_at(node.children[0], prefix + "k1__", out)
-            self._hyperparameters_at(node.children[1], prefix + "k2__", out)
+            self._hyperparameters_at(node.children[0], prefix + "k1__", out, only)
+            self._hyperparameters_at(node.children[1], prefix + "k2__", out, only)
             return
         if k == _Kind.EXPONENTIATION:
-            self._hyperparameters_at(node.children[0], prefix + "kernel__", out)
+            self._hyperparameters_at(node.children[0], prefix + "kernel__", out, only)
             return
         if k == _Kind.COMPOUND:
             return  # sklearn exposes no hyperparameter_* attributes here.
         if k == _Kind.RATIONAL_QUADRATIC:
-            out.append(_spec(prefix + "alpha", 1, node.bounds2))
-            out.append(_spec(prefix + "length_scale", 1, node.bounds))
-            return
+            _append_spec(prefix + "alpha", 1, node.bounds2, only, out)
+        var n_elements = 1
+        if k == _Kind.RBF or k == _Kind.MATERN:
+            n_elements = max(1, len(node.values))
+        _append_spec(prefix + _primary_name(k), n_elements, node.bounds, only, out)
         if k == _Kind.EXP_SINE_SQUARED:
-            out.append(_spec(prefix + "length_scale", 1, node.bounds))
-            out.append(_spec(prefix + "periodicity", 1, node.bounds2))
-            return
-        var n_elements = len(node.values) if len(node.values) > 1 else 1
-        out.append(_spec(prefix + _primary_name(k), n_elements, node.bounds))
+            _append_spec(prefix + "periodicity", 1, node.bounds2, only, out)
 
     def hyperparameters(self) raises -> List[HyperparameterSpec]:
         """Hyperparameter specifications in theta order (fixed ones included)."""
         var out = List[HyperparameterSpec]()
         self._hyperparameters_at(self._root, "", out)
         return out^
+
+    def hyperparameter(self, name: String) raises -> HyperparameterSpec:
+        """One spec by its name, including any operator prefix (e.g. k1__gamma)."""
+        var out = List[HyperparameterSpec]()
+        self._hyperparameters_at(self._root, "", out, name)
+        if len(out) == 0:
+            raise Error(
+                "AttributeError: Unknown hyperparameter " + name + " for " + self.name()
+            )
+        return out[0].copy()
 
     def _theta_at(self, idx: Int, mut out: List[Float64]):
         ref node = self._nodes[idx]
@@ -1667,7 +1696,11 @@ struct Kernel(KernelContract, Equatable, Writable):
             self._write_at(node.children[1], writer)
         elif k == _Kind.EXPONENTIATION:
             self._write_at(node.children[0], writer)
-            writer.write(" ** ", _py_float(node.extra))
+            writer.write(" ** ")
+            if node.integer_exponent:
+                writer.write(node.integer_exponent.value())
+            else:
+                writer.write(_py_float(node.extra))
         else:
             writer.write("CompoundKernel(")
             var values = List[Float64]()
@@ -1702,6 +1735,9 @@ struct Kernel(KernelContract, Equatable, Writable):
     def __rmul__(self, other: Float64) -> Kernel:
         return Product(ConstantKernel(other), self)
 
+    def __pow__(self, exponent: Int) -> Kernel:
+        return Exponentiation(self, exponent)
+
     def __pow__(self, exponent: Float64) -> Kernel:
         return Exponentiation(self, exponent)
 
@@ -1724,6 +1760,18 @@ def _spec(name: String, n_elements: Int, bounds: Bounds) raises -> Hyperparamete
     )
 
 
+def _append_spec(
+    name: String,
+    n_elements: Int,
+    bounds: Bounds,
+    only: Optional[String],
+    mut out: List[HyperparameterSpec],
+) raises:
+    if only and name != only.value():
+        return
+    out.append(_spec(name, n_elements, bounds))
+
+
 # ===----------------------------------------------------------------------=== #
 # Composite constructors
 # ===----------------------------------------------------------------------=== #
@@ -1741,7 +1789,16 @@ def Product(k1: Kernel, k2: Kernel) -> Kernel:
 
 def Exponentiation(kernel: Kernel, exponent: Float64) -> Kernel:
     """sklearn `Exponentiation(kernel, exponent)`: k(X, Y) ** exponent."""
-    return Kernel._combine(_Kind.EXPONENTIATION, [kernel.copy()], exponent)
+    var result = Kernel._combine(_Kind.EXPONENTIATION, [kernel.copy()])
+    result._nodes[result._root].extra = exponent
+    return result^
+
+
+def Exponentiation(kernel: Kernel, exponent: Int) -> Kernel:
+    """Raise a kernel to an integer power and retain the integer in its repr."""
+    var result = Exponentiation(kernel, Float64(exponent))
+    result._nodes[result._root].integer_exponent = exponent
+    return result^
 
 
 def CompoundKernel(kernels: List[Kernel]) raises -> Kernel:
@@ -1773,6 +1830,9 @@ trait KernelLike(Copyable, Movable):
 
     def hyperparameters(self) raises -> List[HyperparameterSpec]:
         return self.as_kernel().hyperparameters()
+
+    def hyperparameter(self, name: String) raises -> HyperparameterSpec:
+        return self.as_kernel().hyperparameter(name)
 
     def get_params(self, deep: Bool = True) raises -> KernelParams:
         return self.as_kernel().get_params(deep)
@@ -1817,6 +1877,9 @@ trait KernelLike(Copyable, Movable):
     def __rmul__(self, other: Float64) -> Kernel:
         return Product(ConstantKernel(other), self.as_kernel())
 
+    def __pow__(self, exponent: Int) -> Kernel:
+        return Exponentiation(self.as_kernel(), exponent)
+
     def __pow__(self, exponent: Float64) -> Kernel:
         return Exponentiation(self.as_kernel(), exponent)
 
@@ -1834,6 +1897,9 @@ struct ConstantKernel(KernelLike, Writable):
     ):
         self.constant_value = constant_value
         self.constant_value_bounds = constant_value_bounds.copy()
+
+    def hyperparameter_constant_value(self) raises -> Hyperparameter:
+        return _spec("constant_value", 1, self.constant_value_bounds)
 
     def write_to(self, mut writer: Some[Writer]):
         writer.write(self.as_kernel())
@@ -1858,6 +1924,9 @@ struct WhiteKernel(KernelLike, Writable):
     ):
         self.noise_level = noise_level
         self.noise_level_bounds = noise_level_bounds.copy()
+
+    def hyperparameter_noise_level(self) raises -> Hyperparameter:
+        return _spec("noise_level", 1, self.noise_level_bounds)
 
     def write_to(self, mut writer: Some[Writer]):
         writer.write(self.as_kernel())
@@ -1893,6 +1962,9 @@ struct RBF(KernelLike, Writable):
 
     def anisotropic(self) -> Bool:
         return len(self.length_scale) > 1
+
+    def hyperparameter_length_scale(self) raises -> Hyperparameter:
+        return _spec("length_scale", max(1, len(self.length_scale)), self.length_scale_bounds)
 
     def write_to(self, mut writer: Some[Writer]):
         writer.write(self.as_kernel())
@@ -1935,6 +2007,9 @@ struct Matern(KernelLike, Writable):
     def anisotropic(self) -> Bool:
         return len(self.length_scale) > 1
 
+    def hyperparameter_length_scale(self) raises -> Hyperparameter:
+        return _spec("length_scale", max(1, len(self.length_scale)), self.length_scale_bounds)
+
     def write_to(self, mut writer: Some[Writer]):
         writer.write(self.as_kernel())
 
@@ -1965,6 +2040,12 @@ struct RationalQuadratic(KernelLike, Writable):
         self.alpha = alpha
         self.length_scale_bounds = length_scale_bounds.copy()
         self.alpha_bounds = alpha_bounds.copy()
+
+    def hyperparameter_alpha(self) raises -> Hyperparameter:
+        return _spec("alpha", 1, self.alpha_bounds)
+
+    def hyperparameter_length_scale(self) raises -> Hyperparameter:
+        return _spec("length_scale", 1, self.length_scale_bounds)
 
     def write_to(self, mut writer: Some[Writer]):
         writer.write(self.as_kernel())
@@ -1998,6 +2079,12 @@ struct ExpSineSquared(KernelLike, Writable):
         self.length_scale_bounds = length_scale_bounds.copy()
         self.periodicity_bounds = periodicity_bounds.copy()
 
+    def hyperparameter_length_scale(self) raises -> Hyperparameter:
+        return _spec("length_scale", 1, self.length_scale_bounds)
+
+    def hyperparameter_periodicity(self) raises -> Hyperparameter:
+        return _spec("periodicity", 1, self.periodicity_bounds)
+
     def write_to(self, mut writer: Some[Writer]):
         writer.write(self.as_kernel())
 
@@ -2021,6 +2108,9 @@ struct DotProduct(KernelLike, Writable):
     ):
         self.sigma_0 = sigma_0
         self.sigma_0_bounds = sigma_0_bounds.copy()
+
+    def hyperparameter_sigma_0(self) raises -> Hyperparameter:
+        return _spec("sigma_0", 1, self.sigma_0_bounds)
 
     def write_to(self, mut writer: Some[Writer]):
         writer.write(self.as_kernel())
@@ -2057,6 +2147,9 @@ struct PairwiseKernel(KernelLike, Writable):
         self.gamma_bounds = gamma_bounds.copy()
         self.metric = metric
         self.pairwise_kernels_kwargs = pairwise_kernels_kwargs.copy()
+
+    def hyperparameter_gamma(self) raises -> Hyperparameter:
+        return _spec("gamma", 1, self.gamma_bounds)
 
     def write_to(self, mut writer: Some[Writer]):
         writer.write(self.as_kernel())

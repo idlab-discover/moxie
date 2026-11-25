@@ -38,11 +38,36 @@ and canonical deflation, with NIPALS or SVD. CCA uses mode B and canonical
 deflation. PLSSVD takes one SVD of centered/scaled cross covariance. All four
 share centering/scaling and the PLS engine. Python warnings are available as
 native diagnostics. Sparse inputs, pandas output, Python metadata routing,
-feature-name input metadata, pickling, and persistence adapters are excluded.
+feature-name input metadata, and pickling are excluded.
 
 Examples cover [PLS/CCA](../../examples/cross_decomposition.mojo),
 [PLSSVD](../../examples/cross_decomposition_svd.mojo), and
 [owned blocks](../../examples/cross_decomposition_blocks.mojo).
+
+## Native persistence
+
+Use the experimental [Moxie model container](../serialization.md) with
+`PLSRegressionSchema`, `PLSCanonicalSchema`, `CCASchema`, or `PLSSVDSchema`
+from `moxie.cross_decomposition`. Choose the estimator's input dtype on the
+schema. Use empty brackets such as `PLSRegressionSchema[]` to select the
+Float64 default. Learned arrays are stored as Float64 for both input dtypes.
+
+```mojo
+from moxie.cross_decomposition import PLSRegression, PLSRegressionSchema
+from moxie.serialization import load_model, save_model
+
+var model = PLSRegression[DType.float32](n_components=2)
+_ = model.fit(X, y)
+save_model[PLSRegressionSchema[DType.float32]](model, "regression.moxie")
+var restored = load_model[PLSRegressionSchema[DType.float32]]("regression.moxie")
+var predictions = restored.predict(X)
+```
+
+The schemas round-trip both fitted and unfitted estimators. Loading reconstructs
+independent learned arrays without fitting or requiring the original inputs.
+Parameters changed after fit are saved separately from the learned dimensions,
+projection state, and prediction rank. Learned arrays are saved in logical row
+order, so strided arrays load as contiguous arrays.
 
 ## Validation
 
@@ -63,10 +88,12 @@ PLSSVD contracts, family block validation, Float32/Float64, owned learned state,
 cloning/refit, and copy semantics. Two isolated assemblies exercise all public
 estimators and check Moxie ownership. Negative compilation rejects PLSSVD
 regression and inverse-transform methods; assembly tests reject conflicting
-module and export ownership.
+module and export ownership. The serialization contract checks on-disk
+round trips, exact learned and inference values, and malformed archives.
 
 The parity suites retain 124 PLS/CCA and 93 PLSSVD cases against scikit-learn
-revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Reports under
+revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Native results are evaluated
+after serializing and restoring each fitted model. Reports under
 `builds/cross_decomposition/{pls,plssvd}/parity/` record current results and
 runner hashes. The suites retain conditioning-aware tolerances, reference
 perturbation checks, component objectives, score spectra, and null-space

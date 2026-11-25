@@ -160,6 +160,7 @@ def main():
             except ValueError:
                 expected = "error"
         add("direction", x, y, expected, *warning_fields(caught))
+        add("dense_direction", x, y, expected, *warning_fields(caught))
 
     def score_warnings():
         model = reference.IsotonicRegression().fit(
@@ -192,6 +193,7 @@ def main():
         expected = reference.isotonic_regression(
             y, sample_weight=w, y_min=low, y_max=high, increasing=increasing
         )
+        assert expected.shape == y.shape and expected.dtype == y.dtype
         independent = scipy_isotonic(y, weights=w, increasing=increasing).x
         independent = independent.astype(dtype)
         independent = np.clip(independent, -np.inf if low is None else low,
@@ -441,8 +443,8 @@ def main():
         expected = []
         for case in cases:
             kind, *fields = case.split("|")
-            if kind in ("direction", "score_warnings"):
-                warning_fields = fields[3:] if kind == "direction" else fields[5:]
+            if kind in ("direction", "dense_direction", "score_warnings"):
+                warning_fields = fields[5:] if kind == "score_warnings" else fields[3:]
                 expected.extend(
                     f"{category}: {message}"
                     for category, message in zip(

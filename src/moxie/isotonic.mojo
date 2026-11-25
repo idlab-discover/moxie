@@ -171,6 +171,14 @@ def check_increasing[dtype: DType = DType.float64](
     return rho >= 0
 
 
+def check_increasing[dtype: DType](
+    x: NDArray[dtype], y: NDArray[dtype],
+) raises -> Bool:
+    """Check direction for two same-dtype, one-dimensional dense arrays."""
+    comptime assert dtype == DType.float32 or dtype == DType.float64
+    return check_increasing(_vector(x, "x"), _vector(y, "y"))
+
+
 def _is_constant[dtype: DType](values: List[Scalar[dtype]]) -> Bool:
     for value in values:
         if value != values[0]:
@@ -301,6 +309,52 @@ def isotonic_regression[dtype: DType](
             rounded = min(rounded, Scalar[dtype](y_max.value()))
         result.append(rounded)
     return result^
+
+
+def isotonic_regression[dtype: DType](
+    y: NDArray[dtype],
+    *,
+    sample_weight: Optional[NDArray[dtype]] = None,
+    y_min: Optional[Float64] = None,
+    y_max: Optional[Float64] = None,
+    increasing: Bool = True,
+) raises -> NDArray[dtype]:
+    """Fit an ordered dense vector and return a new same-dtype vector."""
+    if sample_weight:
+        return isotonic_regression(
+            y, sample_weight=sample_weight.value(), y_min=y_min, y_max=y_max,
+            increasing=increasing,
+        )
+    return _isotonic_regression_array(y, None, y_min, y_max, increasing)
+
+
+def isotonic_regression[dtype: DType](
+    y: NDArray[dtype],
+    *,
+    sample_weight: NDArray[dtype],
+    y_min: Optional[Float64] = None,
+    y_max: Optional[Float64] = None,
+    increasing: Bool = True,
+) raises -> NDArray[dtype]:
+    """Fit an ordered dense vector with borrowed sample weights."""
+    return _isotonic_regression_array(
+        y, _vector(sample_weight, "sample_weight"), y_min, y_max, increasing,
+    )
+
+
+def _isotonic_regression_array[dtype: DType](
+    y: NDArray[dtype],
+    weights: Optional[List[Scalar[dtype]]],
+    y_min: Optional[Float64],
+    y_max: Optional[Float64],
+    increasing: Bool,
+) raises -> NDArray[dtype]:
+    comptime assert dtype == DType.float32 or dtype == DType.float64
+    var fitted = isotonic_regression(
+        _vector(y, "y"), sample_weight=weights, y_min=y_min, y_max=y_max,
+        increasing=increasing,
+    )
+    return array(fitted, [len(fitted)])
 
 
 struct IsotonicRegression[dtype: DType = DType.float64](

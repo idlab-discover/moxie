@@ -17,9 +17,8 @@ uses `numojo.array` to construct results.
 
 Concrete List overloads accept `List[Scalar[dtype]]` and, for the applicable
 X arguments, one-column `List[List[Scalar[dtype]]]`. These overloads return
-lists for prediction and transformation. Learned thresholds and both public
-helpers use lists. Integer or mixed-dtype inputs require explicit conversion
-to the chosen Float32 or Float64 dtype.
+lists for prediction and transformation. Learned thresholds use Lists.
+Convert integer or mixed-dtype inputs to the chosen Float32 or Float64 dtype.
 Float32 PAVA uses the Float64 solver and rounds before clipping, matching
 the SciPy-backed reference.
 Tie accumulation and interpolation retain input precision; score accumulates
@@ -126,11 +125,17 @@ These are algorithmic bounds, not measured performance claims.
 
 ## Public helpers
 
+Both public helpers accept same-dtype Float32 or Float64 vectors as Lists or
+one-dimensional NDArrays. Dense views are read in logical order. Pass the
+same container type for every input of a helper. The estimator also accepts
+one-column X, while the helpers require one-dimensional vectors.
+
 `isotonic_regression(y, sample_weight=None, y_min=None, y_max=None,
 increasing=True)` fits an **already ordered** target sequence. All options
 are keyword-only. Unlike the estimator, this helper requires strictly positive
 weights, matching the reference's SciPy implementation. It returns a new
-same-dtype list of the same length and never sorts its inputs.
+vector with the same length, dtype and container type as y and never sorts
+its inputs.
 
 `check_increasing(x, y)` returns a Bool from Spearman's rank correlation.
 The vectors must have equal lengths. Infinities participate in ranking. Empty
@@ -264,9 +269,10 @@ for in-place fitting and typed configuration differences.
 `pixi run python tools/isotonic_checks.py test` covers trait conformance,
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
 strided arrays, direction, bounds, weighted R², and native persistence.
-`pixi run python tools/isotonic_checks.py parity` compares 723 Float64 and
-556 Float32 deterministic cases, including native transform output, scaler
-pipeline predictions, interpolator reconstruction, validation edges, warning
+`pixi run python tools/isotonic_checks.py parity` compares 856 Float64 and
+719 Float32 deterministic cases, including both public helpers with Lists and
+NDArrays, native transform output, scaler pipeline predictions, interpolator
+reconstruction, validation edges, warning
 diagnostics, sample-weight requests and input tags, against the pinned Python
 module and Cython tie engine. The scikit-learn
 support wheel and SciPy come from the locked Pixi environment. Float64 uses

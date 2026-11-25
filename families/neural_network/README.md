@@ -24,8 +24,9 @@ The [focused MLP parity check](shared/mlp_engine/docs/scope.md) validates the
 private engine in isolation.
 
 Side-by-side notebooks against the official gallery live in
-`notebooks/neural_network/`: `plot_rbm_logistic_classification` (Float64
-numerical parity of the RBM pipeline, Float32 distribution checks) and
+`notebooks/neural_network/`: `plot_rbm_logistic_classification` (Newton-CG
+classifier parity on RBM features and raw pixels, with Float64 RBM numerical
+comparisons and Float32 RBM distribution checks) and
 `plot_mlp_alpha` (bounded dense MLP parity and full-budget diagnostics).
 The [MLP training-curves notebook](../../notebooks/neural_network/plot_mlp_training_curves.ipynb)
 compares full loss curves, stopping epochs and predictions for the seven

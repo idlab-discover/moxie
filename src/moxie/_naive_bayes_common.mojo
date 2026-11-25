@@ -109,8 +109,10 @@ def _check_prior(
     if len(prior.value()) != n:
         raise Error("ValueError: number of priors must match number of classes")
     for value in prior.value():
-        if not isfinite(value) or value < 0:
-            raise Error("ValueError: priors must be finite and nonnegative")
+        if not isfinite(value):
+            raise Error("ValueError: priors must be finite")
+        if normalized and value < 0:
+            raise Error("ValueError: Gaussian priors must be nonnegative")
     if normalized and abs(_sum(prior.value()) - 1.0) > 1.001e-5:
         raise Error("ValueError: Gaussian priors must sum to one")
 

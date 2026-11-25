@@ -18,7 +18,7 @@ Borrowed inputs are not retained. Returned lists own their storage.
 | --- | --- |
 | `_check_X(X: M, expected=0, nonnegative=False) raises -> Int` | Nonempty rectangular finite input; returns feature count; expected=0 skips comparison |
 | `_weights(n: Int, sample_weight: Optional[V]) raises -> V` | Owned ones or copied weights; finite nonnegative values, positive finite total |
-| `_check_prior(prior: Optional[V], n: Int, normalized=False) raises` | Length and finite nonnegative values; optional Gaussian sum check |
+| `_check_prior(prior: Optional[V], n: Int, normalized=False) raises` | Length and finite values. Gaussian validation additionally requires nonnegative values summing to one |
 | `_log_priors(counts: V, prior: Optional[V], fit_prior: Bool) raises -> V` | Explicit, empirical, or uniform priors |
 | `_alpha(alpha: Float64, force_alpha: Bool) raises -> Float64` | Scalar nonnegative smoothing; optional floor at 1e-10 |
 

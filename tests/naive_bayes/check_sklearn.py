@@ -742,4 +742,16 @@ for name in ("MultinomialNB", "ComplementNB", "BernoulliNB", "CategoricalNB"):
                       "    _ = model.fit(X, y)",
                       "    assert_equal(len(model.fit_warnings), 0)"])
 
+# A finite negative class_prior produces a NaN in the second log prior.
+# ComplementNB uses that prior in its joint scores only for a single class.
+prior_X = np.array([[0., 2.], [1., 0.], [2., 2.], [1., 1.]])
+prior_y = np.array([-2, -2, 7, 7])
+with np.errstate(invalid="ignore"):
+    for name in ("MultinomialNB", "ComplementNB", "BernoulliNB", "CategoricalNB"):
+        for chunks in (None, [slice(0, 2), slice(2, 4)]):
+            case(name, {"class_prior": [1.5, -0.5]}, prior_X, prior_y, prior_X,
+                 chunks=chunks, dtype="float64")
+    case("ComplementNB", {"class_prior": [-0.5]}, prior_X, np.full(4, 7),
+         prior_X, dtype="float64")
+
 run_cases()

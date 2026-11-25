@@ -402,12 +402,16 @@ matrices and multioutput targets. CategoricalNB accepts only scalar `alpha`,
 as in the reference (its `_parameter_constraints` reject array-like alpha).
 All five classifiers support numeric NDArray and string target domains, and
 boolean, integer and Float32/Float64 dense feature arrays.
-Named features and Python adapters remain outside the native contract.
+See [named dense inputs](#named-dense-inputs) for the `ColumnTable` API.
 
 Weights must be finite, nonnegative, and have positive finite total weight in
 each batch. Negative weights raise even where sklearn accepts them. All-zero
-rejection matches the pinned reference. Explicit priors must be finite and nonnegative; Gaussian priors must also sum to one. Unknown
-incremental labels raise consistently for every model.
+rejection matches the pinned reference. Explicit priors must be finite.
+Gaussian priors must be nonnegative and sum to one. Discrete classifiers log
+each prior as supplied, producing a NaN for a negative entry without emitting
+NumPy's runtime warning. A native archive preserves the learned NaN even if
+the configured prior has since changed. Unknown incremental labels raise
+consistently for every model.
 
 `force_alpha=False` floors each scalar or vector alpha entry to `1e-10`.
 All four discrete classifiers record one `moxie.warnings.FitWarning` in
@@ -521,7 +525,7 @@ A retained deviation is not strict reference parity.
 | Categorical fractional features | Reference-compatible truncation toward zero in fit, partial_fit and prediction, including values between -1 and 0 | Differential fractional List/Float32/Float64 cases and `test_categorical_arrays.mojo` |
 | Singleton `min_categories_values` | Reference-compatible broadcasting | Differential weighted/category-growth cases and native categorical contracts |
 | Bernoulli vector alpha | Retained native deviation: smooth each feature with its own alpha; do not reproduce the pinned denominator broadcasting bug | Differential square/rectangular bug probes and independent scalar-sklearn fits, checked after each update |
-| Negative discrete `class_prior` entries | Retained native deviation: raise; the pinned reference passes them to `np.log` and stores NaN log priors | `tests/naive_bayes/test_reference_edges.mojo` |
+| Negative finite discrete `class_prior` entries | Reference-compatible learned log priors and predictions, with no NumPy runtime warning in Mojo | `tests/naive_bayes/check_sklearn.py` and `tests/naive_bayes/test_serialization.mojo` |
 | Unknown labels in a later `partial_fit` (discrete models) | Retained native deviation: raise and keep state; the pinned `label_binarize` silently drops such rows from the counts (GaussianNB raises in both) | `tests/naive_bayes/test_reference_edges.mojo` |
 | Gaussian Float32 input with default estimator | Retained native deviation: a fixed compile-time state/output dtype defaults to Float64 across calls; choose `GaussianNB[dtype=DType.float32]` for Float32 reference behavior | `tests/naive_bayes/gaussian/contracts.mojo` distinguishes the two variances on large-offset input; typed differential fixtures check both arithmetic dtypes; default-estimator Float32 fixtures use a Float64 sklearn oracle after preserving input rounding |
 

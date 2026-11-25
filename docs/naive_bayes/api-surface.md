@@ -44,7 +44,7 @@ Native model files are available for [GaussianNB](gaussian/api.md#persistence),
 
 Other explicit differences remain in [family.md](family.md): typed parameter
 records, fluent mutable-reference returns, descriptive Mojo errors, stricter
-negative-weight/prior validation and default Gaussian arithmetic dtype. See
+sample-weight and nonfinite-prior validation and default Gaussian arithmetic dtype. See
 [behavior classifications](family.md#behavioral-compatibility-decisions). All five estimators
 expose [typed sample-weight requests](family.md#sample-weight-requests).
 All five also expose [named dense inputs](family.md#named-dense-inputs) and

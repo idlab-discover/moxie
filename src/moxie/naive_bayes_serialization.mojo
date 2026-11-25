@@ -321,7 +321,9 @@ def _check_count_priors[estimator: String](
         var prior = log_priors.item(c)
         if isnan(count) or count < 0:
             raise Error("ModelSchemaError: invalid " + estimator + " class count")
-        if prior == Float64("inf") or (isnan(prior) and isfinite(count)):
+        # A negative explicit prior can produce NaN regardless of the count.
+        # The current configuration can differ from the one used at fit time.
+        if prior == Float64("inf"):
             raise Error("ModelSchemaError: invalid " + estimator + " log prior")
         has_positive_count = has_positive_count or count > 0
     if not has_positive_count:

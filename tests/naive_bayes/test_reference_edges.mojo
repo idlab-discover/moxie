@@ -134,6 +134,9 @@ def test_parameter_validation_matches_reference() raises:
     var unnormalized = GaussianNB(priors=List[Float64]([0.4, 0.4]))
     with assert_raises(contains="sum"):
         _ = unnormalized.fit(data(), labels())
+    var negative_prior = GaussianNB(priors=List[Float64]([-0.5, 1.5]))
+    with assert_raises(contains="nonnegative"):
+        _ = negative_prior.fit(data(), labels())
     var negative_alpha = MultinomialNB(alpha=-1.0)
     with assert_raises(contains="alpha"):
         _ = negative_alpha.fit(data(), labels())
@@ -145,10 +148,6 @@ def test_parameter_validation_matches_reference() raises:
 
 
 def test_documented_deviations() raises:
-    # family.md: explicit priors must be nonnegative (sklearn logs them to NaN).
-    var negative_prior = MultinomialNB(class_prior=List[Float64]([-0.5, 1.5]))
-    with assert_raises(contains="priors"):
-        _ = negative_prior.fit(data(), labels())
     # family.md: unknown incremental labels raise (sklearn's label_binarize
     # silently drops the row from the counts).
     var row: List[List[Float64]] = [[1.0, 0, 2]]

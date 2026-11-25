@@ -4,7 +4,8 @@ from std.math import isnan, abs
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
 from moxie.model_selection import (
-    GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit,
+    GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, LeavePGroupsOut, LeavePOut,
+    PredefinedSplit,
     RepeatedKFold, RepeatedStratifiedKFold, SplitLabels, StratifiedGroupKFold,
     StratifiedKFold,
 )
@@ -413,6 +414,42 @@ def test_leave_one_cv() raises:
         _ = fresh.fit_transform(X, y, groups=groups)
 
 
+def test_leave_p_cv() raises:
+    var X = table()
+    var y = target()
+    var model = TargetEncoder(cv=LeavePOut(1))
+    var equivalent = TargetEncoder(cv=LeaveOneOut())
+    var expected = equivalent.fit_transform(X, y)
+    assert_same(model.fit_transform(X, y), expected)
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_equal(fresh.get_params().cv[LeavePOut].p, 1)
+    assert_same(fresh.fit_transform(X, y), expected)
+
+    var groups = SplitLabels(["z", "a", "x", "a", "z", "x", "x", "z", "a", "z"])
+    var names: List[String] = ["color", "size"]
+    var grouped = TargetEncoder(cv=LeavePGroupsOut(1))
+    _ = equivalent.set_params(cv=LeaveOneGroupOut())
+    var expected_grouped = equivalent.fit_transform(X, y, groups=groups)
+    assert_same(grouped.fit_transform_named(X, names, y, groups=groups), expected_grouped)
+    assert_equal(grouped.get_feature_names_out(), names)
+    _ = fresh.set_params(grouped.get_params())
+    assert_equal(fresh.cv[LeavePGroupsOut].n_groups, 1)
+    assert_same(fresh.fit_transform(X, y, groups=groups), expected_grouped)
+    with assert_raises(contains="groups are required"):
+        _ = fresh.fit_transform(X, y)
+
+    for count in [0, 2]:
+        _ = fresh.set_params(cv=LeavePGroupsOut(count))
+        with assert_raises(contains="must cover each sample index exactly once"):
+            _ = fresh.fit_transform(X, y, groups=groups)
+        _ = fresh.set_params(cv=LeavePOut(count))
+        with assert_raises(contains="must cover each sample index exactly once"):
+            _ = fresh.fit_transform(X, y)
+    _ = fresh.fit(X, y)
+    assert_same(fresh.transform(X), model.transform(X))
+
+
 def test_predefined_cv() raises:
     var X = table()
     var y = target()
@@ -481,6 +518,7 @@ def main() raises:
     test_cv_none()
     test_grouped_cv()
     test_leave_one_cv()
+    test_leave_p_cv()
     test_predefined_cv()
     test_repeated_cv()
     print("PASS target encoder lifecycle contracts")

@@ -31,7 +31,8 @@ from moxie._random import RandomState, check_random_state
 from moxie.base import FitTransformer
 from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
 from moxie.model_selection._split import (
-    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit,
+    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, LeavePGroupsOut, LeavePOut,
+    PredefinedSplit,
     RepeatedKFold, RepeatedStratifiedKFold, SplitLabels, StratifiedGroupKFold,
     StratifiedKFold,
 )
@@ -362,10 +363,12 @@ struct TargetEncoderSplits(Copyable, Sized):
 comptime TargetEncoderCV = Variant[
     Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), GroupKFold, StratifiedGroupKFold,
     LeaveOneOut, LeaveOneGroupOut, PredefinedSplit, RepeatedKFold, RepeatedStratifiedKFold,
+    LeavePOut, LeavePGroupsOut,
 ]
 comptime _CVUpdate = Variant[
     Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), NoneType, GroupKFold, StratifiedGroupKFold,
     LeaveOneOut, LeaveOneGroupOut, PredefinedSplit, RepeatedKFold, RepeatedStratifiedKFold,
+    LeavePOut, LeavePGroupsOut,
 ]
 
 
@@ -506,6 +509,10 @@ struct TargetEncoder[
             self.cv = TargetEncoderCV(cv[RepeatedKFold].copy())
         elif cv.isa[RepeatedStratifiedKFold]():
             self.cv = TargetEncoderCV(cv[RepeatedStratifiedKFold].copy())
+        elif cv.isa[LeavePOut]():
+            self.cv = TargetEncoderCV(cv[LeavePOut].copy())
+        elif cv.isa[LeavePGroupsOut]():
+            self.cv = TargetEncoderCV(cv[LeavePGroupsOut].copy())
         if shuffle:
             self.shuffle = shuffle.value()
         if random_state:
@@ -677,9 +684,9 @@ struct TargetEncoder[
         var fold_variances = List[List[Float64]]()
         var train = List[Int](capacity=n)
         var n_splits = self._n_splits()
-        if self.cv.isa[LeaveOneOut]():
+        if self.cv.isa[LeaveOneOut]() or self.cv.isa[LeavePOut]():
             n_splits = n
-        elif self.cv.isa[LeaveOneGroupOut]():
+        elif self.cv.isa[LeaveOneGroupOut]() or self.cv.isa[LeavePGroupsOut]():
             # Each group contributes one nonempty fold.
             n_splits = 0
             for fold in folds:
@@ -725,11 +732,22 @@ struct TargetEncoder[
         return encoder.fit_transform(y)
 
     def _folds(self, y: Self.Y.Labels, n: Int, var groups: Optional[IndexArray]) raises -> List[Int]:
-        if self.cv.isa[GroupKFold]() or self.cv.isa[StratifiedGroupKFold]() or self.cv.isa[LeaveOneGroupOut]():
+        if (
+            self.cv.isa[GroupKFold]()
+            or self.cv.isa[StratifiedGroupKFold]()
+            or self.cv.isa[LeaveOneGroupOut]()
+            or self.cv.isa[LeavePGroupsOut]()
+        ):
             if not groups:
                 raise Error("ValueError: groups are required for grouped TargetEncoder cross-fitting")
             if self.cv.isa[LeaveOneGroupOut]():
                 return _test_fold_assignments(self.cv[LeaveOneGroupOut].split(n, groups=groups), n)
+            if self.cv.isa[LeavePGroupsOut]():
+                ref splitter = self.cv[LeavePGroupsOut]
+                var cursor = splitter.split(n, groups=groups)
+                if splitter.n_groups != 1:
+                    raise Error(_COVERAGE_ERROR)
+                return _test_fold_assignments(cursor^, n)
             if self.cv.isa[GroupKFold]():
                 ref splitter = self.cv[GroupKFold]
                 var seed = splitter.random_state if splitter.shuffle else Optional[Int](0)
@@ -741,9 +759,15 @@ struct TargetEncoder[
             with check_random_state(seed) as rng:
                 return _test_fold_assignments(splitter.split(n, rng[], codes^, groups^), n)
         if groups:
-            raise Error("ValueError: groups require GroupKFold, StratifiedGroupKFold, or LeaveOneGroupOut for TargetEncoder")
+            raise Error("ValueError: groups require GroupKFold, StratifiedGroupKFold, LeaveOneGroupOut, or LeavePGroupsOut for TargetEncoder")
         if self.cv.isa[LeaveOneOut]():
             return _test_fold_assignments(self.cv[LeaveOneOut].split(n), n)
+        if self.cv.isa[LeavePOut]():
+            ref splitter = self.cv[LeavePOut]
+            var cursor = splitter.split(n)
+            if splitter.p != 1:
+                raise Error(_COVERAGE_ERROR)
+            return _test_fold_assignments(cursor^, n)
         if self.cv.isa[PredefinedSplit]():
             ref splitter = self.cv[PredefinedSplit]
             if splitter.test_fold.size != n:

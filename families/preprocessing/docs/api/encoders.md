@@ -168,7 +168,11 @@ Behavior follows sklearn:
   settings, as do `GroupKFold` and `StratifiedGroupKFold`. The grouped
   splitters keep all rows of each group in the same validation fold.
   `LeaveOneOut` validates one row per fold, and `LeaveOneGroupOut`
-  validates one group per fold. Both are deterministic.
+  validates one group per fold. `LeavePOut(1)` and `LeavePGroupsOut(1)`
+  produce the same deterministic partitions. Other leave-out counts cannot
+  cover every row exactly once. Moxie rejects them in `fit_transform`
+  before enumerating combinations, with a splitter error for an invalid
+  population or count, and a coverage error otherwise.
   `PredefinedSplit` uses one Int64 fold label per input row and validates
   folds in ascending label order. Its labels must cover every row, so the
   splitter's training-only label `-1` raises `ValueError` in `fit_transform`.
@@ -231,7 +235,8 @@ shuffle, and `n_splits` greater than every class count all raise.
   an inner `None` restores `"auto"`/`"deprecated"`.
 * `cv` accepts an integer of at least 2, `None`, `KFold`, `StratifiedKFold`,
   `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneOut`, `LeaveOneGroupOut`,
-  `PredefinedSplit`, `RepeatedKFold`, `RepeatedStratifiedKFold`, or
+  `LeavePOut`, `LeavePGroupsOut`, `PredefinedSplit`, `RepeatedKFold`,
+  `RepeatedStratifiedKFold`, or
   `TargetEncoderSplits` in the constructor and `set_params`. `cv=None` uses
   five folds with the same target-based splitter as `cv=5`. The constructor
   default is the integer `5`. Omitting `cv` in `set_params` keeps the existing
@@ -246,7 +251,8 @@ shuffle, and `n_splits` greater than every class count all raise.
   integer configuration, read `model.cv[Int]`. Use
   `model.cv.isa[type_of(None)]()` to check for explicit `None`. The caller-owned
   `RandomState` overload accepts integer `cv` or `None`.
-* For `GroupKFold`, `StratifiedGroupKFold`, and `LeaveOneGroupOut`, pass
+* For `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneGroupOut`, and
+  `LeavePGroupsOut`, pass
   `groups=SplitLabels(group_ids)`
   to `fit_transform` or `fit_transform_named`. Use rank-one Int64, Float32 or
   Float64 arrays or a list of strings with one label per input row. Supplying
@@ -309,7 +315,8 @@ Estimator cases cover:
 - direct `GroupKFold` and `StratifiedGroupKFold` with integer and string
   groups, unshuffled and seeded splitters, and seeded global shuffling;
 - direct `LeaveOneOut` with continuous targets and `LeaveOneGroupOut` with
-  multiclass targets, string groups, and unknown training categories;
+  multiclass targets, string groups, and unknown training categories, also
+  tested with `LeavePOut(1)` and `LeavePGroupsOut(1)`;
 - direct `PredefinedSplit` with nonconsecutive labels, including a negative
   fold label, a single fold, and invalid assignment lengths or training-only rows;
 - direct `RepeatedKFold` and `RepeatedStratifiedKFold` with seeded and

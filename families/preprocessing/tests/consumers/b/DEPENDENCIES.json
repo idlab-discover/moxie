@@ -33,6 +33,8 @@
             "KFold": "moxie.model_selection._split",
             "LeaveOneGroupOut": "moxie.model_selection._split",
             "LeaveOneOut": "moxie.model_selection._split",
+            "LeavePGroupsOut": "moxie.model_selection._split",
+            "LeavePOut": "moxie.model_selection._split",
             "PredefinedSplit": "moxie.model_selection._split",
             "RepeatedKFold": "moxie.model_selection._split",
             "RepeatedStratifiedKFold": "moxie.model_selection._split",

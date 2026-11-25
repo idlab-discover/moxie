@@ -21,7 +21,7 @@ from harness import Driver, oracle
 oracle()
 from sklearn import config_context
 from sklearn.model_selection import (
-    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit,
+    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, LeavePGroupsOut, LeavePOut, PredefinedSplit,
     RepeatedKFold, RepeatedStratifiedKFold, StratifiedGroupKFold, StratifiedKFold,
 )
 from sklearn.preprocessing import TargetEncoder
@@ -40,7 +40,7 @@ d.prelude('''
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import seed_global_random_state, RandomState
 from moxie.model_selection import GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, SplitLabels, StratifiedGroupKFold, StratifiedKFold
-from moxie.model_selection import RepeatedKFold, RepeatedStratifiedKFold
+from moxie.model_selection import LeavePGroupsOut, LeavePOut, RepeatedKFold, RepeatedStratifiedKFold
 from moxie.preprocessing._vocabulary import CategoryKind, StringKind, StringNaNKind, NumericKind
 from moxie.preprocessing._label import LabelKind, StringLabels, NumericLabels
 from moxie.preprocessing._target_encoder import kfold_test_folds, stratified_kfold_test_folds
@@ -192,6 +192,10 @@ def native_args(kind, kw):
             parts.append(f'cv={type(v).__name__}({v.n_splits}, shuffle={shuffle}, random_state={v.random_state})')
         elif k == 'cv' and isinstance(v, (LeaveOneOut, LeaveOneGroupOut)):
             parts.append(f'cv={type(v).__name__}()')
+        elif k == 'cv' and isinstance(v, LeavePOut):
+            parts.append(f'cv=LeavePOut({v.p})')
+        elif k == 'cv' and isinstance(v, LeavePGroupsOut):
+            parts.append(f'cv=LeavePGroupsOut({v.n_groups})')
         elif k == 'cv' and isinstance(v, PredefinedSplit):
             parts.append(f'cv=PredefinedSplit({d.input(v.test_fold)})')
         elif k == 'cv' and isinstance(v, (RepeatedKFold, RepeatedStratifiedKFold)):
@@ -330,6 +334,9 @@ run_case('stratified_group_kfold_shuffled', 's', y_bin, dict(cv=StratifiedGroupK
 run_case('leave_one_out', 's', y_cont, dict(cv=LeaveOneOut()))
 run_case('leave_one_group_out', 's', y_multi_s,
          dict(cv=LeaveOneGroupOut(), categories=[['red'], ['x'], ['a']]), groups=group_names[::-1])
+run_case('leave_p_out', 's', y_cont, dict(cv=LeavePOut(1)))
+run_case('leave_p_groups_out', 's', y_multi_s,
+         dict(cv=LeavePGroupsOut(1), categories=[['red'], ['x'], ['a']]), groups=group_names[::-1])
 predefined = np.resize(np.array([8, -2, 4, 8], dtype=np.int64), n)
 run_case('predefined_continuous', 's', y_cont, dict(cv=PredefinedSplit(predefined)))
 run_case('predefined_multiclass', 's', y_multi_s,
@@ -481,6 +488,8 @@ for tag, splitter, groups, needle in [
     ('leave_group_missing', LeaveOneGroupOut(), None, 'groups are required'),
     ('leave_group_length', LeaveOneGroupOut(), group_ids[:-1], 'matching length'),
     ('leave_group_single', LeaveOneGroupOut(), np.zeros_like(group_ids), 'leave-out count'),
+    ('leave_p_groups_overlap', LeavePGroupsOut(2), group_ids, 'must cover each sample index exactly once'),
+    ('leave_p_groups_too_many', LeavePGroupsOut(2), group_ids % 2, 'leave-out count'),
 ]:
     sk_raises(lambda: grouped_fit_transform(TargetEncoder(cv=splitter), S, y_cont, groups))
     native_groups = '' if groups is None else f', groups=SplitLabels({d.input(groups)})'
@@ -491,6 +500,8 @@ for tag, splitter, groups, needle in [
     expect(f'err_{tag}', 'error', needle, 'error')
 
 for tag, splitter, y, needle in [
+    ('leave_p_overlap', LeavePOut(2), y_cont, 'must cover each sample index exactly once'),
+    ('leave_p_too_many', LeavePOut(n), y_cont, 'leave-out count'),
     ('repeat_kfold_overlap', RepeatedKFold(n_splits=3, n_repeats=2, random_state=0), y_cont,
      'must cover each sample index exactly once'),
     ('repeat_stratified_overlap', RepeatedStratifiedKFold(n_splits=3, n_repeats=2, random_state=0), y_bin,

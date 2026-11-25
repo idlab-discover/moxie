@@ -66,13 +66,41 @@ seeded restarts. Set `optimizer=None` to use the configured kernel as supplied.
 
 The structured estimator takes a concrete kernel type at compile time and
 uses typed constructor parameters. Both values of `copy_X_train` keep a
-snapshot. Native persistence, the dense search adapter, and arithmetic with
-built-in `Kernel` values currently apply to the dense estimator.
+snapshot. Native persistence and the dense search adapter support the built-in `Kernel`
+specialization.
 
 The [sequence kernel contract](../../../tests/gaussian_process/regression/structured.mojo)
 compares fixed and optimized fits against the pinned scikit-learn estimator
 and gallery kernel through
 [`structured_parity.py`](../../../tests/gaussian_process/regression/structured_parity.py).
+
+## Custom vector kernels
+
+Use `DenseGaussianProcessRegressor[MyKernel]` when the native
+`KernelContract` has `Input = NDArray[DType.float64]`. The optional second
+type parameter selects the input and target dtype. The estimator validates
+rank, sample and feature counts, and finiteness before passing contiguous
+Float64 matrices to the kernel. It records `n_features_in_` and snapshots
+training input in its original dtype.
+
+```mojo
+from moxie.gaussian_process import DenseGaussianProcessRegressor
+from moxie.kernel_ridge import KernelRidge, TypedGaussianProcessKernel
+
+comptime Adapter = TypedGaussianProcessKernel[MyKernel]
+var gp = DenseGaussianProcessRegressor[MyKernel](kernel)
+var ridge = KernelRidge[DType.float64, Adapter](kernel=Adapter(kernel.copy()))
+_ = gp.fit(X, y)
+_ = ridge.fit(X, y)
+```
+
+The kernel is required at construction. Covariance, diagonal, and gradient
+shapes and log parameter coordinates follow the contract above. GPR calls
+`evaluate(X)` for a self-covariance. KernelRidge passes explicit `Y` even
+during fit, matching scikit-learn. This matters for kernels with an independent
+diagonal noise term. [Native contracts](../../../tests/gaussian_process/regression/vector_kernel.mojo)
+and [pinned comparisons](../../../tests/gaussian_process/regression/vector_kernel_parity.py)
+cover both estimators with a typed vector kernel.
 
 ## Parameter updates
 

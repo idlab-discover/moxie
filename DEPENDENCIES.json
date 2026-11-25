@@ -783,6 +783,7 @@
             "GaussianProcessRegressorAPI": "moxie.gaussian_process._base",
             "GaussianUncertainty": "moxie.gaussian_process._base",
             "FminLBFGSB": "moxie.gaussian_process._gpr",
+            "DenseGaussianProcessRegressor": "moxie.gaussian_process._gpr",
             "GPROptimizer": "moxie.gaussian_process._gpr",
             "GaussianProcessRegressor": "moxie.gaussian_process._gpr",
             "GenericGaussianProcessRegressor": "moxie.gaussian_process._gpr",

@@ -294,16 +294,22 @@ optimizer (a `GPROptimizer`).
 
 comptime GenericGaussianProcessRegressor[
     dtype: DType, Optimizer: GPROptimizer = FminLBFGSB
-] = _GaussianProcessRegressor[dtype, Kernel, Optimizer]
+] = _GaussianProcessRegressor[dtype, Kernel, Optimizer, True]
 
 
 comptime StructuredGaussianProcessRegressor[
     K: KernelContract, dtype: DType = DType.float64
-] = _GaussianProcessRegressor[dtype, K, FminLBFGSB]
+] = _GaussianProcessRegressor[dtype, K, FminLBFGSB, K == Kernel]
+
+
+comptime DenseGaussianProcessRegressor[
+    K: KernelContract, dtype: DType = DType.float64
+] = _GaussianProcessRegressor[dtype, K, FminLBFGSB, True]
+"""Gaussian process regression with a typed Float64 matrix kernel."""
 
 
 struct _GaussianProcessRegressor[
-    dtype: DType, K: KernelContract, Optimizer: GPROptimizer
+    dtype: DType, K: KernelContract, Optimizer: GPROptimizer, dense_input: Bool
 ](Copyable, GaussianProcessPosterior, GaussianProcessRegressorAPI, GaussianUncertainty):
     """Gaussian process regression with sklearn's constructor defaults.
 
@@ -313,7 +319,7 @@ struct _GaussianProcessRegressor[
     during fit). Prediction before fit uses the GP prior, as in sklearn.
     """
 
-    comptime Input = NDArray[Self.dtype] if Self.K == Kernel else Self.K.Input
+    comptime Input = NDArray[Self.dtype] if Self.dense_input else Self.K.Input
     comptime Target = NDArray[Self.dtype]
     comptime Prediction = Dense64
     comptime SampleWeight = List[Float64]
@@ -361,6 +367,10 @@ struct _GaussianProcessRegressor[
         comptime assert (
             Self.dtype == DType.float32 or Self.dtype == DType.float64
         ), "GaussianProcessRegressor supports Float32 and Float64 input"
+        comptime if Self.dense_input:
+            comptime assert (
+                Self.K.Input == Dense64
+            ), "dense GP kernels require Float64 NDArray input"
         self.kernel = kernel.copy()
         self.alpha = alpha.copy()
         self.optimizer = optimizer.copy()
@@ -371,9 +381,11 @@ struct _GaussianProcessRegressor[
         self.random_state = random_state
         comptime if Self.K == Kernel:
             self.kernel_ = rebind_var[Self.K](default_kernel())
-            self.X_train_ = rebind_var[Self.Input](zeros[Self.dtype](Shape(0, 0)))
         else:
             self.kernel_ = Self._configured_kernel(kernel)
+        comptime if Self.dense_input:
+            self.X_train_ = rebind_var[Self.Input](zeros[Self.dtype](Shape(0, 0)))
+        else:
             self.X_train_ = rebind_var[Self.Input](Self.K.empty_input())
         self.y_train_ = zeros[DType.float64](Shape(0))
         self.L_ = zeros[DType.float64](Shape(0, 0))
@@ -436,9 +448,12 @@ struct _GaussianProcessRegressor[
         self._fitted = copy._fitted
 
     def _validate_params(self) raises:
-        comptime if Self.K != Kernel:
+        comptime if not Self.dense_input:
             if not self.kernel or self.kernel.value().requires_vector_input():
                 raise Error("ValueError: an explicit non-vector kernel is required")
+        elif Self.K != Kernel:
+            if not self.kernel:
+                raise Error("ValueError: an explicit custom kernel is required")
         if self.n_restarts_optimizer < 0:
             raise Error(
                 "InvalidParameterError: The 'n_restarts_optimizer' parameter of"
@@ -684,7 +699,7 @@ struct _GaussianProcessRegressor[
         self.L_ = L^
         self.alpha_ = _squeeze_columns(alpha) if self._y_is_vector else alpha^
         self.log_marginal_likelihood_value_ = lml_value
-        comptime if Self.K == Kernel:
+        comptime if Self.dense_input:
             self.n_features_in_ = rebind[Dense64](Xd).shape[1]
         self.convergence_warnings_ = warnings^
         self._y_train_mean = mean^
@@ -720,6 +735,8 @@ struct _GaussianProcessRegressor[
             return kernel.value().copy()
         comptime if Self.K == Kernel:
             return rebind_var[Self.K](_prior_kernel() if prior else default_kernel())
+        elif Self.dense_input:
+            raise Error("ValueError: an explicit custom kernel is required")
         else:
             raise Error("ValueError: a structured kernel is required")
 
@@ -727,11 +744,13 @@ struct _GaussianProcessRegressor[
     def _kernel_name(kernel: Self.K) -> String:
         comptime if Self.K == Kernel:
             return String(rebind[Kernel](kernel))
+        elif Self.dense_input:
+            return String("custom kernel")
         else:
             return String("structured kernel")
 
     def _checked_input(self, X: Self.Input, fitting: Bool = False) raises -> Self.K.Input:
-        comptime if Self.K == Kernel:
+        comptime if Self.dense_input:
             ref matrix = rebind[NDArray[Self.dtype]](X)
             if matrix.ndim != 2:
                 raise Error(
@@ -767,7 +786,7 @@ struct _GaussianProcessRegressor[
             return rebind_var[Self.K.Input](X.copy())
 
     def _training_input(self) raises -> Self.K.Input:
-        comptime if Self.K == Kernel:
+        comptime if Self.dense_input:
             return rebind_var[Self.K.Input](as_dense64(rebind[NDArray[Self.dtype]](self.X_train_), "X_train_"))
         else:
             return rebind_var[Self.K.Input](self.X_train_.copy())

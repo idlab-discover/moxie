@@ -7,6 +7,7 @@ from ._base import (
 )
 from ._gpc import GaussianProcessClassifier, GaussianProcessClassifierParams
 from ._gpr import (
+    DenseGaussianProcessRegressor,
     FminLBFGSB,
     GPROptimizer,
     GaussianProcessRegressor,

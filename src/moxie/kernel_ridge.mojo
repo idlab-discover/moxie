@@ -5,7 +5,7 @@ from ._kernel_ridge._estimator import (
     KernelRidgeRegressor,
     ScalarOrVector,
 )
-from ._kernel_ridge._gp_kernel import GaussianProcessKernel
+from ._kernel_ridge._gp_kernel import GaussianProcessKernel, TypedGaussianProcessKernel
 from ._kernel_ridge._kernels import MatrixKernel, RowKernel
 
 from ._kernel_ridge._promotion import FloatingArray, FittedArray

@@ -176,6 +176,13 @@ _ = model.set_params(
 )
 ```
 
+For a custom GP `KernelContract` with `Input = NDArray[DType.float64]`,
+use `TypedGaussianProcessKernel[MyKernel]` as the estimator's matrix metric
+type and wrap the custom value in it. The adapter materializes contiguous
+Float64 matrices, including when KernelRidge's pairwise dtype is Float32.
+The [custom vector kernel example](../../../docs/gaussian_process/regression/api.md#custom-vector-kernels)
+uses the same kernel type in both estimators.
+
 Pass GP hyperparameters on the kernel object. Nonempty `kernel_params` are
 rejected. As in sklearn's pairwise dispatcher, fit supplies both matrices
 explicitly, so a `WhiteKernel` contributes zero even during fit. The

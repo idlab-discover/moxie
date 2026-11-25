@@ -181,8 +181,8 @@ unchanged foundation contract. Language differences must be tested by children;
 Python reflection, pandas adapters and metadata routing remain binding work.
 The kernel engine implements general Matérn nu and dense string PairwiseKernel
 metrics. The family owns [native regressor and kernel schemas](regression/api.md#native-persistence).
-Structured regression accepts typed native kernels. Custom leaves inside the
-built-in kernel tree and structured classification remain open.
+Vector and structured regression accept typed native kernels. Custom leaves
+inside the built-in kernel tree and structured classification remain open.
 
 ## Dependency assembly and verification
 

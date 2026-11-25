@@ -240,6 +240,13 @@ Both routes compare transformed values, feature names, output spans, and
 classifier predictions, probabilities, and accuracy. The dtype route also
 checks the native input schema and both selectors' column lists.
 
+The notebook also runs the gallery's seeded randomized search on the dtype
+route. It tunes imputation strategy, the chi-squared selection percentile,
+and logistic regularization jointly. The native search fits preprocessing
+inside each of the five stratified folds and refits the best configuration
+on the entire training split. The notebook compares the sampled candidates,
+fold scores, ranks, and held-out predictions and accuracy.
+
 ## Predictive pipelines on mixed tables
 
 Use `as_table_transformer()` when a generic pipeline needs

@@ -8,6 +8,7 @@ and AdditiveChi2Sampler `additivechi2sampler__additivechi2sampler_x0_sqrt`.
 from numojo import NDArray, Shape, zeros
 from moxie.kernel_approximation import RBFSampler, SkewedChi2Sampler, AdditiveChi2Sampler, PolynomialCountSketch, Nystroem
 from moxie.linear_model import RidgeClassifier
+from moxie.model_selection import DenseSupervisedAdapter, GridSearchCV, select_rows
 from moxie.pipeline import Pipeline, make_pipeline, make_union
 from moxie.base import clone
 from moxie._random import RandomState, check_random_state, seed_global_random_state
@@ -66,6 +67,101 @@ def pipeline_matches_two_stages[dtype: DType]() raises:
     _ = fresh.fit(x, y)
     assert_equal(fresh.transformer.random_weights_.shape[1], 7)
     assert_equal(pipe.transformer.random_weights_.shape[1], 20)
+
+
+comptime KernelPipeline = Pipeline[RBFSampler[], RidgeClassifier[]]
+comptime SearchAdapter = DenseSupervisedAdapter[
+    KernelPipeline, NDArray[DType.int64], V=Int,
+]
+comptime ComponentsKey = "feature_map__n_components"
+
+
+def configure_components(
+    mut pipe: KernelPipeline, candidate: Dict[String, Int],
+) raises:
+    var params = pipe.get_params()
+    for key in candidate.keys():
+        if key != ComponentsKey:
+            raise Error("ValueError: unknown parameter " + key)
+        params.transformer.n_components = candidate[key]
+    _ = pipe.set_params(params)
+
+
+def grid_search_matches_manual_refits() raises:
+    var x = data[DType.float64]()
+    var y = labels()
+    var pipe = Pipeline(
+        RBFSampler(gamma=2.0, n_components=20, random_state=3),
+        RidgeClassifier(),
+        transformer_name="feature_map",
+        estimator_name="classifier",
+    )
+    var adapter = SearchAdapter(configure_components, classifier=True)
+    var widths = List[Int]([1, 3, 7, 15])
+    var grid = Dict[String, List[Int]]()
+    grid[ComponentsKey] = widths.copy()
+    var search = GridSearchCV[SearchAdapter](pipe, grid, adapter)
+    _ = search.fit(x, y)
+
+    var folds = adapter.default_cv(x, y)
+    assert_equal(len(folds), 5)
+    assert_equal(search.n_splits_(), len(folds))
+    # Correct-prediction counts from the pinned sklearn GridSearchCV fixture.
+    var expected_correct = [
+        [1, 1, 0, 1, 1],
+        [2, 3, 0, 2, 2],
+        [3, 3, 1, 2, 1],
+        [3, 3, 2, 2, 2],
+    ]
+    var results = search.cv_results_()
+    assert_equal(len(results.params), len(widths))
+    var best_index = 0
+    var best_mean: Float64 = -1.0
+    for candidate in range(len(widths)):
+        var width = widths[candidate]
+        assert_equal(results.params[candidate][ComponentsKey], width)
+        var total: Float64 = 0.0
+        for split in range(len(folds)):
+            ref fold = folds[split]
+            var sampler = RBFSampler(gamma=2.0, n_components=width, random_state=3)
+            var classifier = RidgeClassifier()
+            _ = classifier.fit(
+                sampler.fit_transform(select_rows(x, fold.train)),
+                select_rows(y, fold.train),
+            )
+            var score = classifier.score(
+                sampler.transform(select_rows(x, fold.test)),
+                select_rows(y, fold.test),
+            )
+            assert_equal(results.scores.test_scores.item(candidate, split, 0), score)
+            assert_equal(
+                score, Float64(expected_correct[candidate][split]) / Float64(fold.test.size),
+            )
+            total += score
+        var mean = total / Float64(len(folds))
+        assert_equal(results.mean_test_score.item(candidate, 0), mean)
+        if mean > best_mean:
+            best_mean = mean
+            best_index = candidate
+
+    assert_equal(search.best_index_(), best_index)
+    assert_equal(search.best_score_(), best_mean)
+    var best_width = widths[best_index]
+    assert_equal(best_width, 15)
+    assert_equal(search.best_params_()[ComponentsKey], best_width)
+    assert_equal(search.best_estimator_().get_params().transformer.n_components, best_width)
+    var sampler = RBFSampler(gamma=2.0, n_components=best_width, random_state=3)
+    var features = sampler.fit_transform(x)
+    var classifier = RidgeClassifier()
+    _ = classifier.fit(features, y)
+    var prediction = search.predict(x)
+    same(prediction, classifier.predict(features))
+    same(prediction, y)
+    same(search.best_estimator_().transformer.random_weights_, sampler.random_weights_)
+    same(search.best_estimator_().estimator.coef_, classifier.coef_)
+    same(search.best_estimator_().estimator.intercept_, classifier.intercept_)
+    assert_false(pipe.transformer.__sklearn_is_fitted__())
+    assert_equal(pipe.get_params().transformer.n_components, 20)
 
 
 def nystroem_pipeline[dtype: DType]() raises:
@@ -221,6 +317,7 @@ def counts[dtype: DType]() raises:
 def main() raises:
     pipeline_matches_two_stages[DType.float32]()
     pipeline_matches_two_stages[DType.float64]()
+    grid_search_matches_manual_refits()
     nystroem_pipeline[DType.float32]()
     nystroem_pipeline[DType.float64]()
     default_stream_in_composition()
@@ -229,4 +326,4 @@ def main() raises:
     float32_polynomial_composition()
     counts[DType.float32]()
     counts[DType.float64]()
-    print("PASS kernel feature maps in Pipeline/FeatureUnion: predictions, clone, set_params, names, input counts")
+    print("PASS kernel feature maps in Pipeline/FeatureUnion and GridSearchCV")

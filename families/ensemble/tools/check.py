@@ -162,7 +162,7 @@ def hgb_component(component):
 
 def main():
     try:
-        if sys.argv[1] in ('hgb-binning', 'hgb-histograms', 'hgb-splitting', 'hgb-grower', 'hgb-losses'):
+        if sys.argv[1] in ('hgb-binning', 'hgb-histograms', 'hgb-splitting', 'hgb-grower', 'hgb-losses', 'hgb-classification'):
             hgb_component(sys.argv[1].removeprefix('hgb-'))
             return
         if not sys.argv[1].endswith('-only'): build()

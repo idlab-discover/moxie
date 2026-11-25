@@ -1,6 +1,6 @@
 # scikit-learn developers, BSD-3-Clause. See families/ensemble/LICENSES/scikit-learn.txt.
 # NumPy interpolation and reduction conventions. See families/ensemble/LICENSES/NumPy.txt.
-"""Single-output regression loss operations for histogram gradient boosting."""
+"""Regression and classification loss operations for histogram gradient boosting."""
 
 from std.builtin.sort import sort
 from std.math import floor, isfinite, isnan, nan
@@ -8,6 +8,7 @@ from std.sys import llvm_intrinsic
 
 from numojo import NDArray, Shape
 
+from .._aggregation import _get
 from .._sampling import _at, check_sample_weight, numpy_sum
 from .binning import _Observation
 from .grower import _GrownTree
@@ -244,3 +245,180 @@ struct _RegressionLoss(Copyable, Movable):
                 values, self._fraction(), self._name == "absolute_error", Bool(weights)
             )
             grown.tree.nodes[leaf].value = grown.shrinkage * update
+
+
+def _log1pexp(x: Float64) -> Float64:
+    if x <= -37:
+        return _exp(x)
+    if x <= -2:
+        var tail = _exp(x)
+        var shifted = 1 + tail
+        # Compensate for rounding in 1 + tail before taking the log.
+        return tail if shifted == 1 else _log(shifted) * (tail / (shifted - 1))
+    if x <= 18:
+        return _log(1 + _exp(x))
+    if x <= 33.3:
+        return x + _exp(-x)
+    return x
+
+
+struct _ClassificationLoss(Copyable, Movable):
+    """Binary and multinomial log loss over ordered, encoded class indices."""
+
+    var _n_classes: Int
+
+    def __init__(out self, n_classes: Int) raises:
+        if n_classes < 1:
+            raise Error("ValueError: classification loss requires at least one class")
+        self._n_classes = n_classes
+
+    def raw_columns(self) -> Int:
+        return 1 if self._n_classes <= 2 else self._n_classes
+
+    def _check_raw(self, raw: _Vector) raises:
+        if raw.ndim != 2 or raw.shape[1] != self.raw_columns():
+            raise Error("ValueError: raw predictions must have one column per tree in a stage")
+
+    def _check_targets(self, y: _Vector, weights: Optional[_Vector]) raises:
+        if y.ndim != 1 or y.size == 0:
+            raise Error("ValueError: expected a nonempty vector of encoded class indices")
+        if weights:
+            ref weight = weights.value()
+            if weight.ndim != 1 or weight.size != y.size:
+                raise Error("ValueError: sample_weight must have one entry per target")
+        for i in range(y.size):
+            var code = _at(y, i)
+            if not (code >= 0 and code < Float64(self._n_classes) and code == floor(code)):
+                raise Error("ValueError: invalid encoded class index")
+
+    def _check_inputs(self, y: _Vector, raw: _Vector, weights: Optional[_Vector]) raises:
+        self._check_raw(raw)
+        self._check_targets(y, weights)
+        if raw.shape[0] != y.size:
+            raise Error("ValueError: raw predictions must have one row per target")
+
+    def fit_intercept(self, y: _Vector, weights: Optional[_Vector] = None) raises -> _Vector:
+        """Return one initial raw value per tree, in stage column order."""
+        self._check_targets(y, weights)
+        if weights:
+            ref weight = weights.value()
+            check_sample_weight(weight, y.size)
+            for i in range(y.size):
+                if _at(weight, i) < 0:
+                    raise Error("ValueError: sample_weight must be nonnegative")
+
+        comptime eps = Float64(2.220446049250313e-16)
+        var baseline = _Vector(Shape(self.raw_columns()))
+        if self.raw_columns() == 1:
+            var prior = _weighted_mean(y, weights)
+            if not isnan(prior):
+                prior = prior.clamp(10 * eps, 1 - 10 * eps)
+            baseline.unsafe_set(0, _log(prior / (1 - prior)))
+            return baseline^
+
+        var total = numpy_sum(weights.value()) if weights else Float64(y.size)
+        if total == 0:
+            raise Error("ValueError: sample weights sum to zero")
+        var class_weights = _Vector(Shape(y.size))
+        for k in range(self._n_classes):
+            for i in range(y.size):
+                var value = 0.0
+                if _at(y, i) == Float64(k):
+                    value = _at(weights.value(), i) if weights else 1.0
+                class_weights.unsafe_set(i, value)
+            var prior = numpy_sum(class_weights) / total
+            baseline.unsafe_set(k, prior if isnan(prior) else prior.clamp(eps, 1 - eps))
+        var logs = _Vector(Shape(self._n_classes))
+        for k in range(self._n_classes):
+            logs.unsafe_set(k, _log(baseline.unsafe_get(k)))
+        var geometric_mean = _exp(numpy_sum(logs) / Float64(self._n_classes))
+        for k in range(self._n_classes):
+            baseline.unsafe_set(k, _log(baseline.unsafe_get(k) / geometric_mean))
+        return baseline^
+
+    def _shifted_exponentials(
+        self, raw: _Vector, row: Int, mut exps: List[Float64]
+    ) raises -> Tuple[Float64, Float64]:
+        var peak = _get(raw, row, 0)
+        for k in range(1, self._n_classes):
+            var value = _get(raw, row, k)
+            if peak < value:
+                peak = value
+        var total = Float64(0)
+        for k in range(self._n_classes):
+            exps[k] = _exp(_get(raw, row, k) - peak)
+            total += exps[k]
+        return (peak, total)
+
+    def gradient_hessian(
+        self,
+        y: _Vector,
+        raw: _Vector,
+        weights: Optional[_Vector],
+        mut gradients: List[Float32],
+        mut hessians: List[Float32],
+    ) raises:
+        """Refill column-major derivatives so each tree can borrow a contiguous span."""
+        self._check_inputs(y, raw, weights)
+        gradients.resize(raw.size, fill=0.0)
+        hessians.resize(raw.size, fill=0.0)
+        var binary = self.raw_columns() == 1
+        var exps = List[Float64](length=0 if binary else self._n_classes, fill=0.0)
+        for i in range(y.size):
+            var target = _at(y, i)
+            var weight = _at(weights.value(), i) if weights else 1.0
+            if binary:
+                var prediction = _get(raw, i, 0)
+                var gradient: Float64
+                var hessian: Float64
+                if prediction > -37:
+                    var tail = _exp(-prediction)
+                    var denom = 1 + tail
+                    gradient = ((1 - target) - target * tail) / denom
+                    hessian = tail / (denom * denom)
+                else:
+                    hessian = _exp(prediction)
+                    gradient = hessian - target
+                gradients[i] = Float32(weight * gradient)
+                hessians[i] = Float32(weight * hessian)
+            else:
+                var _, total = self._shifted_exponentials(raw, i, exps)
+                for k in range(self._n_classes):
+                    var probability = exps[k] / total
+                    var offset = k * y.size + i
+                    gradients[offset] = Float32((probability - Float64(target == Float64(k))) * weight)
+                    hessians[offset] = Float32((probability * (1 - probability)) * weight)
+
+    def mean_loss(
+        self, y: _Vector, raw: _Vector, weights: Optional[_Vector] = None
+    ) raises -> Float64:
+        self._check_inputs(y, raw, weights)
+        var values = _Vector(Shape(y.size))
+        var binary = self.raw_columns() == 1
+        var exps = List[Float64](length=0 if binary else self._n_classes, fill=0.0)
+        for i in range(y.size):
+            var target = _at(y, i)
+            if binary:
+                var prediction = _get(raw, i, 0)
+                values.unsafe_set(i, _log1pexp(prediction) - target * prediction)
+            else:
+                var peak, total = self._shifted_exponentials(raw, i, exps)
+                values.unsafe_set(i, (_log(total) + peak) - _get(raw, i, Int(target)))
+        return _weighted_mean(values, weights)
+
+    def predict_proba(self, raw: _Vector) raises -> _Vector:
+        self._check_raw(raw)
+        var binary = self.raw_columns() == 1
+        var n_columns = 2 if binary else self._n_classes
+        var probabilities = _Vector(Shape(raw.shape[0], n_columns))
+        var exps = List[Float64](length=0 if binary else n_columns, fill=0.0)
+        for i in range(raw.shape[0]):
+            if binary:
+                var probability = 1 / (1 + _exp(-_get(raw, i, 0)))
+                probabilities.unsafe_set(i * n_columns, 1 - probability)
+                probabilities.unsafe_set(i * n_columns + 1, probability)
+            else:
+                var _, total = self._shifted_exponentials(raw, i, exps)
+                for k in range(n_columns):
+                    probabilities.unsafe_set(i * n_columns + k, exps[k] / total)
+        return probabilities^

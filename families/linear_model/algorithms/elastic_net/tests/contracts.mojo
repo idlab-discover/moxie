@@ -64,9 +64,22 @@ def contracts[dtype: DType]() raises:
         _ = a.predict(zeros[dtype](Shape(2, 3)))
     with assert_raises(contains="warm_start"):
         model.fit(X, Y)
-    with assert_raises(contains="NotImplementedError"):
-        var random = Lasso[dtype](selection="random")
-        random.fit(X, y)
+    var random = Lasso[dtype](selection="random", random_state=0, max_iter=1)
+    _ = random.fit(X, y)
+    var random_copy = clone(random)
+    assert_false(random_copy.__sklearn_is_fitted__())
+    assert_equal(random_copy.selection, "random")
+    assert_equal(random_copy.random_state.value(), 0)
+    _ = random_copy.fit(X, y)
+    var random_coef = random.coef_.copy()
+    _ = random.fit(X, y)
+    for j in range(X.shape[1]):
+        assert_equal(random_coef.unsafe_get(j), random.coef_.unsafe_get(j))
+        assert_equal(random_coef.unsafe_get(j), random_copy.coef_.unsafe_get(j))
+    random.random_state = -1
+    with assert_raises(contains="random_state"):
+        _ = random.fit(X, y)
+    assert_equal(random_coef.unsafe_get(0), random.coef_.unsafe_get(0))
     with assert_raises(contains="NotImplementedError"):
         var gram = Lasso[dtype](precompute=True)
         gram.fit(X, y)
@@ -89,6 +102,18 @@ def path_contracts[dtype: DType]() raises:
         X.unsafe_set(2 * i, Scalar[dtype](i))
         X.unsafe_set(2 * i + 1, Scalar[dtype](i % 2))
         y.unsafe_set(i, Scalar[dtype](2 * i + 1))
+
+    var random = lasso_path(X, y, selection="random", random_state=0, n_alphas=8, max_iter=1)
+    var repeat = Lasso[dtype].path(X, y, selection="random", random_state=0, n_alphas=8, max_iter=1)
+    for i in range(random.coefs.size):
+        assert_equal(random.coefs.unsafe_get(i), repeat.coefs.unsafe_get(i))
+    # Unseeded random paths release the shared stream after each call.
+    _ = enet_path(X, y, selection="random", n_alphas=2)
+    _ = enet_path(X, y, selection="random", n_alphas=2)
+    with assert_raises(contains="selection"):
+        _ = enet_path(X, y, selection="unknown")
+    with assert_raises(contains="random_state"):
+        _ = lasso_path(X, y, selection="random", random_state=4294967296)
 
     var default_path: CoordinatePathResult[dtype] = enet_path(X, y)
     assert_equal(default_path.alphas.shape[0], 100)

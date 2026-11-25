@@ -1,4 +1,4 @@
-# Cyclic residual engine
+# Coordinate residual engine
 
 Import `coordinate_descent` from `moxie.linear_model._cd_fast` in the verified
 assembly. This is a private engine, not a public sklearn path API.
@@ -12,12 +12,17 @@ tolerance must be finite and nonnegative; max_iter must be at least one.
 
 `CoordinateResult` contains owned `coef`, `dual_gap`, `iterations` and
 `converged`. The gap is unnormalized; the stopping threshold is tol times y@y.
+The optional `random_seed` is a per-solve UInt32 seed for shared
+`our_rand_r`. When provided, each sweep samples active positions with
+replacement for as many draws as there are active features.
 At alpha=0 the pinned reference's ridge dual formulation or OLS gradient norm
 is used. Initial convergence may return zero iterations. At an iteration limit
-the result remains available with converged=False. Invalid inputs or nonfinite
+the result remains available with converged=False. After a final failed gap
+check the residual solver applies Gap Safe screening before returning the
+coefficients, as in the pinned implementation. Invalid inputs or nonfinite
 final coefficients/gap raise. Inputs, including initial coefficients, are never
 mutated. Strided inputs are materialized once as contiguous feature columns.
 
 See [scope](scope.md) for unfinished branches and validation commands. The
-engine does not center inputs, normalize weights, draw random numbers, fit an
+engine does not center inputs, normalize weights, derive solve seeds, fit an
 intercept or perform CV; the estimator/family owners supply those operations.

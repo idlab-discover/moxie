@@ -3,10 +3,21 @@ from moxie.linear_model import CoordinatePathResult, ElasticNet, Lasso
 from parity_io import Fixture, ResultLine, fixture_lines, report_error
 
 
+def random_state(fx: Fixture) raises -> Optional[Int]:
+    return Optional(fx.integer("seed")) if fx.has("seed") else None
+
+
 def run[dtype: DType](fx: Fixture) raises:
     var X = fx.array[dtype]("X")
     var y = fx.array[dtype]("y")
-    var model = ElasticNet[dtype](alpha=fx.number("alpha"), l1_ratio=fx.number("ratio"), fit_intercept=fx.flag("intercept"), tol=fx.number("tol"), max_iter=fx.integer("max_iter"), positive=fx.flag("positive"), warm_start=fx.flag("warm"))
+    var model = ElasticNet[dtype](
+        alpha=fx.number("alpha"), l1_ratio=fx.number("ratio"),
+        fit_intercept=fx.flag("intercept"), tol=fx.number("tol"),
+        max_iter=fx.integer("max_iter"), positive=fx.flag("positive"),
+        warm_start=fx.flag("warm"),
+        selection="random" if fx.has("seed") else "cyclic",
+        random_state=random_state(fx),
+    )
     if fx.has("sw"):
         model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
     else:
@@ -38,7 +49,14 @@ def run[dtype: DType](fx: Fixture) raises:
 def run_lasso[dtype: DType](fx: Fixture) raises:
     var X = fx.array[dtype]("X")
     var y = fx.array[dtype]("y")
-    var model = Lasso[dtype](alpha=fx.number("alpha"), fit_intercept=fx.flag("intercept"), tol=fx.number("tol"), max_iter=fx.integer("max_iter"), positive=fx.flag("positive"), warm_start=fx.flag("warm"))
+    var model = Lasso[dtype](
+        alpha=fx.number("alpha"),
+        fit_intercept=fx.flag("intercept"), tol=fx.number("tol"),
+        max_iter=fx.integer("max_iter"), positive=fx.flag("positive"),
+        warm_start=fx.flag("warm"),
+        selection="random" if fx.has("seed") else "cyclic",
+        random_state=random_state(fx),
+    )
     if fx.has("sw"):
         model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
     else:
@@ -81,17 +99,20 @@ def run_path[dtype: DType](fx: Fixture) raises:
     var max_iter = fx.integer("max_iter")
     var positive = fx.flag("positive")
     var eps = fx.number("eps")
+    var selection = "random" if fx.has("seed") else "cyclic"
     var result: CoordinatePathResult[dtype]
     if ratio == 1:
         result = Lasso[dtype].path(
             X, y, eps=eps, n_alphas=count, alphas=alphas, coef_init=initial,
             max_iter=max_iter, positive=positive, return_n_iter=True,
+            selection=selection, random_state=random_state(fx),
         )
     else:
         result = ElasticNet[dtype].path(
             X, y, l1_ratio=ratio, eps=eps, n_alphas=count, alphas=alphas,
             coef_init=initial, max_iter=max_iter, positive=positive,
             return_n_iter=True,
+            selection=selection, random_state=random_state(fx),
         )
     var out = ResultLine(fx.id)
     out.add("alphas", result.alphas)

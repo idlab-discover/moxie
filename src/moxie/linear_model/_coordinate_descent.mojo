@@ -4,6 +4,7 @@
 from numojo import NDArray, Shape, full, logspace, zeros
 from std.builtin.sort import sort
 from std.math import isfinite, log10
+from moxie._random import RandomStateHandle, check_random_state
 from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
 from moxie.linear_model._base import LinearRegressor
@@ -58,6 +59,14 @@ def _path_alphas(
     return grid^
 
 
+def _random_selection(selection: String, random_state: Optional[Int]) raises -> Bool:
+    if selection != "cyclic" and selection != "random":
+        raise Error("ValueError: selection must be cyclic or random")
+    if random_state and (random_state.value() < 0 or random_state.value() > 4294967295):
+        raise Error("ValueError: random_state must be in [0, 2**32 - 1]")
+    return selection == "random"
+
+
 def enet_path[dtype: DType](
     X: NDArray[dtype],
     y: NDArray[dtype],
@@ -72,8 +81,10 @@ def enet_path[dtype: DType](
     max_iter: Int = 1000,
     tol: Float64 = 1e-4,
     early_stopping: Bool = True,
+    selection: String = "cyclic",
+    random_state: Optional[Int] = None,
 ) raises -> CoordinatePathResult[dtype]:
-    """Fit a warm-started cyclic elastic-net path on a matrix and vector target."""
+    """Fit a warm-started elastic-net path on a matrix and vector target."""
     if not isfinite(l1_ratio) or l1_ratio < 0 or l1_ratio > 1:
         raise Error("ValueError: l1_ratio must be in [0, 1]")
     if not isfinite(eps) or eps <= 0 or n_alphas < 1:
@@ -83,6 +94,7 @@ def enet_path[dtype: DType](
     if max_iter < 1 or not isfinite(tol) or tol < 0:
         raise Error("ValueError: max_iter must be positive and tol finite and nonnegative")
 
+    var random = _random_selection(selection, random_state)
     var design = _CoordinateDesign[dtype](X, y)
     var n = Float64(X.shape[0])
     var p = X.shape[1]
@@ -95,11 +107,17 @@ def enet_path[dtype: DType](
     var gaps = zeros[DType.float64](Shape(count))
     var iterations = List[Int]()
     var start = compact_vector(coef_init.value()) if coef_init else zeros[dtype](Shape(p))
+    var rng = Optional[RandomStateHandle[MutUntrackedOrigin]]()
+    if random:
+        rng = check_random_state(random_state)
     for i in range(count):
         var alpha = grid.unsafe_get(i)
+        var seed = Optional[UInt32]()
+        if random:
+            seed = UInt32(rng.value()[].randint(2147483647))
         var solved = design.solve(
             start, alpha * l1_ratio * n, alpha * (1 - l1_ratio) * n,
-            max_iter, tol, positive, early_stopping=early_stopping,
+            max_iter, tol, positive, early_stopping=early_stopping, random_seed=seed,
         )
         for j in range(p):
             coefs.unsafe_set(j * count + i, solved.coef.unsafe_get(j))
@@ -124,12 +142,15 @@ def lasso_path[dtype: DType](
     max_iter: Int = 1000,
     tol: Float64 = 1e-4,
     early_stopping: Bool = True,
+    selection: String = "cyclic",
+    random_state: Optional[Int] = None,
 ) raises -> CoordinatePathResult[dtype]:
-    """Fit a warm-started cyclic Lasso path on a matrix and vector target."""
+    """Fit a warm-started Lasso path on a matrix and vector target."""
     return enet_path(
         X, y, l1_ratio=1, eps=eps, n_alphas=n_alphas, alphas=alphas,
         coef_init=coef_init, return_n_iter=return_n_iter, positive=positive,
         max_iter=max_iter, tol=tol, early_stopping=early_stopping,
+        selection=selection, random_state=random_state,
     )
 
 
@@ -147,13 +168,7 @@ def _fit_coordinate[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], sample_w
         raise Error("ValueError: alpha must be finite and nonnegative; l1_ratio must be in [0, 1]")
     if max_iter < 1 or not isfinite(tol) or tol < 0:
         raise Error("ValueError: max_iter must be positive and tol finite and nonnegative")
-    if selection != "cyclic" and selection != "random":
-        raise Error("ValueError: selection must be cyclic or random")
-    if selection == "random":
-        raise Error("NotImplementedError: random selection requires shared our_rand_r")
-    if random_state:
-        if random_state.value() < 0 or random_state.value() > 4294967295:
-            raise Error("ValueError: random_state must be in [0, 2**32 - 1]")
+    var random = _random_selection(selection, random_state)
     if precompute:
         raise Error("NotImplementedError: Gram coordinate descent is not implemented")
     var normalized = Optional[NDArray[dtype]](None)
@@ -188,7 +203,16 @@ def _fit_coordinate[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], sample_w
             target.unsafe_set(i, data.y.unsafe_get(i * k + t))
         for j in range(p):
             start.unsafe_set(j, coef.unsafe_get(t * p + j))
-        var solved = coordinate_descent(data.X, target, start, alpha * l1_ratio * Float64(n), alpha * (1 - l1_ratio) * Float64(n), max_iter, tol, positive)
+        var seed = Optional[UInt32]()
+        if random:
+            # Each independent target is a separate path in ElasticNet.fit.
+            with check_random_state(random_state) as rng:
+                seed = UInt32(rng[].randint(2147483647))
+        var solved = coordinate_descent(
+            data.X, target, start, alpha * l1_ratio * Float64(n),
+            alpha * (1 - l1_ratio) * Float64(n), max_iter, tol, positive,
+            random_seed=seed,
+        )
         for j in range(p):
             coef.unsafe_set(t * p + j, solved.coef.unsafe_get(j))
         gaps.unsafe_set(t, Scalar[dtype](solved.dual_gap / Float64(n)))
@@ -214,7 +238,7 @@ struct ElasticNetParams(Copyable, Movable):
 
 
 struct ElasticNet[dtype: DType = DType.float64](Copyable, LinearRegressor, WeightedSupervisedEstimator):
-    """ElasticNet with cyclic dense fitting; see docs/api.md for typed diagnostics."""
+    """ElasticNet with dense coordinate descent; see docs/api.md for typed diagnostics."""
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
     comptime Prediction = NDArray[Self.dtype]
@@ -357,7 +381,7 @@ struct LassoParams(Copyable, Movable):
 
 
 struct Lasso[dtype: DType = DType.float64](Copyable, LinearRegressor, WeightedSupervisedEstimator):
-    """Lasso with cyclic dense fitting; see docs/api.md for typed diagnostics."""
+    """Lasso with dense coordinate descent; see docs/api.md for typed diagnostics."""
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
     comptime Prediction = NDArray[Self.dtype]

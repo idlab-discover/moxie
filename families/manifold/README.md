@@ -1,9 +1,9 @@
 # Manifold
 
-Moxie owns the pure Mojo implementations of ClassicalMDS and trustworthiness,
-the dense exchange helpers, tests and examples in this directory. Other public
-manifold algorithms raise explicit unsupported errors. See [algorithm support](docs/algorithms.md)
-and [scope](docs/scope.md) for supported metrics and native API differences.
+Moxie owns exact TSNE, ClassicalMDS, trustworthiness and the dense manifold
+contracts in this directory. See [exact t-SNE](docs/tsne.md),
+[ClassicalMDS and trustworthiness](docs/algorithms.md), and [scope](docs/scope.md)
+for supported metrics and native API differences.
 
 From the Moxie root:
 
@@ -22,14 +22,13 @@ assembled namespace. No standalone manifold checkout supplies build inputs.
 
 The core `DEPENDENCIES.json` owns public namespace assembly. The focused fixture
 manifests consume current Moxie framework sources and the integrated decomposition
-eigensolver. Compatible Pixi locks and the sklearn reference revision are preserved.
-[PROVENANCE.json](PROVENANCE.json) and `SCAFFOLD_BASE` record the original source;
-the retired sibling retains its Git history and ignored artifacts.
+and neighbors engines. [PROVENANCE.json](PROVENANCE.json) and `SCAFFOLD_BASE`
+record the original source.
 
-The side-by-side notebook `notebooks/manifold/plot_lle_digits.ipynb` replays the
-official `plot_lle_digits` example: its Classical MDS panel and `trustworthiness`
-are compared numerically with scikit-learn, and the other manifold estimators
-are shown to raise. Rerun it with `pixi run -e notebooks notebooks notebooks/manifold`.
+The notebook `notebooks/manifold/plot_lle_digits.ipynb` compares its Classical MDS
+panel and trustworthiness scores with scikit-learn and checks the unsupported
+manifold operations used by the example. Run it with
+`pixi run -e notebooks notebooks notebooks/manifold`.
 
 - [Family contracts](docs/family.md)
 - [Public declarations and deferrals](docs/api-surface.md)

@@ -9,6 +9,15 @@
         },
         "moxie.decomposition._contracts": {
           "file": "src/moxie/decomposition/_contracts.mojo"
+        },
+        "moxie.decomposition._base": {
+          "file": "src/moxie/decomposition/_base.mojo"
+        },
+        "moxie.decomposition._pca": {
+          "file": "src/moxie/decomposition/_pca.mojo"
+        },
+        "moxie.decomposition._pca_backend": {
+          "file": "src/moxie/decomposition/_pca_backend.mojo"
         }
       },
       "assets": {
@@ -18,6 +27,59 @@
         "schema": 1,
         "packages": {
           "moxie.decomposition": {}
+        }
+      }
+    },
+    {
+      "id": "neighbors",
+      "path": "../neighbors",
+      "modules": {
+        "moxie.neighbors._contracts": {
+          "file": "src/moxie/neighbors/_contracts.mojo"
+        }
+      },
+      "assets": {
+        "licenses/neighbors-scipy.txt": "LICENSES/scipy.txt",
+        "licenses/neighbors-sklearn.txt": "LICENSES/sklearn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {}
+        }
+      }
+    },
+    {
+      "id": "query_engine",
+      "path": "../neighbors/shared/query_engine",
+      "modules": {
+        "moxie.neighbors._distance": {
+          "file": "src/moxie/neighbors/_distance.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.neighbors": {}
+        }
+      }
+    },
+    {
+      "id": "linalg",
+      "path": "../../shared/linalg",
+      "modules": {
+        "moxie._linalg": {
+          "file": "src/moxie/_linalg.mojo"
+        }
+      },
+      "assets": {
+        "licenses/linalg-sklearn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {}
         }
       }
     }

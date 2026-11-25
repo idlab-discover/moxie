@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Deferred public scikit-learn API declarations.
 
-ClassicalMDS and trustworthiness are implemented in their own modules.
+Implemented estimators and functions live in their own modules.
 """
 from moxie.manifold._api_types import APIValue
 
@@ -71,84 +71,6 @@ struct MDS(Movable):
     def fit_transform(mut self, X: Some[Movable], y: Some[Movable] = None, init: Some[Movable] = None) raises -> APIValue:
         "Scikit-learn signature: fit_transform(self, X, y=None, init=None)."
         raise Error("NotImplementedError: MDS.fit_transform is an API scaffold")
-
-struct TSNE(Movable):
-
-    "API scaffold for sklearn.manifold._t_sne.TSNE. Operations are deferred."
-
-    var n_components: APIValue
-
-    var perplexity: APIValue
-
-    var early_exaggeration: APIValue
-
-    var learning_rate: APIValue
-
-    var max_iter: APIValue
-
-    var n_iter_without_progress: APIValue
-
-    var min_grad_norm: APIValue
-
-    var metric: APIValue
-
-    var metric_params: APIValue
-
-    var init: APIValue
-
-    var verbose: APIValue
-
-    var random_state: APIValue
-
-    var method: APIValue
-
-    var angle: APIValue
-
-    var n_jobs: APIValue
-
-    var embedding_: APIValue
-
-    var kl_divergence_: APIValue
-
-    var n_features_in_: APIValue
-
-    var feature_names_in_: APIValue
-
-    var learning_rate_: APIValue
-
-    var n_iter_: APIValue
-
-    def get_metadata_routing(mut self) raises -> APIValue:
-        "Scikit-learn signature: get_metadata_routing(self)."
-        raise Error("NotImplementedError: TSNE.get_metadata_routing is an API scaffold")
-
-    def get_params(mut self, deep: Some[Movable] = True) raises -> APIValue:
-        "Scikit-learn signature: get_params(self, deep=True)."
-        raise Error("NotImplementedError: TSNE.get_params is an API scaffold")
-
-    def set_params(mut self, params: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_params(self, **params)."
-        raise Error("NotImplementedError: TSNE.set_params is an API scaffold")
-
-    def set_output(mut self, *, transform: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_output(self, *, transform=None)."
-        raise Error("NotImplementedError: TSNE.set_output is an API scaffold")
-
-    def fit_transform(mut self, X: Some[Movable], y: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: fit_transform(self, X, y=None)."
-        raise Error("NotImplementedError: TSNE.fit_transform is an API scaffold")
-
-    def get_feature_names_out(mut self, input_features: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: get_feature_names_out(self, input_features=None)."
-        raise Error("NotImplementedError: TSNE.get_feature_names_out is an API scaffold")
-
-    def __init__(out self, n_components: Some[Movable] = 2, *, perplexity: Some[Movable] = 30.0, early_exaggeration: Some[Movable] = 12.0, learning_rate: Some[Movable] = "auto", max_iter: Some[Movable] = 1000, n_iter_without_progress: Some[Movable] = 300, min_grad_norm: Some[Movable] = 1e-07, metric: Some[Movable] = "euclidean", metric_params: Some[Movable] = None, init: Some[Movable] = "pca", verbose: Some[Movable] = 0, random_state: Some[Movable] = None, method: Some[Movable] = "barnes_hut", angle: Some[Movable] = 0.5, n_jobs: Some[Movable] = None) raises:
-        "Scikit-learn signature: __init__(self, n_components=2, *, perplexity=30.0, early_exaggeration=12.0, learning_rate='auto', max_iter=1000, n_iter_without_progress=300, min_grad_norm=1e-07, metric='euclidean', metric_params=None, init='pca', verbose=0, random_state=None, method='barnes_hut', angle=0.5, n_jobs=None)."
-        raise Error("NotImplementedError: TSNE.__init__ is an API scaffold")
-
-    def fit(mut self, X: Some[Movable], y: Some[Movable] = None) raises:
-        "Scikit-learn signature: fit(self, X, y=None)."
-        raise Error("NotImplementedError: TSNE.fit is an API scaffold")
 
 struct Isomap(Movable):
 

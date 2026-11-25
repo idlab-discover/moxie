@@ -1,6 +1,7 @@
 # Manifold plumbing
 
-This directory owns manifold contracts, validation, ClassicalMDS and trustworthiness.
+This directory owns manifold contracts, validation, exact TSNE, ClassicalMDS
+and trustworthiness.
 Existing `EmbeddingEstimator` and `OutOfSampleEmbedding` remain unchanged.
 Public imports follow sklearn.manifold; `_plumbing` is a private native exchange
 module. Its records are not new sklearn public exports.
@@ -120,9 +121,9 @@ module ownership and symbol collisions fail.
 The `DEPENDENCIES.lock.json` filenames remain for consumer compatibility, but
 contain live-source manifests, not source locks. They declare paths, modules,
 license assets and exports. `NUMERICAL-DEPENDENCIES.json` declares the live
-decomposition engine. Builds neither recover historical sources nor use cached
-source snapshots. Missing dependencies fail; generated receipts record consumed
-hashes. Keep toolchain locks and the scikit-learn correctness reference revision.
+decomposition and neighbors modules used by isolated consumers. Missing dependencies
+fail and generated receipts record consumed hashes. Keep toolchain locks and the
+scikit-learn correctness reference revision.
 
 `tests/consumers/a` and `b` are isolated test fixtures, not algorithm children.
 Both independently assemble contributions from the two fixture projects into

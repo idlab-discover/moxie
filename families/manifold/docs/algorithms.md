@@ -1,7 +1,7 @@
 # Implemented dense algorithms
 
-`ClassicalMDS` and `trustworthiness` run entirely in Mojo. Other public estimator
-names currently remain declarations that raise `NotImplementedError`.
+`ClassicalMDS` and `trustworthiness` run entirely in Mojo. See [exact TSNE](tsne.md)
+for t-SNE fitting and [scope](scope.md) for the other manifold estimators.
 
 ## Classical MDS
 

@@ -4,7 +4,6 @@ from ._base import EmbeddingEstimator, OutOfSampleEmbedding
 # Public scikit-learn API scaffold.
 from ._api import (
     MDS,
-    TSNE,
     Isomap,
     LocallyLinearEmbedding,
     SpectralEmbedding,
@@ -12,5 +11,5 @@ from ._api import (
     smacof,
     spectral_embedding,
 )
-from ._t_sne import trustworthiness
+from ._t_sne import TSNE, TSNEParams, TSNEMetricParams, trustworthiness
 from ._classical_mds import ClassicalMDS

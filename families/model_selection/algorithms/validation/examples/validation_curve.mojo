@@ -1,21 +1,12 @@
 """Compare mean and median baselines on the same four folds."""
 from moxie.dummy import DummyRegressor as _DummyRegressor
-from moxie.model_selection import TypedScorer, CVAdapter, ParameterAdapter, KFold, IndexArray, IndexSplit, validation_curve
-from moxie.model_selection._split import _rows
+from moxie.model_selection import EstimatorScore, CVAdapter, ParameterAdapter, KFold, IndexArray, IndexSplit, validation_curve, select_rows
 from numojo import NDArray, Shape, Item, zeros
 comptime DummyRegressor = _DummyRegressor[]  # Bind default parameters to the concrete estimator.
 
 comptime Dense = NDArray[DType.float64]
 
-struct R2Scorer(TypedScorer):
-    comptime Estimator = DummyRegressor
-    comptime Input = Dense
-    comptime Target = Dense
-    comptime Metadata = Optional[Dense]
-    def __init__(out self):
-        pass
-    def score(self, estimator: DummyRegressor, X: Dense, y: Dense, metadata: Optional[Dense]) raises -> Float64:
-        return estimator.score(X, y, metadata)
+comptime R2Scorer = EstimatorScore[DummyRegressor, Dense, Dense]
 
 
 struct RegressionAdapter(CVAdapter, ParameterAdapter):
@@ -28,12 +19,12 @@ struct RegressionAdapter(CVAdapter, ParameterAdapter):
             raise Error("ValueError: expected aligned dense X and y")
         return y.shape[0]
     def input_rows(self, X: Dense, rows: IndexArray, train: IndexArray) raises -> Dense:
-        return _rows(X, rows)
+        return select_rows(X, rows)
     def target_rows(self, y: Dense, rows: IndexArray) raises -> Dense:
-        return _rows(y, rows)
+        return select_rows(y, rows)
     def metadata_rows(self, metadata: Optional[Dense], rows: IndexArray) raises -> Optional[Dense]:
         if metadata:
-            return _rows(metadata.value(), rows)
+            return select_rows(metadata.value(), rows)
         return None
     def fit(self, mut estimator: DummyRegressor, X: Dense, y: Dense, metadata: Optional[Dense]) raises:
         if metadata:

@@ -1,7 +1,7 @@
 """Out-of-fold probabilities in sorted global class order, even with rare labels."""
 from moxie.dummy import DummyClassifier as _DummyClassifier, Label
 from moxie.model_selection import ClassPredictionAdapter, TypedScorer, ClassResponse, cross_val_predict, encode_prediction_target, IndexArray, IndexSplit, KFold
-from moxie.model_selection._split import _rows
+from moxie.model_selection import select_rows
 from numojo import NDArray, Shape, Item, zeros
 comptime DummyClassifier = _DummyClassifier[multioutput=True]  # Row-wise label targets, as before the Moxie merge.
 
@@ -33,11 +33,11 @@ struct ClassifierAdapter(ClassPredictionAdapter):
             raise Error("ValueError: expected sample-aligned label vector")
         return y.size
     def input_rows(self, X: Dense, rows: IndexArray, train: IndexArray) raises -> Dense:
-        return _rows(X, rows)
+        return select_rows(X, rows)
     def target_rows(self, y: IndexArray, rows: IndexArray) raises -> IndexArray:
-        return _rows(y, rows)
+        return select_rows(y, rows)
     def metadata_rows(self, metadata: Optional[Dense], rows: IndexArray) raises -> Optional[Dense]:
-        if metadata: return _rows(metadata.value(), rows)
+        if metadata: return select_rows(metadata.value(), rows)
         return None
     def fit(self, mut estimator: DummyClassifier, X: Dense, y: IndexArray, metadata: Optional[Dense]) raises:
         if metadata:

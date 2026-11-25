@@ -1,5 +1,5 @@
 """Estimator-independent lifecycle seam; no CV evaluation engine."""
-from moxie.base import BaseEstimator, clone
+from moxie.base import BaseEstimator, SupervisedScorer, clone
 
 trait TypedScorer(Movable, Deinitable):
     comptime Estimator: BaseEstimator & Deinitable
@@ -10,6 +10,35 @@ trait TypedScorer(Movable, Deinitable):
     def score(self, estimator: Self.Estimator, X: Self.Input,
               y: Self.Target, metadata: Self.Metadata) raises -> Float64:
         ...
+
+
+struct EstimatorScore[
+    E: SupervisedScorer & Deinitable,
+    XType: Movable & Deinitable,
+    YType: Movable & Deinitable,
+    Weight: Movable & Deinitable = XType,
+](TypedScorer, Copyable):
+    """Delegate scoring to the estimator's default score method."""
+
+    comptime Estimator = Self.E
+    comptime Input = Self.XType
+    comptime Target = Self.YType
+    comptime Metadata = Optional[Self.Weight]
+
+    def __init__(out self):
+        comptime assert Self.Input == Self.E.Input, "Input must match the estimator"
+        comptime assert Self.Target == Self.E.Target, "Target must match the estimator"
+        comptime assert Self.Weight == Self.E.SampleWeight, "Weight must match the estimator"
+
+    def __init__(out self, *, copy: Self):
+        pass
+
+    def score(self, estimator: Self.E, X: Self.Input, y: Self.Target, metadata: Self.Metadata) raises -> Float64:
+        return estimator.score(
+            rebind[Self.E.Input](X),
+            rebind[Self.E.Target](y),
+            rebind[Optional[Self.E.SampleWeight]](metadata),
+        )
 
 
 trait FitAdapter(Movable):

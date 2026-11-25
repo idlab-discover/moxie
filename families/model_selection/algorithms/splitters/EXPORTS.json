@@ -25,6 +25,7 @@
       "train_test_split": "moxie.model_selection._split",
       "CheckedCV": "moxie.model_selection._split",
       "IterableCV": "moxie.model_selection._split",
+      "select_rows": "moxie.model_selection._split",
       "SplitLabels": "moxie.model_selection._split"
     }
   }

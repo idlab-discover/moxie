@@ -3,10 +3,10 @@ from numojo import NDArray, Shape, Item, zeros
 from std.math import isnan, abs
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
-from moxie.model_selection import KFold, StratifiedKFold
+from moxie.model_selection import IndexSplit, KFold, StratifiedKFold
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import RandomState, seed_global_random_state
-from moxie.preprocessing import TargetEncoder, TargetPreprocessor
+from moxie.preprocessing import TargetEncoder, TargetEncoderSplits, TargetPreprocessor
 from moxie.preprocessing._label import StringLabels, NumericLabels
 from moxie.preprocessing._vocabulary import StringKind, NumericKind
 from moxie.preprocessing._target_encoder import kfold_test_folds, stratified_kfold_test_folds
@@ -273,10 +273,61 @@ def test_cv_configuration() raises:
     assert_same(model.fit_transform(X, y), expected)
 
 
+def test_explicit_splits() raises:
+    var X = table()
+    var y = target()
+    var first = ints([0, 1, 2, 3, 4])
+    var second = ints([5, 6, 7, 8, 9])
+    var pairs: List[IndexSplit] = [
+        IndexSplit(second.copy(), first.copy()),
+        IndexSplit(first.copy(), second.copy()),
+    ]
+    var explicit = TargetEncoderSplits(pairs)
+    pairs[0].test.unsafe_set(0, 9)
+    var cursor = TargetEncoderSplits(KFold(2).split(y.size))
+    var model = TargetEncoder(cv=explicit^)
+    var expected = model.fit_transform(X, y)
+    var fitted = model.transform(X)
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_equal(len(fresh.get_params().cv[TargetEncoderSplits]), 2)
+    assert_same(fresh.fit_transform(X, y), expected)
+    assert_same(fresh.transform(X), fitted)
+    _ = fresh.set_params(cv=cursor^)
+    assert_same(fresh.fit_transform(X, y), expected)
+    _ = fresh.set_params(model.get_params())
+    assert_same(fresh.fit_transform(X, y), expected)
+
+    with assert_raises(contains="must cover each sample index exactly once"):
+        _ = fresh.set_params(cv=TargetEncoderSplits(pairs))
+        _ = fresh.fit_transform(X, y)
+    with assert_raises(contains="must cover each sample index exactly once"):
+        _ = fresh.set_params(cv=TargetEncoderSplits(List[IndexSplit]()))
+        _ = fresh.fit_transform(X, y)
+    with assert_raises(contains="must cover each sample index exactly once"):
+        var repeated: List[IndexSplit] = [IndexSplit(first.copy(), ints([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))]
+        _ = fresh.set_params(cv=TargetEncoderSplits(repeated))
+        _ = fresh.fit_transform(X, y)
+    with assert_raises(contains="training index out of bounds"):
+        var bad_train: List[IndexSplit] = [IndexSplit(ints([10]), first.copy())]
+        _ = fresh.set_params(cv=TargetEncoderSplits(bad_train))
+        _ = fresh.fit_transform(X, y)
+    with assert_raises(contains="validation index out of bounds"):
+        var bad_test: List[IndexSplit] = [IndexSplit(first.copy(), ints([-1]))]
+        _ = fresh.set_params(cv=TargetEncoderSplits(bad_test))
+        _ = fresh.fit_transform(X, y)
+    with assert_raises(contains="split indices must be rank one"):
+        var bad_rank: List[IndexSplit] = [
+            IndexSplit(first.copy(), zeros[DType.int64](Shape(1, 1))),
+        ]
+        _ = TargetEncoderSplits(bad_rank)
+
+
 def main() raises:
     test_lifecycle()
     test_params()
     test_targets()
     test_folds_and_rng()
     test_cv_configuration()
+    test_explicit_splits()
     print("PASS target encoder lifecycle contracts")

@@ -50,6 +50,7 @@ from ._function_transformer import (
 )
 from ._target_encoder import (
     TargetEncoder,
+    TargetEncoderSplits,
 )
 from ._discretization import (
     KBinsDiscretizer,

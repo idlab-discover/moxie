@@ -1,6 +1,7 @@
 # Adapted from scikit-learn; BSD-3-Clause, see algorithms/c_svm/SCIKIT_LEARN_LICENSE.
 """Dense kernel estimators using the family LIBSVM engine."""
 import numojo as nm
+from moxie.compose._table import ColumnTable
 from std.math import log
 from moxie.base import FitPredictor
 from moxie.svm._contracts import Dense, Indices, KernelModel, KernelSpec, KernelOptions, KernelProvider, TrainingSnapshot, validate_matrix, validate_vector
@@ -243,6 +244,40 @@ struct OneClassSVM(OneClassSupportVector, FitPredictor):
         if not self._model:
             raise Error("NotFittedError: estimator is not fitted")
         return linear_coefficients(self._model.value(), self._kernel, 0)
+
+    def fit[
+        dtype: DType,
+        origin: MutOrigin, x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[dtype],
+        y: Optional[Dense] = None,
+        *,
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        return self.fit(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
+
+    def predict[dtype: DType](self, X: ColumnTable[dtype]) raises -> Self.Prediction:
+        return self.predict(X.values(), feature_names=X.schema().names)
+
+    def decision_function[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
+        return self.decision_function(X.values(), feature_names=X.schema().names)
+
+    def score_samples[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
+        return self.score_samples(X.values(), feature_names=X.schema().names)
+
+    def fit_predict[dtype: DType](
+        mut self,
+        X: ColumnTable[dtype],
+        y: Optional[Dense] = None,
+        *,
+        sample_weight: Optional[Dense] = None,
+    ) raises -> Self.Labels:
+        return self.fit_predict(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
 
     def predict[dtype: DType](
         self, X: nm.NDArray[dtype], *, feature_names: List[String],

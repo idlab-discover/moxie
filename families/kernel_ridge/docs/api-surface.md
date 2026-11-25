@@ -20,8 +20,35 @@ numerical tolerances.
 | Feature names | Explicit `feature_names` keyword on fit/predict/score; exact ordered validation |
 | Metadata requests | `get_metadata_routing`, `set_fit_request`, `set_score_request`; native sample-weight selection/rejection and aliases |
 | Parameters | `get_params`/mapping updates plus optional typed records; direct optional resets |
-| Composition | `clone`, final step of `moxie.pipeline` pipelines, `cross_val_score`/`learning_curve`/`GridSearchCV` through typed model_selection adapters (`tests/test_composition.mojo`, `notebooks/kernel_ridge/`) |
+| Composition | `clone`, final step of `moxie.pipeline` pipelines, and `cross_val_score`/`learning_curve`/`GridSearchCV` through typed model_selection adapters. Grid search can tune the KernelRidge step and refit the entire pipeline. |
 | Python integration | Dataframe adapters, Python callbacks, unrestricted kwargs and global sklearn routing remain outside the native API |
+
+## Pipeline grid search
+
+The adapter in [test_composition.mojo](../tests/test_composition.mojo) applies
+candidate `alpha` and `gamma` to the typed final-step parameter map in
+`Pipeline.get_params()`. The sklearn reference uses the corresponding
+`kernelridge__alpha` and `kernelridge__gamma` keys. Each fold fits its scaler
+on its training rows. `EstimatorScore[PipelineType, Dense, Dense, ScalarOrVector]`
+delegates to the pipeline's R² score, and `select_rows` selects fold inputs.
+
+For the focused sklearn comparison, build and install a wheel from the revision
+above into a private directory and set `oracle_dir` to its absolute install path.
+Use the locked toolchain and assemble the live family sources:
+
+```sh
+PYTHONPATH=families/kernel_ridge/tools python -c 'from check import assemble; assemble()'
+MOXIE_SKLEARN_ORACLE="$oracle_dir" \
+PYTHONPATH="$oracle_dir:families/kernel_ridge/tools" \
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+python families/kernel_ridge/tests/check_pipeline_search_parity.py
+```
+
+The script builds and runs the family composition contract and compares candidate
+order, per-fold and mean scores, ranks, the winning index and refit predictions.
+Float64 scores and predictions use
+`rtol=1e-10` and `atol=1e-12` for differences in scaling, RBF evaluation and
+Cholesky operation order. Order, ranks and the winning index match exactly.
 
 ## Deferred: sparse feature inputs
 

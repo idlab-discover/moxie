@@ -14,7 +14,12 @@ Sources live in `src/moxie/gaussian_process/`, validation in
 and `examples/gaussian_process_kernels.mojo`.
 
 Side-by-side notebooks against the official gallery live in
-`notebooks/gaussian_process/`. `plot_gpr_prior_posterior` covers prior and
+`notebooks/gaussian_process/`. [XOR](../../notebooks/gaussian_process/plot_gpc_xor.ipynb)
+compares RBF and squared DotProduct kernels for binary classification.
+[Iris](../../notebooks/gaussian_process/plot_gpc_iris.ipynb) compares isotropic
+and anisotropic RBF kernels for three-class OvR. Both notebooks check
+predictions, probabilities, fitted theta, and log marginal likelihood against
+the pinned scikit-learn source. `plot_gpr_prior_posterior` covers prior and
 posterior moments and `sample_y` for five kernels. `plot_gpr_noisy` covers two
 local optima, an 80 x 80 likelihood grid, seeded restarts, `make_pipeline`,
 `cross_val_score`, `GridSearchCV` and `clone`. Rerun them with

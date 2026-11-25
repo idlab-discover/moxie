@@ -103,7 +103,7 @@ def native(case, kind, X, y, query, strategy):
     return result
 
 
-def main():
+def pinned_classifier():
     kernels = load_pinned("sklearn/gaussian_process/kernels.py", "pinned_gpc_kernels")
     multiclass_utils = load_pinned("sklearn/utils/multiclass.py", "pinned_multiclass_utils")
     with patch.dict(sys.modules, {"sklearn.utils.multiclass": multiclass_utils}):
@@ -112,7 +112,12 @@ def main():
         "sklearn.gaussian_process.kernels": kernels,
         "sklearn.multiclass": multiclass,
     }):
-        gpc = load_pinned("sklearn/gaussian_process/_gpc.py", "pinned_gpc").GaussianProcessClassifier
+        classifier = load_pinned("sklearn/gaussian_process/_gpc.py", "pinned_gpc").GaussianProcessClassifier
+    return classifier, kernels
+
+
+def main():
+    gpc, kernels = pinned_classifier()
 
     rng = np.random.RandomState(12)
     X = rng.normal(size=(28, 2))

@@ -23,11 +23,15 @@ def run[dtype: DType](mut tokens: Tokens) raises:
     var iterations = tokens.integer()
     var custom = tokens.integer()
     var mode = tokens.next()
+    var jobs: Optional[Int] = None
+    if tokens.position < len(tokens.items):
+        jobs = tokens.integer()
     for centered in range(2):
         var key = String("cv", centered)
         try:
             var model = GraphicalLassoCV[dtype](alphas=grid.copy(), n_refinements=refinements,
-                cv=folds, mode=mode.copy(), max_iter=iterations, assume_centered=centered == 1)
+                cv=folds, mode=mode.copy(), max_iter=iterations, assume_centered=centered == 1,
+                n_jobs=jobs)
             if custom:
                 var cursor = KFold(folds, shuffle=True, random_state=42).split(X.shape[0])
                 var splits = List[IndexSplit]()

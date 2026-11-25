@@ -67,6 +67,7 @@ from moxie.model_selection._split import StratifiedShuffleSplit
 from moxie.model_selection._validation import StringPredictionAdapter
 from moxie.model_selection._split import TimeSeriesSplit
 from moxie.model_selection._api import TunedThresholdClassifierCV
+from moxie.model_selection._evaluation import NegMeanSquaredError
 from moxie.model_selection._evaluation import TypedScorer
 from moxie.model_selection._plot import ValidationCurveDisplay
 from moxie.model_selection._split import check_cv

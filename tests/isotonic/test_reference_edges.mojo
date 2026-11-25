@@ -45,9 +45,25 @@ def main() raises:
 
     # Spearman with tied ranks: rho = 0.447 > 0, so "auto" picks increasing.
     var automatic = IsotonicRegression(increasing="auto")
+    assert_equal(len(automatic.fit_warnings), 0)
     _ = automatic.fit([0.0, 1, 2, 3], [0.0, 1, 0, 1])
     assert_true(automatic.increasing_)
     close(automatic.y_thresholds_, [0.0, 0.5, 0.5, 1])
+    assert_equal(len(automatic.fit_warnings), 1)
+    assert_equal(automatic.fit_warnings[0].category, "UserWarning")
+    var fitted_copy = automatic.copy()
+    fitted_copy.fit_warnings[0].category = "copy"
+    assert_equal(len(clone(automatic).fit_warnings), 0)
+    with assert_raises(contains="positive weight"):
+        _ = automatic.fit(
+            [0.0, 0, 0, 0], [1.0, 2, 3, 4],
+            sample_weight=List[Float64]([0.0, 0, 0, 0]),
+        )
+    assert_equal(len(automatic.fit_warnings), 1)
+    assert_equal(automatic.fit_warnings[0].category, "UserWarning")
+    _ = automatic.fit([0.0, 1, 2, 3], [0.0, 1, 2, 3])
+    assert_equal(len(automatic.fit_warnings), 0)
+    assert_equal(fitted_copy.fit_warnings[0].category, "copy")
 
     # set_params then refit replaces the learned state; clone keeps the new
     # configuration but no fitted buffers.
@@ -77,8 +93,8 @@ def main() raises:
     var outside = single.predict(query32)
     assert_true(isnan(outside[0]) and isnan(outside[1]))
 
-    # Documented validation difference: the reference returns True for an
-    # infinite y (spearmanr ranks it last); Moxie rejects nonfinite inputs.
-    with assert_raises(contains="finite"):
-        _ = check_increasing([0.0, 1, 2], [1.0, 2, Float64("inf")])
+    # Infinities are ranked, and undefined correlations select decreasing.
+    assert_true(check_increasing([0.0, 1, 2], [1.0, 2, Float64("inf")]))
+    assert_false(check_increasing([0.0, 1, 2], [1.0, 2, Float64("nan")]))
+    assert_false(check_increasing(List[Float64](), List[Float64]()))
     print("Isotonic reference edge checks passed")

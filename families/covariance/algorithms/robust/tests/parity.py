@@ -138,10 +138,18 @@ def postprocess(ref, model, X, X_test, key):
             ref[post + '_predict'] = model.predict(X_test)
 
 
+def regularized_covariance(samples):
+    return ROB.empirical_covariance(samples.astype(np.float64)) + 0.125 * np.eye(samples.shape[1])
+
+
 def reference(X, X_test, y, fraction, seed, assume, contamination):
     ref = {}
     location, covariance, support, dist = ROB.fast_mcd(X, support_fraction=fraction, random_state=seed)
     ref.update(fast_mcd_location=location, fast_mcd_covariance=covariance, fast_mcd_support=support, fast_mcd_dist=dist)
+    location, covariance, support, dist = ROB.fast_mcd(
+        X, support_fraction=fraction, random_state=seed, cov_computation_method=regularized_covariance)
+    ref.update(custom_mcd_location=location, custom_mcd_covariance=covariance,
+               custom_mcd_support=support, custom_mcd_dist=dist)
     for store in (0, 1):
         key = f'mcd_store{store}'
         model = ROB.MinCovDet(store_precision=bool(store), assume_centered=assume, support_fraction=fraction, random_state=seed).fit(X)

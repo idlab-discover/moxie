@@ -29,7 +29,10 @@
       "exports": {
         "packages": {
           "moxie.model_selection": {
+            "GroupKFold": "moxie.model_selection._split",
             "KFold": "moxie.model_selection._split",
+            "SplitLabels": "moxie.model_selection._split",
+            "StratifiedGroupKFold": "moxie.model_selection._split",
             "StratifiedKFold": "moxie.model_selection._split"
           }
         },
@@ -78,6 +81,9 @@
         "moxie.utils.validation": {
           "baseline": "ec75e4cf4a4b1d244fffa6f8b3b55016635e5914",
           "file": "src/moxie/utils/validation.mojo"
+        },
+        "moxie.warnings": {
+          "file": "src/moxie/warnings.mojo"
         }
       },
       "path": "../../../../.."

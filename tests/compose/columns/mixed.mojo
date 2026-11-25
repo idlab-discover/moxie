@@ -4,7 +4,7 @@ from moxie.base import clone
 from moxie.compose import ColumnEntry, ColumnTable, ColumnTransformer, make_column_selector
 from moxie.impute import SimpleImputer
 from moxie.pipeline import make_pipeline
-from moxie.preprocessing import OneHotEncoder, StandardScaler
+from moxie.preprocessing import OneHotEncoder, QuantileTransformer, StandardScaler
 from numojo import Shape, zeros
 from parity_io import ResultLine
 from std.math import inf, nan
@@ -82,7 +82,7 @@ def main() raises:
     invalid.add_categorical("color", test_colors)
     with assert_raises():
         _ = model.fit_transform(invalid)
-    with assert_raises(contains="requires float64 storage"):
+    with assert_raises(contains="requires float32 or float64 storage"):
         _ = model.transform(wrong_kind)
     line.add("after_failed_refit", model.transform(test_table))
     line.emit()
@@ -96,3 +96,11 @@ def main() raises:
     assert_false(cloned.__sklearn_is_fitted__())
     _ = cloned.fit(test_table)
     assert_equal(cloned.get_feature_names_out()[1], "cat__color_green")
+
+    var quantile = ColumnTransformer(
+        ColumnEntry("age_quantiles", QuantileTransformer(n_quantiles=7), age_name.copy()),
+    )
+    _ = quantile.fit_transform(train_table)
+    var fitted = quantile.named_transformers_[QuantileTransformer[]]("age_quantiles")
+    assert_equal(len(fitted.fit_warnings), 1)
+    assert_equal(fitted.fit_warnings[0].category, "UserWarning")

@@ -4,7 +4,7 @@ from numojo import NDArray, Shape
 from std.sys import argv
 from std.math import inf, nan
 from parity_io import Tokens, emit, emit_scalar, emit_error
-from moxie.covariance import MinCovDet, EllipticEnvelope, fast_mcd
+from moxie.covariance import MinCovDet, EllipticEnvelope, empirical_covariance, fast_mcd
 
 
 def mask(values: NDArray[DType.bool]) raises -> NDArray[DType.float64]:
@@ -19,6 +19,15 @@ def labels(values: NDArray[DType.int64]) raises -> NDArray[DType.float64]:
     for k in range(values.size):
         result.unsafe_set(k, Float64(values.unsafe_get(k)))
     return result^
+
+
+def regularized_covariance(samples: NDArray[DType.float64]) raises -> NDArray[DType.float64]:
+    var covariance = empirical_covariance(samples)
+    var p = samples.shape[1]
+    for j in range(p):
+        var diagonal = j * (p + 1)
+        covariance.unsafe_set(diagonal, covariance.unsafe_get(diagonal) + 0.125)
+    return covariance^
 
 
 def run[dtype: DType](mut tokens: Tokens) raises:
@@ -43,6 +52,11 @@ def run[dtype: DType](mut tokens: Tokens) raises:
         emit("fast_mcd_dist", result.dist)
     except e:
         emit_error("fast_mcd", e)
+    var custom = fast_mcd(X, fraction, seed, cov_computation_method=regularized_covariance)
+    emit("custom_mcd_location", custom.location)
+    emit("custom_mcd_covariance", custom.covariance)
+    emit("custom_mcd_support", mask(custom.support))
+    emit("custom_mcd_dist", custom.dist)
     for store in range(2):
         var key = String("mcd_store", store)
         try:

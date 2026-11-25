@@ -233,8 +233,8 @@ tree storage use Float64. Both Moxie trees return Float64 kernel densities,
 including in log space. Sparse graph APIs remain deferred.
 
 [Imputation](../families/impute/README.md) is owned by Moxie, including dense simple, integer,
-string and KNN imputers, numeric/string indicators, and dense deterministic
-IterativeImputer. The standalone checkout is not a build dependency.
+string and KNN imputers, numeric/string indicators, and dense deterministic and
+posterior IterativeImputer. The standalone checkout is not a build dependency.
 
 [Ensemble](../families/ensemble/README.md) is owned by Moxie, including the four
 dense RandomForest/ExtraTrees estimators and shared forest engine. Other ensemble
@@ -250,13 +250,14 @@ dense affinity, centroid, density, linkage and Birch implementations. Spectral
 clustering, biclustering, HDBSCAN and sparse inputs remain deferred.
 
 [SVM estimators](../families/svm/README.md) are owned by Moxie, including all seven
-dense estimators, l1_min_c and both native engines. Sparse input, Python runtime
-integration and persistence remain outside the supported contract. The retired
-standalone checkout is not a build dependency.
+dense estimators, l1_min_c and both native engines. LinearSVC and LinearSVR
+support [native model files](../families/svm/algorithms/linear/docs/api.md#native-model-files).
+The [family scope](../families/svm/docs/scope.md) lists supported capabilities
+and exclusions.
 
 [Neural networks](../families/neural_network/README.md) are owned by Moxie, with a
-dense BernoulliRBM subset and private MLP parameter helpers. MLP estimators remain
-raising declarations. See the family scope for explicit deferrals.
+dense BernoulliRBM subset and ordinary and incremental dense MLP training.
+See the family scope for supported solver and lifecycle contracts.
 
 [Semi-supervised learning](../families/semi_supervised/README.md) is owned by Moxie,
 including dense LabelPropagation, LabelSpreading and SelfTrainingClassifier.

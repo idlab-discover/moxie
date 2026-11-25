@@ -58,3 +58,31 @@ C logging. A ConvergenceWarning message and `fit_status_` expose capped fits.
 intercept_scaling=1.0)` returns a Float64 bound. It accepts the same native label
 lists. Use loss="log" for the L1 logistic bound; no logistic estimator is
 exported by this child. See [scope.md](scope.md) for restrictions and evidence.
+
+## Native model files
+
+Use the experimental [model file API](../../../../../docs/serialization.md)
+with a schema from `moxie.svm.linear_serialization`.
+
+```mojo
+from moxie.serialization import load_model, save_model
+from moxie.svm.linear_serialization import LinearSVCSchema, LinearSVRSchema
+
+save_model[LinearSVCSchema[String]](classifier, "classifier.moxie")
+var restored = load_model[LinearSVCSchema[String]]("classifier.moxie")
+
+save_model[LinearSVRSchema](regressor, "regressor.moxie")
+var restored_regressor = load_model[LinearSVRSchema]("regressor.moxie")
+```
+
+Choose the same classifier label type on save and load. Schema version 1
+supports String, Int, Int32, Int64, Float32, and Float64 labels, including
+explicit class weights. Both schemas preserve current configuration, fitted or
+unfitted state, and the estimator-owned random stream. Fitted loads restore
+independent coefficients and intercepts without retraining. Settings changed
+after fit apply to a subsequent fit. A stream borrowed through
+`fit_with_random_state` is owned by the caller.
+
+The linear child test runner includes file round trips and malformed-state
+checks. The linear wrapper parity driver serializes and restores each
+successfully fitted estimator before comparing with pinned scikit-learn.

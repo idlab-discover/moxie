@@ -30,6 +30,7 @@
         "docs/interfaces.md": null,
         "src/moxie/__init__.mojo": null,
         "src/moxie/base.mojo": null,
+        "src/moxie/warnings.mojo": null,
         "src/moxie/utils/__init__.mojo": null,
         "src/moxie/utils/validation.mojo": null,
         "src/moxie/isotonic.mojo": null,
@@ -46,6 +47,9 @@
       "modules": {
         "moxie.base": {
           "file": "src/moxie/base.mojo"
+        },
+        "moxie.warnings": {
+          "file": "src/moxie/warnings.mojo"
         },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"

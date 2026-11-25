@@ -78,10 +78,15 @@ def emit[dtype: DType](X: nm.NDArray[dtype]) raises:
 def report[dtype: DType](
     name: String, model: IterativeImputer[dtype],
     fitted: nm.NDArray[dtype], transformed: nm.NDArray[dtype],
+    second: Optional[nm.NDArray[dtype]],
 ) raises:
     print(name)
     emit(fitted)
     emit(transformed)
+    if second:
+        emit(second.value())
+    var fitted_state = model.random_state_.value().copy()
+    print(fitted_state.next_uint32())
     print(model.n_iter_, model.n_features_in_, model.n_features_with_missing_)
     for feature_name in model.get_feature_names_out():
         print(feature_name)
@@ -139,6 +144,23 @@ def cases():
             )
     yield "initial-only", X, Z, dict(max_iter=0, initial_strategy="median")
     yield "configured-bayesian", X, Z, dict(estimator=dict(max_iter=1, fit_intercept=False))
+    posterior = dict(sample_posterior=True, tol=1e6)
+    yield "posterior-unbounded", X, Z, posterior
+    yield "posterior-bounded", X, Z, posterior | dict(
+        min_value=[-0.1, -1, -1, -0.5, 5], max_value=[0.2, 1, 2, 0.5, 6],
+    )
+    yield "posterior-global", X, Z, posterior | dict(
+        random_state=None, imputation_order="random", n_nearest_features=3,
+    )
+    yield "posterior-repeat-fit", X, Z, posterior | dict(
+        imputation_order="random", n_nearest_features=3,
+    )
+    yield "posterior-skip-complete", X, Z, posterior | dict(
+        skip_complete=True, max_value=0.0,
+    )
+    yield "posterior-no-draws", X, Z, posterior | dict(min_value=30.0)
+    yield "posterior-all-missing-query", X, np.full_like(Z, np.nan), posterior
+    yield "posterior-initial-only", X, Z, posterior | dict(max_iter=0)
 
 
 def scalar(x):
@@ -235,11 +257,20 @@ def main():
                 np.random.seed(17)
             fitted = reference.fit_transform(X)
             repeat = tag == "repeat-random"
+            posterior = options.get("sample_posterior", False)
+            repeat_posterior = tag == "posterior-repeat-fit"
+            if repeat_posterior:
+                reference.transform(Z)
+                fitted = reference.fit_transform(X)
             if repeat:
                 fitted = reference.fit_transform(X)
+            fitted_rng = np.random.RandomState()
+            fitted_rng.set_state(reference.random_state_.get_state())
+            next_word = fitted_rng.randint(2**32, dtype="uint32")
             transformed = reference.transform(Z)
+            second = reference.transform(Z) if posterior else None
             assert fitted.dtype.name == transformed.dtype.name == dtype, name
-            expected[name] = (reference, fitted, transformed)
+            expected[name] = (reference, fitted, transformed, second, next_word)
             function = f"case_{len(calls)}"
             definitions += ["@no_inline", f"def {function}() raises:"]
             definitions += array("X", X) + array("Z", Z)
@@ -252,9 +283,13 @@ def main():
             if options["random_state"] is None:
                 definitions.append("    seed_global_random_state(17)")
             definitions.append("    var fitted = model.fit_transform(X)")
-            if repeat:
+            if repeat_posterior:
+                definitions.append("    _ = model.transform(Z)")
+            if repeat or repeat_posterior:
                 definitions.append("    fitted = model.fit_transform(X)")
-            definitions += [f'    report[DType.{dtype}]("{name}", model, fitted, model.transform(Z))', ""]
+            definitions.append("    var transformed = model.transform(Z)")
+            second_expr = "model.transform(Z)" if posterior else "None"
+            definitions += [f'    report[DType.{dtype}]("{name}", model, fitted, transformed, {second_expr})', ""]
             calls.append(f"    {function}()")
 
     build = FAMILY / "builds" / "iterative"
@@ -273,16 +308,19 @@ def main():
     )
     records = iter(output.splitlines())
     worst = {"float64": 0.0, "float32": 0.0}
-    for name, (model, fitted, transformed) in expected.items():
+    for name, (model, fitted, transformed, second, next_word) in expected.items():
         assert next(records) == name
         dtype = fitted.dtype.name
         tolerance = 3e-4 if dtype == "float32" else 5e-8
-        for want in (fitted, transformed):
+        for want in (fitted, transformed, second):
+            if want is None:
+                continue
             shape = tuple(map(int, next(records).split()))
             assert shape == want.shape, (name, shape, want.shape)
             observed = np.array([float(next(records)) for _ in range(want.size)]).reshape(shape)
             np.testing.assert_allclose(observed, want, rtol=tolerance, atol=tolerance, err_msg=name)
             worst[dtype] = max(worst[dtype], np.max(np.abs(observed - want), initial=0))
+        assert int(next(records)) == next_word, name
         counts = tuple(map(int, next(records).split()))
         assert counts == (model.n_iter_, model.n_features_in_,
                           getattr(model, "n_features_with_missing_", 0)), (name, counts)

@@ -77,6 +77,30 @@ def main() raises:
     var t32 = ColumnTable(f32, names)
     var m32 = ColumnTransformer(ColumnEntry[NoTransformer[DType.float32], DType.float32]("all", "passthrough", make_column_selector(dtype_include=float32.copy())))
     assert_equal(m32.fit_transform(t32).shape[1], 3)
+    var wide = zeros[DType.float64](Shape(2))
+    wide.unsafe_set(0, 1.0000000000000002)
+    wide.unsafe_set(1, 3.5)
+    var narrow = zeros[DType.float32](Shape(2))
+    narrow.unsafe_set(0, 2.5)
+    t32.add_numeric("wide", wide, position=0)
+    t32.add_numeric("narrow", narrow, position=1)
+    var all_numbers: List[String] = ["number"]
+    var mixed32 = ColumnTransformer(ColumnEntry[NoTransformer[DType.float32], DType.float32](
+        "all", "passthrough", make_column_selector(dtype_include=all_numbers^),
+    ))
+    var projected = mixed32.fit_transform(t32)
+    assert_equal(projected.shape[1], 5)
+    assert_equal(projected.unsafe_get(0), Float32(1.0))
+    assert_equal(projected.unsafe_get(1), Float32(2.5))
+    assert_equal(projected.unsafe_get(5), Float32(3.5))
+    assert_equal(mixed32.get_feature_names_out()[0], "all__wide")
+    with assert_raises(contains="cannot be borrowed"):
+        _ = t32.values()
+    var scalar32 = ColumnTransformer(ColumnEntry[NoTransformer[DType.float32], DType.float32](
+        "scalar", "passthrough", "wide",
+    ))
+    with assert_raises(contains="should be 2D"):
+        _ = scalar32.fit_transform(t32)
     var snapshot = table.copy()
     table.values().unsafe_set(0, 123)
     assert_equal(Float64(snapshot.values().unsafe_get(0)), 0.0)

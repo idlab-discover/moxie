@@ -20,6 +20,8 @@ from moxie._calibration_algorithms import (
     _IsotonicCalibration,
     _TemperatureScaling,
 )
+from moxie.calibration_serialization import CalibratedClassifierCVSchema
+from moxie.serialization import dumps, loads
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.frozen import FrozenEstimator
 from moxie.linear_model import LogisticRegression
@@ -281,6 +283,11 @@ def main() raises:
             )
             _ = model.fit(x, y, w)
             compare_estimator_result(model, q, expected, fields, context)
+            var restored = CalibratedClassifierCVSchema.decode(
+                loads(dumps(CalibratedClassifierCVSchema.encode(model)))
+            )
+            compare_estimator_result(restored, q, expected, fields, context + " restored")
+            compare(restored.predict_proba(q), model.predict_proba(q), 0, context)
             var expected_folds = 1 if fields[7] == "false" else 5
             if len(model.calibrated_classifiers_) != expected_folds:
                 raise Error(context + ": incorrect number of fitted classifiers")

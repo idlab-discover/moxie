@@ -189,6 +189,11 @@ Binary decisions become `(-score, score)`. Inputs that look like probabilities
 become `log(p + 1e-12)`, following the reference. Stable softmax produces the
 probabilities. The optimizer differs from SciPy's bounded Brent search.
 
+Sigmoid and temperature calibration use Numax's Float64 scalar `exp` and
+`log`. The sigmoid objective uses `std.math.log1p` to preserve small loss
+terms. Numax's array `log1p` calls the same stdlib primitive and would
+materialize an array for this scalar operation.
+
 The pinned sklearn temperature wrapper does not encode nonconsecutive numeric
 labels before its multinomial loss. This implementation always encodes labels
 as consecutive class indices and maps predictions back through `classes_`.
@@ -258,13 +263,39 @@ figure. This ownership model replaces Matplotlib's shared mutable artists.
 returns nothing. Matplotlib axes, arbitrary plot
 kwargs, interactive windows and other image formats are not supported.
 
+## Native model files
+
+Persist a fitted or unfitted calibrator whose base estimator is the built-in
+dense LinearSVC adapter. This includes the default constructor and
+`adapt_classifier(LinearSVC(...))`.
+
+```mojo
+from moxie.calibration import CalibratedClassifierCV
+from moxie.calibration_serialization import CalibratedClassifierCVSchema
+from moxie.serialization import load_model, save_model
+
+var model = CalibratedClassifierCV(method="isotonic", cv=3)
+_ = model.fit(X, y)
+save_model[CalibratedClassifierCVSchema](model, "calibrated.moxie")
+var restored = load_model[CalibratedClassifierCVSchema]("calibrated.moxie")
+var probabilities = restored.predict_proba(X)
+```
+
+The experimental schema stores current constructor settings, learned class
+order and feature count, and every fitted estimator and calibrator for the
+sigmoid, isotonic and temperature methods. Loading reconstructs independent
+fitted state without refitting. Parameters changed after fit apply to the next
+fit. A custom class reader on a LinearSVC adapter is rejected because it
+has no representation in the file. Other base estimator types require their
+own calibration schema support. See [native model files](../serialization.md)
+for format and load limits.
+
 ## Limits and validation
 
 Remaining gaps include sparse estimators, typed estimator labels, arbitrary fit
-metadata, parallel jobs, metadata routing, persistence, feature names and
-Matplotlib object interoperability. Temperature ensemble folds with missing
-training classes are rejected explicitly. These are scope limits, not claims
-of complete sklearn compatibility.
+metadata, parallel jobs, metadata routing, persistence for other base
+estimators, feature names and Matplotlib object interoperability. Temperature
+ensemble folds with missing training classes are rejected explicitly.
 
 From the Moxie root run `pixi run build`, `pixi run test`, and `pixi run parity`.
 For calibration alone run `pixi run python tools/calibration_checks.py test`

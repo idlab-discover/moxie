@@ -60,13 +60,14 @@ No performance claim is made by these scaffold probes.
 
 ## Exact extension contracts
 
-Import the following private names from `moxie.gaussian_process._plumbing`.
+Import `KernelContract` and `KernelEvaluation` from `moxie.gaussian_process`.
+The remaining internal names are in `moxie.gaussian_process._plumbing`.
 Their executable signatures are authoritative and compiled in `test_plumbing`.
 
 | Contract / record | Interface and layout |
 | --- | --- |
 | `HyperparameterSpec` | `name: String`, `n_elements: Int`, `fixed: Bool`, owned raw-unit `bounds: Dense64`; constructor validates positive element count and `(n_elements,2)` or fixed `(0,2)` shape; `n_dims()` excludes fixed entries |
-| `KernelContract` | Associated `Input`, `Params`; `get_params(deep=True)`, in-place `set_params`, `hyperparameters()`, `theta()`, `bounds()`, `set_theta`, `clone_with_theta`; `evaluate(X,Y=None,eval_gradient=False)`, `diag(X)`, stationary/vector flags |
+| `KernelContract` | Associated `Input` (sized and copyable), `Params`; static `empty_input()`; `get_params(deep=True)`, in-place `set_params`, `hyperparameters()`, `theta()`, `bounds()`, `set_theta`, `clone_with_theta`; `evaluate(X,Y=None,eval_gradient=False)`, `diag(X)`, stationary/vector flags |
 | `KernelEvaluation` | Owned `covariance: Dense64`; `gradient: Optional[Dense64]`; None when not requested |
 | `PositiveDefiniteAlgebra` | `cholesky(matrix)`, `solve_triangular(lower,rhs,transpose=False)`, `cho_solve(lower,rhs)`, `log_determinant(lower)`; all borrow arguments, return owned arrays or Float64 log determinant |
 | `LikelihoodObjective` | Mutating `evaluate(theta,eval_gradient=True)` returns `ObjectiveEvaluation(value: Float64, gradient: Optional[Dense64])`; minimized value is negative LML |
@@ -180,7 +181,8 @@ unchanged foundation contract. Language differences must be tested by children;
 Python reflection, pandas adapters and metadata routing remain binding work.
 The kernel engine implements general Matérn nu and dense string PairwiseKernel
 metrics. The family owns [native regressor and kernel schemas](regression/api.md#native-persistence).
-Native custom/structured kernels remain incomplete.
+Structured regression accepts typed native kernels. Custom leaves inside the
+built-in kernel tree and structured classification remain open.
 
 ## Dependency assembly and verification
 

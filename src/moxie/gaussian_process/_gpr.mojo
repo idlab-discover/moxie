@@ -21,10 +21,12 @@ from moxie.gaussian_process._base import (
 from moxie.gaussian_process._plumbing import (
     Dense64,
     HyperparameterOptimizer,
+    KernelContract,
     LikelihoodObjective,
     ObjectiveEvaluation,
     OptimizationResult,
     PredictionResult,
+    validate_theta,
     validate_uncertainty,
 )
 from moxie.gaussian_process._algebra import CholeskyAlgebra, identity
@@ -81,9 +83,16 @@ def _diagonal_noise(alpha: ScalarOrVector, n: Int) raises -> List[Float64]:
     return values.copy()
 
 
-def log_marginal_likelihood_of(
-    kernel: Kernel,
-    X_train: Dense64,
+def _covariance_copy(covariance: Dense64, rows: Int, cols: Int) raises -> Dense64:
+    if covariance.shape != Shape(rows, cols):
+        raise Error("ValueError: expected kernel covariance shape (n_X, n_Y)")
+    # Detach kernel-owned views before writing noise or posterior corrections.
+    return covariance.contiguous()
+
+
+def log_marginal_likelihood_of[K: KernelContract](
+    kernel: K,
+    X_train: K.Input,
     y_train: Dense64,
     noise: List[Float64],
     eval_gradient: Bool,
@@ -93,18 +102,18 @@ def log_marginal_likelihood_of(
     y_train is `(n, t)`; returns `-inf` (and a zero gradient) when K + alpha I
     is not positive definite, exactly like sklearn.
     """
-    var n = X_train.shape[0]
+    var n = y_train.shape[0]
     var t = y_train.shape[1]
     var evaluation = kernel.evaluate(X_train, eval_gradient=eval_gradient)
-    var K = evaluation.covariance.copy()
+    var covariance = _covariance_copy(evaluation.covariance, n, n)
     for i in range(n):
-        K.unsafe_set(i * n + i, K.unsafe_get(i * n + i) + noise[i])
+        covariance.unsafe_set(i * n + i, covariance.unsafe_get(i * n + i) + noise[i])
     var algebra = CholeskyAlgebra()
     var L: Dense64
     try:
-        L = algebra.cholesky(K)
+        L = algebra.cholesky(covariance)
     except:
-        var p = kernel.n_dims()
+        var p = len(kernel.theta())
         if eval_gradient:
             return LikelihoodResult(value=-Float64.MAX * 2.0, gradient=zeros[DType.float64](Shape(p)))
         return LikelihoodResult(value=-Float64.MAX * 2.0, gradient=None)
@@ -120,8 +129,13 @@ def log_marginal_likelihood_of(
         total += -0.5 * fit - log_diag - Float64(n) / 2.0 * flog(2.0 * pi)
     if not eval_gradient:
         return LikelihoodResult(value=total, gradient=None)
-    ref G = evaluation.gradient.value()
-    var p = G.shape[2]
+    if not evaluation.gradient:
+        raise Error("ValueError: the kernel did not return a requested gradient")
+    ref gradient_matrix = evaluation.gradient.value()
+    var p = len(kernel.theta())
+    if gradient_matrix.shape != Shape(n, n, p):
+        raise Error("ValueError: expected kernel gradient shape (n, n, n_dims)")
+    var G = gradient_matrix.view() if gradient_matrix.is_c_contiguous() else gradient_matrix.contiguous()
     var K_inv = algebra.cho_solve(L, identity(n))
     var gradient = zeros[DType.float64](Shape(p))
     var g = G.unsafe_ptr()
@@ -140,21 +154,24 @@ def log_marginal_likelihood_of(
     return LikelihoodResult(value=total, gradient=gradient^)
 
 
-struct LogMarginalLikelihood(Copyable, LikelihoodObjective, Movable):
+comptime LogMarginalLikelihood = _KernelLikelihood[Kernel]
+
+
+struct _KernelLikelihood[K: KernelContract](Copyable, LikelihoodObjective, Movable):
     """Optimizer objective: negative LML of the training data at log theta.
 
     Mirrors sklearn's `obj_func(theta, eval_gradient=True)`; the kernel's
     theta is replaced on each call (clone_kernel=False semantics).
     """
 
-    var kernel: Kernel
-    var X_train: Dense64
+    var kernel: Self.K
+    var X_train: Self.K.Input
     var y_train: Dense64
     var noise: List[Float64]
     var evaluations: Int
 
     def __init__(
-        out self, var kernel: Kernel, X_train: Dense64, y_train: Dense64, var noise: List[Float64]
+        out self, var kernel: Self.K, X_train: Self.K.Input, y_train: Dense64, var noise: List[Float64]
     ):
         self.kernel = kernel^
         self.X_train = X_train.copy()
@@ -211,10 +228,12 @@ struct FminLBFGSB(GPROptimizer, HyperparameterOptimizer, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct GaussianProcessRegressorParams[Optimizer: GPROptimizer](Copyable, Movable):
+struct GaussianProcessRegressorParams[
+    Optimizer: GPROptimizer, K: KernelContract = Kernel
+](Copyable, Movable):
     """Constructor configuration (sklearn get_params keys)."""
 
-    var kernel: Optional[Kernel]
+    var kernel: Optional[Self.K]
     var alpha: ScalarOrVector
     var optimizer: Optional[Self.Optimizer]
     var n_restarts_optimizer: Int
@@ -273,8 +292,18 @@ optimizer (a `GPROptimizer`).
 """
 
 
-struct GenericGaussianProcessRegressor[
+comptime GenericGaussianProcessRegressor[
     dtype: DType, Optimizer: GPROptimizer = FminLBFGSB
+] = _GaussianProcessRegressor[dtype, Kernel, Optimizer]
+
+
+comptime StructuredGaussianProcessRegressor[
+    K: KernelContract, dtype: DType = DType.float64
+] = _GaussianProcessRegressor[dtype, K, FminLBFGSB]
+
+
+struct _GaussianProcessRegressor[
+    dtype: DType, K: KernelContract, Optimizer: GPROptimizer
 ](Copyable, GaussianProcessPosterior, GaussianProcessRegressorAPI, GaussianUncertainty):
     """Gaussian process regression with sklearn's constructor defaults.
 
@@ -284,17 +313,17 @@ struct GenericGaussianProcessRegressor[
     during fit). Prediction before fit uses the GP prior, as in sklearn.
     """
 
-    comptime Input = NDArray[Self.dtype]
+    comptime Input = NDArray[Self.dtype] if Self.K == Kernel else Self.K.Input
     comptime Target = NDArray[Self.dtype]
     comptime Prediction = Dense64
     comptime SampleWeight = List[Float64]
-    comptime Params = GaussianProcessRegressorParams[Self.Optimizer]
+    comptime Params = GaussianProcessRegressorParams[Self.Optimizer, Self.K]
     comptime Draws = Dense64
     comptime Theta = Dense64
     comptime Likelihood = LikelihoodResult
     comptime Uncertainty = PredictionResult
 
-    var kernel: Optional[Kernel]
+    var kernel: Optional[Self.K]
     var alpha: ScalarOrVector
     var optimizer: Optional[Self.Optimizer]
     var n_restarts_optimizer: Int
@@ -303,8 +332,8 @@ struct GenericGaussianProcessRegressor[
     var n_targets: Optional[Int]
     var random_state: Optional[Int]
 
-    var kernel_: Kernel
-    var X_train_: NDArray[Self.dtype]
+    var kernel_: Self.K
+    var X_train_: Self.Input
     var y_train_: Dense64
     var L_: Dense64
     var alpha_: Dense64
@@ -319,7 +348,7 @@ struct GenericGaussianProcessRegressor[
 
     def __init__(
         out self,
-        kernel: Optional[Kernel] = None,
+        kernel: Optional[Self.K] = None,
         *,
         alpha: ScalarOrVector = 1e-10,
         optimizer: Optional[Self.Optimizer] = Self.Optimizer(),
@@ -340,8 +369,12 @@ struct GenericGaussianProcessRegressor[
         self.copy_X_train = copy_X_train
         self.n_targets = n_targets
         self.random_state = random_state
-        self.kernel_ = default_kernel()
-        self.X_train_ = zeros[Self.dtype](Shape(0, 0))
+        comptime if Self.K == Kernel:
+            self.kernel_ = rebind_var[Self.K](default_kernel())
+            self.X_train_ = rebind_var[Self.Input](zeros[Self.dtype](Shape(0, 0)))
+        else:
+            self.kernel_ = Self._configured_kernel(kernel)
+            self.X_train_ = rebind_var[Self.Input](Self.K.empty_input())
         self.y_train_ = zeros[DType.float64](Shape(0))
         self.L_ = zeros[DType.float64](Shape(0, 0))
         self.alpha_ = zeros[DType.float64](Shape(0))
@@ -357,7 +390,7 @@ struct GenericGaussianProcessRegressor[
 
     def __init__(
         out self,
-        kernel: Kernel,
+        kernel: Self.K,
         *,
         alpha: ScalarOrVector = 1e-10,
         optimizer: Optional[Self.Optimizer] = Self.Optimizer(),
@@ -369,7 +402,7 @@ struct GenericGaussianProcessRegressor[
     ) raises:
         """Construct with an explicit kernel (copied; sklearn clones at fit)."""
         self = Self(
-            Optional[Kernel](kernel.copy()),
+            Optional[Self.K](kernel.copy()),
             alpha=alpha,
             optimizer=optimizer,
             n_restarts_optimizer=n_restarts_optimizer,
@@ -403,6 +436,9 @@ struct GenericGaussianProcessRegressor[
         self._fitted = copy._fitted
 
     def _validate_params(self) raises:
+        comptime if Self.K != Kernel:
+            if not self.kernel or self.kernel.value().requires_vector_input():
+                raise Error("ValueError: an explicit non-vector kernel is required")
         if self.n_restarts_optimizer < 0:
             raise Error(
                 "InvalidParameterError: The 'n_restarts_optimizer' parameter of"
@@ -467,7 +503,7 @@ struct GenericGaussianProcessRegressor[
     def set_params[origin: MutOrigin](
         ref[origin] self,
         *,
-        kernel: Optional[Optional[Kernel]] = None,
+        kernel: Optional[Optional[Self.K]] = None,
         alpha: Variant[NoneType, Float64, List[Float64]] = NoneType(),
         optimizer: Optional[Optional[Self.Optimizer]] = None,
         n_restarts_optimizer: Optional[Int] = None,
@@ -538,24 +574,9 @@ struct GenericGaussianProcessRegressor[
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, mut random_state: RandomState) raises -> ref[self] Self:
         """Fit using (and advancing) a borrowed RandomState for restarts."""
         self._validate_params()
-        var kernel = self.kernel.value().copy() if self.kernel else default_kernel()
-        if X.ndim != 2:
-            raise Error(
-                "ValueError: Expected 2D array, got "
-                + String(X.ndim)
-                + "D array instead. Reshape your data."
-            )
-        var Xd = as_dense64(X, "GaussianProcessRegressor.fit X")
-        var n = Xd.shape[0]
-        if n < 1 or Xd.shape[1] < 1:
-            raise Error(
-                "ValueError: Found array with "
-                + String(n)
-                + " sample(s) and "
-                + String(Xd.shape[1])
-                + " feature(s) while a minimum of 1 is required by GaussianProcessRegressor."
-            )
-        _check_finite(Xd, "X")
+        var kernel = Self._configured_kernel(self.kernel)
+        var Xd = self._checked_input(X, fitting=True)
+        var n = len(Xd)
         var Y = _target_matrix(y)
         if Y.shape[0] != n:
             raise Error(
@@ -603,17 +624,25 @@ struct GenericGaussianProcessRegressor[
         var noise = _diagonal_noise(self.alpha, n)
         var warnings = List[String]()
         var lml_value: Float64
-        if self.optimizer and kernel.n_dims() > 0:
-            var objective = LogMarginalLikelihood(kernel.copy(), Xd, Y, noise.copy())
+        var theta = kernel.theta()
+        comptime if Self.K != Kernel:
+            if theta.ndim != 1:
+                raise Error("ValueError: expected a one-dimensional kernel theta")
+        if self.optimizer and len(theta) > 0:
+            var objective = _KernelLikelihood[Self.K](kernel.copy(), Xd, Y, noise.copy())
             ref optimizer = self.optimizer.value()
             var bounds = kernel.bounds()
+            comptime if Self.K != Kernel:
+                validate_theta(theta, bounds, len(theta))
+                theta = theta.contiguous()
+                bounds = bounds.contiguous()
             var results = List[OptimizationResult]()
-            results.append(optimizer.minimize(objective, kernel.theta(), bounds))
+            results.append(Self._minimize(optimizer, objective, theta, bounds))
             if self.n_restarts_optimizer > 0:
                 check_restart_bounds(bounds)
                 for _ in range(self.n_restarts_optimizer):
                     var start = restart_initial_theta(bounds, random_state)
-                    results.append(optimizer.minimize(objective, start, bounds))
+                    results.append(Self._minimize(optimizer, objective, start, bounds))
             for i in range(len(results)):
                 if not results[i].converged:
                     warnings.append("ConvergenceWarning: " + results[i].message)
@@ -624,17 +653,17 @@ struct GenericGaussianProcessRegressor[
             lml_value = -best.value
         else:
             lml_value = log_marginal_likelihood_of(kernel, Xd, Y, noise, False).value
-        var K = kernel(Xd)
+        var covariance = Self._covariance(kernel, Xd, n, n)
         for i in range(n):
-            K.unsafe_set(i * n + i, K.unsafe_get(i * n + i) + noise[i])
+            covariance.unsafe_set(i * n + i, covariance.unsafe_get(i * n + i) + noise[i])
         var algebra = CholeskyAlgebra()
         var L: Dense64
         try:
-            L = algebra.cholesky(K)
+            L = algebra.cholesky(covariance)
         except e:
             raise Error(
                 "LinAlgError: The kernel, "
-                + String(kernel)
+                + Self._kernel_name(kernel)
                 + ", is not returning a positive definite matrix. Try gradually"
                 " increasing the 'alpha' parameter of your GaussianProcessRegressor"
                 " estimator. ("
@@ -655,12 +684,25 @@ struct GenericGaussianProcessRegressor[
         self.L_ = L^
         self.alpha_ = _squeeze_columns(alpha) if self._y_is_vector else alpha^
         self.log_marginal_likelihood_value_ = lml_value
-        self.n_features_in_ = Xd.shape[1]
+        comptime if Self.K == Kernel:
+            self.n_features_in_ = rebind[Dense64](Xd).shape[1]
         self.convergence_warnings_ = warnings^
         self._y_train_mean = mean^
         self._y_train_std = scale^
         self._fitted = True
         return self
+
+    @staticmethod
+    def _minimize(
+        optimizer: Self.Optimizer, mut objective: _KernelLikelihood[Self.K],
+        theta: Dense64, bounds: Dense64,
+    ) raises -> OptimizationResult:
+        comptime if Self.K == Kernel:
+            return optimizer.minimize(rebind[LogMarginalLikelihood](objective), theta, bounds)
+        else:
+            return LBFGSBOptimizer[_KernelLikelihood[Self.K]]().minimize(
+                objective, theta, bounds
+            )
 
     def _alpha_matrix(self) raises -> Dense64:
         var t = self._target_matrix.shape[1]
@@ -672,26 +714,84 @@ struct GenericGaussianProcessRegressor[
 
     # --- prediction -------------------------------------------------------------
 
-    def _checked_input(self, X: Self.Input) raises -> Dense64:
-        if X.ndim != 2:
-            raise Error(
-                "ValueError: Expected 2D array, got "
-                + String(X.ndim)
-                + "D array instead. Reshape your data."
+    @staticmethod
+    def _configured_kernel(kernel: Optional[Self.K], prior: Bool = False) raises -> Self.K:
+        if kernel:
+            return kernel.value().copy()
+        comptime if Self.K == Kernel:
+            return rebind_var[Self.K](_prior_kernel() if prior else default_kernel())
+        else:
+            raise Error("ValueError: a structured kernel is required")
+
+    @staticmethod
+    def _kernel_name(kernel: Self.K) -> String:
+        comptime if Self.K == Kernel:
+            return String(rebind[Kernel](kernel))
+        else:
+            return String("structured kernel")
+
+    def _checked_input(self, X: Self.Input, fitting: Bool = False) raises -> Self.K.Input:
+        comptime if Self.K == Kernel:
+            ref matrix = rebind[NDArray[Self.dtype]](X)
+            if matrix.ndim != 2:
+                raise Error(
+                    "ValueError: Expected 2D array, got "
+                    + String(matrix.ndim)
+                    + "D array instead. Reshape your data."
+                )
+            var context = "GaussianProcessRegressor.fit X" if fitting else "GaussianProcessRegressor.predict X"
+            var Xd = as_dense64(matrix, context)
+            if fitting and (Xd.shape[0] < 1 or Xd.shape[1] < 1):
+                raise Error(
+                    "ValueError: Found array with "
+                    + String(Xd.shape[0])
+                    + " sample(s) and "
+                    + String(Xd.shape[1])
+                    + " feature(s) while a minimum of 1 is required by GaussianProcessRegressor."
+                )
+            if Xd.shape[0] < 1:
+                raise Error("ValueError: Found array with 0 sample(s) while a minimum of 1 is required by GaussianProcessRegressor.")
+            _check_finite(Xd, "X")
+            if not fitting and self._fitted and Xd.shape[1] != self.n_features_in_:
+                raise Error(
+                    "ValueError: X has "
+                    + String(Xd.shape[1])
+                    + " features, but GaussianProcessRegressor is expecting "
+                    + String(self.n_features_in_)
+                    + " features as input."
+                )
+            return rebind_var[Self.K.Input](Xd^)
+        else:
+            if len(X) < 1:
+                raise Error("ValueError: expected at least one structured sample")
+            return rebind_var[Self.K.Input](X.copy())
+
+    def _training_input(self) raises -> Self.K.Input:
+        comptime if Self.K == Kernel:
+            return rebind_var[Self.K.Input](as_dense64(rebind[NDArray[Self.dtype]](self.X_train_), "X_train_"))
+        else:
+            return rebind_var[Self.K.Input](self.X_train_.copy())
+
+    @staticmethod
+    def _covariance(
+        kernel: Self.K, X: Self.K.Input, rows: Int, cols: Int,
+        Y: Optional[Self.K.Input] = None,
+    ) raises -> Dense64:
+        comptime if Self.K == Kernel:
+            return rebind[Kernel](kernel)(
+                rebind[Dense64](X), rebind[Optional[Dense64]](Y)
             )
-        var Xd = as_dense64(X, "GaussianProcessRegressor.predict X")
-        if Xd.shape[0] < 1:
-            raise Error("ValueError: Found array with 0 sample(s) while a minimum of 1 is required by GaussianProcessRegressor.")
-        _check_finite(Xd, "X")
-        if self._fitted and Xd.shape[1] != self.n_features_in_:
-            raise Error(
-                "ValueError: X has "
-                + String(Xd.shape[1])
-                + " features, but GaussianProcessRegressor is expecting "
-                + String(self.n_features_in_)
-                + " features as input."
-            )
-        return Xd^
+        else:
+            var evaluation = kernel.evaluate(X, Y)
+            return _covariance_copy(evaluation.covariance, rows, cols)
+
+    def _kernel_diag(self, kernel: Self.K, X: Self.K.Input, n: Int) raises -> Dense64:
+        var diagonal = kernel.diag(X)
+        comptime if Self.K != Kernel:
+            if diagonal.shape != Shape(n):
+                raise Error("ValueError: expected kernel diagonal shape (n,)")
+            return diagonal.contiguous()
+        return diagonal^
 
     def predict(self, X: Self.Input) raises -> Dense64:
         """Mean of shape `(n,)` for one target and `(n, t)` for multiple targets.
@@ -708,9 +808,9 @@ struct GenericGaussianProcessRegressor[
             raise Error("RuntimeError: At most one of return_std or return_cov can be requested.")
         validate_uncertainty(return_std, return_cov)
         var Xd = self._checked_input(X)
-        var m = Xd.shape[0]
+        var m = len(Xd)
         if not self._fitted:
-            var kernel = self.kernel.value().copy() if self.kernel else _prior_kernel()
+            var kernel = Self._configured_kernel(self.kernel, prior=True)
             var t = self.n_targets.value() if self.n_targets else 1
             var mean_shape = Shape(m, t)
             if t == 1:
@@ -719,7 +819,7 @@ struct GenericGaussianProcessRegressor[
                 mean_shape = Shape(t)
             var mean = zeros[DType.float64](mean_shape)
             if return_cov:
-                var cov = kernel(Xd)
+                var cov = Self._covariance(kernel, Xd, m, m)
                 if t == 1:
                     return PredictionResult(mean=mean^, std=None, covariance=cov^)
                 var rep = zeros[DType.float64](Shape(m, m, t))
@@ -728,7 +828,7 @@ struct GenericGaussianProcessRegressor[
                         rep.unsafe_set(e * t + k, cov.unsafe_get(e))
                 return PredictionResult(mean=mean^, std=None, covariance=rep^)
             if return_std:
-                var diag = kernel.diag(Xd)
+                var diag = self._kernel_diag(kernel, Xd, m)
                 var std = zeros[DType.float64](Shape(m)) if t == 1 else zeros[DType.float64](Shape(m, t))
                 for i in range(m):
                     for k in range(t):
@@ -737,8 +837,8 @@ struct GenericGaussianProcessRegressor[
             return PredictionResult(mean=mean^, std=None, covariance=None)
         var n = self.L_.shape[0]
         var t = self._target_matrix.shape[1]
-        var X_train = as_dense64(self.X_train_, "X_train_")
-        var K_trans = self.kernel_(Xd, X_train^)  # (m, n)
+        var X_train = self._training_input()
+        var K_trans = Self._covariance(self.kernel_, Xd, m, n, X_train^)
         var A = self._alpha_matrix()
         var mean = zeros[DType.float64](Shape(m, t))
         for i in range(m):
@@ -756,7 +856,7 @@ struct GenericGaussianProcessRegressor[
                 K_trans_T.unsafe_set(j * m + i, K_trans.unsafe_get(i * n + j))
         var V = CholeskyAlgebra().solve_triangular(self.L_, K_trans_T)  # (n, m)
         if return_cov:
-            var cov = self.kernel_(Xd)
+            var cov = Self._covariance(self.kernel_, Xd, m, m)
             for a in range(m):
                 for b in range(m):
                     var acc: Float64 = 0.0
@@ -773,7 +873,7 @@ struct GenericGaussianProcessRegressor[
                 for k in range(t):
                     full.unsafe_set(e * t + k, cov.unsafe_get(e) * self._y_train_std[k] * self._y_train_std[k])
             return PredictionResult(mean=mean_out^, std=None, covariance=full^)
-        var var_ = self.kernel_.diag(Xd)
+        var var_ = self._kernel_diag(self.kernel_, Xd, m)
         var negative = False
         for i in range(m):
             var acc: Float64 = 0.0
@@ -862,8 +962,8 @@ struct GenericGaussianProcessRegressor[
         if not clone_kernel:
             self.kernel_.set_theta(theta.value())
         var kernel = self.kernel_.clone_with_theta(theta.value())
-        var X_train = as_dense64(self.X_train_, "X_train_")
-        var noise = _diagonal_noise(self.alpha, X_train.shape[0])
+        var X_train = self._training_input()
+        var noise = _diagonal_noise(self.alpha, len(X_train))
         return log_marginal_likelihood_of(kernel, X_train, self._target_matrix, noise, eval_gradient)
 
     # --- scoring -------------------------------------------------------------------
@@ -918,7 +1018,7 @@ def _isclose(a: Float64, b: Float64) -> Bool:
     return abs(a - b) <= 1e-8 + 1e-5 * abs(b)
 
 
-def _bounds_warnings(kernel: Kernel) raises -> List[String]:
+def _bounds_warnings[K: KernelContract](kernel: K) raises -> List[String]:
     """sklearn `Kernel._check_bounds_params` messages (ConvergenceWarning)."""
     var out = List[String]()
     var bounds = kernel.bounds()
@@ -928,22 +1028,26 @@ def _bounds_warnings(kernel: Kernel) raises -> List[String]:
         if spec.fixed:
             continue
         for dim in range(spec.n_elements):
-            var t = theta.unsafe_get(idx)
-            if _isclose(bounds.unsafe_get(2 * idx), t):
+            if idx >= len(theta):
+                raise Error("ValueError: kernel hyperparameters exceed theta dimensions")
+            var t = theta.item(idx)
+            if _isclose(bounds.item(idx, 0), t):
                 out.append(
                     "ConvergenceWarning: The optimal value found for dimension "
                     + String(dim) + " of parameter " + spec.name
                     + " is close to the specified lower bound "
-                    + String(spec.bounds.unsafe_get(2 * dim))
+                    + String(spec.bounds.item(dim, 0))
                     + ". Decreasing the bound and calling fit again may find a better value."
                 )
-            elif _isclose(bounds.unsafe_get(2 * idx + 1), t):
+            elif _isclose(bounds.item(idx, 1), t):
                 out.append(
                     "ConvergenceWarning: The optimal value found for dimension "
                     + String(dim) + " of parameter " + spec.name
                     + " is close to the specified upper bound "
-                    + String(spec.bounds.unsafe_get(2 * dim + 1))
+                    + String(spec.bounds.item(dim, 1))
                     + ". Increasing the bound and calling fit again may find a better value."
                 )
             idx += 1
+    if idx != len(theta):
+        raise Error("ValueError: kernel hyperparameters do not cover theta dimensions")
     return out^

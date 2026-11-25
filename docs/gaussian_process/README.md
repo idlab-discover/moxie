@@ -76,7 +76,9 @@ explicit `None` sampling advance the shared stream. Caller-owned streams advance
 in place. Omitted `sample_y` state is integer zero. Sampling parity compares
 whitened norms because valid SVD sign choices can change individual draws.
 
-Structured/custom kernels, callable pairwise metrics,
+[Structured regression](regression/api.md#structured-inputs) uses native typed
+kernels and batches. Custom leaves inside built-in kernel compositions,
+structured classification, callable pairwise metrics,
 training aliasing, Python reflection, metadata routing and pickling remain open.
 CompoundKernel theta splitting preserves the documented correction to the
 reference setter; unsupported nested CompoundKernel compositions remain explicit.

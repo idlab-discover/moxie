@@ -1,11 +1,14 @@
-# Dense GaussianProcessRegressor scope
+# GaussianProcessRegressor scope
 
 Supported: dense Float32/Float64 X `(n, d)`, y `(n,)`/`(n, t)`, every kernel of the
 kernels engine, scalar/per-sample alpha, normalize_y, L-BFGS-B with restarts,
 optimizer=None, native custom optimizer, prior/posterior mean/std/cov, sample_y,
 LML with gradients, R² score, clone/params. Sparse input is deferred
-(`../session-plan/SPARSITY-SCOPE.md`); non-vector (structured) inputs are not
-supported.
+(`../session-plan/SPARSITY-SCOPE.md`).
+
+[Structured regression](api.md#structured-inputs) uses typed non-vector
+batches and a native kernel. The sequence fixture checks both a fixed kernel
+and optimization with log-space gradients against the pinned reference.
 
 Validation: `pixi run test` (15 native contract tests + example), `pixi run
 parity` (15 cases incl. Float32, multi-target, restarts, general-nu Matern,

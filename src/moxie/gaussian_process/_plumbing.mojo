@@ -60,9 +60,12 @@ struct HyperparameterSpec(Copyable, Movable):
         return 0 if self.fixed else self.n_elements
 
 
-trait KernelContract(Copyable, Movable):
-    comptime Input: Movable
+trait KernelContract(Copyable, Deinitable):
+    comptime Input: Copyable & Deinitable & Sized
     comptime Params: Movable
+
+    @staticmethod
+    def empty_input() raises -> Self.Input: ...
 
     def get_params(self, deep: Bool = True) raises -> Self.Params: ...
     def set_params(mut self, params: Self.Params) raises: ...

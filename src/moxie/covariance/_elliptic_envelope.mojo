@@ -11,6 +11,7 @@ from numojo import NDArray, Shape
 from std.math import floor, isfinite
 from moxie._random import RandomState, entropy_state
 from moxie.covariance._base import RobustCovarianceDetector
+from moxie.base import FitPredictor
 from moxie.covariance._robust_covariance import RobustFit, argsort
 from moxie.covariance._empirical_covariance import shape_text
 
@@ -40,7 +41,7 @@ struct EllipticEnvelopeParams(Copyable, Movable, Writable):
     var random_state: Optional[Int]
 
 
-struct EllipticEnvelope[dtype: DType = DType.float64](RobustCovarianceDetector, Copyable):
+struct EllipticEnvelope[dtype: DType = DType.float64](RobustCovarianceDetector, FitPredictor, Copyable):
     """Robust-covariance outlier detector (sklearn `EllipticEnvelope`).
 
     Defaults: store_precision=True, assume_centered=False, support_fraction=None,
@@ -52,6 +53,7 @@ struct EllipticEnvelope[dtype: DType = DType.float64](RobustCovarianceDetector, 
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[DType.int64]
     comptime Prediction = NDArray[DType.int64]
+    comptime Labels = Self.Prediction
     comptime Decision = NDArray[Self.dtype]
     comptime SampleScores = NDArray[Self.dtype]
     comptime Params = EllipticEnvelopeParams

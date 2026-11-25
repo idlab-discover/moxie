@@ -161,7 +161,7 @@ def regressor[dtype: DType]() raises:
     with assert_raises(contains="Poisson targets must be nonnegative"):
         var poisson = MLPRegressor[dtype](loss="poisson", random_state=0)
         _ = poisson.fit(X, target - 2)
-    with assert_raises(contains="early stopping"):
+    with assert_raises(contains="validation set is too small"):
         var stopping = MLPRegressor[dtype](early_stopping=True, random_state=0)
         _ = stopping.fit(X, target)
     var warm = MLPRegressor[dtype](warm_start=True, random_state=0, max_iter=1)
@@ -218,8 +218,56 @@ def regressor[dtype: DType]() raises:
     equal(poisson_prediction, constant.predict(dense))
 
 
+def early_stopping() raises:
+    var X = arange[DType.float64](16).reshape(Shape(8, 2))
+    var y = zeros[DType.int64](Shape(8))
+    var model = MLPClassifier(
+        [3], early_stopping=True, validation_fraction=0.25,
+        max_iter=2, random_state=17, warm_start=True,
+    )
+    with assert_raises(contains="NotFittedError"):
+        _ = model.validation_scores_()
+    _ = model.fit(X, y)
+    assert_equal(model.t_(), 12)
+    assert_false(model.best_loss_())
+    assert_equal(model.best_validation_score_().value(), 1.0)
+    var scores = model.validation_scores_()
+    assert_equal(len(scores.value()), 2)
+    scores.value().append(-1.0)
+    var saved = model.copy()
+    _ = model.fit(X, y)
+    assert_equal(model.t_(), 24)
+    scores = model.validation_scores_()
+    assert_equal(len(scores.value()), 4)
+    scores = saved.validation_scores_()
+    assert_equal(len(scores.value()), 2)
+    var saved_coefs = saved.coefs_()
+    var current_coefs = model.coefs_()
+    for layer in range(len(saved_coefs)):
+        equal(saved_coefs[layer], current_coefs[layer])
+
+    _ = model.set_params(validation_fraction=0.1)
+    with assert_raises(contains="validation set is too small"):
+        _ = model.fit(X, y)
+    assert_equal(model.t_(), 24)
+
+    _ = model.set_params(early_stopping=False).fit(X, y)
+    assert_false(model.validation_scores_())
+    assert_false(model.best_validation_score_())
+    assert_true(model.best_loss_())
+
+    var lbfgs = MLPClassifier(
+        [3], solver="lbfgs", random_state=17, max_iter=1, early_stopping=True,
+    )
+    _ = lbfgs.fit(X, y)
+    assert_false(lbfgs.validation_scores_())
+    assert_false(lbfgs.best_validation_score_())
+    assert_false(lbfgs.best_loss_())
+
+
 def main() raises:
     classifier()
+    early_stopping()
     regressor[DType.float32]()
     regressor[DType.float64]()
     print("PASS dense public MLP validation, cloning, atomic refit, RNG and strided input")

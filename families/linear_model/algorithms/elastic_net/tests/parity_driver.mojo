@@ -7,6 +7,36 @@ def random_state(fx: Fixture) raises -> Optional[Int]:
     return Optional(fx.integer("seed")) if fx.has("seed") else None
 
 
+def fit_elastic_net[dtype: DType](
+    mut model: ElasticNet[dtype], fx: Fixture, X: NDArray[dtype], y: NDArray[dtype],
+) raises:
+    if fx.has("gram"):
+        var gram = fx.array[dtype]("gram")
+        if fx.has("sw"):
+            _ = model.fit(X, y, gram=gram, sample_weight=fx.array[dtype]("sw"))
+        else:
+            _ = model.fit(X, y, gram=gram)
+    elif fx.has("sw"):
+        _ = model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
+    else:
+        _ = model.fit(X, y)
+
+
+def fit_lasso[dtype: DType](
+    mut model: Lasso[dtype], fx: Fixture, X: NDArray[dtype], y: NDArray[dtype],
+) raises:
+    if fx.has("gram"):
+        var gram = fx.array[dtype]("gram")
+        if fx.has("sw"):
+            _ = model.fit(X, y, gram=gram, sample_weight=fx.array[dtype]("sw"))
+        else:
+            _ = model.fit(X, y, gram=gram)
+    elif fx.has("sw"):
+        _ = model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
+    else:
+        _ = model.fit(X, y)
+
+
 def run[dtype: DType](fx: Fixture) raises:
     var X = fx.array[dtype]("X")
     var y = fx.array[dtype]("y")
@@ -15,20 +45,14 @@ def run[dtype: DType](fx: Fixture) raises:
         alpha=fx.number("alpha"), l1_ratio=fx.number("ratio"),
         fit_intercept=fx.flag("intercept"), tol=fx.number("tol"),
         max_iter=fx.integer("max_iter"), positive=fx.flag("positive"),
-        warm_start=fx.flag("warm"),
+        warm_start=fx.flag("warm"), precompute=fx.has("precompute"),
         selection="random" if fx.has("seed") else "cyclic",
         random_state=random_state(fx),
     )
-    if fx.has("sw"):
-        model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
-    else:
-        model.fit(X, y)
+    fit_elastic_net(model, fx, X, y)
     if fx.flag("warm"):
         _ = model.set_params(alpha=model.alpha * 0.5)
-        if fx.has("sw"):
-            model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
-        else:
-            model.fit(X, y)
+        fit_elastic_net(model, fx, X, y)
     var out = ResultLine(fx.id)
     out.add("coef", model.coef_)
     out.add("intercept", model.intercept_)
@@ -55,20 +79,14 @@ def run_lasso[dtype: DType](fx: Fixture) raises:
         alpha=fx.number("alpha"),
         fit_intercept=fx.flag("intercept"), tol=fx.number("tol"),
         max_iter=fx.integer("max_iter"), positive=fx.flag("positive"),
-        warm_start=fx.flag("warm"),
+        warm_start=fx.flag("warm"), precompute=fx.has("precompute"),
         selection="random" if fx.has("seed") else "cyclic",
         random_state=random_state(fx),
     )
-    if fx.has("sw"):
-        model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
-    else:
-        model.fit(X, y)
+    fit_lasso(model, fx, X, y)
     if fx.flag("warm"):
         _ = model.set_params(alpha=model.alpha * 0.5)
-        if fx.has("sw"):
-            model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
-        else:
-            model.fit(X, y)
+        fit_lasso(model, fx, X, y)
     var out = ResultLine(fx.id)
     out.add("coef", model.coef_)
     out.add("intercept", model.intercept_)

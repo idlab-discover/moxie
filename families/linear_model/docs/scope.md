@@ -46,9 +46,9 @@ Single-target intercepts remain length-one arrays. Ridge ravels single-column
 coefficients and predictions, as does this pinned reference; LinearRegression
 preserves the target rank. Integer-valued numeric classifier labels only.
 
-Unfinished dense work: Ridge SAG/SAGA, RidgeCV/RidgeClassifierCV, Gram ElasticNet and Lasso
-fit branches, multi-task estimators and paths, coordinate CV, SGD/Perceptron, LogisticRegressionCV and
-remaining family algorithms. The residual coordinate engine is implemented and consumed by
+Unfinished dense work: Ridge SAG/SAGA, RidgeCV/RidgeClassifierCV, Gram and
+multi-task paths, multi-task estimators, coordinate CV, SGD/Perceptron, LogisticRegressionCV and
+remaining family algorithms. The residual and Gram coordinate engines are consumed by
 ElasticNet/Lasso (see algorithms/elastic_net/docs/scope.md). Smooth and SGD
 engine directories still contain prerequisite probes, not functioning solvers. CV validation belongs to model_selection; shared
 `our_rand_r` belongs to Moxie. These gaps are not sparse deferrals and the

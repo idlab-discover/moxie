@@ -14,7 +14,7 @@ from the assembled package.
 | --- | --- |
 | LinearRegression | Dense least squares and nonnegative least squares; see least_squares scope and parity suite |
 | Ridge, RidgeClassifier, ridge_regression | Dense direct, iterative and positive solvers; SAG/SAGA missing |
-| ElasticNet, Lasso | Cyclic and random residual solving and single-target `path` static methods. Gram input remains open. `sparse_coef_` is a sparse deferral |
+| ElasticNet, Lasso | Cyclic and random residual and Gram fitting, including supplied Gram matrices, and single-target `path` static methods. `sparse_coef_` is a sparse deferral |
 | enet_path, lasso_path | [Single-target coordinate paths](../algorithms/elastic_net/docs/api.md#single-target-regularization-paths). Multi-task and Gram paths remain open. |
 | MultiTaskElasticNet, MultiTaskLasso | Missing block coordinate solver and estimators |
 | RidgeCV, RidgeClassifierCV | Missing estimators and validation integration |

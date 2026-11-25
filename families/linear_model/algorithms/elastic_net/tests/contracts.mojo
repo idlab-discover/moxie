@@ -92,9 +92,8 @@ def contracts[dtype: DType]() raises:
     configured.random_state = None
     _ = random.set_params(configured).set_params(selection=String("cyclic"))
     assert_false(Bool(random.get_params().random_state))
-    with assert_raises(contains="NotImplementedError"):
-        _ = random.set_params(precompute=True).fit(X, y)
-    assert_equal(random_coef.unsafe_get(0), random.coef_.unsafe_get(0))
+    _ = random.set_params(precompute=True).fit(X, y)
+    assert_true(clone(random).get_params().precompute)
     _ = random.set_params(precompute=False).fit(X, y)
     assert_false(random.get_params().precompute)
     with assert_raises(contains="alpha"):
@@ -107,6 +106,48 @@ def contracts[dtype: DType]() raises:
     var ordinary = Lasso[dtype](alpha=0.2)
     ordinary.fit(X, y)
     assert_almost_equal(Float64(b.coef_.unsafe_get(0)), Float64(ordinary.coef_.unsafe_get(0)), atol=1e-6)
+
+
+def gram_contracts[dtype: DType]() raises:
+    var X = zeros[dtype](Shape(4, 2))
+    var y = zeros[dtype](Shape(4))
+    for i in range(4):
+        var value = Scalar[dtype](i - 2)
+        X.unsafe_set(2 * i, value)
+        X.unsafe_set(2 * i + 1, 1)
+        y.unsafe_set(i, 2 * value + 1)
+
+    var gram = zeros[dtype](Shape(2, 2))
+    gram.unsafe_set(0, 6)
+    gram.unsafe_set(1, -2)
+    gram.unsafe_set(2, -2)
+    gram.unsafe_set(3, 4)
+    # A nonzero-offset, strided Gram view must retain the logical layout.
+    var backing = zeros[dtype](Shape(3, 3))
+    for i in range(2):
+        for j in range(2):
+            backing.unsafe_set(4 + i * 3 + j, gram.unsafe_get(i * 2 + j))
+    var view = backing.view_with_layout(Shape(2, 2), NDArrayStrides(3, 1), 4)
+    var computed = ElasticNet[dtype](alpha=0.1, fit_intercept=False, precompute=True)
+    _ = computed.fit(X, y)
+    var supplied = ElasticNet[dtype](alpha=0.1, fit_intercept=False)
+    _ = supplied.fit(X, y, gram=view)
+    assert_false(supplied.get_params().precompute)
+    assert_false(clone(supplied).__sklearn_is_fitted__())
+    for j in range(2):
+        assert_equal(computed.coef_.unsafe_get(j), supplied.coef_.unsafe_get(j))
+    _ = supplied.fit(X, y, gram=view, sample_weight=3.0)
+    assert_equal(supplied.coef_.unsafe_get(0), computed.coef_.unsafe_get(0))
+    assert_equal(backing.unsafe_get(4), Scalar[dtype](6))
+
+    with assert_raises(contains="gram must have shape"):
+        _ = supplied.fit(X, y, gram=zeros[dtype](Shape(1, 1)))
+    with assert_raises(contains="gram does not match"):
+        _ = supplied.fit(X, y, gram=zeros[dtype](Shape(2, 2)))
+    gram.unsafe_set(3, nan[dtype]())
+    with assert_raises(contains="contains NaN"):
+        _ = supplied.fit(X, y, gram=gram)
+    assert_equal(supplied.coef_.unsafe_get(0), computed.coef_.unsafe_get(0))
 
 
 def path_contracts[dtype: DType]() raises:
@@ -207,7 +248,9 @@ def path_contracts[dtype: DType]() raises:
 
 def main() raises:
     contracts[DType.float32]()
+    gram_contracts[DType.float32]()
     contracts[DType.float64]()
+    gram_contracts[DType.float64]()
     print("ElasticNet/Lasso lifecycle, weights, shapes, strides and explicit unsupported modes passed")
     path_contracts[DType.float32]()
     path_contracts[DType.float64]()

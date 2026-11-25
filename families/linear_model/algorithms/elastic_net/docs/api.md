@@ -40,14 +40,37 @@ starts reuse coefficients and reconstruct the intercept with the new means;
 incompatible feature/output counts raise. A converged warm start may take
 zero iterations, as in the pinned local reference.
 
-Open dense work includes Gram precomputation and supplied Gram arrays,
-multi-task group penalties, and CV variants. `selection="random"` draws
-coordinates with replacement from the active set. `random_state` accepts
+`selection="random"` draws coordinates with replacement from the active
+set. `random_state` accepts
 a 32-bit unsigned seed as `Int`, or `None` for Moxie's shared default
 stream. An integer resets the stream at each fit and for each independently
 fitted target, including warm refits. The cyclic solver skips RNG draws.
 Python `check_input=False`, mutable RandomState objects, metadata routing
 and feature names have no native interface.
+
+## Gram fitting
+
+Set `precompute=True` to compute a Gram matrix from the prepared design.
+The default `False` uses the residual solver. Both fitters support cyclic
+and random Gram solves, including positivity, weights, independent outputs,
+and warm starts.
+
+Pass a caller-supplied same-dtype symmetric matrix as `fit(X, y, gram=G)`.
+This overrides the Boolean setting for that call. The estimator reads the
+array without mutating it, including when it is strided. Clone and subsequent
+fits carry only the Boolean setting. The matrix must be
+`(n_features, n_features)` and represent `X_prepared.T @ X_prepared`.
+For a weighted fit with an intercept, first
+center the features by their weighted means. Form the Gram from those
+centered rows scaled by the square roots of weights normalized to sum to
+`n_samples`. Pass the centered features to `fit` with the original weights
+so the estimator applies the rescaling once.
+
+As in scikit-learn, an intercept fit that materially recenters the design
+discards the supplied Gram. It computes a fresh Gram for tall designs and
+uses the residual solver otherwise. This fallback is silent in Mojo. When a
+supplied matrix is used, the estimator checks shape, finiteness and one
+design entry using the pinned reference tolerances.
 
 ## Single-target regularization paths
 

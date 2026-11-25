@@ -228,11 +228,17 @@ OpenML Titanic version 1 rows, run only this notebook:
 MOXIE_TITANIC_OPENML=1 pixi run -e notebooks notebooks notebooks/compose/plot_column_transformer_mixed_types.ipynb
 ```
 
-The OpenML download is cached under `builds/titanic-reference`. The comparison
-uses the gallery's 80/20 split with seed 0 and its named route's feature groups.
-It casts passenger class to a string category so dtype selectors pick the same
-columns as the named route. Missing embarkation values stay missing through
-the notebook's exchange with Mojo.
+The OpenML download is cached under `builds/titanic-reference`. Both routes use
+the gallery's 80/20 split with seed 0. The named route encodes passenger class
+alongside embarkation and sex. Moxie represents passenger class with string
+labels in that route so all three columns share the encoder's categorical
+domain. The dtype route stores passenger class as Int64 and selects it for
+median imputation and scaling alongside age and fare. Missing embarkation
+values stay missing through the notebook's exchange with Mojo.
+
+Both routes compare transformed values, feature names, output spans, and
+classifier predictions, probabilities, and accuracy. The dtype route also
+checks the native input schema and both selectors' column lists.
 
 ## Predictive pipelines on mixed tables
 

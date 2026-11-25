@@ -106,7 +106,7 @@ def malformed_state() raises:
         _ = GaussianNBSchema[NumericDomain[DType.int64]].decode(archive)
 
     var bad = archive.copy()
-    bad.schema_version = 3
+    bad.schema_version = 4
     with assert_raises(contains="unsupported estimator"):
         _ = Schema.decode(bad)
     bad = archive.copy()

@@ -17,6 +17,7 @@ from moxie.warnings import FitWarning
 
 
 comptime _WEIGHT_REQUEST_VERSION = 2
+comptime _FEATURE_NAMES_VERSION = 3
 
 
 def _write_request(mut writer: BinaryWriter, request: SampleWeightRequest):
@@ -55,9 +56,10 @@ def _has_metadata(metadata: _NaiveBayesMetadata) -> Bool:
 
 def _write_metadata(
     mut writer: BinaryWriter, mut archive: ModelArchive, metadata: _NaiveBayesMetadata,
+    named: Bool = False,
 ):
-    if _has_metadata(metadata):
-        archive.schema_version = _WEIGHT_REQUEST_VERSION
+    if named or _has_metadata(metadata):
+        archive.schema_version = _FEATURE_NAMES_VERSION if named else _WEIGHT_REQUEST_VERSION
         _write_request(writer, metadata.fit_score.fit)
         _write_request(writer, metadata.fit_score.score)
         _write_request(writer, metadata.partial_fit)
@@ -67,13 +69,34 @@ def _read_metadata(
     mut reader: BinaryReader[_], archive: ModelArchive,
 ) raises -> _NaiveBayesMetadata:
     var metadata = _NaiveBayesMetadata()
-    if archive.schema_version == _WEIGHT_REQUEST_VERSION:
+    if archive.schema_version in (_WEIGHT_REQUEST_VERSION, _FEATURE_NAMES_VERSION):
         metadata.fit_score.fit = _read_request(reader)
         metadata.fit_score.score = _read_request(reader)
         metadata.partial_fit = _read_request(reader)
-        if not _has_metadata(metadata):
+        if archive.schema_version == _WEIGHT_REQUEST_VERSION and not _has_metadata(metadata):
             raise Error("ModelSchemaError: missing configured sample-weight request")
     return metadata^
+
+
+def _validate_feature_names(names: List[String], features: Int) raises:
+    if features < 1 or len(names) != features:
+        raise Error("ModelSchemaError: invalid feature names count")
+    var seen = Dict[String, Bool]()
+    for name in names:
+        if name in seen:
+            raise Error("ModelSchemaError: duplicate feature name")
+        seen[name] = True
+
+
+def _read_feature_names(mut reader: BinaryReader[_], features: Int) raises -> List[String]:
+    # Each entry has at least an eight-byte string length.
+    if features < 1 or features > reader.remaining() // 8:
+        raise Error("ModelSchemaError: invalid feature names count")
+    var names = List[String](capacity=features)
+    for _ in range(features):
+        names.append(reader.string(reader.remaining()))
+    _validate_feature_names(names, features)
+    return names^
 
 
 def _numeric_label_dtype[D: ClassDomain]() -> DType:
@@ -231,13 +254,20 @@ struct GaussianNBSchema[
             or model.theta_.shape.tolist() != [0, 0] or model.var_.shape.tolist() != [0, 0]
         ):
             raise Error("ModelSchemaError: unfitted GaussianNB has learned state")
-        _write_metadata(writer, archive, model._metadata)
+        _write_metadata(writer, archive, model._metadata, named=Bool(model.feature_names_in_))
+        if model.feature_names_in_:
+            ref names = model.feature_names_in_.value()
+            _validate_feature_names(names, features)
+            for name in names:
+                writer.string(name)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        var version = Self.StateVersion
+        if archive.schema_version in (_WEIGHT_REQUEST_VERSION, _FEATURE_NAMES_VERSION):
+            version = archive.schema_version
         archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
@@ -275,6 +305,8 @@ struct GaussianNBSchema[
             model.classes_ = classes^
             model._domain = domain^
         model._metadata = _read_metadata(reader, archive)
+        if version == _FEATURE_NAMES_VERSION:
+            model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
         reader.finish()
         return model^
 

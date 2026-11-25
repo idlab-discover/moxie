@@ -298,6 +298,22 @@ remain outside the native interface.
 
 ## Validation
 
+The negative-MSE probe compares the same scorer with and without weights,
+using Float32 and Float64 multioutput targets, reversed rows and weights,
+and vector predictions scored against a singleton-column target. The native
+probe also checks shape and finite-value errors, zero-sum weights and unfitted
+prediction. With the pinned sklearn wheel installed at `oracle_dir`, use the
+validation child's assembled sources and locked Mojo executable:
+
+```sh
+mojo build -O3 --fp-mode=contract=off -I builds/deps tests/neg_mean_squared_error.mojo -o builds/neg_mean_squared_error
+MOXIE_SKLEARN_ORACLE="$oracle_dir" PYTHONPATH="$oracle_dir" \
+python tests/neg_mean_squared_error_parity.py builds/neg_mean_squared_error
+```
+
+The probe allows `2e-7` for Float32 and `1e-13` for Float64
+to account for reduction rounding.
+
 Run `pixi run build`, `pixi run test`, and `pixi run parity` from this child.
 Curve consumers use `-O3`, as these tasks do: on the pinned Mojo 1.0 / NuMojo
 combination, reshape fails LLVM masked-gather lowering at `-O0`. The family

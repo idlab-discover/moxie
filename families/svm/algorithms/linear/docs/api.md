@@ -51,8 +51,12 @@ is a reproducible seed. `fit_with_random_state(X, y, rng, sample_weight)` borrow
 and advances a shared `moxie._random.RandomState`; it consumes the same
 randint(INT_MAX) seed draw as the reference before calling LIBLINEAR. An integer
 configuration restarts its stream each fit. The None context is local to the
-estimator. `verbose>0` prints an iteration summary, not LIBLINEAR's per-iteration
-C logging. A ConvergenceWarning message and `fit_status_` expose capped fits.
+estimator. `verbose>0` prints an iteration summary. Both estimators expose
+`fit_warnings: List[FitWarning]` under the
+[native fit-warning contract](../../../../../docs/interfaces.md#fit-warnings).
+Reaching `max_iter` records the reference `ConvergenceWarning` category and
+message on the estimator. A converged refit clears the list, and a failed fit
+preserves the previous record. `fit_status_` also exposes capped fits.
 
 `l1_min_c(X, labels, loss="squared_hinge", fit_intercept=True,
 intercept_scaling=1.0)` returns a Float64 bound. It accepts the same native label
@@ -82,6 +86,8 @@ unfitted state, and the estimator-owned random stream. Fitted loads restore
 independent coefficients and intercepts without retraining. Settings changed
 after fit apply to a subsequent fit. A stream borrowed through
 `fit_with_random_state` is owned by the caller.
+Loading reconstructs `fit_warnings` from the saved fit status, including for
+existing version 1 archives.
 
 The linear child test runner includes file round trips and malformed-state
 checks. The linear wrapper parity driver serializes and restores each

@@ -28,6 +28,9 @@
         "moxie._multiclass_contracts": {
           "file": "src/moxie/_multiclass_contracts.mojo"
         },
+        "moxie.warnings": {
+          "file": "src/moxie/warnings.mojo"
+        },
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },

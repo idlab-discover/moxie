@@ -7,6 +7,7 @@ C++ is a validation subprocess, never linked to the Mojo library.
 from pathlib import Path
 import ast, importlib.util, json, subprocess, types, warnings
 import numpy as np
+from sklearn.exceptions import ConvergenceWarning
 import sklearn.svm._base as support_base
 import sklearn.svm._classes as support_classes
 import sklearn.svm._bounds as support_bounds
@@ -64,7 +65,9 @@ def native(x,y,sw,config,regression):
     coef=a[:i].reshape(r,p);intercept=a[i:i+r];i+=r
     decision=a[i:i+len(y)*r].reshape(len(y),r);i+=len(y)*r
     predicted=None if regression else a[i:i+len(y)]
-    return coef,intercept,decision,predicted,a[-1],it,status
+    records = [tuple(line.removeprefix("WARNING ").split(" ", 1)) for line in lines[:start]
+               if line.startswith("WARNING ")]
+    return coef,intercept,decision,predicted,a[-1],it,status,records
 
 def main():
     refs=reference();rng=np.random.RandomState(45);results=[]
@@ -139,8 +142,13 @@ def main():
        sw=np.ones(6)
        if kind=='signed':sw[1]=0;sw[4]=-1
        config=dict(loss='squared_epsilon_insensitive' if regression else 'squared_hinge',dual=True,C=1e-6 if kind=='small_c' else 1.,tol=1e-9,fit_intercept=True,intercept_scaling=1.,max_iter=limit,random_state=17)
-       expected_model=refs['LinearSVR' if regression else 'LinearSVC'](**config).fit(x,y,sample_weight=sw)
+       with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always", ConvergenceWarning)
+        expected_model=refs['LinearSVR' if regression else 'LinearSVC'](**config).fit(x,y,sample_weight=sw)
        got=native(x,y,sw,config,regression)
+       expected_warnings = [(warning.category.__name__, str(warning.message)) for warning in recorded
+                            if warning.category is ConvergenceWarning]
+       assert got[7] == expected_warnings, (config, kind, got[7], expected_warnings)
        np.testing.assert_allclose(got[0],np.atleast_2d(expected_model.coef_),rtol=5e-5,atol=3e-6)
        np.testing.assert_allclose(got[1],expected_model.intercept_,rtol=5e-5,atol=3e-6)
        assert got[6]==int(got[5]>=limit)

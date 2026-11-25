@@ -5,15 +5,15 @@ basis Gram K_BB = U S V^T, the map x -> K(x, B) @ (U S^{-1/2} V^T)^T satisfies
 phi(x) . phi(y) = K(x, B) K_BB^+ K(B, y). Singular values are clipped below at
 1e-12 exactly as sklearn does.
 
-Kernel evaluation reuses the completed kernel_ridge numerics engine
-(`moxie._kernel_ridge.pairwise`/`pairwise_callable`); the SVD is mojo-linalg's
-economy one-sided Jacobi `svd`; the products use NuMojo's rank-2 matmul.
+Kernel evaluation uses the kernel_ridge numerics engine
+(`moxie._kernel_ridge.pairwise`/`pairwise_callable`). Normalization uses
+mojo-linalg's symmetric eigensolver or one-sided Jacobi SVD and NuMojo matmul.
 """
 from numojo import NDArray, Shape, zeros
 from std.sys import num_logical_cores
 from max.algorithm import parallelize
 from std.math import sqrt, isfinite
-from mojo_linalg import svd, NumericalError
+from mojo_linalg import svd, symmetric_eigh, NumericalError
 from moxie._random import RandomState, check_random_state
 from moxie._kernel_features import FeatureMapState, validate_matrix, component_width, basis_width
 from moxie._kernel_approximation_contracts import KernelFeatureMap
@@ -180,18 +180,63 @@ def _evaluate[
     return output^
 
 
-def _normalization[dtype: DType](basis_kernel: NDArray[dtype]) raises NumericalError -> NDArray[dtype]:
-    """U / sqrt(clip(S, 1e-12)) @ Vt of the (k, k) basis kernel, in the input dtype."""
+comptime _SINGULAR_VALUE_FLOOR = 1e-12
+
+
+def _scaled_normalization[dtype: DType](
+    var left: NDArray[dtype],
+    values: NDArray[dtype],
+    right_transposed: NDArray[dtype],
+) raises NumericalError -> NDArray[dtype]:
+    var width = values.size
+    var floor = Scalar[dtype](_SINGULAR_VALUE_FLOOR)
+    for column in range(width):
+        var root = sqrt(max(values.unsafe_get(column), floor))
+        for row in range(left.shape[0]):
+            var index = row * width + column
+            left.unsafe_set(index, left.unsafe_get(index) / root)
+    return left @ right_transposed
+
+
+def _rbf_normalization[dtype: DType](
+    basis_kernel: NDArray[dtype],
+) raises NumericalError -> Optional[NDArray[dtype]]:
+    """Compute the inverse square root of a compact, symmetric RBF Gram."""
+    var width = basis_kernel.shape[0]
+    for row in range(width):
+        for column in range(row):
+            var lower = basis_kernel.unsafe_get(row * width + column)
+            var upper = basis_kernel.unsafe_get(column * width + row)
+            if lower != upper:
+                return None
+    var factor = symmetric_eigh(basis_kernel)
+    var values = factor.eigenvalues()
+    # Leave near-floor modes to the SVD. The Float64 Jacobi sweep ignores
+    # off-diagonal terms below 8e-16 of the local scale. Allow a margin for
+    # the accumulated residual and roundoff before using the SPD identity.
+    var largest = Float64(values.unsafe_get(width - 1))
+    var margin = 64e-16 * Float64(width) * largest
+    if Float64(values.unsafe_get(0)) <= Float64(_SINGULAR_VALUE_FLOOR) + margin:
+        return None
+    var vectors = factor.eigenvectors()
+    var transposed = vectors.T()
+    return _scaled_normalization(vectors^, values, transposed)
+
+
+def _normalization[dtype: DType](
+    basis_kernel: NDArray[dtype], kernel: String
+) raises NumericalError -> NDArray[dtype]:
+    """U / sqrt(clip(S, 1e-12)) @ Vt of the basis kernel in its dtype."""
+    if kernel == "rbf":
+        try:
+            var normalization = _rbf_normalization(basis_kernel)
+            if normalization:
+                return normalization.take()
+        except:
+            # A failed eigensolve still gets the general SVD.
+            pass
     var factor = svd(basis_kernel)
-    var u = factor.u()
-    var s = factor.singular_values()
-    var k = s.size
-    var floor = Scalar[dtype](1e-12)
-    for c in range(k):
-        var root = sqrt(max(s.unsafe_get(c), floor))
-        for r in range(u.shape[0]):
-            u.unsafe_set(r * k + c, u.unsafe_get(r * k + c) / root)
-    return u @ factor.vt()
+    return _scaled_normalization(factor.u(), factor.singular_values(), factor.vt())
 
 
 struct Nystroem[dtype: DType = DType.float64, Kernel: RowKernel & Copyable & Deinitable = NoCallableKernel, output_dtype: DType = dtype](KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
@@ -321,7 +366,7 @@ struct Nystroem[dtype: DType = DType.float64, Kernel: RowKernel & Copyable & Dei
         var basis_kernel = self._kernel(basis, basis, True)
         var normalization: NDArray[Self.output_dtype]
         try:
-            normalization = _normalization(basis_kernel)
+            normalization = _normalization(basis_kernel, self.params.kernel)
         except e:
             raise Error("ValueError: Nystroem: SVD of the (" + String(k) + ", " + String(k) + ") basis kernel failed: " + e.kind + " in " + e.operation)
         self._state.record_fit(X, k)

@@ -2122,7 +2122,8 @@
             "StringSimpleImputer": "moxie.impute._string",
             "StringMissingIndicator": "moxie.impute._string",
             "IterativeBound": "moxie.impute._iterative",
-            "IterativeParams": "moxie.impute._iterative"
+            "IterativeParams": "moxie.impute._iterative",
+            "IterativePosteriorRegressor": "moxie.impute._iterative"
           },
           "moxie.utils": {}
         },
@@ -2625,6 +2626,9 @@
         },
         "moxie.svm._linear": {
           "file": "src/moxie/svm/_linear.mojo"
+        },
+        "moxie.svm.linear_serialization": {
+          "file": "src/moxie/svm/linear_serialization.mojo"
         }
       },
       "path": "families/svm/algorithms/linear"
@@ -2703,6 +2707,20 @@
             "NuSVRParams": "moxie.svm._nu_svm"
           }
         }
+      }
+    },
+    {
+      "id": "svm-kernel-persistence",
+      "path": "families/svm",
+      "modules": {
+        "moxie.svm.kernel_serialization": {
+          "file": "src/moxie/svm/kernel_serialization.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
       }
     },
     {

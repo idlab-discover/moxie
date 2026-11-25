@@ -7,7 +7,7 @@ Import the public estimators from `moxie.impute` in Moxie's assembled
 Implemented contracts include dense floating SimpleImputer, integer and string
 specializations, numeric and string MissingIndicator, and dense KNNImputer.
 KNN uses the [integrated neighbors engine](../neighbors/README.md).
-IterativeImputer supports dense deterministic imputation and replay. Sparse
+IterativeImputer supports dense deterministic and posterior imputation. Sparse
 and heterogeneous categorical inputs remain unsupported.
 See [the API](docs/api-surface.md) for exact limits and adaptations.
 

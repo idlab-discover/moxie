@@ -18,7 +18,7 @@ Tests in `tests/isotonic/` cover numerical behavior, lifecycle, fluent concrete
 and generic calls, dtype preservation, and rejected mixed-dtype inputs.
 `test_reference_edges.mojo` pins hand-derived reference values for pooling,
 crossed bounds, negative score weights, tied-rank direction, refit after
-`set_params` and the documented `check_increasing` validation difference.
+`set_params` and `check_increasing` with empty and nonfinite inputs.
 `test_model_selection.mojo` checks weighted and unweighted KFold scores,
 grid-search ranking and refitted predictions against the pinned reference.
 The root shared-contract tests cover missing prediction capabilities.
@@ -29,11 +29,11 @@ verify the assembled module matches the Moxie source.
 The parity runner executes the clean local scikit-learn source at
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`, including its compiled Cython tie
 engine. The installed scikit-learn wheel supplies validation infrastructure.
-It generates 624 Float64 and 457 Float32 cases, including scaler pipeline
-predictions. The respective tolerances are `2e-12` and `2e-6`. Threshold
-counts, X thresholds, domain, direction and NaN locations must match exactly. Evidence is written to
-ignored `builds/isotonic/parity/`. This is bounded core behavior coverage,
-not full Python API parity.
+It generates 666 Float64 and 499 Float32 cases, including scaler pipeline
+predictions, schema reconstruction, automatic-fit warnings, and validation
+edges for `check_increasing` and `f_`. The respective tolerances are `2e-12` and
+`2e-6`. Threshold counts, X thresholds, domain, direction and NaN locations
+must match exactly. Evidence is written to ignored `builds/isotonic/parity/`.
 
 The estimator uses the existing List-based solver. Calibration uses its List
 overloads for isotonic calibration.

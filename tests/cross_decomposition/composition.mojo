@@ -1,4 +1,4 @@
-"""Cross decomposition inside clone, Pipeline and cross_val_score.
+"""Cross decomposition inside clone, Pipeline, cross_val_score and GridSearchCV.
 
 Every composed result is checked exactly against the same steps run by hand,
 so composition adds no behavior of its own (sklearn's Pipeline/CV contract).
@@ -6,21 +6,25 @@ Scenarios: make_pipeline(StandardScaler(), PLSRegression(...)) predict/score/
 feature names/input width in Float32 and Float64 (sklearn users scale before
 PLS; plot_pcr_vs_pls fits the same regressor standalone), PLSCanonical and CCA
 as pipeline regressors, a cloned pipeline with a typed nested set_params, and
-5-fold cross_val_score with the estimator's own R^2 `score`. All estimators
-are deterministic, so comparisons are exact. Feature names and the
+default 5-fold cross_val_score and GridSearchCV with the estimator's own R^2
+`score`. Each fold is checked exactly against a native manual fit. Feature names and the
 `input_features` length check follow ClassNamePrefixFeaturesOutMixin.
 """
-from numojo import NDArray, Shape, zeros
-from std.math import sin, cos
+from numojo import Item, NDArray, Shape, zeros
+from std.math import abs, cos, sin
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
 from moxie.cross_decomposition import PLSRegression, PLSCanonical, CCA, PLSSVD
 from moxie.preprocessing import StandardScaler
-from moxie.pipeline import Pipeline, make_pipeline
-from moxie.model_selection import IndexArray, IndexSplit, KFold, cross_val_score
-from moxie.model_selection._evaluation import TypedScorer
-from moxie.model_selection._validation import CVAdapter
-from moxie.model_selection._split import _rows
+from moxie.pipeline import make_pipeline
+from moxie.model_selection import (
+    DenseSupervisedAdapter,
+    ErrorPolicy,
+    GridSearchCV,
+    KFold,
+    cross_val_score,
+    select_rows,
+)
 
 comptime Dense = NDArray[DType.float64]
 comptime PLS = PLSRegression[DType.float64]
@@ -56,7 +60,8 @@ def targets[dtype: DType](x: NDArray[dtype], q: Int) raises -> NDArray[dtype]:
 
 def same(a: Dense, b: Dense) raises:
     assert_equal(a.ndim, b.ndim)
-    assert_equal(a.size, b.size)
+    for axis in range(a.ndim):
+        assert_equal(a.shape[axis], b.shape[axis])
     for k in range(a.size):
         assert_equal(a.unsafe_get(k), b.unsafe_get(k))
 
@@ -168,65 +173,81 @@ def cloned_pipeline() raises:
     assert_equal(pipe.estimator.x_weights_.shape[1], 1)
 
 
-struct R2(TypedScorer):
-    """sklearn's default for a regressor without `scoring`: estimator.score(X, y)."""
-
-    comptime Estimator = PLS
-    comptime Input = Dense
-    comptime Target = Dense
-    comptime Metadata = NoneType
-
-    def __init__(out self):
-        pass
-
-    def score(self, estimator: PLS, X: Dense, y: Dense, metadata: NoneType) raises -> Float64:
-        return estimator.score(X, y)
+def configure_components[dtype: DType](
+    mut estimator: PLSRegression[dtype], params: Dict[String, Int]
+) raises:
+    for name in params.keys():
+        if name != "n_components":
+            raise Error("Unexpected PLS parameter: " + name)
+        _ = estimator.set_params(n_components=params[name])
 
 
-struct Rows(CVAdapter):
-    comptime Scorer = R2
+def cross_validation_and_search[dtype: DType](q: Int) raises:
+    comptime Regression = PLSRegression[dtype]
+    comptime Adapter = DenseSupervisedAdapter[
+        Regression, NDArray[dtype], dtype, Int, weight_dtype=DType.float64
+    ]
+    var x = data[dtype](53, 4)
+    var y = targets(x, q)
+    var model = Regression(n_components=2)
+    var error_policy = ErrorPolicy(True, 0)
+    var scores = cross_val_score[Adapter](model, x, y, Adapter(), error_score=error_policy)
 
-    def __init__(out self):
-        pass
-
-    def n_samples(self, X: Dense, y: Dense) raises -> Int:
-        return y.shape[0]
-
-    def input_rows(self, X: Dense, rows: IndexArray, train: IndexArray) raises -> Dense:
-        return _rows(X, rows)
-
-    def target_rows(self, y: Dense, rows: IndexArray) raises -> Dense:
-        return _rows(y, rows)
-
-    def metadata_rows(self, metadata: NoneType, rows: IndexArray) raises -> NoneType:
-        return None
-
-    def fit(self, mut estimator: PLS, X: Dense, y: Dense, metadata: NoneType) raises:
-        _ = estimator.fit(X, y)
-
-
-def cross_validation() raises:
-    var x = data[DType.float64](50, 4)
-    var y = targets(x, 0)
-    var cursor = KFold(5).split(50)
-    var splits = List[IndexSplit]()
-    while True:
-        var pair = cursor.next()
-        if not pair:
-            break
-        splits.append(pair.value().copy())
-    var model = PLS(n_components=2)
-    var scores = cross_val_score[Rows](model, x, y, Rows(), R2(), splits, None, None)
+    var candidates: List[Int] = [3, 1, 2]
+    var grid = Dict[String, List[Int]]()
+    grid["n_components"] = candidates.copy()
+    var search = GridSearchCV[Adapter](
+        model, grid, Adapter(configure_components[dtype]), error_score=error_policy
+    )
+    _ = search.fit(x, y)
+    var results = search.cv_results_()
     assert_equal(scores.size, 5)
+    assert_equal(search.n_splits_(), 5)
+    assert_equal(len(results.params), len(candidates))
+    assert_equal(results.scores.test_scores.shape[2], 1)
+
+    var best_index = 0
+    var best_mean = -Float64.MAX
+    for candidate in range(len(candidates)):
+        var count = candidates[candidate]
+        assert_equal(results.params[candidate]["n_components"], count)
+        var cursor = KFold(5).split(x.shape[0])
+        var total: Float64 = 0
+        for fold in range(5):
+            var next_split = cursor.next()
+            var split = next_split.take()
+            var by_hand = Regression(n_components=count)
+            _ = by_hand.fit(select_rows(x, split.train), select_rows(y, split.train))
+            var expected = by_hand.score(
+                select_rows(x, split.test), select_rows(y, split.test)
+            )
+            var actual = results.scores.test_scores[Item(candidate, fold, 0)]
+            assert_equal(actual, expected)
+            if count == model.n_components:
+                assert_equal(scores[Item(fold)], expected)
+            total += expected
+            print("fold", q, count, fold, actual)
+
+        var mean = total / 5
+        assert_true(abs(results.mean_test_score[Item(candidate, 0)] - mean) < 1e-14)
+        if mean > best_mean:
+            best_index = candidate
+            best_mean = mean
+
+    assert_equal(search.best_index_(), best_index)
+    assert_equal(search.best_params_()["n_components"], candidates[best_index])
+    assert_true(abs(search.best_score_() - best_mean) < 1e-14)
     assert_false(model.__sklearn_is_fitted__())
-    for fold in range(5):
-        var train = splits[fold].train.copy()
-        var test = splits[fold].test.copy()
-        var by_hand = PLS(n_components=2)
-        _ = by_hand.fit(_rows(x, train), _rows(y, train))
-        var expected = by_hand.score(_rows(x, test), _rows(y, test))
-        assert_equal(scores.unsafe_get(fold), expected)
-        assert_true(expected > 0.5)
+    assert_equal(model.n_components, 2)
+    assert_false(clone(search).__sklearn_is_fitted__())
+    print("winner", q, search.best_index_(), search.best_score_())
+
+    var refit = Regression(n_components=candidates[best_index])
+    _ = refit.fit(x, y)
+    var prediction = search.predict(x)
+    same(prediction, refit.predict(x))
+    for i in range(prediction.size):
+        print("predict", q, i, prediction.unsafe_get(i))
 
 
 def main() raises:
@@ -238,5 +259,6 @@ def main() raises:
     aliased_pipeline_names()
     unfitted_and_plssvd()
     cloned_pipeline()
-    cross_validation()
-    print("PASS: cross decomposition in Pipeline, clone, nested set_params and cross_val_score")
+    cross_validation_and_search[DType.float64](0)
+    cross_validation_and_search[DType.float32](2)
+    print("PASS: cross decomposition in Pipeline, clone, cross_val_score and GridSearchCV")

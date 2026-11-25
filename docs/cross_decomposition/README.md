@@ -25,7 +25,9 @@ The estimators satisfy current Moxie supervised and transformer contracts;
 the three PLS variants also satisfy regression contracts. Tests exercise real
 `FrozenEstimator` composition and, in `tests/cross_decomposition/composition.mojo`,
 `make_pipeline(StandardScaler(), PLSRegression|PLSCanonical|CCA)`, cloned
-pipelines with typed nested `set_params`, and `cross_val_score`. PLSSVD has no predict, score, or inverse transform.
+pipelines with typed nested `set_params`, and PLS regression with
+`cross_val_score` and `GridSearchCV`. PLSSVD has no predict, score, or inverse
+transform.
 
 `fit` borrows inputs and always works on copies. Use `fit_inplace` to honor
 `copy=False`: Float64 inputs receive the centered/scaled workspaces, plus
@@ -69,6 +71,44 @@ Parameters changed after fit are saved separately from the learned dimensions,
 projection state, and prediction rank. Learned arrays are saved in logical row
 order, so strided arrays load as contiguous arrays.
 
+## Cross-validation and search
+
+Use the shared [dense adapter](../../families/model_selection/algorithms/search/docs/search.md)
+with `PLSRegression` to get its default R² scorer and five unshuffled KFold
+splits. Cross-validation only needs the adapter type and an instance. For a
+nonempty search grid, give the adapter a noncapturing parameter applier.
+`n_components` is an integer, so this grid uses `Int` as its value type and
+applies each candidate through the estimator's named `set_params` overload.
+
+```mojo
+from moxie.cross_decomposition import PLSRegression
+from moxie.model_selection import DenseSupervisedAdapter, GridSearchCV, cross_val_score
+from numojo import NDArray
+
+comptime Regression = PLSRegression[]
+comptime Adapter = DenseSupervisedAdapter[Regression, NDArray[DType.float64], DType.float64, Int]
+
+def set_components(mut estimator: Regression, params: Dict[String, Int]) raises:
+    for name in params.keys():
+        if name != "n_components":
+            raise Error("Unexpected PLS parameter: " + name)
+        _ = estimator.set_params(n_components=params[name])
+
+# With dense Float64 X and y:
+var model = Regression(n_components=2)
+var scores = cross_val_score[Adapter](model, X, y, Adapter())
+var grid = Dict[String, List[Int]]()
+grid["n_components"] = [1, 2, 3]
+var search = GridSearchCV[Adapter](model, grid, Adapter(set_components))
+_ = search.fit(X, y)
+var best_components = search.best_params_()["n_components"]
+```
+
+For Float32 inputs, select the Float32 estimator, target and input dtype on the
+adapter and pass `weight_dtype=DType.float64` to match PLS's score weight type.
+The default unweighted calls accept rank-one and rank-two targets and preserve
+their rank through search and refit.
+
 ## Validation
 
 From Moxie, run:
@@ -99,6 +139,20 @@ runner hashes. The suites retain conditioning-aware tolerances, reference
 perturbation checks, component objectives, score spectra, and null-space
 orthonormality comparisons. Performance has not been
 remeasured during integration.
+
+To validate only the PLS composition, assemble live sources and run the
+following with the locked environment. The composition binary checks the search
+against independent native fits. The Python runner also compares candidate
+ordering, fold scores, the refit selection and predictions with the pinned PLS,
+search and splitter sources.
+
+```sh
+python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
+mkdir -p builds/tests/cross_decomposition
+mojo build -O3 --fp-mode=contract=off -I builds/deps tests/cross_decomposition/composition.mojo \
+  -o builds/tests/cross_decomposition/composition
+python tests/cross_decomposition/composition_parity.py builds/tests/cross_decomposition/composition
+```
 
 ## Numerical dependencies
 

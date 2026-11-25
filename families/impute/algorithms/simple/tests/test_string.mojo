@@ -121,7 +121,7 @@ def sentinels_and_empty() raises:
     assert_equal(dropped.indicators.shape[1], 1)
     _ = model.set_params(keep_empty_features=True)
     _ = model.fit(X)
-    with assert_raises():
+    with assert_raises(contains="empty most_frequent feature requires numeric zero"):
         _ = model.fit(empty)
     assert_equal(model.n_features_in_, 2)
     assert_true(model.__sklearn_is_fitted__())

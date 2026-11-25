@@ -19,6 +19,7 @@ lines=['''import numojo as nm
 from moxie.impute import SimpleImputer, MissingIndicator
 from moxie.impute._plumbing import MissingValue
 from moxie.impute._simple import ColumnStrategy
+from std.testing import assert_equal, assert_raises
 from std.utils import Variant
 
 @no_inline
@@ -79,6 +80,35 @@ def callback_case(name: String, X: nm.NDArray[DType.float64], keep: Bool) raises
     var model=SimpleImputer[DType.float64, Minimum](strategy="callable", keep_empty_features=keep)
     emit(name + "o", model.fit_transform(X))
     emit(name + "s", model.statistics_)
+
+@no_inline
+def ownership_case[dtype: DType](name: String, mut X: nm.NDArray[dtype]) raises:
+    var model = SimpleImputer[dtype](
+        strategy="constant", fill_value=SIMD[dtype, 1](7), copy=False,
+        missing_values=MissingValue[dtype](-1),
+    )
+    comptime assert type_of(model.statistics_) == nm.NDArray[DType.float64]
+    var fitted = model.fit_transform(X)
+    var replay = model.transform(X)
+    emit(name + "s", model.statistics_)
+    emit(name + "f", fitted)
+    emit(name + "r", replay)
+    assert_equal(X.unsafe_get(0), -1)
+    fitted.unsafe_set(0, 19)
+    replay.unsafe_set(1, 21)
+    assert_equal(X.unsafe_get(0), -1)
+    assert_equal(X.unsafe_get(1), 2)
+    assert_equal(replay.unsafe_get(0), 7)
+    assert_equal(fitted.unsafe_get(1), 2)
+
+@no_inline
+def inverse_edge_case[dtype: DType](name: String, X: nm.NDArray[dtype], query: nm.NDArray[dtype]) raises:
+    var model = SimpleImputer[dtype](add_indicator=True)
+    _ = model.fit(X)
+    var output = model.transform(query)
+    emit(name, output)
+    with assert_raises(contains="ValueError: inverse indicator layout exhausts original features"):
+        _ = model.inverse_transform(output)
 ''']
 expected={}
 cases=0
@@ -162,6 +192,51 @@ with warnings.catch_warnings():
             if strategy=='callable': lines.append(f'    callback_case("{name}", X, {keep})')
             else: lines.append(f'    exercise("{name}", X, X, "{strategy}", Float64("nan"), {keep}, False)')
             cases+=1
+
+for dtype in ('float32', 'float64'):
+    X = np.array([[-1, 2], [3, 4]], dtype=dtype)
+    reference = oracle.SimpleImputer(strategy='constant', fill_value=7, missing_values=-1, copy=False)
+    fit_input, replay_input = X.copy(), X.copy()
+    fitted = reference.fit_transform(fit_input)
+    replay = reference.transform(replay_input)
+    assert reference.statistics_.dtype == np.dtype(object)
+    for data, output in ((fit_input, fitted), (replay_input, replay)):
+        assert np.shares_memory(data, output) and data[0, 0] == 7
+        assert output.dtype == X.dtype
+    name = f'c{cases}'
+    record(name + 's', reference.statistics_, dtype)
+    record(name + 'f', fitted, dtype)
+    record(name + 'r', replay, dtype)
+    lines.extend(['@no_inline', f'def case{cases}() raises:'])
+    array('X', X, dtype)
+    lines.append(f'    ownership_case("{name}", X)')
+    cases += 1
+
+    # Column 0 is dropped. Column 1 was partially observed in fit, but all
+    # query rows flag it as missing, exhausting the inverse traversal.
+    X = np.array([[np.nan, np.nan], [np.nan, 4]], dtype=dtype)
+    query = np.full((1, 2), np.nan, dtype=dtype)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        reference = oracle.SimpleImputer(add_indicator=True).fit(X)
+        assert not caught
+        output = reference.transform(query)
+    assert len(caught) == 1 and caught[0].category is UserWarning
+    assert 'Skipping features without any observed values: [0]' in str(caught[0].message)
+    try:
+        reference.inverse_transform(output)
+    except IndexError:
+        pass
+    else:
+        raise AssertionError('Pinned inverse unexpectedly accepted an entirely flagged retained column')
+    name = f'c{cases}'
+    record(name, output, dtype)
+    lines.extend(['@no_inline', f'def case{cases}() raises:'])
+    array('X', X, dtype)
+    array('query', query, dtype)
+    lines.append(f'    inverse_edge_case("{name}", X, query)')
+    cases += 1
+
 lines.append('def main() raises:')
 for i in range(cases): lines.append(f'    case{i}()')
 source=BUILDS/'parity_cases.mojo';source.write_text('\n'.join(lines)+'\n')

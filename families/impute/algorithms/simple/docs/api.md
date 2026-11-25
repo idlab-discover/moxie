@@ -1,11 +1,11 @@
-# Dense simple imputation (partial implementation)
+# Dense simple imputation
 
 Import `SimpleImputer`, `IntegerSimpleImputer`, `StringSimpleImputer`,
 `StringMissingIndicator`, and `MissingIndicator` from `moxie.impute` in the generated namespace. The family root and this algorithm
 both support `pixi run build`, `pixi run test`, and `pixi run parity` with the
-same verified family modules. The full assigned dense scope is **not complete**:
-typed categorical imputation remains implementation work. Dense integers and
-strings use the `IntegerSimpleImputer` and `StringSimpleImputer` specializations below.
+same verified family modules. Dense integers and strings use the
+`IntegerSimpleImputer` and `StringSimpleImputer` specializations below.
+Use the categorical adapters for typed selections from a `ColumnTable`.
 
 `SimpleImputer[DType.float64]` (the default) and `[DType.float32]` accept NuMojo
 rank-2 arrays. Constructor keywords are `missing_values=MissingValue[dtype]()`,
@@ -67,10 +67,20 @@ raises a descriptive ValueError-prefixed Error in that case, rather than reading
 outside the result. Feature names likewise follow statistics validity, including
 NaN callback statistics even with keep_empty_features=True.
 
-Errors use Mojo Error with ValueError/NotFittedError prefixes. Python warnings,
-reflection, metadata routing, pandas and arbitrary heterogeneous Python objects
-remain binding concerns. This does not exclude native categorical imputation,
-which is still required unfinished work. See [family scope](../../../docs/scope.md).
+Errors use Mojo Error with ValueError/NotFittedError prefixes. When transform
+drops fitted columns, scikit-learn emits a `UserWarning` identifying those
+columns. Inspect `get_feature_names_out()` for retained features and
+`statistics_` for unavailable statistics in Mojo. Transform does not emit a
+warning. Output uses the native types documented here. `set_output` and
+Python metadata routing are unavailable.
+
+The [floating parity runner](../tests/parity.py) checks `copy=False` against
+writable NumPy inputs in both dtypes, including independent native outputs
+from `fit_transform` and `transform`. It verifies the constant statistics
+dtype on each side and reproduces the reference's transform warning and
+`IndexError` on an entirely flagged retained column. The
+[string parity runner](../tests/string_parity.py) checks retained empty
+most-frequent columns and the reference's numeric-zero fill.
 
 ## Indicators for typed categorical columns
 

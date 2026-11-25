@@ -66,35 +66,40 @@ PCA = namespace["PCA"]
 assert PCA._fit.__code__.co_filename == str(SOURCE / "sklearn/decomposition/_pca.py")
 
 
-def native(a, components, solver, whiten, copy=True, score=True, power="auto", normalizer="auto"):
+def native(a, components, solver, whiten, copy=True, score=True, power="auto", normalizer="auto", mode="inplace"):
     kind = "none" if components is None else "mle" if components == "mle" else "int" if isinstance(components, int) else "fraction"
     args = [(ROOT / "builds/numax_pca_static_evaluate" if "--numax" in sys.argv else ROOT / "builds/pca_evaluate"), "f32" if a.dtype == np.float32 else "f64", *a.shape,
             kind, components if kind not in {"none", "mle"} else 0, solver, int(whiten), int(copy),
-            "score" if score else "skip", -1 if power == "auto" else power, 10, normalizer, 42, *a.ravel()]
+            "score" if score else "skip", -1 if power == "auto" else power, 10, normalizer, 42, mode, *a.ravel()]
     process = subprocess.run(list(map(str, args)), text=True, capture_output=True)
-    assert process.returncode == 0, (args[:14], process.stdout[-1000:], process.stderr[:3000])
+    assert process.returncode == 0, (args[:15], process.stdout[-1000:], process.stderr[:3000])
     result = {}
     for line in process.stdout.splitlines():
         name, value = line.split()
-        if name == "solver": result[name] = value
+        if name == "solver" or name.endswith("_dtype"): result[name] = value
         else: result.setdefault(name, []).append(float(value))
-    return {k: np.array(v) if k != "solver" else v for k, v in result.items()}
+    return {k: np.array(v) if isinstance(v, list) else v for k, v in result.items()}
 
 
 count = 0
 
 
-def compare(a, components, solver="full", whiten=False, copy=True, score=True, power="auto", normalizer="auto", unique=True):
+def compare(a, components, solver="full", whiten=False, copy=True, score=True, power="auto", normalizer="auto", unique=True,
+            mode="inplace"):
     global count
     reference = PCA(components, svd_solver=solver, whiten=whiten, copy=copy,
                     random_state=42, iterated_power=power, power_iteration_normalizer=normalizer)
     original = a.copy()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        expected_fit = reference.fit_transform(a)
+        if mode == "fit":
+            reference.fit(a)
+            expected_fit = None
+        else:
+            expected_fit = reference.fit_transform(a)
         expected_transform = reference.transform(original)
         expected_cov = reference.get_covariance()
-    got = native(original, components, solver, whiten, copy, score, power, normalizer)
+    got = native(original, components, solver, whiten, copy, score, power, normalizer, mode)
     tol = 6e-4 if a.dtype == np.float32 else 3e-9
     spectral_floor = reference.singular_values_.max(initial=0) * np.sqrt(np.finfo(a.dtype).eps) * 4 if reference._fit_svd_solver == "covariance_eigh" else 0
     assert int(got["k"][0]) == reference.n_components_
@@ -111,12 +116,23 @@ def compare(a, components, solver="full", whiten=False, copy=True, score=True, p
     np.testing.assert_allclose(native_components[nonzero].T @ native_components[nonzero],
                                reference.components_[nonzero].T @ reference.components_[nonzero], atol=tol, rtol=tol)
     if unique:
-        for key, expected in [("components", reference.components_), ("fit_transform", expected_fit), ("transform", expected_transform)]:
+        outputs = [("components", reference.components_), ("transform", expected_transform)]
+        if expected_fit is not None:
+            outputs.append(("fit_transform", expected_fit))
+        for key, expected in outputs:
             np.testing.assert_allclose(got.get(key, []), expected.ravel(), atol=tol, rtol=tol, equal_nan=True, err_msg=key)
     np.testing.assert_allclose(got["inverse"], reference.inverse_transform(expected_transform).ravel(), atol=tol, rtol=tol, equal_nan=True)
     if score:
         for key, expected in [("precision", reference.get_precision()), ("score_samples", reference.score_samples(original)), ("score", reference.score(original))]:
             np.testing.assert_allclose(got[key], np.asarray(expected).ravel(), atol=tol * 10, rtol=tol * 10, err_msg=key)
+    dtype_keys = ["input", "components", "mean", "variance", "ratio", "singular",
+                  "transform", "inverse", "covariance"]
+    if expected_fit is not None:
+        dtype_keys.append("fit_transform")
+    if score:
+        dtype_keys += ["precision", "score_samples"]
+    for key in dtype_keys:
+        assert got[key + "_dtype"] == a.dtype.name, (key, got[key + "_dtype"], a.dtype)
     count += 1
 
 
@@ -150,6 +166,27 @@ for dtype in (np.float64, np.float32):
         compare(y.copy(), 1, "arpack", copy=False, score=False)
     compare(x.copy(), "mle")
     compare(x.copy(), "mle", "covariance_eigh")
+    for mode in ("fit", "fit_transform"):
+        for solver in ("full", "covariance_eigh", "randomized"):
+            compare(x.copy(), 2, solver, whiten=True, mode=mode)
+    anisotropic = x * np.array([16, 8, 0.5, 0.25, 0.25], dtype=dtype)
+    compare(anisotropic, "mle", mode="fit")
+    compare(anisotropic[:, :3] * np.array([1, 1, 0], dtype=dtype), "mle", score=False)
+
+    # The first eigenvalue explains exactly half the variance. A strict
+    # threshold therefore retains both directions. Compare their subspace.
+    equal_weights = np.zeros((8, 3), dtype=dtype)
+    equal_weights[:4, :2] = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    compare(equal_weights, 0.5, "covariance_eigh", score=False, unique=False,
+            mode="fit_transform")
+
+    # Offset the data by a large exactly representable mean. Dyadic sums of squares
+    # isolate the centering formula from cancellation rounding.
+    large_mean = np.zeros((8, 3), dtype=dtype)
+    large_mean[:3] = np.diag([8, 4, 2])
+    large_mean[3:6] = -large_mean[:3]
+    large_mean += 2 ** (20 if dtype == np.float64 else 10)
+    compare(large_mean, 1, "covariance_eigh", mode="fit_transform")
     # Distinct nonzero directions plus a constant feature: compare bases via projection.
     rank_deficient = np.column_stack([x[:, 0], x[:, 1], np.ones(24)]).astype(dtype)
     compare(rank_deficient.copy(), 2, score=False)

@@ -9,18 +9,20 @@ module = load_pinned('sklearn/decomposition/_kernel_pca.py')
 count = 0
 
 
-def compare(x, y, k=3, kernel='rbf', solver='dense', inverse=False, remove=False, gamma=.2, power=4, subspace=False):
+def compare(x, y, k=3, kernel='rbf', solver='dense', inverse=False, remove=False, gamma=.2, power=4, subspace=False,
+            alpha=1.0, degree=3, coef0=1.0):
     global count
     m = module.KernelPCA(k, kernel=kernel, eigen_solver=solver, fit_inverse_transform=inverse,
-                        remove_zero_eig=remove, gamma=gamma, random_state=42, iterated_power=power if power >= 0 else "auto")
+                        remove_zero_eig=remove, gamma=gamma, random_state=42, iterated_power=power if power >= 0 else "auto",
+                        alpha=alpha, degree=degree, coef0=coef0)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         z = m.fit_transform(x)
         test = m.transform(y)
     got = run_native(ROOT / 'builds/kernel_pca_driver', x.dtype, [x,y], k or 0, kernel, solver,
-                     int(inverse), int(remove), 42, gamma if gamma is not None else -1, power)
+                     int(inverse), int(remove), 42, gamma if gamma is not None else -1, power, alpha, degree, coef0)
     tol = 2e-7 if x.dtype == np.float64 else 8e-4
-    label = f'{x.dtype} {x.shape} {kernel} {solver} {k=} {inverse=} {remove=}'
+    label = f'{x.dtype} {x.shape} {kernel} {solver} {k=} {inverse=} {remove=} {power=} {alpha=} {degree=} {coef0=}'
     assert_close(got.get('values'), m.eigenvalues_, tol, label+' values')
     # Signs are public; compare directly for these nondegenerate fixtures.
     # Zero-eigenvalue vectors have no unique basis, compare the embedding.
@@ -55,6 +57,10 @@ for dtype in (np.float64, np.float32):
         for solver in ('dense','arpack','randomized','auto'):
             compare(x,y,kernel=kernel,solver=solver)
         compare(x,y,kernel=kernel,inverse=True)
+    # Sigmoid can be indefinite. Retain just the largest positive eigenvalue.
+    compare(x, y, k=1, kernel="sigmoid", gamma=0.05, coef0=-0.4)
+    compare(x, y, kernel="poly", solver="randomized", power=-1, inverse=True,
+            alpha=0.3, degree=2, coef0=0.5)
     repeated=(np.eye(4)-np.ones((4,4))/4).astype(dtype)
     compare(repeated,repeated[:2],k=3,kernel="precomputed",subspace=True)
     compare(x,y,k=1,gamma=None,power=-1)

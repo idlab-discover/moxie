@@ -34,7 +34,9 @@ def compare(x, k, method="randomized", rotation=None, max_iter=1000, tol=1e-2, p
         warnings.simplefilter("ignore")
         expected_z = reference.fit_transform(x)
     psi_matrix = np.ones((1, x.shape[1])) if psi is None else np.asarray(psi, dtype=np.float64)[None, :]
-    got = run_native(DRIVER, x.dtype, [x, psi_matrix], -1 if k is None else k, method, rotation or "none",
+    # A separate batch with values distinct from the training rows.
+    held_out = (x[:3] * 0.75 + 0.5).astype(x.dtype)
+    got = run_native(DRIVER, x.dtype, [x, psi_matrix, held_out], -1 if k is None else k, method, rotation or "none",
                      max_iter, tol, power, seed, int(psi is not None))
     label = f"{x.dtype} {x.shape} {k=} {method} {rotation} {max_iter=} {tol=} {power=}"
     assert int(got["n_iter"][0]) == reference.n_iter_, (label, got["n_iter"], reference.n_iter_)
@@ -52,8 +54,12 @@ def compare(x, k, method="randomized", rotation=None, max_iter=1000, tol=1e-2, p
         assert_close(components, reference.components_, TOL, label + ": components", atol=TOL * scale)
         latent = got["transform"].reshape(x.shape[0], kk) * signs[None, :]
         assert_close(latent, expected_z, TOL * 10, label + ": transform", atol=TOL * 10)
+        held = got["held_out"].reshape(held_out.shape[0], kk) * signs[None, :]
+        assert_close(held, reference.transform(held_out), TOL * 10,
+                     label + ": held-out transform", atol=TOL * 10)
     else:
-        assert "components" not in got and "transform" not in got
+        assert reference.transform(held_out).shape == (held_out.shape[0], 0)
+        assert not {"components", "transform", "held_out"}.intersection(got)
     count += 1
 
 

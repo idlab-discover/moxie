@@ -13,6 +13,7 @@ def check[dtype: DType, Backend: PCABackend = RuntimePCABackend]() raises:
         X.unsafe_set(i * 3, SIMD[dtype, 1](i))
         X.unsafe_set(i * 3 + 1, SIMD[dtype, 1](i * i))
         X.unsafe_set(i * 3 + 2, SIMD[dtype, 1](i % 2))
+    var rank_input = X.copy()  # Preserve the fixture for the rank assertions.
     var model = PCA[dtype, Backend](n_components=2)
     var all_components = PCA[dtype, Backend]()
     all_components.fit(X)
@@ -71,10 +72,11 @@ def check[dtype: DType, Backend: PCABackend = RuntimePCABackend]() raises:
     with assert_raises(): zero.set_output(transform="pandas")
     zero.set_output(transform="default")
     var fraction = PCA[dtype, Backend](Float64(0.9))
-    fraction.fit(X)
-    assert_true(fraction.n_components_ > 0)
+    _ = fraction.fit(rank_input)
+    assert_equal(fraction.n_components_, 1)
     var mle = PCA[dtype, Backend](String("mle"))
-    mle.fit(X)
+    _ = mle.fit(rank_input)
+    assert_equal(mle.n_components_, 1)
     var bad_count = PCA[dtype, Backend](10)
     with assert_raises(): bad_count.fit(X)
 

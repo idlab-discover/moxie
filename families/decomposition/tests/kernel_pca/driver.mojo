@@ -1,4 +1,4 @@
-"""KernelPCA differential driver: dtype X Y k kernel solver inverse remove seed gamma power."""
+"""KernelPCA differential driver: dtype X Y k kernel solver inverse remove seed gamma power alpha degree coef0."""
 from std.sys import argv
 from moxie.decomposition import KernelPCA
 from moxie.decomposition._kernel_pca import KernelPower
@@ -17,7 +17,9 @@ def evaluate[dtype: DType]() raises:
     if Int(a[11]) >= 0: power = Int(a[11])
     var model = KernelPCA[dtype](k, kernel=String(a[5]), eigen_solver=String(a[6]),
         fit_inverse_transform=Int(a[7]) != 0, remove_zero_eig=Int(a[8]) != 0,
-        random_state=Int(a[9]), gamma=gamma, iterated_power=power)
+        random_state=Int(a[9]), gamma=gamma, iterated_power=power,
+        alpha=Float64(String(a[12])), degree=Float64(String(a[13])),
+        coef0=Float64(String(a[14])))
     var z = model.fit_transform(x)
     emit("fit", z)
     emit("values", model.eigenvalues_.value())

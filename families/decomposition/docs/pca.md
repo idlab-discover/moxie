@@ -171,10 +171,14 @@ and Jacobi/LAPACK rounding; degenerate bases are compared by subspace.
 
 ## Validation record
 
-The runtime backend passed **349 cases** against the pinned local source,
+The runtime backend passed **369 cases** against the pinned local source,
 including 58 dense-ARPACK cases (tall, wide, k from 1 to min-1 and omitted,
-whitening, copy=False) compared with the reference's `scipy.sparse.linalg.svds`. The
-compile-time Numax backend passed **290 cases**, covering eight training shapes
+whitening, copy=False) compared with the reference's `scipy.sparse.linalg.svds`.
+The driver checks output dtypes and exercises public `fit` and `fit_transform`,
+anisotropic and rank-deficient MLE, covariance centering with a large mean,
+and the strict fractional variance threshold.
+
+The compile-time Numax backend passed **290 cases**, covering eight training shapes
 in both dtypes. Both backends pass the native lifecycle/ownership contracts.
 The extra runtime case selects randomized SVD on `(20, 501)`; the static driver
 does not instantiate that shape. Numax validation includes the singleton-product

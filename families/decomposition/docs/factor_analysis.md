@@ -49,7 +49,8 @@ Language adaptations, each covered by contract tests:
 shapes, both SVD methods, `n_components` None/0/1/2/3, both rotations, tight
 `tol`, truncated `max_iter`, custom `noise_variance_init`, several
 `iterated_power`/seeds, a constant feature (SMALL floor) and scaled data, in
-Float64 and Float32 input. The EM iteration count must match exactly. Values
+Float64 and Float32 input. The driver checks transforms on training and held-out
+rows. The EM iteration count must match exactly. Values
 use relative/absolute tolerance 1e-7 (scaled by the data magnitude), 1e-6 for
 precision and latent scores. Component rows and latent columns are compared
 up to one sign per factor because the reference keeps LAPACK's arbitrary

@@ -56,12 +56,13 @@ reference fails with a shape error.
 
 ## Validation
 
-`pixi run parity` runs 180 cases against the pinned source: both algorithms,
+`pixi run parity` runs 184 cases against the pinned source: both algorithms,
 all three nonlinearities, both whitening modes and solvers, `alpha=1.5`,
 truncated/tight `tol`/`max_iter`, custom `w_init`, `fit` versus
 `fit_transform`, the `fastica` function, clipped `n_components` and
-`whiten=False`, in Float64 and Float32. Sources, unmixing, mixing, whitening
-and round trips are compared directly (same RNG draws and sign conventions, no
+`whiten=False`, with tall and wide matrices in Float64 and Float32. Sources,
+unmixing, mixing, whitening, and training and held-out round trips are compared
+directly (same RNG draws and sign conventions, no
 permutation matching). Tolerances: Float64 1e-6, Float32 2e-2 relative and
 absolute (scaled by the data magnitude); Float64 iteration counts must match,
 Float32 may differ by two sweeps because its stopping test compares a

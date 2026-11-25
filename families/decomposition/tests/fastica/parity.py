@@ -39,6 +39,7 @@ def compare(x, k=None, algorithm="parallel", whiten="unit-variance", fun="logcos
     kwargs = dict(n_components=k, algorithm=algorithm, whiten=whiten, fun=fun,
                   fun_args=None if alpha == 1.0 else {"alpha": alpha}, max_iter=max_iter, tol=tol,
                   w_init=w_init, whiten_solver=solver, random_state=seed)
+    held_out = (x[:3] * 0.75 + 0.5).astype(x.dtype)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         if mode == "function":
@@ -49,8 +50,9 @@ def compare(x, k=None, algorithm="parallel", whiten="unit-variance", fun="logcos
             if mode == "fit": reference.fit(x)
             transform = reference.transform(x)
             inverse = reference.inverse_transform(transform)
+            held_projection = reference.transform(held_out)
     w0 = np.eye(1) if w_init is None else w_init
-    got = run_native(DRIVER, x.dtype, [x, w0], -1 if k is None else k, algorithm,
+    got = run_native(DRIVER, x.dtype, [x, w0, held_out], -1 if k is None else k, algorithm,
                      "false" if whiten is False else whiten, fun, alpha, max_iter, tol, solver, seed,
                      int(w_init is not None), mode)
     label = f"{x.dtype} {x.shape} {k=} {algorithm} {whiten} {fun} {alpha=} {solver} {mode}"
@@ -66,7 +68,8 @@ def compare(x, k=None, algorithm="parallel", whiten="unit-variance", fun="logcos
     else:
         same_iterations(got["n_iter"][0], reference.n_iter_, x.dtype, label)
         pairs = [("components", reference.components_), ("mixing", reference.mixing_),
-                 ("transform", transform), ("inverse", inverse)]
+                 ("transform", transform), ("inverse", inverse),
+                 ("held_out", held_projection), ("held_inverse", reference.inverse_transform(held_projection))]
         if sources is not None: pairs.append(("sources", sources))
         if whiten is not False:
             pairs += [("mean", reference.mean_), ("whitening", reference.whitening_)]
@@ -104,4 +107,8 @@ for dtype in (np.float64, np.float32):
         z = (sources[:, :3] @ rng.normal(size=(3, 3))).astype(dtype)
         compare(z, None, "parallel", whiten=False, max_iter=500)
         compare(z, None, "deflation", whiten=False, max_iter=500)
+    # More features than samples, with a distinct leading spectrum and k < n - 1.
+    wide = np.random.RandomState(102).normal(size=(7, 11)).astype(dtype)
+    compare(wide, 3, mode="fit")
+    compare(wide, 3, algorithm="deflation", solver="eigh")
 print(f"PASS: {count} dense FastICA cases against local sklearn {REVISION}")

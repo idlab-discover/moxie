@@ -53,6 +53,14 @@ def check[dtype: DType]() raises:
     x = mixed[dtype](60)
     var restored = model.inverse_transform(model.transform(x))
     assert_equal(restored.shape[1], 3)
+    # Two retained directions discard the deliberately small third-channel noise.
+    for i in range(x.size):
+        assert_true(abs(Float64(restored.unsafe_get(i) - x.unsafe_get(i))) < 1e-2)
+    var full = FastICA[dtype](3, random_state=0)
+    full.fit(x)
+    var round_trip = full.inverse_transform(full.transform(x))
+    for i in range(x.size):
+        assert_true(abs(Float64(round_trip.unsafe_get(i) - x.unsafe_get(i))) < 1e-4)
     _ = model.transform(x, copy=False)
     var copy = clone(model)
     assert_false(copy.__sklearn_is_fitted__())

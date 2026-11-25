@@ -57,9 +57,11 @@ no kernel implementation is copied here. Runtime eigen and Cholesky operations
 use the existing mojo-linalg dependency, since Numax's static factorization API
 and Mojo 1.1 toolchain do not fit this Mojo 1.0 runtime-shape contract.
 
-The 55 differential cases cover four kernels, all solver choices, default gamma,
-rank clipping, zero and repeated spectra, precomputed input, held-out transforms and inverse
-maps. Float64 tolerance is 2e-7 and Float32 8e-4 for bounded fixtures; inverse
+The 59 differential cases cover five named kernels including sigmoid,
+precomputed input, all solver choices, default gamma, rank clipping, zero and
+repeated spectra, held-out transforms and inverse maps. A randomized polynomial
+case uses automatic power selection and non-default degree, coef0, and inverse
+regularization. Float64 tolerance is 2e-7 and Float32 8e-4 for bounded fixtures. Inverse
 comparisons allow four times those tolerances for propagation through the solve.
 Positive nondegenerate eigenvector signs/order are compared directly. These
 checks establish the tested dense modes, not full sklearn compatibility or a

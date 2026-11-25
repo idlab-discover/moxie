@@ -15,9 +15,20 @@ def check[dtype: DType]() raises:
     assert_equal(model.n_samples_seen_, 9)
     assert_equal(model.n_components_, 2)
     assert_equal(z.shape[0], 9)
-    _ = model.inverse_transform(z)
-    _ = model.get_covariance()
-    _ = model.get_precision()
+    var restored = model.inverse_transform(z)
+    assert_equal(restored.shape, x.shape)
+    var projected_again = model.transform(restored)
+    for i in range(z.size):
+        assert_true(abs(Float64(projected_again.unsafe_get(i) - z.unsafe_get(i))) < 1e-4)
+    var covariance = model.get_covariance()
+    var precision = model.get_precision()
+    assert_equal(covariance.shape, Shape(3, 3))
+    assert_equal(precision.shape, Shape(3, 3))
+    var identity = covariance @ precision
+    for i in range(3):
+        for j in range(3):
+            var expected = 1.0 if i == j else 0.0
+            assert_true(abs(Float64(identity.unsafe_get(i * 3 + j)) - expected) < 1e-3)
     var cloned = model.__sklearn_clone__()
     assert_true(not cloned.__sklearn_is_fitted__())
     var single = zeros[dtype](Shape(1, 3))

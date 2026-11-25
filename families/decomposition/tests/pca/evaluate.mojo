@@ -7,6 +7,7 @@ from moxie.decomposition._pca import ComponentCount, IteratedPower
 
 
 def emit[dtype: DType](name: String, x: NDArray[dtype]) raises:
+    print(name + "_dtype", String(dtype))
     if x.size == 0: return
     var flat = x.flatten()
     for i in range(flat.size): print(name, Float64(flat.unsafe_get(i)))
@@ -26,9 +27,17 @@ def evaluate[dtype: DType, Backend: PCABackend = RuntimePCABackend]() raises:
         copy=Bool(Int(args[8])), iterated_power=power, n_oversamples=Int(args[11]),
         power_iteration_normalizer=args[12], random_state=Int(args[13]))
     var x = zeros[dtype](Shape(m, p))
-    for i in range(m * p): x.unsafe_set(i, SIMD[dtype, 1](Float64(args[14 + i])))
+    var mode = args[14]
+    for i in range(m * p): x.unsafe_set(i, SIMD[dtype, 1](Float64(args[15 + i])))
     var original = x.copy()
-    var scores = model.fit_transform_inplace(x)
+    if mode == "fit":
+        _ = model.fit(x)
+    elif mode == "fit_transform":
+        emit("fit_transform", model.fit_transform(x))
+    elif mode == "inplace":
+        emit("fit_transform", model.fit_transform_inplace(x))
+    else:
+        raise Error("Unrecognized PCA fit mode")
     print("k", model.n_components_)
     print("solver", model._fit_svd_solver)
     print("noise", model.noise_variance_)
@@ -37,7 +46,6 @@ def evaluate[dtype: DType, Backend: PCABackend = RuntimePCABackend]() raises:
     emit("variance", model.explained_variance_.value())
     emit("ratio", model.explained_variance_ratio_.value())
     emit("singular", model.singular_values_.value())
-    emit("fit_transform", scores)
     var projected = model.transform(original)
     emit("transform", projected)
     emit("inverse", model.inverse_transform(projected))

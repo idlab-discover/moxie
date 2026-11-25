@@ -59,7 +59,7 @@ def check_mixed(case, column, train_categories, test_categories, *, extra_output
     check_composition(case, model, train, test, extra_outputs)
 
 
-def check_composition(case, model, train, test, extra_outputs=(), *, numeric_width=1):
+def check_composition(case, model, train, test, extra_outputs=(), *, numeric_width=1, extra_sources=None):
     expected_fit = model.fit_transform(train)
     expected_transform = model.transform(test)
     output = io.run(ROOT, BUILD / case, capture=True).stdout
@@ -84,7 +84,8 @@ def check_composition(case, model, train, test, extra_outputs=(), *, numeric_wid
     report = BUILD / "parity"
     report.mkdir(parents=True, exist_ok=True)
     (report / f"{case}-report.json").write_text(json.dumps({
-        "revision": io.REVISION, "sources": hashes, "scaler_max_errors": errors,
+        "revision": io.REVISION, "sources": {**hashes, **(extra_sources or {})},
+        "scaler_max_errors": errors,
         "names": names, "spans": {name: [span.start, span.stop] for name, span in spans.items()},
     }, indent=2) + "\n")
     print(f"{case}: one-hot values, names and spans exact, scaler within 1e-12")
@@ -244,6 +245,10 @@ def check_mixed_raw_float_categories():
 
 
 def check_mixed_raw_string_categories():
+    indexing_source = "sklearn/utils/_indexing.py"
+    reference = io.verify_reference([indexing_source])
+    select_rows = io.load_pinned(indexing_source)._safe_indexing
+    io.pinned_code(select_rows, indexing_source)
     train = pd.DataFrame({
         "color": pd.Series(["red", "", "bleu", "café", ""], dtype=object),
         "age": [10.0, np.nan, 30.0, 40.0, 20.0],
@@ -255,13 +260,17 @@ def check_mixed_raw_string_categories():
         "color": ["", "green", "café"],
         "unused": ["", "", ""],
     })
+    train = select_rows(train, [3, 0, 1, 1, 4, 2])
+    test = select_rows(test, [2, 1, 0, 2])
     model = compose.ColumnTransformer([
         ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
          compose.make_column_selector(dtype_include="number")),
         ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
          compose.make_column_selector(dtype_include=object)),
     ])
-    check_composition("mixed_raw_string_categories", model, train, test, ("after_fit",))
+    check_composition(
+        "mixed_raw_string_categories", model, train, test, ("after_fit",), extra_sources=reference,
+    )
 
 
 if __name__ == "__main__":

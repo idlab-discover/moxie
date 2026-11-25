@@ -5,7 +5,7 @@ from moxie.compose import ColumnEntry, ColumnTable, ColumnTransformer, make_colu
 from moxie.impute import SimpleImputer
 from moxie.pipeline import make_pipeline
 from moxie.preprocessing import OneHotEncoder, StandardScaler
-from numojo import Shape, zeros
+from numojo import NDArrayStrides, Shape, zeros
 from parity_io import ResultLine
 from std.math import nan
 from std.testing import assert_equal, assert_false, assert_raises
@@ -32,6 +32,21 @@ def main() raises:
     var test_colors: List[Optional[String]] = ["", "green", "café"]
     test.add_categorical("color", categorical_column(test_colors))
     test.add_strings("unused", ["", "", ""])
+
+    var train_rows = zeros[DType.int64](Shape(6))
+    train_rows.unsafe_set(0, 2)
+    train_rows.unsafe_set(1, 4)
+    train_rows.unsafe_set(2, 1)
+    train_rows.unsafe_set(3, 1)
+    train_rows.unsafe_set(4, 0)
+    train_rows.unsafe_set(5, 3)
+    train = train.take_rows(train_rows.view_with_layout(Shape(6), NDArrayStrides(-1), 5))
+    var test_rows = zeros[DType.int64](Shape(4))
+    test_rows.unsafe_set(0, 2)
+    test_rows.unsafe_set(1, 1)
+    test_rows.unsafe_set(2, 0)
+    test_rows.unsafe_set(3, 2)
+    test = test.take_rows(test_rows)
 
     var category_kinds: List[String] = ["string", "category"]
     var raw_kinds: List[String] = ["string"]

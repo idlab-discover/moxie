@@ -27,6 +27,14 @@ Omit the domain to read string categorical columns.
 Raw text stores UTF-8 strings directly, including empty strings. Use a
 nullable string categorical column when you need an explicit missing value.
 
+`take_rows(indices)` returns an independent table in the requested row order.
+It preserves column names, storage dtypes, category dictionaries (including
+unused values), and missing codes. Pass a rank-one Int64 NuMojo array such as
+`IndexSplit.train` or `IndexSplit.test` from a model-selection splitter. Repeated
+indices, strided indices, and an empty selection are supported. Indices are
+zero-based and must be nonnegative, following `CategoricalColumn.take`.
+The native table stores rows by position and carries no row labels.
+
 ```mojo
 from moxie.compose import ColumnTable, ColumnTransformer, ColumnEntry, make_column_selector
 
@@ -198,7 +206,9 @@ handling through a dense OneHotEncoder alongside the numeric pipeline.
 The Float64 case selects both a negative-strided matrix column and an added
 column in the same branch.
 The raw string case combines a raw column with nullable string categories
-in one encoder and checks inference with the two storage forms swapped.
+in one encoder and checks inference with the two storage forms swapped. It
+compares fitting and inference on reordered, repeated row selections against
+scikit-learn's `_safe_indexing`, including the resulting names and output spans.
 The mixed encoders parity case also compares ordinal codes and multiclass
 target encodings with exact equality, including cross-fitted training output.
 The mixed text comparison checks scalar name and position routing with

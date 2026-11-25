@@ -126,16 +126,45 @@ results are covered by native and reference-comparison tests.
 ## Composition
 
 - `clone(model)` and `model.copy()` follow the estimator rules above.
-- `moxie.model_selection` `cross_val_score`, `cross_validate` and `GridSearchCV`
-  work through a caller-written `CVAdapter`/`SearchAdapter` that slices
-  `List[Scalar[dtype]]` rows; this family ships no adapter. The verification
-  notebook `notebooks/isotonic/plot_isotonic_regression.ipynb` defines one and
-  matches the reference KFold scores and grid-search results.
+- `IsotonicCVAdapter[dtype]` and `IsotonicScorer[dtype]` work with
+  `moxie.model_selection` `cross_val_score`, `cross_validate` and
+  `GridSearchCV`. They use the estimator's NDArray input shapes. Set the
+  second compile-time parameter `list_inputs=True` on both types for
+  one-dimensional Lists. With Lists, predict or transform through
+  `search.best_estimator_()`. The search object's forwarding methods use
+  the estimator's NDArray trait types.
 - `moxie.calibration` uses `IsotonicRegression` internally for
   `method="isotonic"`.
 - `make_pipeline(StandardScaler(), IsotonicRegression())` accepts
   one-column X and a one-dimensional target array. Instantiate both steps
   with Float32 to use a Float32 pipeline.
+
+Pass optional per-row weights explicitly as `fit_metadata` and `score_metadata`.
+Each weight vector must align with the original samples and use the same dtype
+and container as y. The adapter selects the corresponding rows for each fold.
+The default split is an unshuffled five-fold `KFold`. To supply other splits, pass
+a `List[IndexSplit]` through model selection's `cv` argument.
+
+```mojo
+from moxie.isotonic import IsotonicCVAdapter, IsotonicRegression, IsotonicSearchValue
+from moxie.model_selection import GridSearchCV, cross_val_score
+
+comptime Adapter = IsotonicCVAdapter[]
+var model = IsotonicRegression(out_of_bounds="clip")
+var adapter = Adapter()
+var scores = cross_val_score[Adapter](
+    model, X, y, adapter, adapter.default_scorer(), adapter.default_cv(X, y), None, None,
+)
+var grid = Dict[String, List[IsotonicSearchValue]]()
+grid["y_max"] = [IsotonicSearchValue(8.0), IsotonicSearchValue(NoneType())]
+var search = GridSearchCV[Adapter](model, grid, adapter)
+_ = search.fit(X, y)
+var predictions = search.predict(X)
+```
+
+Grid values use `IsotonicSearchValue`. Bounds take Float64 or `NoneType()`
+to clear a bound. Direction takes Bool or `String("auto")`. Out-of-bounds
+mode takes a String.
 
 ## Scope and validation
 

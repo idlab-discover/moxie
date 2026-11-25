@@ -209,6 +209,9 @@
         "moxie.isotonic": {
           "file": "src/moxie/isotonic.mojo"
         },
+        "moxie._isotonic_adapters": {
+          "file": "src/moxie/_isotonic_adapters.mojo"
+        },
         "moxie.random_projection": {
           "file": "src/moxie/random_projection.mojo"
         },

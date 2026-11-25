@@ -1,7 +1,7 @@
 """Extension signatures only; no scoring, importance aggregation or CV engines."""
 import numojo as nm
 
-struct ScoreResult[dtype: DType](Movable):
+struct ScoreResult[dtype: DType](Copyable, Movable):
     var scores: nm.NDArray[Self.dtype]
     var pvalues: Optional[nm.NDArray[Self.dtype]]
 

@@ -99,6 +99,12 @@ encoding, including reordered inputs, unknown categories, names and output spans
 The mixed encoders parity case also compares ordinal codes and multiclass
 target encodings with exact equality, including cross-fitted training output.
 
+The [mixed-types notebook](../../notebooks/compose/plot_column_transformer_mixed_types.ipynb)
+puts both transformer pipelines in one ColumnTransformer. The categorical
+branch chains dense OneHotEncoder with SelectPercentile using a chi-squared
+scorer. Pass a Float64 target array to the table preprocessor and use the
+original Int64 labels when fitting the downstream LogisticRegression.
+
 Table overloads supplement the existing NDArray-associated estimator traits;
 generic pipeline wrappers do not automatically acquire schema routing. Native
 schema validation reports descriptive ValueError messages rather than reproducing

@@ -182,9 +182,21 @@ Behavior follows sklearn:
   With a single unseeded repeat, the process RNG advances through the
   coverage pass and the encoding uses the next shuffled partition,
   matching scikit-learn.
-  All stratified splitters require binary or multiclass labels in the
-  original target, even when `target_type="continuous"`. A shuffled
-  splitter with no seed uses Moxie's process default RNG.
+  `ShuffleSplit`, `GroupShuffleSplit`, and `StratifiedShuffleSplit`
+  can cross-fit when their validation sets form a partition. Training
+  indices retain each splitter's order and may omit rows outside the
+  validation set. An unseeded splitter draws once for coverage and again
+  for encoding from Moxie's process RNG. Moxie raises a coverage error if
+  either draw fails to cover every row exactly once.
+  `TimeSeriesSplit` always raises during cross-fitting because its initial
+  training rows never appear in validation.
+  Stratified K-fold variants require binary or multiclass labels in the
+  original target, even when `target_type="continuous"`.
+  `StratifiedShuffleSplit` can also stratify on distinct continuous values
+  when they satisfy the splitter's class-count and size requirements.
+  Its native splitter requires Float64 for rank-two floating-point
+  stratification targets.
+  A shuffled splitter with no seed uses Moxie's process default RNG.
 - Explicit splits use the supplied training rows in order, including duplicate
   training indices. Validation indices must cover every sample exactly once.
   Validation happens in `fit_transform`; plain `fit` learns from all samples.
@@ -236,9 +248,10 @@ shuffle, and `n_splits` greater than every class count all raise.
 * `cv` accepts an integer of at least 2, `None`, `KFold`, `StratifiedKFold`,
   `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneOut`, `LeaveOneGroupOut`,
   `LeavePOut`, `LeavePGroupsOut`, `PredefinedSplit`, `RepeatedKFold`,
-  `RepeatedStratifiedKFold`, or
-  `TargetEncoderSplits` in the constructor and `set_params`. `cv=None` uses
-  five folds with the same target-based splitter as `cv=5`. The constructor
+  `RepeatedStratifiedKFold`, `ShuffleSplit`, `GroupShuffleSplit`,
+  `StratifiedShuffleSplit`, `TimeSeriesSplit`, or `TargetEncoderSplits` in
+  the constructor and `set_params`. `cv=None` uses five folds with the same
+  target-based splitter as `cv=5`. The constructor
   default is the integer `5`. Omitting `cv` in `set_params` keeps the existing
   configuration. Pass a `List[IndexSplit]` from `moxie.model_selection` or a
   native splitter cursor to `TargetEncoderSplits` to snapshot the index pairs.
@@ -251,8 +264,8 @@ shuffle, and `n_splits` greater than every class count all raise.
   integer configuration, read `model.cv[Int]`. Use
   `model.cv.isa[type_of(None)]()` to check for explicit `None`. The caller-owned
   `RandomState` overload accepts integer `cv` or `None`.
-* For `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneGroupOut`, and
-  `LeavePGroupsOut`, pass
+* For `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneGroupOut`,
+  `LeavePGroupsOut`, and `GroupShuffleSplit`, pass
   `groups=SplitLabels(group_ids)`
   to `fit_transform` or `fit_transform_named`. Use rank-one Int64, Float32 or
   Float64 arrays or a list of strings with one label per input row. Supplying

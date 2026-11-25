@@ -4,10 +4,11 @@ from std.math import isnan, abs
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
 from moxie.model_selection import (
-    GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, LeavePGroupsOut, LeavePOut,
+    GroupKFold, GroupShuffleSplit, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut,
+    LeavePGroupsOut, LeavePOut,
     PredefinedSplit,
     RepeatedKFold, RepeatedStratifiedKFold, SplitLabels, StratifiedGroupKFold,
-    StratifiedKFold,
+    SplitSize, StratifiedKFold, StratifiedShuffleSplit, TimeSeriesSplit,
 )
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import RandomState, seed_global_random_state
@@ -508,6 +509,44 @@ def test_repeated_cv() raises:
     assert_true(labels.get_feature_names_out() == expected_names)
 
 
+def test_shuffle_cv() raises:
+    var X = table()
+    var y = target()
+    var groups = SplitLabels(ints([0, 1, 0, 1, 0, 1, 0, 1, 0, 1]))
+    var model = TargetEncoder()
+    _ = model.set_params(cv=GroupShuffleSplit(2, test_size=SplitSize(1), random_state=0))
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_true(fresh.get_params().cv.isa[GroupShuffleSplit]())
+
+    var names: List[String] = ["color", "size"]
+    var training = fresh.fit_transform_named(X, names, y, groups=groups)
+    assert_same(model.fit_transform(X, y, groups=groups), training)
+    assert_true(fresh.get_feature_names_out() == names)
+
+    _ = fresh.set_params(cv=GroupShuffleSplit(2, test_size=SplitSize(1)))
+    # Seed 5 covers every row on the first pass and repeats one group on the second.
+    seed_global_random_state(5)
+    with assert_raises(contains="must cover each sample index exactly once"):
+        _ = fresh.fit_transform(X, y, groups=groups)
+
+    var column_y32 = zeros[DType.float32](Shape(10, 1))
+    for i in range(10):
+        column_y32[Item(i, 0)] = Float32(i % 2)
+    var model32 = TargetEncoder[StringKind, NumericLabels[DType.float32]](
+        cv=StratifiedShuffleSplit(2, test_size=SplitSize(0.5), random_state=0)
+    )
+    with assert_raises(contains="rank-two Float32 stratification labels"):
+        _ = model32.fit_transform(X, column_y32)
+
+    _ = fresh.set_params(cv=TimeSeriesSplit(3, gap=1))
+    assert_true(fresh.get_params().cv.isa[TimeSeriesSplit]())
+    with assert_raises(contains="must cover each sample index exactly once"):
+        _ = fresh.fit_transform(X, y)
+    _ = fresh.fit(X, y)
+    assert_same(fresh.transform(X), model.transform(X))
+
+
 def main() raises:
     test_lifecycle()
     test_params()
@@ -521,4 +560,5 @@ def main() raises:
     test_leave_p_cv()
     test_predefined_cv()
     test_repeated_cv()
+    test_shuffle_cv()
     print("PASS target encoder lifecycle contracts")

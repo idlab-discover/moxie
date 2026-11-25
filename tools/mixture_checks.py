@@ -110,6 +110,7 @@ def test(run, executable):
 
 def parity(run):
     ownership()
+    run(sys.executable, TESTS / 'verbose_parity.py')
     known = json.loads((TESTS / 'known_float32_exceptions.json').read_text())
     for name in ('gaussian', 'bayesian'):
         run(sys.executable, TESTS / name / 'parity.py')

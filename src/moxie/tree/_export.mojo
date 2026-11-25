@@ -12,6 +12,7 @@ from balsa import Model, ModelBuilder, TreeBuilder, Operator, TaskType
 from moxie.tree._classes import BaseDecisionTree
 from moxie.tree._records import TREE_LEAF, SPLIT_NUMERIC
 from moxie.tree._tree import _go_left
+from moxie.utils._format import format_fixed
 from std.builtin.sort import sort
 
 comptime TreeliteModel = Model[DType.float64]
@@ -115,70 +116,6 @@ def export_treelite[classifier: Bool, extra: Bool, label_dtype: DType, string_la
 
 # Text layout adapted from sklearn/tree/_export.py (BSD-3-Clause).
 # Copyright the scikit-learn developers; see LICENSES/scikit-learn.txt.
-def _fixed(value: Float64, decimals: Int) raises -> String:
-    """Exact binary64 to fixed decimal, rounded to nearest with ties to even.
-
-    String.format lacks precision support on Mojo 1.0; NuMojo's formatter
-    scales through floats and Int, losing digits and overflowing large values.
-    Decimal digits here are text-conversion workspace, not estimator buffers.
-    """
-    from std.memory import bitcast
-    var bits = bitcast[DType.uint64](value)
-    var negative = (bits >> 63) != 0
-    var exponent = Int((bits >> 52) & 2047)
-    var mantissa = Int(bits & 0x000fffffffffffff)
-    if exponent == 2047:
-        if mantissa != 0:
-            return "nan"
-        return "-inf" if negative else "inf"
-    if exponent != 0:
-        mantissa += 4503599627370496
-    var power = (exponent - 1023 - 52) if exponent != 0 else -1074
-    var digits = List[Int]()
-    while mantissa != 0:
-        digits.append(mantissa % 10)
-        mantissa //= 10
-    if len(digits) == 0:
-        digits.append(0)
-    var scale = max(0, -power)
-    for _ in range(abs(power)):
-        var carry = 0
-        for i in range(len(digits)):
-            var product = digits[i] * (2 if power >= 0 else 5) + carry
-            digits[i] = product % 10
-            carry = product // 10
-        if carry != 0:
-            digits.append(carry)
-    while len(digits) <= scale:
-        digits.append(0)
-    if decimals < scale:
-        var cut = scale - decimals
-        var sticky = False
-        for i in range(cut - 1):
-            sticky = sticky or digits[i] != 0
-        var up = digits[cut - 1] > 5 or (digits[cut - 1] == 5 and (sticky or digits[cut] % 2 != 0))
-        var rounded = List[Int]()
-        var carry = Int(up)
-        for i in range(cut, len(digits)):
-            var digit = digits[i] + carry
-            rounded.append(digit % 10)
-            carry = digit // 10
-        if carry:
-            rounded.append(carry)
-        digits = rounded^
-        scale = decimals
-    var result = String("-" if negative else "")
-    for i in range(len(digits) - 1, scale - 1, -1):
-        result += String(digits[i])
-    if decimals > 0:
-        result += "."
-        for i in range(scale - 1, -1, -1):
-            result += String(digits[i])
-        for _ in range(decimals - scale):
-            result += "0"
-    return result
-
-
 def export_text[classifier: Bool, extra: Bool, label_dtype: DType, string_labels: Bool, //](decision_tree: BaseDecisionTree[classifier, extra, label_dtype, string_labels], *, feature_names: Optional[List[String]] = None, class_names: Optional[List[String]] = None, max_depth: Int = 10, spacing: Int = 3, decimals: Int = 2, show_weights: Bool = False) raises -> String:
     """Render tree rules. Categorical rules name both sets and missing routes."""
     from moxie.tree._tree import _go_left
@@ -231,7 +168,7 @@ def export_text[classifier: Bool, extra: Bool, label_dtype: DType, string_labels
                     if values[c] > values[chosen]:
                         chosen = c
                     if show_weights:
-                        formatted.append(_fixed(values[c] * node.weighted_n_node_samples, decimals))
+                        formatted.append(format_fixed(values[c] * node.weighted_n_node_samples, decimals))
                 var label = String(chosen)
                 if data.n_outputs == 1 and data.n_classes[0] != 1:
                     label = class_names.value()[chosen] if class_names else String(decision_tree._class_label(0, chosen))
@@ -241,7 +178,7 @@ def export_text[classifier: Bool, extra: Bool, label_dtype: DType, string_labels
                 report += " class: " + label + "\n"
             else:
                 for value in values:
-                    formatted.append(_fixed(value, decimals))
+                    formatted.append(format_fixed(value, decimals))
                 report += indent + " value: [" + ", ".join(formatted) + "]\n"
         elif depth - 1 > max_depth:
             report += indent + " truncated branch of depth " + String(heights[node_id]) + "\n"
@@ -250,7 +187,7 @@ def export_text[classifier: Bool, extra: Bool, label_dtype: DType, string_labels
             var left: String
             var right: String
             if node.split_kind == SPLIT_NUMERIC:
-                var threshold = _fixed(node.threshold, decimals)
+                var threshold = format_fixed(node.threshold, decimals)
                 left = name + " <= " + threshold
                 right = name + " >  " + threshold
             else:
@@ -283,7 +220,7 @@ def export_text[classifier: Bool, extra: Bool, label_dtype: DType, string_labels
 
 def _dot_number(value: Float64, precision: Int) raises -> String:
     """Fixed decimal adaptation: retain one fractional digit, avoid exponents."""
-    var text = _fixed(value, precision)
+    var text = format_fixed(value, precision)
     if "." in text:
         while text.endswith("0") and not text.endswith(".0"):
             var trimmed = String(text.removesuffix("0"))
@@ -344,7 +281,7 @@ def _node_lines[classifier: Bool, extra: Bool, label_dtype: DType, string_labels
         var cells = List[String]()
         for c in range(data.max_n_classes):
             var value = values[k * data.max_n_classes + c]
-            cells.append(_fixed(value, 0) if integral else _dot_number(round(value * scale) / scale, precision))
+            cells.append(format_fixed(value, 0) if integral else _dot_number(round(value * scale) / scale, precision))
         var row = ", ".join(cells)
         if data.n_outputs != 1 or data.n_classes[0] != 1:
             row = "[" + row + "]"

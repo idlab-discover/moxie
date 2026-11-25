@@ -560,14 +560,14 @@ struct IterativeImputer[
         var weights = nm.zeros[DType.float64](nm.Shape(0, 0))
         if self._params.n_nearest_features and self._params.n_nearest_features.value() < width:
             weights = _correlations(filled)
-        var scale = Float64(0)
+        var scale = Scalar[Self.dtype](0)
         var previous = Optional[Self.Input]()
         if not self._params.sample_posterior:
             for i in range(filled.size):
                 if not mask.unsafe_get(i):
-                    scale = max(scale, abs(Float64(filled.unsafe_get(i))))
+                    scale = max(scale, abs(filled.unsafe_get(i)))
             previous = filled.copy()
-        var tolerance = self._params.tol * scale
+        var tolerance = self._params.tol.cast[Self.dtype]() * scale
         if self._params.verbose > 0:
             print("[IterativeImputer] Completing matrix with shape", filled.shape)
         for iteration in range(self._params.max_iter):
@@ -585,15 +585,15 @@ struct IterativeImputer[
                 print("[IterativeImputer] Ending imputation round", self.n_iter_, "/", self._params.max_iter)
             if not previous:
                 continue
-            # Matrix infinity norm: the largest absolute row sum.
+            # Match the reference's input-dtype row sums before comparing.
             ref snapshot = previous.value()
-            var change = Float64(0)
+            var change = Scalar[Self.dtype](0)
             for i in range(filled.shape[0]):
-                var row_change = Float64(0)
+                var row_change = Scalar[Self.dtype](0)
                 for j in range(width):
                     var offset = i * width + j
                     var updated = filled.unsafe_get(offset)
-                    row_change += Float64(abs(updated - snapshot.unsafe_get(offset)))
+                    row_change += abs(updated - snapshot.unsafe_get(offset))
                     snapshot.unsafe_set(offset, updated)
                 change = max(change, row_change)
             if self._params.verbose > 0:

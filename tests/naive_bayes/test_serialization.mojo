@@ -5,7 +5,9 @@ from numojo import NDArrayStrides, Shape, Item, array
 from moxie._labels import StringTarget
 from moxie._naive_bayes_dense import ClassDomain, dense_from_lists
 from moxie.naive_bayes import IntListDomain, NumericDomain, StringDomain
-from moxie.naive_bayes_serialization import GaussianNBSchema, MultinomialNBSchema
+from moxie.naive_bayes_serialization import (
+    ComplementNBSchema, GaussianNBSchema, MultinomialNBSchema,
+)
 from moxie.serialization import BinaryWriter, dumps, dtype_code, load_model, loads, save_model
 
 
@@ -190,6 +192,41 @@ def multinomial_round_trip[D: ClassDomain, dtype: DType](y: D.Target) raises:
     assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
 
 
+def complement_round_trip[D: ClassDomain, dtype: DType](y: D.Target) raises:
+    comptime Schema = ComplementNBSchema[D, dtype]
+    var X = dense_from_lists([[2.0, 1.0], [1.0, 9.0], [3.0, 1.0], [1.0, 8.0]])
+    var backing = array[DType.float64]([0.25, 9.0, 0.0], [3])
+    var alpha = backing.view_with_layout(Shape(2), NDArrayStrides(-2), 2)
+    var model = Schema.Model(alpha_values=alpha^, force_alpha=False,
+                             class_prior=List[Float64]([0.25, 2.0]))
+    var weights: List[Float64] = [0.5, 1.0, 0.25, 0.75]
+    _ = model.set_params(norm=True)
+    _ = model.fit(X, y, sample_weight=weights.copy())
+    _ = model.set_params(norm=False)
+    _ = model.set_params(force_alpha=True, fit_prior=False,
+                         class_prior=Optional[List[Float64]](List[Float64]([0.75, 0.25])))
+    var before = dumps(Schema.encode(model))
+    var restored = Schema.decode(loads(before))
+    assert_equal(dumps(Schema.encode(restored)), before)
+    assert_equal(restored.alpha_values.value().tolist(), List[Float64]([0.0, 0.25]))
+    assert_equal(restored.fit_warnings[0].message, model.fit_warnings[0].message)
+    assert_equal(restored.fit_warnings[0].category, model.fit_warnings[0].category)
+    assert_false(restored.norm)
+    assert_equal(restored.feature_all_.tolist(), model.feature_all_.tolist())
+    assert_equal(restored.predict_proba(X).tolist(), model.predict_proba(X).tolist())
+    var expected = model.predict(X)
+    var predicted = restored.predict(X)
+    for i in range(4):
+        assert_true(D.equal_at(expected, predicted, i))
+    assert_false(restored.__sklearn_clone__().__sklearn_is_fitted__())
+
+    _ = restored.partial_fit(X, y, sample_weight=weights.copy())
+    assert_equal(len(restored.fit_warnings), 0)
+    assert_equal(dumps(Schema.encode(model)), before)
+    _ = model.partial_fit(X, y, sample_weight=weights^)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+
+
 def multinomial_file_and_validation() raises:
     comptime Schema = MultinomialNBSchema[]
     var path = "builds/naive-bayes-multinomial-model.moxie"
@@ -237,6 +274,54 @@ def multinomial_file_and_validation() raises:
         _ = Schema.encode(model)
 
 
+def complement_file_and_validation() raises:
+    comptime Schema = ComplementNBSchema[]
+    var path = "builds/naive-bayes-complement-model.moxie"
+    var X = dense_from_lists([[2.0, 0.0], [0.0, 0.0]])
+    var y: List[Int] = [-1, 2]
+    var model = Schema.Model(alpha=0.0, norm=True)
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_false(restored.__sklearn_is_fitted__())
+    assert_true(restored.norm)
+    with assert_raises(contains="NotFittedError"):
+        _ = restored.predict(X)
+    model.feature_all_ = array[DType.float64]([2.0], [1])
+    with assert_raises(contains="unfitted ComplementNB"):
+        _ = Schema.encode(model)
+
+    _ = model.set_params(norm=False)
+    _ = model.fit(X, y)
+    save_model[Schema](model, path)
+    restored = load_model[Schema](path)
+    assert_equal(restored.feature_all_.tolist(), List[Float64]([2.0, 0.0]))
+    assert_true(isnan(restored.feature_log_prob_.item(0, 0)))
+    assert_equal(restored.feature_log_prob_.item(1, 1), Float64("inf"))
+    var archive = Schema.encode(restored)
+    assert_equal(dumps(archive), dumps(Schema.encode(model)))
+
+    with assert_raises(contains="unsupported estimator"):
+        _ = MultinomialNBSchema[].decode(archive)
+    var bad = archive.copy()
+    _ = bad.payloads.pop()
+    with assert_raises(contains="unexpected ComplementNB arrays"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    bad.payloads[4].shape = [1, 2]
+    with assert_raises(contains="invalid shape for feature_all_"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    _ = bad.payloads.pop()
+    var shape: List[Int] = [2]
+    var values: List[Float64] = [2.0, 1.0]
+    bad.add_array[DType.float64]("feature_all_", shape, values)
+    with assert_raises(contains="feature_all_ disagrees"):
+        _ = Schema.decode(bad)
+    model.feature_log_prob_[Item(1, 0)] = -1.0
+    with assert_raises(contains="invalid ComplementNB feature statistics"):
+        _ = Schema.encode(model)
+
+
 def main() raises:
     fitted_round_trip[IntListDomain, DType.float64](List[Int]([2, -1, 2, -1]))
     fitted_round_trip[StringDomain, DType.float32](StringTarget(["β", "a\0z", "β", "a\0z"]))
@@ -266,3 +351,16 @@ def main() raises:
     )
     multinomial_file_and_validation()
     print("PASS: MultinomialNB serialization contracts")
+    complement_round_trip[IntListDomain, DType.float64](List[Int]([2, -1, 2, -1]))
+    complement_round_trip[StringDomain, DType.float32](StringTarget(["β", "a\0z", "β", "a\0z"]))
+    complement_round_trip[NumericDomain[DType.int64], DType.float64](
+        array[DType.int64]([9223372036854775807, -1, 9223372036854775807, -1], [4])
+    )
+    complement_round_trip[NumericDomain[DType.float32], DType.float32](
+        array[DType.float32]([2, -1, 2, -1], [4])
+    )
+    complement_round_trip[NumericDomain[DType.float64], DType.uint8](
+        array[DType.float64]([2, -1, 2, -1], [4])
+    )
+    complement_file_and_validation()
+    print("PASS: ComplementNB serialization contracts")

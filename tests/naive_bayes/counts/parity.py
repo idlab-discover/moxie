@@ -14,8 +14,16 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--deps', type=Path, default=ROOT/'builds/deps')
 parser.add_argument('--round-trip-multinomial', action='store_true',
                     help='compare the MultinomialNB cases after native archive round trips')
-args = parser.parse_args()
-DEPS = args.deps.resolve()
+parser.add_argument('--round-trip-complement', action='store_true',
+                    help='compare the ComplementNB cases after native archive round trips')
+options = parser.parse_args()
+if options.round_trip_multinomial and options.round_trip_complement:
+    parser.error('choose one round-trip mode')
+round_trip_model = (
+    'MultinomialNB' if options.round_trip_multinomial else
+    'ComplementNB' if options.round_trip_complement else None
+)
+DEPS = options.deps.resolve()
 REFERENCE=ROOT.parent/'scikit-learn'
 REV='4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 assert subprocess.check_output(['git','-C',str(REFERENCE),'rev-parse','HEAD'],text=True).strip()==REV
@@ -40,7 +48,7 @@ lines=['''import numojo as nm
 from std.math import isnan, isfinite
 from std.testing import assert_true, assert_equal
 from moxie._nb_counts import MultinomialNB, ComplementNB
-from moxie.naive_bayes_serialization import MultinomialNBSchema
+from moxie.naive_bayes_serialization import MultinomialNBSchema, ComplementNBSchema
 from moxie.serialization import dumps, loads
 
 @no_inline
@@ -75,12 +83,12 @@ for model in ('MultinomialNB', 'ComplementNB'):
      for dtype in ('float32', 'float64'):
       cases.append((model, 7, 5, 3, np.array([0., .2, 1e-12, 2., .7]),
                     norm, force, layout, incremental, dtype))
-if args.round_trip_multinomial:
-    cases = [case for case in cases if case[0] == 'MultinomialNB']
-    lines[0] += '''
+if round_trip_model:
+    cases = [case for case in cases if case[0] == round_trip_model]
+    lines[0] += f'''
 @no_inline
-def round_trip[dtype: DType](model: MultinomialNB[dtype=dtype]) raises -> MultinomialNB[dtype=dtype]:
-    comptime Schema = MultinomialNBSchema[dtype=dtype]
+def round_trip[dtype: DType](model: {round_trip_model}[dtype=dtype]) raises -> {round_trip_model}[dtype=dtype]:
+    comptime Schema = {round_trip_model}Schema[dtype=dtype]
     var data = dumps(Schema.encode(model))
     var restored = Schema.decode(loads(data))
     assert_equal(dumps(Schema.encode(restored)), data)
@@ -159,7 +167,11 @@ with warnings.catch_warnings(),np.errstate(all='ignore'):
     lines.append('\n'.join(body))
 # Keep generated sources away from stale standalone moxie.mojoc packages.
 # Bounded batches also avoid one large optimized compilation for every fixture.
-output_dir = ROOT/'builds'/('naive-bayes-multinomial-round-trip' if restore else 'naive-bayes-counts-parity')
+output_name = {
+    'MultinomialNB': 'naive-bayes-multinomial-round-trip',
+    'ComplementNB': 'naive-bayes-complement-round-trip',
+}.get(round_trip_model, 'naive-bayes-counts-parity')
+output_dir = ROOT/'builds'/output_name
 output_dir.mkdir(parents=True, exist_ok=True)
 for start in range(0, len(cases), 12):
     stop = min(start + 12, len(cases))

@@ -38,7 +38,7 @@ statistics. See
 [Gaussian API](gaussian/api.md) for shapes and examples.
 
 Native model files are available for [GaussianNB](gaussian/api.md#persistence)
-and [MultinomialNB](counts/scope.md#multinomialnb-model-files).
+and for [MultinomialNB and ComplementNB](counts/scope.md#native-model-files).
 
 Other explicit differences remain in [family.md](family.md): typed parameter
 records, fluent mutable-reference returns, descriptive Mojo errors, stricter

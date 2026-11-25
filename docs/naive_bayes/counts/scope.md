@@ -30,9 +30,12 @@ use Mojo Error. Probability results use Float64 NDArrays for NDArray inputs
 and nested Float64 Lists for List inputs. Training widens to Float64 and uses
 an O(CN) weighted indicator matrix. Transactional updates duplicate O(CF) state.
 
-## MultinomialNB model files
+<a id="multinomialnb-model-files"></a>
 
-Use `MultinomialNBSchema[D, dtype]` from `moxie.naive_bayes_serialization`
+## Native model files
+
+Use `MultinomialNBSchema[D, dtype]` or `ComplementNBSchema[D, dtype]` from
+`moxie.naive_bayes_serialization`
 with the [experimental native archive API](../../serialization.md). Choose the
 same built-in label domain and input dtype used by the model. The defaults
 are `IntListDomain` and Float64.
@@ -50,7 +53,9 @@ log probabilities, class order and the alpha-floor warning from the last
 successful fit or update. They support fitted and unfitted models. A loaded
 model can predict and continue weighted `partial_fit` without refitting.
 Vector alpha is stored in logical feature order and restored in owned
-contiguous storage.
+contiguous storage. ComplementNB also stores `norm` and the learned
+`feature_all_` totals. Restoring `norm` does not recompute the saved weights,
+so parameter changes made after fitting take effect on the next fit or update.
 
 Validation uses Moxie's root build/test/parity commands and focused
 `tools/naive_bayes_checks.py`. The count parity runner is
@@ -65,9 +70,10 @@ settings, weighted fit and repeated weighted partial fits, and both complement
 normalization modes. Native layout tests require bit-identical finalizer results
 to an equivalent contiguous alpha vector.
 
-Run `tests/naive_bayes/counts/parity.py --round-trip-multinomial` in the pinned
-reference environment to compare MultinomialNB after byte-exact archive round
-trips before fit and after each fit or update.
+Run `tests/naive_bayes/counts/parity.py` in the pinned reference environment
+with `--round-trip-multinomial` or `--round-trip-complement` to compare the
+selected estimator after byte-exact archive round trips before fit and after
+each fit or update.
 
 The former ComplementNB `norm=True`, `alpha=0`, `force_alpha=False` tie failure
 came from Mojo 1.0's inaccurate `std.math.log` (~1e-10 relative), not from the

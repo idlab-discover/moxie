@@ -3,9 +3,12 @@
 from std.math import isfinite, isnan
 from std.sys import size_of
 from numojo import NDArray, Item, array
+from moxie._dense import sum_axis2d
 from moxie._labels import StringTarget
 from moxie._naive_bayes_dense import ClassDomain, DenseMatrix
-from moxie.naive_bayes import GaussianNB, IntListDomain, MultinomialNB, NumericDomain, StringDomain
+from moxie.naive_bayes import (
+    ComplementNB, GaussianNB, IntListDomain, MultinomialNB, NumericDomain, StringDomain,
+)
 from moxie.serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 from moxie.warnings import FitWarning
 
@@ -210,7 +213,7 @@ struct GaussianNBSchema[
         return model^
 
 
-def _check_multinomial_statistics(
+def _check_count_statistics[complement: Bool, estimator: String](
     class_counts: DenseMatrix, feature_counts: DenseMatrix,
     log_priors: DenseMatrix, log_probs: DenseMatrix,
 ) raises:
@@ -219,16 +222,25 @@ def _check_multinomial_statistics(
         var count = class_counts.item(c)
         var prior = log_priors.item(c)
         if isnan(count) or count < 0:
-            raise Error("ModelSchemaError: invalid MultinomialNB class count")
+            raise Error("ModelSchemaError: invalid " + estimator + " class count")
         if prior == Float64("inf") or (isnan(prior) and isfinite(count)):
-            raise Error("ModelSchemaError: invalid MultinomialNB log prior")
+            raise Error("ModelSchemaError: invalid " + estimator + " log prior")
         has_positive_count = has_positive_count or count > 0
         for f in range(feature_counts.shape[1]):
             var feature_count = feature_counts.item(c, f)
-            if isnan(feature_count) or feature_count < 0 or log_probs.item(c, f) > 0:
-                raise Error("ModelSchemaError: invalid MultinomialNB feature statistics")
+            var weight = log_probs.item(c, f)
+            var invalid_weight = weight < 0 if complement else weight > 0
+            if isnan(feature_count) or feature_count < 0 or invalid_weight:
+                raise Error("ModelSchemaError: invalid " + estimator + " feature statistics")
     if not has_positive_count:
-        raise Error("ModelSchemaError: fitted MultinomialNB has no positive class count")
+        raise Error("ModelSchemaError: fitted " + estimator + " has no positive class count")
+
+
+def _check_feature_all(feature_all: DenseMatrix, feature_counts: DenseMatrix) raises:
+    var totals = sum_axis2d(feature_counts, 0)
+    for f in range(feature_all.size):
+        if feature_all.item(f) != totals.item(f):
+            raise Error("ModelSchemaError: ComplementNB feature_all_ disagrees with feature_count_")
 
 
 def _count_input_dtype_tag[dtype: DType]() -> UInt64:
@@ -248,12 +260,83 @@ def _count_input_dtype_tag[dtype: DType]() -> UInt64:
         return UInt64(dtype_code[dtype]())
 
 
+def _write_count_config(
+    mut writer: BinaryWriter, mut archive: ModelArchive,
+    alpha: Float64, force_alpha: Bool, fit_prior: Bool,
+    class_prior: Optional[List[Float64]], alpha_values: Optional[DenseMatrix],
+) raises:
+    writer.scalar(alpha)
+    writer.boolean(force_alpha)
+    writer.boolean(fit_prior)
+    writer.boolean(Bool(class_prior))
+    if class_prior:
+        ref priors = class_prior.value()
+        writer.uint(UInt64(len(priors)))
+        for prior in priors:
+            writer.scalar(prior)
+    writer.boolean(Bool(alpha_values))
+    if alpha_values:
+        ref values = alpha_values.value()
+        _write_array(archive, "alpha_values", values, [values.size])
+
+
+@fieldwise_init
+struct _CountConfig(Movable):
+    var alpha: Float64
+    var force_alpha: Bool
+    var fit_prior: Bool
+    var class_prior: Optional[List[Float64]]
+    var has_alpha_values: Bool
+
+
+def _read_count_config(mut reader: BinaryReader[_]) raises -> _CountConfig:
+    var alpha = reader.scalar[DType.float64]()
+    var force_alpha = reader.boolean()
+    var fit_prior = reader.boolean()
+    var class_prior: Optional[List[Float64]] = None
+    if reader.boolean():
+        var count = reader.count(reader.remaining() // 8)
+        var priors = List[Float64](capacity=count)
+        for _ in range(count):
+            priors.append(reader.scalar[DType.float64]())
+        class_prior = priors^
+    return _CountConfig(alpha, force_alpha, fit_prior, class_prior^, reader.boolean())
+
+
+def _read_count_alpha(archive: ModelArchive) raises -> DenseMatrix:
+    var alpha = archive.array("alpha_values")
+    if len(alpha.shape) != 1:
+        raise Error("ModelSchemaError: invalid shape for alpha_values")
+    return array(alpha.values[DType.float64](), alpha.shape)
+
+
+def _write_count_warning(mut writer: BinaryWriter, warnings: List[FitWarning], estimator: String) raises:
+    if len(warnings) > 1:
+        raise Error("ModelSchemaError: invalid " + estimator + " fit warning")
+    writer.boolean(len(warnings) == 1)
+    if len(warnings) == 1:
+        ref warning = warnings[0]
+        if warning.category != "UserWarning" or warning.message.byte_length() == 0:
+            raise Error("ModelSchemaError: invalid " + estimator + " fit warning")
+        writer.string(warning.message)
+
+
+def _read_count_warning(mut reader: BinaryReader[_], estimator: String) raises -> List[FitWarning]:
+    if not reader.boolean():
+        return []
+    var message = reader.string(reader.remaining())
+    if message.byte_length() == 0:
+        raise Error("ModelSchemaError: invalid " + estimator + " fit warning")
+    return [FitWarning("UserWarning", message^)]
+
+
 struct MultinomialNBSchema[
     D: ClassDomain = IntListDomain, dtype: DType = DType.float64
 ](ModelSchema):
     """Version 1 state for MultinomialNB with a built-in label domain."""
 
     comptime Model = MultinomialNB[Self.D, Self.dtype]
+    comptime Estimator = "MultinomialNB"
     comptime TypeId = "moxie.naive_bayes.MultinomialNB"
     comptime StateVersion = 1
 
@@ -263,19 +346,8 @@ struct MultinomialNBSchema[
         var writer = BinaryWriter()
         writer.uint(_count_input_dtype_tag[Self.dtype]())
         writer.uint(_domain_tag[Self.D]())
-        writer.scalar(model.alpha)
-        writer.boolean(model.force_alpha)
-        writer.boolean(model.fit_prior)
-        writer.boolean(Bool(model.class_prior))
-        if model.class_prior:
-            ref priors = model.class_prior.value()
-            writer.uint(UInt64(len(priors)))
-            for prior in priors:
-                writer.scalar(prior)
-        writer.boolean(Bool(model.alpha_values))
-        if model.alpha_values:
-            ref alpha = model.alpha_values.value()
-            _write_array(archive, "alpha_values", alpha, [alpha.size])
+        _write_count_config(writer, archive, model.alpha, model.force_alpha,
+                            model.fit_prior, model.class_prior, model.alpha_values)
 
         var fitted = model.__sklearn_is_fitted__()
         writer.boolean(fitted)
@@ -283,25 +355,16 @@ struct MultinomialNBSchema[
         var features = model.n_features_in_
         if fitted:
             if not model._domain:
-                raise Error("ModelSchemaError: missing fitted MultinomialNB label domain")
-            _check_classes[Self.D](model.classes_, count, model._domain.value(), "MultinomialNB")
+                raise Error("ModelSchemaError: missing fitted " + Self.Estimator + " label domain")
+            _check_classes[Self.D](model.classes_, count, model._domain.value(), Self.Estimator)
             writer.integer(features)
             _write_classes[Self.D](writer, model.classes_, count)
-            # The only diagnostic emitted by this estimator is the alpha-floor
-            # warning. Preserve its presence independently of today's params.
-            if len(model.fit_warnings) > 1:
-                raise Error("ModelSchemaError: invalid MultinomialNB fit warning")
-            writer.boolean(len(model.fit_warnings) == 1)
-            if len(model.fit_warnings) == 1:
-                ref warning = model.fit_warnings[0]
-                if warning.category != "UserWarning" or warning.message.byte_length() == 0:
-                    raise Error("ModelSchemaError: invalid MultinomialNB fit warning")
-                writer.string(warning.message)
+            _write_count_warning(writer, model.fit_warnings, Self.Estimator)
             _write_array(archive, "class_count_", model.class_count_, [count])
             _write_array(archive, "class_log_prior_", model.class_log_prior_, [count])
             _write_array(archive, "feature_count_", model.feature_count_, [count, features])
             _write_array(archive, "feature_log_prob_", model.feature_log_prob_, [count, features])
-            _check_multinomial_statistics(
+            _check_count_statistics[False, Self.Estimator](
                 model.class_count_, model.feature_count_, model.class_log_prior_, model.feature_log_prob_,
             )
         elif (
@@ -310,7 +373,7 @@ struct MultinomialNBSchema[
             or model.feature_count_.shape.tolist() != [0, 0]
             or model.feature_log_prob_.shape.tolist() != [0, 0]
         ):
-            raise Error("ModelSchemaError: unfitted MultinomialNB has learned state")
+            raise Error("ModelSchemaError: unfitted " + Self.Estimator + " has learned state")
         archive.manifest = writer^.finish()
         return archive^
 
@@ -320,50 +383,131 @@ struct MultinomialNBSchema[
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != _count_input_dtype_tag[Self.dtype]():
-            raise Error("ModelSchemaError: MultinomialNB dtype mismatch")
+            raise Error("ModelSchemaError: " + Self.Estimator + " dtype mismatch")
         if reader.uint() != _domain_tag[Self.D]():
-            raise Error("ModelSchemaError: MultinomialNB label domain mismatch")
-        var model = Self.Model(
-            alpha=reader.scalar[DType.float64](),
-            force_alpha=reader.boolean(),
-            fit_prior=reader.boolean(),
-        )
-        if reader.boolean():
-            var count = reader.count(reader.remaining() // 8)
-            var priors = List[Float64](capacity=count)
-            for _ in range(count):
-                priors.append(reader.scalar[DType.float64]())
-            model.class_prior = priors^
-        var has_alpha_values = reader.boolean()
+            raise Error("ModelSchemaError: " + Self.Estimator + " label domain mismatch")
+        var config = _read_count_config(reader)
+        var has_alpha_values = config.has_alpha_values
+        var model = Self.Model(alpha=config.alpha, force_alpha=config.force_alpha,
+                               fit_prior=config.fit_prior, class_prior=config.class_prior.copy())
         var fitted = reader.boolean()
         var expected_arrays = Int(has_alpha_values) + (4 if fitted else 0)
         if len(archive.payloads) != expected_arrays:
-            raise Error("ModelSchemaError: unexpected MultinomialNB arrays")
+            raise Error("ModelSchemaError: unexpected " + Self.Estimator + " arrays")
         if has_alpha_values:
-            var alpha = archive.array("alpha_values")
-            if len(alpha.shape) != 1:
-                raise Error("ModelSchemaError: invalid shape for alpha_values")
-            model.alpha_values = array(alpha.values[DType.float64](), alpha.shape)
+            model.alpha_values = _read_count_alpha(archive)
         if fitted:
             var features = reader.integer()
             if features < 1:
-                raise Error("ModelSchemaError: invalid MultinomialNB feature count")
+                raise Error("ModelSchemaError: invalid " + Self.Estimator + " feature count")
             var classes = _read_classes[Self.D](reader)
             var count = Self.D.check_target(classes)
             var domain = Self.D.from_classes(classes)
-            _check_classes[Self.D](classes, count, domain, "MultinomialNB")
-            if reader.boolean():
-                var message = reader.string(reader.remaining())
-                if message.byte_length() == 0:
-                    raise Error("ModelSchemaError: invalid MultinomialNB fit warning")
-                model.fit_warnings = [FitWarning("UserWarning", message^)]
+            _check_classes[Self.D](classes, count, domain, Self.Estimator)
+            model.fit_warnings = _read_count_warning(reader, Self.Estimator)
             model.class_count_ = _read_array[DType.float64](archive, "class_count_", [count])
             model.class_log_prior_ = _read_array[DType.float64](archive, "class_log_prior_", [count])
             model.feature_count_ = _read_array[DType.float64](archive, "feature_count_", [count, features])
             model.feature_log_prob_ = _read_array[DType.float64](archive, "feature_log_prob_", [count, features])
-            _check_multinomial_statistics(
+            _check_count_statistics[False, Self.Estimator](
                 model.class_count_, model.feature_count_, model.class_log_prior_, model.feature_log_prob_,
             )
+            model.n_features_in_ = features
+            model.classes_ = classes^
+            model._domain = domain^
+        reader.finish()
+        return model^
+
+
+struct ComplementNBSchema[
+    D: ClassDomain = IntListDomain, dtype: DType = DType.float64
+](ModelSchema):
+    """Version 1 state for ComplementNB with a built-in label domain."""
+
+    comptime Model = ComplementNB[Self.D, Self.dtype]
+    comptime Estimator = "ComplementNB"
+    comptime TypeId = "moxie.naive_bayes.ComplementNB"
+    comptime StateVersion = 1
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self.TypeId, Self.StateVersion)
+        var writer = BinaryWriter()
+        writer.uint(_count_input_dtype_tag[Self.dtype]())
+        writer.uint(_domain_tag[Self.D]())
+        _write_count_config(writer, archive, model.alpha, model.force_alpha,
+                            model.fit_prior, model.class_prior, model.alpha_values)
+
+        writer.boolean(model.norm)
+        var fitted = model.__sklearn_is_fitted__()
+        writer.boolean(fitted)
+        var count = Self.D.check_target(model.classes_)
+        var features = model.n_features_in_
+        if fitted:
+            if not model._domain:
+                raise Error("ModelSchemaError: missing fitted " + Self.Estimator + " label domain")
+            _check_classes[Self.D](model.classes_, count, model._domain.value(), Self.Estimator)
+            writer.integer(features)
+            _write_classes[Self.D](writer, model.classes_, count)
+            _write_count_warning(writer, model.fit_warnings, Self.Estimator)
+            _write_array(archive, "class_count_", model.class_count_, [count])
+            _write_array(archive, "class_log_prior_", model.class_log_prior_, [count])
+            _write_array(archive, "feature_count_", model.feature_count_, [count, features])
+            _write_array(archive, "feature_log_prob_", model.feature_log_prob_, [count, features])
+            _check_count_statistics[True, Self.Estimator](
+                model.class_count_, model.feature_count_, model.class_log_prior_, model.feature_log_prob_,
+            )
+            _write_array(archive, "feature_all_", model.feature_all_, [features])
+            _check_feature_all(model.feature_all_, model.feature_count_)
+        elif (
+            features != 0 or count != 0 or model._domain or len(model.fit_warnings) != 0
+            or model.class_count_.shape.tolist() != [0] or model.class_log_prior_.shape.tolist() != [0]
+            or model.feature_count_.shape.tolist() != [0, 0]
+            or model.feature_log_prob_.shape.tolist() != [0, 0]
+            or model.feature_all_.shape.tolist() != [0]
+        ):
+            raise Error("ModelSchemaError: unfitted " + Self.Estimator + " has learned state")
+        archive.manifest = writer^.finish()
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self.TypeId, Self.StateVersion)
+        archive.validate()
+        var reader = BinaryReader(Span(archive.manifest))
+        if reader.uint() != _count_input_dtype_tag[Self.dtype]():
+            raise Error("ModelSchemaError: " + Self.Estimator + " dtype mismatch")
+        if reader.uint() != _domain_tag[Self.D]():
+            raise Error("ModelSchemaError: " + Self.Estimator + " label domain mismatch")
+        var config = _read_count_config(reader)
+        var has_alpha_values = config.has_alpha_values
+        var model = Self.Model(alpha=config.alpha, force_alpha=config.force_alpha,
+                               fit_prior=config.fit_prior, class_prior=config.class_prior.copy())
+        model.norm = reader.boolean()
+        var fitted = reader.boolean()
+        var expected_arrays = Int(has_alpha_values) + (5 if fitted else 0)
+        if len(archive.payloads) != expected_arrays:
+            raise Error("ModelSchemaError: unexpected " + Self.Estimator + " arrays")
+        if has_alpha_values:
+            model.alpha_values = _read_count_alpha(archive)
+        if fitted:
+            var features = reader.integer()
+            if features < 1:
+                raise Error("ModelSchemaError: invalid " + Self.Estimator + " feature count")
+            var classes = _read_classes[Self.D](reader)
+            var count = Self.D.check_target(classes)
+            var domain = Self.D.from_classes(classes)
+            _check_classes[Self.D](classes, count, domain, Self.Estimator)
+            model.fit_warnings = _read_count_warning(reader, Self.Estimator)
+            model.class_count_ = _read_array[DType.float64](archive, "class_count_", [count])
+            model.class_log_prior_ = _read_array[DType.float64](archive, "class_log_prior_", [count])
+            model.feature_count_ = _read_array[DType.float64](archive, "feature_count_", [count, features])
+            model.feature_log_prob_ = _read_array[DType.float64](archive, "feature_log_prob_", [count, features])
+            _check_count_statistics[True, Self.Estimator](
+                model.class_count_, model.feature_count_, model.class_log_prior_, model.feature_log_prob_,
+            )
+            model.feature_all_ = _read_array[DType.float64](archive, "feature_all_", [features])
+            _check_feature_all(model.feature_all_, model.feature_count_)
             model.n_features_in_ = features
             model.classes_ = classes^
             model._domain = domain^

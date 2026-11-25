@@ -63,6 +63,27 @@ Use `adapter.estimator` to inspect the underlying model, and use the adapter's
 typed `get_params` and `set_params` to configure it. A fitted copy owns its
 state independently, while `clone` returns an unfitted adapter.
 
+## K-nearest neighbors components
+
+```mojo
+from numojo import NDArray
+from moxie.multiclass import OneVsRestClassifier
+from moxie.neighbors import KNeighborsClassifier
+
+var model = OneVsRestClassifier(KNeighborsClassifier[Y=NDArray[DType.int64]](3))
+_ = model.fit(X, y)
+```
+
+Select `Y=NDArray[DType.int64]` for the inner binary targets. The wrapper
+handles encoding and decoding its own labels. For Float32 features, select
+`KNeighborsClassifier[DType.float32, Y=NDArray[DType.int64]]` and the
+corresponding wrapper feature dtype. KNN returns a list of probability
+matrices, including for one output. Each wrapper extracts the positive-class
+column from the single `(n_samples, 2)` Float64 matrix. A fitted component
+copy retains its query state, and `clone` keeps the configuration for a new
+fit. The KNN production parity group covers feature matrices, uniform and
+distance weights, and all three wrappers.
+
 ## Behavioral distinctions
 
 One-vs-rest, one-vs-one and output-code wrappers clone component estimators. Available methods depend on wrapped estimator capabilities; probability and partial_fit are not universal.

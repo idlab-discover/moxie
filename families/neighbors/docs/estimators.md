@@ -150,7 +150,11 @@ explicit unsupported extension of sklearn's more permissive weighting surface.
 Classifiers expose one target-domain vector per output in `classes_`
 (`StringTarget` for strings).
 `predict_proba` returns a list of Float64 arrays, one per target
-output, including single-output classification. Regression preserves target rank; classification flattens a single-column
+output, including single-output classification. Explicitly copying a
+`KNeighborsClassifier` retains its fitted query and targets. Cloning keeps
+only the configuration. To compose KNN with a multiclass wrapper, use the
+[Int64 binary target configuration](../../../docs/multiclass/family.md#k-nearest-neighbors-components).
+Regression preserves target rank; classification flattens a single-column
 target like sklearn. Classification `score` is accuracy (subset accuracy for
 multilabel indicators); multiclass-multioutput scoring raises like sklearn,
 although prediction supports those targets. Regression uses uniformly averaged R2, with sklearn's finite

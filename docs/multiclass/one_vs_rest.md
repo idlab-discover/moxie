@@ -31,8 +31,10 @@ See [examples/multiclass_one_vs_rest.mojo](../../examples/multiclass_one_vs_rest
 
 `E.Target` must be `NDArray[DType.int64]`: each component receives one 0/1
 column, exactly as sklearn's `LabelBinarizer` produces. Component decision
-values must be `NDArray[float32/float64]` of shape `(n,)` or `(n, 1)`, and
-probabilities `(n, 2)`. Regressor predictions must be `NDArray[float32/float64]`
+values must be `NDArray[float32/float64]` of shape `(n,)` or `(n, 1)`.
+Probabilities may be a dense `(n, 2)` Float32 or Float64 array or a
+`List[NDArray[float64]]` containing one such Float64 matrix.
+Regressor predictions must be `NDArray[float32/float64]`
 of shape `(n,)` (an `(n, 1)` column is also flattened). Incompatible dtypes
 fail to compile; malformed score shapes raise `ValueError`.
 

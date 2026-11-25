@@ -13,6 +13,9 @@ from moxie.discriminant_analysis import (
     QuadraticDiscriminantAnalysis,
 )
 from moxie.frozen import FrozenEstimator
+from moxie.linear_model import LogisticRegression
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
 from moxie.svm import LinearSVC
 
 comptime Array = nm.NDArray[DType.float64]
@@ -20,6 +23,42 @@ comptime Array = nm.NDArray[DType.float64]
 
 def generic_fit[E: SupervisedEstimator](mut model: E, X: E.Input, y: E.Target) raises:
     _ = model.fit(X, y)
+
+
+def test_generic_frozen_classifier(X: Array, y: Array) raises:
+    var pipeline = make_pipeline(StandardScaler(), LogisticRegression())
+    var frozen_unfitted = FrozenEstimator(pipeline.copy())
+    var model = CalibratedClassifierCV(adapt_classifier(frozen_unfitted.copy()), cv=3)
+    with assert_raises(contains="NotFittedError"):
+        _ = model.fit(X, y)
+    assert_false(model.__sklearn_is_fitted__())
+
+    _ = pipeline.fit(X, y.astype[DType.int64]())
+    var frozen = FrozenEstimator(pipeline^)
+    var adapter = adapt_classifier(frozen.copy())
+    assert_true(adapter.is_frozen())
+    assert_false(adapter.uses_probabilities())
+    assert_true(clone(adapter).__sklearn_is_fitted__())
+    var scores = frozen.decision_function(X)
+    var classes = frozen.get_classes()
+    var params = model.get_params()
+    params.estimator = adapter.copy()
+    _ = model.set_params(params)
+
+    _ = model.fit(X, y)
+    var first = model.predict_proba(X)
+    _ = model.fit(X, y)
+    var second = model.predict_proba(X)
+    assert_equal(len(model.calibrated_classifiers_), 1)
+    assert_equal(first.shape, nm.Shape(X.shape[0], classes.size))
+    var after = frozen.decision_function(X)
+    for i in range(scores.size):
+        assert_equal(after.item(i), scores.item(i))
+    for i in range(first.size):
+        assert_equal(second.item(i), first.item(i))
+    for i in range(classes.size):
+        assert_equal(model.classes_.item(i), Float64(classes.item(i)))
+    assert_false(frozen_unfitted.__sklearn_is_fitted__())
 
 
 def test_default_classifier(X: Array, y: Array) raises:
@@ -116,6 +155,7 @@ def main() raises:
         X[nm.Item(i, 1)] = Float64(i % 11) / 3
         y[nm.Item(i)] = -3.0 if i % 2 == 0 else 7.0
     test_default_classifier(X, y)
+    test_generic_frozen_classifier(X, y)
     test_float32_features(X, y)
     var base = adapt_classifier(LinearDiscriminantAnalysis())
     with assert_raises():

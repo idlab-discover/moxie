@@ -34,6 +34,8 @@ from moxie.calibration_serialization import (
 from moxie.serialization import ModelSchema, dumps, loads
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.frozen import FrozenEstimator
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
 from moxie.linear_model import LogisticRegression
 from moxie.naive_bayes import BernoulliNB, CategoricalNB, ComplementNB, GaussianNB, MultinomialNB
 from moxie.svm import LinearSVC, SVC
@@ -422,6 +424,13 @@ def main() raises:
                 labels.append(Int(train_y.item(i)))
             if kind == "production_frozen_gaussian":
                 var estimator = GaussianNB()
+                _ = estimator.fit(train_x, labels)
+                compare_production(
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            elif kind == "production_frozen_pipeline":
+                var estimator = make_pipeline(StandardScaler(), LinearDiscriminantAnalysis())
                 _ = estimator.fit(train_x, labels)
                 compare_production(
                     adapt_classifier(FrozenEstimator(estimator^)),

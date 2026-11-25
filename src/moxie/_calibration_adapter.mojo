@@ -8,7 +8,8 @@ from ._calibration_estimator import (
     _adapt_linear_svc,
     validate_integral_labels,
 )
-from .base import TransformerMixin
+from ._classifier_targets import NumericListTarget
+from .base import NumericClassifierClasses, TransformerMixin
 from .discriminant_analysis import (
     LinearDiscriminantAnalysis,
     QuadraticDiscriminantAnalysis,
@@ -36,6 +37,40 @@ def _numeric_classes(labels: List[Int]) raises -> Array:
             )
         result[nm.Item(i)] = Float64(labels[i])
     return result^
+
+
+def adapt_classifier[E: NumericClassifierClasses & Deinitable](
+    var estimator: FrozenEstimator[E],
+) -> ClassifierCalibrationAdapter[FrozenEstimator[E]]:
+    """Calibrate a fitted dense classifier through its ordered class metadata."""
+    comptime Target = E.Target
+    comptime Domain = NumericListTarget[Target]
+    comptime ArrayTarget = nm.NDArray[E.ClassLabelDType]
+
+    def classes(model: FrozenEstimator[E]) raises -> Array:
+        var result: Array
+        comptime if Domain.supported:
+            var values = rebind_var[List[Domain.Label]](model.get_classes())
+            result = Array(nm.Shape(len(values)))
+            for i in range(len(values)):
+                result[nm.Item(i)] = Domain.as_float64(values[i])
+        else:
+            comptime assert Target == ArrayTarget and E.ClassLabelDType in (
+                DType.int64, DType.float32, DType.float64,
+            ), "Calibration requires numeric class storage"
+            var values = rebind_var[ArrayTarget](model.get_classes())
+            if values.ndim != 1:
+                raise Error("ValueError: expected a one-dimensional array of classes")
+            result = Array(values.shape)
+            for i in range(values.size):
+                result[nm.Item(i)] = values[nm.Item(i)].cast[DType.float64]()
+        validate_integral_labels(result)
+        return result^
+
+    comptime info = reflect[E]
+    return ClassifierCalibrationAdapter(
+        estimator^, classes, String(info.base_name())
+    )
 
 
 def adapt_classifier(

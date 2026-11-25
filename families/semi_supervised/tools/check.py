@@ -56,8 +56,8 @@ def build():
     print(f'Moxie HEAD: {revision}', flush=True)
     for root in [ROOT, *CONSUMERS]:
         assemble(root, revision=revision)
-        run('mojo', 'precompile', root/'builds/deps/moxie', '-I', root/'builds/deps',
-            '-o', root/'builds/moxie.mojoc', root=root)
+        run('mojo', 'precompile', root/'builds/deps/moxie/semi_supervised',
+            '-I', root/'builds/deps', '-o', root/'builds/semi_supervised.mojoc', root=root)
         if root == ROOT:
             for test in ('test_contracts', 'test_capabilities', 'test_family', 'test_plumbing', 'test_estimators', 'test_fluent'):
                 compile_file(root, ROOT/'tests'/f'{test}.mojo', test)

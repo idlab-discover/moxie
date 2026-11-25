@@ -2,6 +2,8 @@ from std.math import isnan
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from numojo import zeros, Shape, NDArray, NDArrayStrides
 from moxie.semi_supervised import LabelPropagation, LabelSpreading, SelfTrainingClassifier, GraphClassifierAdapter
+from moxie.semi_supervised import SVCAdapter
+from moxie.svm import SVC
 from moxie.semi_supervised._label_propagation import GraphClassifier
 from moxie.semi_supervised._affinity import RBFAffinity
 from moxie.semi_supervised._probability import RowNormalizer
@@ -63,7 +65,40 @@ def graph[dtype: DType, spreading: Bool]() raises:
     assert_equal(model.n_features_in_, 1)
     _ = model.predict_proba(view)
 
+def direct_svc_contract() raises:
+    var X = zeros[DType.float64](Shape(6, 1))
+    var features: List[Float64] = [-3.0, -2.8, -2.9, 3.0, 2.8, 2.9]
+    for i in range(len(features)):
+        X.unsafe_set(i, features[i])
+
+    var base = SVCAdapter(SVC[String](probability=True, random_state=42))
+    var model = SelfTrainingClassifier[type_of(base)](base^, threshold=0.0)
+    var labels: List[Optional[String]] = [
+        String("z"), String("z"), None, String("-1"), String("-1"), None,
+    ]
+    _ = model.fit(X, labels)
+    assert_equal(model.classes_, List[String](["-1", "z"]))
+    assert_equal(model.predict(X), List[String](["z", "z", "z", "-1", "-1", "-1"]))
+    assert_equal(model.labeled_iter_, List[Int]([0, 0, 1, 0, 0, 1]))
+
+    var disabled = SVCAdapter(SVC[String](probability=False))
+    var without_probabilities = SelfTrainingClassifier[type_of(disabled)](disabled^)
+    with assert_raises(contains="predict_proba requires probability=True"):
+        _ = without_probabilities.fit(X, labels)
+    assert_false(without_probabilities.__sklearn_is_fitted__())
+    _ = without_probabilities.set_params(max_iter=Optional[Optional[Int]](Optional(0))).fit(X, labels)
+    assert_equal(without_probabilities.predict(X), model.predict(X))
+    with assert_raises(contains="predict_proba requires probability=True"):
+        _ = without_probabilities.predict_proba(X)
+
+    var pairwise = SVCAdapter(SVC[String](kernel="precomputed", probability=True))
+    var precomputed = SelfTrainingClassifier[type_of(pairwise)](pairwise^)
+    with assert_raises(contains="requires a feature kernel"):
+        _ = precomputed.fit(zeros[DType.float64](Shape(6, 6)), labels)
+
+
 def main() raises:
+    direct_svc_contract()
     graph[DType.float64, False]()
     graph[DType.float64, True]()
     graph[DType.float32, False]()

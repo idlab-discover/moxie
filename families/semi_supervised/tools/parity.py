@@ -23,6 +23,8 @@ LOGISTIC_TOLERANCES = {
 CALIBRATED_SVC_SEED = 2802
 # LIBSVM kernel arithmetic and the calibration optimizer differ at low bits.
 CALIBRATED_SVC_TOLERANCE = 3e-5
+DIRECT_SVC_SEED = 2803
+DIRECT_SVC_TOLERANCE = 3e-5
 
 
 def reference(name, relative):
@@ -217,6 +219,67 @@ def calibrated_svc_cases(training, calibration, svc):
         yield name, '\n'.join(lines)
 
 
+def direct_svc_cases(training, svc):
+    rng = np.random.default_rng(DIRECT_SVC_SEED)
+    for n_classes in (2, 3):
+        centers = [[-3., -1.], [3., -1.], [0., 4.]][:n_classes]
+        features = np.concatenate([rng.normal(center, .7, (12, 2)) for center in centers])
+        truth = np.repeat([35, -7, 12][:n_classes], 12)
+        y = truth.copy()
+        y.reshape(n_classes, 12)[:, 8:] = -1
+        for dtype in ('float64', 'float32'):
+            X = features.astype(dtype)
+            query = (features[1::3] + .25).astype(dtype)
+            name = f'direct_svc_{n_classes}_{dtype}'
+            lines = [f'@no_inline\ndef {name}() raises:']
+            lines += array('X', X, dtype) + array('Q', query, dtype)
+            lines += [
+                '    var svc = SVC[Int](gamma=.5, probability=True, random_state=42, tol=1e-8)',
+                f'    var base = SVCAdapter[Int, DType.{dtype}](svc^)',
+                f'    var model = SelfTrainingClassifier[type_of(base), DType.{dtype}](base.copy())',
+                '    with assert_raises():',
+                '        _ = base.classes()',
+                '    with assert_raises():',
+                '        _ = model.predict_proba(Q)',
+            ]
+            model = training.SelfTrainingClassifier(
+                svc(gamma=.5, probability=True, random_state=42, tol=1e-8))
+            for threshold, offset in ((.65, 0), (.98, 100)):
+                targets = np.where(y == -1, -1, y + offset)
+                model.set_params(threshold=threshold).fit(X, targets)
+                assert (model.labeled_iter_ > 0).any() == (offset == 0)
+                lines += [
+                    f'    _ = model.set_params(threshold={threshold}).fit(X, {ints(targets)})',
+                    f'    assert_equal(model.classes_, {ints(model.classes_)})',
+                    f'    assert_equal(model.labeled_iter_, {ints(model.labeled_iter_)})',
+                    f'    assert_equal(model.n_iter_, {model.n_iter_})',
+                    f'    assert_equal(model.termination_condition_, "{model.termination_condition_}")',
+                    f'    assert_equal(model.predict(Q), {ints(model.predict(query))})',
+                    f'    assert_equal(model.score(X, {ints(truth + offset)}), {literal(model.score(X, truth + offset))})',
+                ]
+                for i, label in enumerate(model.transduction_):
+                    lines.append(f'    assert_equal(model.transduction_[{i}].value(), {label})'
+                                 if label != -1 else f'    assert_true(not model.transduction_[{i}])')
+                lines += check_array('model.predict_proba(Q)', model.predict_proba(query), DIRECT_SVC_TOLERANCE)
+                lines += check_array('model.predict_log_proba(Q)', model.predict_log_proba(query), DIRECT_SVC_TOLERANCE)
+                decision = model.decision_function(query)
+                lines.append(f'    assert_equal(model.decision_function(Q).ndim, {decision.ndim})')
+                decision = decision.reshape(len(query), -1)
+                lines += check_array(
+                    f'model.decision_function(Q).reshape(Shape({len(query)}, {decision.shape[1]}))',
+                    decision, DIRECT_SVC_TOLERANCE)
+            lines += [
+                '    var cloned = model.__sklearn_clone__()',
+                '    assert_true(not cloned.__sklearn_is_fitted__())',
+                '    assert_true(not base.estimator.__sklearn_is_fitted__())',
+                '    assert_true(not cloned.estimator.value().estimator.__sklearn_is_fitted__())',
+                '    assert_true(cloned.estimator.value().estimator.probability.enabled())',
+                '    assert_equal(cloned.estimator.value().estimator.random_state, 42)',
+                '    assert_equal(cloned.threshold, .98)',
+            ]
+            yield name, '\n'.join(lines)
+
+
 def main():
     assert subprocess.check_output(['git', '-C', str(REFERENCE), 'rev-parse', 'HEAD'], text=True).strip() == REVISION
     OUT.mkdir(parents=True, exist_ok=True)
@@ -233,7 +296,7 @@ def main():
     source = ['''from std.testing import assert_equal, assert_true, assert_raises
 from std.math import abs, isnan
 from numojo import NDArray, Shape, zeros
-from moxie.semi_supervised import LabelPropagation, LabelSpreading, SelfTrainingClassifier, GaussianNBAdapter, LogisticRegressionAdapter, CalibratedClassifierAdapter
+from moxie.semi_supervised import LabelPropagation, LabelSpreading, SelfTrainingClassifier, GaussianNBAdapter, LogisticRegressionAdapter, CalibratedClassifierAdapter, SVCAdapter
 from moxie.calibration import CalibratedClassifierCV, ClassifierCalibrationAdapter
 from moxie.svm import SVC
 from moxie.linear_model import LogisticRegression
@@ -357,7 +420,11 @@ struct FixtureAffinity(DenseAffinity, Copyable, Movable):
             truth = np.where(np.arange(len(y)) < 12, 0, 1)
             lines.append(f'    assert_equal(model.score(X, {ints(truth)}), {literal(estimator.score(X, truth))})')
             source.append('\n'.join(lines));cases.append(identifier)
-    for name, code in [*logistic_cases(training, logistic), *calibrated_svc_cases(training, calibration, svc)]:
+    for name, code in [
+        *logistic_cases(training, logistic),
+        *calibrated_svc_cases(training, calibration, svc),
+        *direct_svc_cases(training, svc),
+    ]:
         source.append(code)
         cases.append(name)
     source.append('def main() raises:\n' + '\n'.join(f'    {case}()\n    print("PASS {case}")' for case in cases))
@@ -375,6 +442,8 @@ struct FixtureAffinity(DenseAffinity, Copyable, Movable):
     manifest['source_hashes'].update(svc_hashes)
     manifest['calibrated_svc_seed'] = CALIBRATED_SVC_SEED
     manifest['tolerances']['calibrated_svc'] = CALIBRATED_SVC_TOLERANCE
+    manifest['direct_svc_seed'] = DIRECT_SVC_SEED
+    manifest['tolerances']['direct_svc'] = DIRECT_SVC_TOLERANCE
     manifest['logistic_seed'] = LOGISTIC_SEED
     manifest['tolerances']['logistic'] = LOGISTIC_TOLERANCES
     (OUT/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')

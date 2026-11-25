@@ -47,6 +47,9 @@
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },
+        "moxie._multiclass_contracts": {
+          "file": "src/moxie/_multiclass_contracts.mojo"
+        },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
         },
@@ -971,6 +974,63 @@
         "src/moxie/svm/_linear.mojo": null
       },
       "revision": "HEAD"
+    },
+    {
+      "id": "svm-libsvm",
+      "revision": "HEAD",
+      "files": {},
+      "path": "../svm/shared/libsvm",
+      "modules": {
+        "moxie.svm._libsvm": {
+          "file": "src/moxie/svm/_libsvm.mojo"
+        },
+        "moxie.svm._cache": {
+          "file": "src/moxie/svm/_cache.mojo"
+        },
+        "moxie.svm._kernels": {
+          "file": "src/moxie/svm/_kernels.mojo"
+        }
+      },
+      "assets": {
+        "licenses/svm-libsvm/LIBSVM.txt": "LICENSES/LIBSVM.txt",
+        "licenses/svm-libsvm/scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.svm": {}
+        }
+      }
+    },
+    {
+      "id": "svm-c-svm",
+      "revision": "HEAD",
+      "files": {},
+      "path": "../svm/algorithms/c_svm",
+      "modules": {
+        "moxie.svm._c_svm": {
+          "file": "src/moxie/svm/_c_svm.mojo"
+        },
+        "moxie.svm._classification": {
+          "file": "src/moxie/svm/_classification.mojo"
+        }
+      },
+      "assets": {
+        "licenses/svm-c_svm/scikit-learn.txt": "SCIKIT_LEARN_LICENSE"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.svm": {
+            "SVC": "moxie.svm._c_svm",
+            "SVR": "moxie.svm._c_svm",
+            "Gamma": "moxie.svm._classification",
+            "Probability": "moxie.svm._classification",
+            "SVCParams": "moxie.svm._c_svm",
+            "SVRParams": "moxie.svm._c_svm"
+          }
+        }
+      }
     }
   ],
   "overrides": []

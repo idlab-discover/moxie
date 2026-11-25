@@ -32,6 +32,9 @@
       },
       "id": "moxie",
       "modules": {
+        "moxie._categorical": {
+          "file": "src/moxie/_categorical.mojo"
+        },
         "moxie._feature_metadata": {
           "file": "src/moxie/_feature_metadata.mojo"
         },

@@ -1,9 +1,11 @@
 """Dense IterativeImputer comparisons with pinned imputer and BayesianRidge bodies."""
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 import hashlib
 import importlib.util
 import inspect
+from io import StringIO
 from pathlib import Path
+import re
 import subprocess
 import sys
 import warnings
@@ -157,6 +159,11 @@ def cases():
                 min_value=[-1, -2, -3, -4, -5], max_value=[1, 2, 3, 4, 5],
             )
     yield "initial-only", X, Z, dict(max_iter=0, initial_strategy="median")
+    yield "verbose-replay", X, Z, dict(verbose=2, tol=0.0, max_iter=2)
+    yield "verbose-summary", X, Z, dict(verbose=1)
+    yield "verbose-all-missing-query", X, np.full_like(Z, np.nan), dict(verbose=2)
+    yield "verbose-initial-only", X, Z, dict(verbose=2, max_iter=0)
+    yield "verbose-empty-sequence", complete, Z, dict(verbose=2, skip_complete=True)
     yield "configured-bayesian", X, Z, dict(estimator=dict(max_iter=1, fit_intercept=False))
     posterior = dict(sample_posterior=True, tol=1e6)
     yield "posterior-unbounded", X, Z, posterior
@@ -248,6 +255,20 @@ def value(key, x, dtype):
     return str(x)
 
 
+def replay_events(lines):
+    events = []
+    for line in lines:
+        if "Completing matrix with shape" in line:
+            match = re.search(r"\((\d+),\s*(\d+)\)", line)
+            assert match, line
+            events.append(("shape", *map(int, match.groups())))
+        else:
+            match = re.search(r"Ending imputation round (\d+)\s*/\s*(\d+)", line)
+            assert match, line
+            events.append(("round", *map(int, match.groups())))
+    return events
+
+
 def main():
     iterative, bayesian = oracle()
     expected = {}
@@ -259,7 +280,7 @@ def main():
         for tag, X, Z, overrides in cases()
     ]
     inputs.extend(("float64", *case) for case in integer_cases())
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(), redirect_stdout(StringIO()):
         warnings.simplefilter("ignore")
         for dtype, tag, X, Z, overrides in inputs:
             name = f"{tag}-{dtype}"
@@ -281,10 +302,15 @@ def main():
             fitted_rng = np.random.RandomState()
             fitted_rng.set_state(reference.random_state_.get_state())
             next_word = fitted_rng.randint(2**32, dtype="uint32")
-            transformed = reference.transform(Z)
+            log = StringIO()
+            with redirect_stdout(log):
+                transformed = reference.transform(Z)
             second = reference.transform(Z) if posterior else None
             assert fitted.dtype.name == transformed.dtype.name == dtype, name
-            expected[name] = (reference, fitted, transformed, second, next_word)
+            expected[name] = (
+                reference, fitted, transformed, second, next_word,
+                replay_events(log.getvalue().splitlines()),
+            )
             function = f"case_{len(calls)}"
             definitions += ["@no_inline", f"def {function}() raises:"]
             definitions += array("X", X) + array("Z", Z)
@@ -301,7 +327,10 @@ def main():
                 definitions.append("    _ = model.transform(Z)")
             if repeat or repeat_posterior:
                 definitions.append("    fitted = model.fit_transform(X)")
-            definitions.append("    var transformed = model.transform(Z)")
+            definitions += [
+                f'    print("replay {name}")',
+                "    var transformed = model.transform(Z)",
+            ]
             second_expr = "model.transform(Z)" if posterior else "None"
             definitions += [f'    report[DType.{dtype}]("{name}", model, fitted, transformed, {second_expr})', ""]
             calls.append(f"    {function}()")
@@ -322,8 +351,18 @@ def main():
     )
     records = iter(output.splitlines())
     worst = {"float64": 0.0, "float32": 0.0}
-    for name, (model, fitted, transformed, second, next_word) in expected.items():
-        assert next(records) == name
+    for name, (model, fitted, transformed, second, next_word, events) in expected.items():
+        line = next(records)
+        while line.startswith("[IterativeImputer]"):
+            line = next(records)
+        assert line == f"replay {name}", (name, line)
+        replay_log = []
+        line = next(records)
+        while line.startswith("[IterativeImputer]"):
+            replay_log.append(line)
+            line = next(records)
+        assert replay_events(replay_log) == events, (name, replay_log, events)
+        assert line == name
         dtype = fitted.dtype.name
         tolerance = 3e-4 if dtype == "float32" else 5e-8
         for want in (fitted, transformed, second):

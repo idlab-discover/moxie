@@ -89,8 +89,9 @@ sentinels in a single object column. It also excludes arbitrary Python objects,
 bytes, mixed string/numeric scalars within a column, ordered-category comparison,
 automatic dtype promotion, and serialization adapters.
 
-[ColumnTable](compose/named-columns.md) stores these string columns alongside
-numeric data and supplies them to categorical transformers. Families exchange
+[ColumnTable](compose/named-columns.md) stores these string and numeric
+categorical columns alongside its dense matrix and supplies them to
+categorical transformers. Families exchange
 columns through this single core owner, following the
 [live-source development policy](family-development.md). Include
 `moxie._categorical` and NuMojo in the dependency manifest, retaining compatible

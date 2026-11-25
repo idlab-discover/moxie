@@ -1,8 +1,14 @@
 """Owned named numeric and categorical feature columns."""
 from numojo import NDArray
-from moxie._categorical import CategoricalColumn, StringCategories
+from std.utils import Variant
+from moxie._categorical import CategoricalColumn, CategoryDomain, NumericCategories, StringCategories
 
 comptime StringColumn = CategoricalColumn[StringCategories]
+comptime NumericColumn[dtype: DType] = CategoricalColumn[NumericCategories[dtype]]
+comptime _TableCategory = Variant[
+    StringColumn, NumericColumn[DType.bool], NumericColumn[DType.int64],
+    NumericColumn[DType.float32], NumericColumn[DType.float64],
+]
 
 
 struct ColumnSchema(Copyable, Movable):
@@ -43,7 +49,7 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
     var _data: NDArray[Self.dtype]
     var _schema: ColumnSchema
     var _locations: List[Int]
-    var _categories: List[StringColumn]
+    var _categories: List[_TableCategory]
 
     def __init__(out self, X: NDArray[Self.dtype], names: List[String]) raises:
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, "Float32/Float64 tables only"
@@ -58,10 +64,12 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
             self._locations.append(i)
         self._schema = ColumnSchema(names, dtypes)
         self._data = X.copy()
-        self._categories = List[StringColumn]()
+        self._categories = List[_TableCategory]()
 
-    def add_categorical(mut self, name: String, column: StringColumn, *, position: Optional[Int] = None) raises:
-        """Insert an independent string categorical column, appending by default."""
+    def add_categorical[Domain: CategoryDomain](
+        mut self, name: String, column: CategoricalColumn[Domain], *, position: Optional[Int] = None,
+    ) raises:
+        """Insert an independent categorical column, appending by default."""
         self._check_shape()
         if name in self._schema.names:
             raise Error("ValueError: native column names must be unique")
@@ -71,10 +79,11 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
         var index = position.or_else(width)
         if index < 0 or index > width:
             raise Error("ValueError: column insertion position is out of bounds")
+        var stored = _TableCategory(column.copy())
         self._schema.names.insert(index, name)
         self._schema.dtypes.insert(index, "category")
         self._locations.insert(index, len(self._categories))
-        self._categories.append(column.copy())
+        self._categories.append(stored^)
 
     def values(ref self) raises -> ref[self._data] NDArray[Self.dtype]:
         """Borrow the matrix when all columns are numeric."""
@@ -89,12 +98,19 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
         self._check_shape()
         return self._schema.copy()
 
-    def categorical_columns(self, indices: List[Int]) raises -> List[StringColumn]:
-        """Copy categorical columns in selection order, including repeats."""
-        var result = List[StringColumn](capacity=len(indices))
+    def categorical_columns[Domain: CategoryDomain = StringCategories](
+        self, indices: List[Int],
+    ) raises -> List[CategoricalColumn[Domain]]:
+        """Copy columns of the requested domain in selection order, including repeats."""
+        comptime Column = CategoricalColumn[Domain]
+        var result = List[Column](capacity=len(indices))
         for index in indices:
             self._check_index(index, "category")
-            result.append(self._categories[self._locations[index]].copy())
+            ref column = self._categories[self._locations[index]]
+            if not column.isa[Column]():
+                raise Error(String("TypeError: column '", self._schema.names[index],
+                                   "' has a different categorical domain than this component requires"))
+            result.append(column[Column].copy())
         return result^
 
     def _numeric_indices(self, indices: List[Int]) raises -> List[Int]:

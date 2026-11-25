@@ -41,42 +41,53 @@ for method, source in [
 ]:
     io.pinned_code(method, source)
 
-train = pd.DataFrame({
-    "color": pd.Categorical(["red", "blue", "red", "amber", "blue"]),
-    "age": [10.0, np.nan, 30.0, 40.0, 20.0],
-})
-test = pd.DataFrame({
-    "age": [35.0, np.nan, 15.0],
-    "color": pd.Categorical(["green", None, "red"]),
-})
-model = compose.ColumnTransformer([
-    ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
-     compose.make_column_selector(dtype_include="number")),
-    ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
-     compose.make_column_selector(dtype_include="category")),
-])
-expected_fit = model.fit_transform(train)
-expected_transform = model.transform(test)
-output = io.run(ROOT, BUILD / "mixed", capture=True).stdout
-actual = io.parse_results(output)["mixed"]
-errors = {}
-for label, expected in {
-    "fit": expected_fit,
-    "transform": expected_transform,
-    "after_failed_refit": expected_transform,
-}.items():
-    errors[label] = io.close(actual[label][:, :1], expected[:, :1], 1e-12, 1e-12, label)
-    np.testing.assert_array_equal(actual[label][:, 1:], expected[:, 1:])
-names = [line.split("|")[1] for line in output.splitlines() if line.startswith("name|")]
-spans = {name: slice(int(start), int(stop)) for _, name, start, stop in
-         (line.split("|") for line in output.splitlines() if line.startswith("span|"))}
-assert names == model.get_feature_names_out().tolist(), names
-assert spans == model.output_indices_, spans
+def check_mixed(case, column, train_categories, test_categories, *, extra_outputs=()):
+    train = pd.DataFrame({
+        column: pd.Categorical(train_categories),
+        "age": [10.0, np.nan, 30.0, 40.0, 20.0],
+    })
+    test = pd.DataFrame({
+        "age": [35.0, np.nan, 15.0],
+        column: pd.Categorical(test_categories),
+    })
+    model = compose.ColumnTransformer([
+        ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
+         compose.make_column_selector(dtype_include="number")),
+        ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
+         compose.make_column_selector(dtype_include="category")),
+    ])
+    expected_fit = model.fit_transform(train)
+    expected_transform = model.transform(test)
+    output = io.run(ROOT, BUILD / case, capture=True).stdout
+    actual = io.parse_results(output)[case]
+    errors = {}
+    for label, expected in [
+        ("fit", expected_fit),
+        ("transform", expected_transform),
+        ("after_failed_refit", expected_transform),
+        *((label, expected_transform) for label in extra_outputs),
+    ]:
+        errors[label] = io.close(actual[label][:, :1], expected[:, :1], 1e-12, 1e-12, label)
+        np.testing.assert_array_equal(actual[label][:, 1:], expected[:, 1:])
+    names = [line.split("|")[1] for line in output.splitlines() if line.startswith("name|")]
+    spans = {name: slice(int(start), int(stop)) for _, name, start, stop in
+             (line.split("|") for line in output.splitlines() if line.startswith("span|"))}
+    assert names == model.get_feature_names_out().tolist(), names
+    assert spans == model.output_indices_, spans
 
-report = BUILD / "parity"
-report.mkdir(parents=True, exist_ok=True)
-(report / "mixed-report.json").write_text(json.dumps({
-    "revision": io.REVISION, "sources": hashes, "scaler_max_errors": errors,
-    "names": names, "spans": {name: [span.start, span.stop] for name, span in spans.items()},
-}, indent=2) + "\n")
-print("Mixed table parity passed: one-hot values, names and spans exact, scaler within 1e-12")
+    report = BUILD / "parity"
+    report.mkdir(parents=True, exist_ok=True)
+    (report / f"{case}-report.json").write_text(json.dumps({
+        "revision": io.REVISION, "sources": hashes, "scaler_max_errors": errors,
+        "names": names, "spans": {name: [span.start, span.stop] for name, span in spans.items()},
+    }, indent=2) + "\n")
+    print(f"{case}: one-hot values, names and spans exact, scaler within 1e-12")
+
+
+if __name__ == "__main__":
+    check_mixed("mixed", "color", ["red", "blue", "red", "amber", "blue"], ["green", None, "red"])
+    large = 2**53
+    check_mixed(
+        "mixed_numeric_categories", "product", [large + 1, large, large + 1, -2, large],
+        [large + 2, large, large + 1], extra_outputs=("with_extra_categories", "after_fit"),
+    )

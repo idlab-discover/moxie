@@ -3,7 +3,9 @@
 `ColumnTable[dtype]` adds column names to an owned NuMojo matrix. It accepts
 rank-2 Float32 or Float64 data and copies the input matrix and names.
 `add_categorical(name, column, position=None)` copies a
-`CategoricalColumn[StringCategories]` into the same table. The position is
+`CategoricalColumn[Domain]` into the same table. The supported domains are
+`StringCategories` and `NumericCategories[dtype]` for Bool, Int64, Float32,
+and Float64. The position is
 zero-based and defaults to the end. The name must be unique and the row
 count must match the numeric block. A matrix with shape `(rows, 0)` can
 seed a categorical-only table. All numeric columns share the matrix dtype.
@@ -11,8 +13,9 @@ seed a categorical-only table. All numeric columns share the matrix dtype.
 Copying a table creates an independent snapshot. `schema()` returns its own
 `ColumnSchema` with actual storage kinds (`float32`, `float64`, `category`).
 `values()` borrows the numeric matrix for numeric-only tables and raises on
-mixed tables. `categorical_columns(indices)` copies categorical columns in
-selection order, preserving the dictionaries and missing codes.
+mixed tables. `categorical_columns[Domain](indices)` copies categorical
+columns in selection order, preserving the dictionaries and missing codes.
+Omit the domain to read string categorical columns.
 
 ```mojo
 from moxie.compose import ColumnTable, ColumnTransformer, ColumnEntry, make_column_selector
@@ -44,7 +47,7 @@ state. Supplied `get_feature_names_out(input_features)` must match fitted names.
 
 `make_column_selector(dtype_include=..., dtype_exclude=...)` returns a named
 key from a table or schema. Use `["number"]` for the numeric block or
-`["category"]` for string categorical columns. `"floating"`, `"float32"`
+`["category"]` for categorical columns of any domain. `"floating"`, `"float32"`
 and `"float64"` also match their respective numeric storage. Typed selectors
 take lists of dtype names. Regex `pattern` raises an unsupported-capability error.
 
@@ -72,17 +75,22 @@ var model = ColumnTransformer(
 var result = model.fit_transform(table)
 ```
 
-A categorical component receives `List[CategoricalColumn[StringCategories]]`
-when its associated input declares that type. Select those columns using
-a list, mask, slice or dtype selector so the component gets a collection of
-features. The component's target and dense result dtype must match the table
-dtype. Numeric components, including `"passthrough"`, accept only numeric
+A categorical component receives `List[CategoricalColumn[Domain]]` according
+to its associated input type. For example,
+`OneHotEncoder[NumericKind[DType.int64]]` receives Int64 categorical columns
+and preserves their identities through encoding, including values above
+`2**53`. Import `NumericKind` from `moxie.preprocessing._vocabulary`.
+Each branch must select a single domain. Use explicit column lists to route
+different domains to different branches in the same table. A list, mask,
+slice, or dtype selector supplies a collection of features. The component's
+target and dense result dtype must match the table dtype. Numeric components,
+including `"passthrough"`, accept only numeric
 selections. Use `"drop"` for unused categorical columns. A callable taking
 an NDArray requires a numeric-only table. Invalid selections and type changes
 on fitted columns raise errors.
 
-String categorical selections also support `OrdinalEncoder` and
-`TargetEncoder`. For `TargetEncoder`, use a Float64 table and a Float64
+Categorical selections also support `OrdinalEncoder` and `TargetEncoder`
+with the corresponding domain. For `TargetEncoder`, use a Float64 table and a Float64
 target array. Pass `y.copy()` to keep the target or `y^` to transfer it when
 calling `fit_transform(table, y)` or `fit(table, y)`. The target is required
 when an active entry uses TargetEncoder. The training output uses out-of-fold

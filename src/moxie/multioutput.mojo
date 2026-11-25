@@ -10,6 +10,7 @@ from moxie.base import (BaseEstimator, SupervisedEstimator, Predictor, Probabili
     WeightedSupervisedEstimator, ClassifierMixin, clone)
 from moxie._labels import encode_column
 from moxie.dummy import Label
+from moxie.compose._table import ColumnTable
 from moxie.metadata_routing import FitScoreMetadataRequestProvider
 from moxie._multioutput_contracts import MultiOutputClassifierAPI, MultiOutputRegressorAPI, MultiOutputProbability
 from moxie._multioutput import (
@@ -557,6 +558,13 @@ def _score[label: DType, classifier: Bool](y: NDArray[label], pred: NDArray[labe
         return Float64(nm.sum(scores)) / Float64(q)
 
 
+def _check_column_names[dtype: DType](
+    X: ColumnTable[dtype], fitted_names: Optional[List[String]],
+) raises:
+    if fitted_names and X.schema().names != fitted_names.value():
+        raise Error("ValueError: feature names must match the names and order used during fit")
+
+
 struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dtype: DType = DType.float64, label: DType = dtype](
     MultiOutputRegressorAPI,
     Copyable where conforms_to(E, Copyable),
@@ -572,6 +580,7 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
     var n_jobs: Optional[Int]
     var estimators_: List[Self.E]
     var n_features_in_: Optional[Int]
+    var feature_names_in_: Optional[List[String]]
 
     def __init__(out self, var estimator: Self.E, *, n_jobs: Optional[Int] = None) raises:
         comptime assert Self.dtype in (DType.float32, DType.float64), "features must use Float32 or Float64"
@@ -582,6 +591,7 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         self.n_jobs = n_jobs
         self.estimators_ = List[Self.E]()
         self.n_features_in_ = None
+        self.feature_names_in_ = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.estimator.get_params(deep), self.n_jobs)
@@ -615,8 +625,32 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         self._fit(X, y, None)
         return self
 
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y)
+        self.feature_names_in_ = names^
+        return self
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Self.SampleWeight) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
         self._fit(X, y, sample_weight.copy())
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, sample_weight=sample_weight)
+        self.feature_names_in_ = names^
         return self
 
     def fit[
@@ -628,6 +662,18 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
     ) raises -> ref[self] Self:
         var weights = _route_fit_weights(self.estimator, metadata)
         self._fit(X, y, weights^)
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        metadata_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target,
+        *, ref[metadata_origin] metadata: Dict[String, Self.SampleWeight],
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, metadata=metadata)
+        self.feature_names_in_ = names^
         return self
 
     def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
@@ -656,6 +702,7 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         fit_outputs(models, fit_one, workers)
         self.estimators_ = models^
         self.n_features_in_ = X.shape[1]
+        self.feature_names_in_ = None
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check(X)
@@ -691,6 +738,27 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         self.n_features_in_ = X.shape[1]
         return self
 
+    def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self where conforms_to(Self.E, IncrementalRegressor):
+        _check_column_names(X, self.feature_names_in_)
+        var first_fit = not self.__sklearn_is_fitted__()
+        var names = X.schema().names.copy() if first_fit else List[String]()
+        _ = self.partial_fit(X.values(), y)
+        if first_fit:
+            self.feature_names_in_ = names^
+        return self
+
+    def predict(self, X: ColumnTable[Self.dtype]) raises -> Self.Prediction:
+        _check_column_names(X, self.feature_names_in_)
+        return self.predict(X.values())
+
+    def score(self, X: ColumnTable[Self.dtype], y: Self.Target, sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
+        _check_column_names(X, self.feature_names_in_)
+        return self.score(X.values(), y, sample_weight)
+
 struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dtype: DType = DType.float64, label: DType = DType.int64](
     MultiOutputClassifierAPI,
     Copyable where conforms_to(E, Copyable),
@@ -710,6 +778,7 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
     var estimators_: List[Self.E]
     var classes_: List[NDArray[Self.label]]
     var n_features_in_: Optional[Int]
+    var feature_names_in_: Optional[List[String]]
 
     def __init__(out self, var estimator: Self.E, *, n_jobs: Optional[Int] = None) raises:
         comptime assert Self.dtype in (DType.float32, DType.float64), "features must use Float32 or Float64"
@@ -725,6 +794,7 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         self.estimators_ = List[Self.E]()
         self.classes_ = List[NDArray[Self.label]]()
         self.n_features_in_ = None
+        self.feature_names_in_ = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.estimator.get_params(deep), self.n_jobs)
@@ -758,8 +828,32 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         self._fit(X, y, None)
         return self
 
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y)
+        self.feature_names_in_ = names^
+        return self
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Self.SampleWeight) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
         self._fit(X, y, sample_weight.copy())
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, sample_weight=sample_weight)
+        self.feature_names_in_ = names^
         return self
 
     def fit[
@@ -771,6 +865,18 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
     ) raises -> ref[self] Self:
         var weights = _route_fit_weights(self.estimator, metadata)
         self._fit(X, y, weights^)
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        metadata_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target,
+        *, ref[metadata_origin] metadata: Dict[String, Self.SampleWeight],
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, metadata=metadata)
+        self.feature_names_in_ = names^
         return self
 
     def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
@@ -795,6 +901,7 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         self.estimators_ = models^
         self.classes_ = classes^
         self.n_features_in_ = X.shape[1]
+        self.feature_names_in_ = None
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check(X)
@@ -877,6 +984,31 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         self.n_features_in_ = X.shape[1]
         return self
 
+    def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target, classes: Optional[Self.Classes] = None,
+    ) raises -> ref[self] Self where conforms_to(Self.E, IncrementalClassifier):
+        _check_column_names(X, self.feature_names_in_)
+        var first_fit = not self.__sklearn_is_fitted__()
+        var names = X.schema().names.copy() if first_fit else List[String]()
+        _ = self.partial_fit(X.values(), y, classes)
+        if first_fit:
+            self.feature_names_in_ = names^
+        return self
+
+    def predict(self, X: ColumnTable[Self.dtype]) raises -> Self.Prediction:
+        _check_column_names(X, self.feature_names_in_)
+        return self.predict(X.values())
+
+    def score(self, X: ColumnTable[Self.dtype], y: Self.Target, sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
+        _check_column_names(X, self.feature_names_in_)
+        return self.score(X.values(), y, sample_weight)
+
+    def predict_proba(self, X: ColumnTable[Self.dtype]) raises -> List[NDArray[DType.float64]] where conforms_to(Self.E, ProbabilityPredictor):
+        _check_column_names(X, self.feature_names_in_)
+        return self.predict_proba(X.values())
+
 struct RegressorChain[
     E: SupervisedEstimator & Predictor & Deinitable,
     dtype: DType = DType.float64,
@@ -907,6 +1039,7 @@ struct RegressorChain[
     var classes_: List[NDArray[Self.label]]
     var order_: List[Int]
     var n_features_in_: Optional[Int]
+    var feature_names_in_: Optional[List[String]]
 
     def __init__(out self, var estimator: Self.E, *, order: Optional[List[Int]] = None, random_state: Optional[Int] = None,
                  random_order: Bool = False, verbose: Bool = False, chain_method: String = "predict",
@@ -946,6 +1079,7 @@ struct RegressorChain[
         self.classes_ = List[NDArray[Self.label]]()
         self.order_ = List[Int]()
         self.n_features_in_ = None
+        self.feature_names_in_ = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.estimator.get_params(deep), self.order.copy(), self.random_state, self.random_order, self.verbose, self.chain_method, self.cv.copy())
@@ -979,8 +1113,32 @@ struct RegressorChain[
         self._fit_native_cv(X, y, None, self.cv.copy())
         return self
 
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y)
+        self.feature_names_in_ = names^
+        return self
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Self.SampleWeight) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
         self._fit_native_cv(X, y, sample_weight.copy(), self.cv.copy())
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, sample_weight=sample_weight)
+        self.feature_names_in_ = names^
         return self
 
     def fit[
@@ -992,6 +1150,18 @@ struct RegressorChain[
     ) raises -> ref[self] Self:
         var weights = _route_fit_weights(self.estimator, metadata)
         self._fit_native_cv(X, y, weights^, self.cv.copy())
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        metadata_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target,
+        *, ref[metadata_origin] metadata: Dict[String, Self.SampleWeight],
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, metadata=metadata)
+        self.feature_names_in_ = names^
         return self
 
     def _fit_native_cv[C: Copyable & Deinitable](
@@ -1068,6 +1238,7 @@ struct RegressorChain[
         self.classes_ = classes^
         self.order_ = order^
         self.n_features_in_ = X.shape[1]
+        self.feature_names_in_ = None
         self.chain_method_ = self.chain_method
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
@@ -1092,12 +1263,36 @@ struct RegressorChain[
         self._fit_native_cv(X, y, None, cv.copy())
         return self
 
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target, *, cv: ChainCV,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, cv=cv)
+        self.feature_names_in_ = names^
+        return self
+
     def fit[CV: ChainResponses, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, cv: CV,
     ) raises -> ref[self] Self:
         """Use a custom out-of-fold provider for this fit."""
         self._fit(X, y, None, cv)
         return self
+
+    def fit[CV: ChainResponses, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target, *, cv: CV,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, cv=cv)
+        self.feature_names_in_ = names^
+        return self
+
+    def predict(self, X: ColumnTable[Self.dtype]) raises -> Self.Prediction:
+        _check_column_names(X, self.feature_names_in_)
+        return self.predict(X.values())
+
+    def score(self, X: ColumnTable[Self.dtype], y: Self.Target, sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
+        _check_column_names(X, self.feature_names_in_)
+        return self.score(X.values(), y, sample_weight)
 
 struct ClassifierChain[
     E: SupervisedEstimator & Predictor & Deinitable,
@@ -1131,6 +1326,7 @@ struct ClassifierChain[
     var classes_: List[NDArray[Self.label]]
     var order_: List[Int]
     var n_features_in_: Optional[Int]
+    var feature_names_in_: Optional[List[String]]
 
     def __init__(
         out self,
@@ -1186,6 +1382,7 @@ struct ClassifierChain[
         self.classes_ = List[NDArray[Self.label]]()
         self.order_ = List[Int]()
         self.n_features_in_ = None
+        self.feature_names_in_ = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(
@@ -1222,8 +1419,32 @@ struct ClassifierChain[
         self._fit_native_cv(X, y, None, self.cv.copy())
         return self
 
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y)
+        self.feature_names_in_ = names^
+        return self
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Self.SampleWeight) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
         self._fit_native_cv(X, y, sample_weight.copy(), self.cv.copy())
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        sample_weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+        *, ref[sample_weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self where conforms_to(Self.E, WeightedSupervisedEstimator):
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, sample_weight=sample_weight)
+        self.feature_names_in_ = names^
         return self
 
     def fit[
@@ -1235,6 +1456,18 @@ struct ClassifierChain[
     ) raises -> ref[self] Self:
         var weights = _route_fit_weights(self.estimator, metadata)
         self._fit_native_cv(X, y, weights^, self.cv.copy())
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        metadata_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target,
+        *, ref[metadata_origin] metadata: Dict[String, Self.SampleWeight],
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, metadata=metadata)
+        self.feature_names_in_ = names^
         return self
 
     def _fit_native_cv[C: Copyable & Deinitable](
@@ -1300,6 +1533,7 @@ struct ClassifierChain[
         self.classes_ = classes^
         self.order_ = order^
         self.n_features_in_ = X.shape[1]
+        self.feature_names_in_ = None
         self.chain_method_ = method^
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
@@ -1352,9 +1586,45 @@ struct ClassifierChain[
         self._fit_native_cv(X, y, None, cv.copy())
         return self
 
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target, *, cv: ChainCV,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, cv=cv)
+        self.feature_names_in_ = names^
+        return self
+
     def fit[CV: ChainResponses, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, cv: CV,
     ) raises -> ref[self] Self:
         """Use a custom out-of-fold provider for this fit."""
         self._fit(X, y, None, cv)
         return self
+
+    def fit[CV: ChainResponses, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: Self.Target, *, cv: CV,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y, cv=cv)
+        self.feature_names_in_ = names^
+        return self
+
+    def predict(self, X: ColumnTable[Self.dtype]) raises -> Self.Prediction:
+        _check_column_names(X, self.feature_names_in_)
+        return self.predict(X.values())
+
+    def score(self, X: ColumnTable[Self.dtype], y: Self.Target, sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
+        _check_column_names(X, self.feature_names_in_)
+        return self.score(X.values(), y, sample_weight)
+
+    def predict_proba(self, X: ColumnTable[Self.dtype]) raises -> NDArray[DType.float64] where conforms_to(Self.E, ProbabilityPredictor):
+        _check_column_names(X, self.feature_names_in_)
+        return self.predict_proba(X.values())
+
+    def predict_log_proba(self, X: ColumnTable[Self.dtype]) raises -> NDArray[DType.float64] where conforms_to(Self.E, ProbabilityPredictor):
+        _check_column_names(X, self.feature_names_in_)
+        return self.predict_log_proba(X.values())
+
+    def decision_function(self, X: ColumnTable[Self.dtype]) raises -> NDArray[DType.float64] where conforms_to(Self.E, DecisionFunction):
+        _check_column_names(X, self.feature_names_in_)
+        return self.decision_function(X.values())

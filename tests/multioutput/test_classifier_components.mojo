@@ -3,6 +3,7 @@ import numojo as nm
 from numojo import NDArray, Shape
 from std.testing import assert_equal, assert_raises
 from moxie.base import clone
+from moxie.compose import ColumnTable
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.dummy import DummyClassifier, Label
 from moxie.naive_bayes import GaussianNB, NumericDomain
@@ -37,6 +38,7 @@ def parity[name: StaticString, dtype: DType](values: NDArray[dtype]) raises:
 
 def main() raises:
     var X = features()
+    var table = ColumnTable(X, List[String](["time"]))
     var multiclass = targets(False)
     var binary = targets(True)
     comptime Tree = DecisionTreeClassifier[]
@@ -88,7 +90,7 @@ def main() raises:
     var weights = nm.zeros[DType.float64](Shape(12))
     for i in range(12):
         weights.unsafe_set(i, Float64(i % 3 + 1))
-    _ = bayes.fit(X, multiclass, sample_weight=weights)
+    _ = bayes.fit(table, multiclass, sample_weight=weights)
     parity["ComponentsGaussianNBLabels"](bayes.predict(X))
     parity["ComponentsGaussianNBProba"](bayes.predict_proba(X)[1])
     var bad_weights = nm.zeros[DType.float64](Shape(12, 1))
@@ -99,7 +101,7 @@ def main() raises:
     var bayes_chain = ClassifierChain[NB, DType.float64, DType.float64](
         clone(bayes.estimator), chain_method="predict_proba",
     )
-    _ = bayes_chain.fit(X, binary, sample_weight=weights)
+    _ = bayes_chain.fit(table, binary, sample_weight=weights)
     parity["ComponentsGaussianNBChainProba"](bayes_chain.predict_proba(X))
 
     var integer_targets = multiclass.astype[DType.int64]()
@@ -128,14 +130,14 @@ def main() raises:
     assert_equal(len(routed.estimators_), 0)
     metadata = Dict[String, NDArray[DType.float64]]()
     metadata["row_weights"] = weights.copy()
-    _ = routed.fit(X, integer_targets, metadata=metadata)
+    _ = routed.fit(table, integer_targets, metadata=metadata)
     parity["ComponentsGaussianNBRoutedLabels"](routed.predict(X))
     parity["ComponentsGaussianNBRoutedProba"](routed.predict_proba(X)[1])
 
     var routed_chain = ClassifierChain(
         clone(list_bayes.estimator), chain_method="predict_proba", cv=3,
     )
-    _ = routed_chain.fit(X, binary.astype[DType.int64](), metadata=metadata)
+    _ = routed_chain.fit(table, binary.astype[DType.int64](), metadata=metadata)
     parity["ComponentsGaussianNBChainRoutedCVProba"](routed_chain.predict_proba(X))
 
     var incremental = clone(list_bayes)
@@ -156,7 +158,7 @@ def main() raises:
 
     var list_chain = ClassifierChain(GaussianNB(), chain_method="predict_proba", cv=3)
     var integer_binary = binary.astype[DType.int64]()
-    _ = list_chain.fit(X, integer_binary)
+    _ = list_chain.fit(table, integer_binary, cv=3)
     parity["ComponentsGaussianNBListChainCVLabels"](list_chain.predict(X))
     parity["ComponentsGaussianNBListChainCVProba"](list_chain.predict_proba(X))
 
@@ -208,4 +210,4 @@ def main() raises:
     )
     _ = svc_chain.fit(X, integer_binary)
     parity["ComponentsSVCChainCVLabels"](svc_chain.predict(X))
-    parity["ComponentsSVCChainCVDecision"](svc_chain.decision_function(X))
+    parity["ComponentsSVCChainCVDecision"](svc_chain.decision_function(table))

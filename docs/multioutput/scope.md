@@ -40,8 +40,10 @@ original sample order.
   undersized classes silently.
 - Ordinary fit supports routing a component's sample-weight request from a
   typed metadata map. Incremental sample weights, arbitrary metadata, parent
-  routing through a wrapper, Python reflection and feature-name propagation
-  remain unsupported.
+  routing through a wrapper, and Python reflection remain unsupported.
+- Numeric `ColumnTable` input preserves fitted feature names at the wrapper.
+  Components receive positional matrices. See the [API](api-surface.md) for
+  name checks and incremental fits.
 - Component inputs must match the wrapper's feature array type. Regressor
   component targets and predictions use the declared NDArray type. Classifier
   components also accept a list of scalars of the declared label dtype, or

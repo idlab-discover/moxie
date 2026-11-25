@@ -156,14 +156,30 @@ Frozen wrappers therefore still do not conform to that trait. Shared tags and
 a framework-wide identity-only trait remain outside this family change. A
 predictive clusterer's independent `Predictor` capability can still be forwarded.
 
+### Positional access to pipeline steps
+
+For a wrapped `Pipeline` or `TransformerPipeline`, use `frozen.step[0]()`
+for the prefix and `frozen.step[1]()` for the final step. Negative indices
+`-2` and `-1` select the same steps from the end. Mojo resolves the index at
+compile time because the two steps can have different types. Invalid indices
+and calls on wrappers without the pipeline step capability fail compilation.
+
+The result is an immutable borrow of the actual child, including its learned
+state. Access also works before fitting, and the child still applies its own
+fitted-state checks. Clones and nested frozen wrappers access the same child
+allocation. See the pipeline contract for [sequential composition](../pipeline/sequential.md).
+`tests/frozen/compare_composition_width.py` compares indexed step inference
+with the pinned sklearn reference.
+
 ## Native differences and scope
 
 - Python clone returns the same wrapper object. Mojo clone returns a value
   sharing its estimator allocation; replacing one wrapper's estimator leaves
   other wrapper values unchanged.
 - Learned attributes and custom read-only methods use `frozen.estimator()`;
-  arbitrary attribute forwarding, indexing, and inference overloads outside
-  the shared traits are not synthesized.
+  arbitrary attribute forwarding and inference overloads outside the shared
+  traits are not synthesized. Lookup by name, slices, and ColumnTransformer
+  indexing are outside the positional pipeline interface.
 - Fit, partial fit, and parameter changes return a mutable borrow of this wrapper.
   Nested parameter rejection occurs at compile time rather than as a Python
   `ValueError`.
@@ -247,7 +263,7 @@ Moxie's `pixi run parity` includes both comparisons automatically.
 | `test_clone_frozen`, `test_check_is_fitted` | `test_frozen.mojo` covers shared allocation, clone lifetime, unfitted errors and repeated no-op fit |
 | `test_frozen_params` | Typed parameter records, restoration, same-type replacement, and compile-time rejection of nested updates |
 | `test_frozen_tags` | Classifier, regressor and outlier trait identity plus recursive cluster identity; arbitrary Python tags are unsupported |
-| `test_frozen_metadata_routing` | Unsupported: dynamic metadata routing and indexing require a separate native design |
+| `test_frozen_metadata_routing` | Dynamic metadata routing remains open. Positional step access has separate native and sklearn comparison coverage |
 
 `test_frozen_composition.mojo` wraps production estimators: a fitted
 `LinearDiscriminantAnalysis` (no-op fit on different data, delegated
@@ -266,7 +282,7 @@ frozen `StandardScaler` followed by logistic regression. Run it with
 `pixi run -e notebooks notebooks notebooks/frozen/plot_frozen_examples.ipynb`.
 
 Capability probes establish forwarding contracts, not numerical coverage of every
-wrapped estimator. Python object identity, arbitrary attribute/index forwarding,
+wrapped estimator. Python object identity, arbitrary attribute forwarding,
 cross-type replacement and dynamic arguments retain the differences listed above.
 The integrated implementation comes from `moxie-frozen` commit
 `ee63d6cd8093e3d1611bd0d3427359ad1fd58b98`; its original sibling checkout is not

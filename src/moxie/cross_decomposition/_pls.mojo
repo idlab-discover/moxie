@@ -21,6 +21,7 @@ from moxie._feature_metadata import (
 )
 from moxie.metadata_routing import SampleWeightRequest, SampleWeightUpdate
 from moxie.warnings import FitWarning
+from moxie.compose._table import ColumnTable
 from moxie.cross_decomposition._base import (
     CrossDecompositionTransformer,
     PLSPredictor,
@@ -801,17 +802,26 @@ def r2_score(
     return total / Float64(q)
 
 
+def check_named_input[dtype: DType](
+    X: ColumnTable[dtype], fitted_names: Optional[List[String]]
+) raises:
+    if fitted_names:
+        if X.schema().names != fitted_names.value():
+            raise Error(
+                "ValueError: The feature names should match those that were passed during fit."
+            )
+
+
 def prefixed_feature_names(
     class_name: String,
     n_features_out: Int,
     n_features_in: Int,
     input_features: Optional[List[String]],
+    fitted_names: Optional[List[String]],
 ) raises -> List[String]:
-    """ClassNamePrefixFeaturesOutMixin: '<class name lowercased><k>' names.
-
-    Supplied `input_features` are only length-checked, as scikit-learn does for
-    estimators fitted without `feature_names_in_`.
-    """
+    """Generate component names after validating any explicit input names."""
+    if Bool(fitted_names) and Bool(input_features) and input_features.value() != fitted_names.value():
+        raise Error("ValueError: input_features is not equal to feature_names_in_")
     if input_features and len(input_features.value()) != n_features_in:
         raise Error(
             "ValueError: input_features should have length equal to number of"
@@ -1036,6 +1046,7 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
     var n_iter_: List[Int]
     """Power-method iterations per extracted component; empty for 'svd'."""
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var fit_warnings: List[FitWarning]
     """Warning categories and messages from the last successful fit."""
 
@@ -1101,6 +1112,7 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         self.intercept_ = _vector(0)
         self.n_iter_ = List[Int]()
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self.diagnostics_ = List[String]()
         self.fit_warnings = List[FitWarning]()
         self._x_mean = _vector(0)
@@ -1261,6 +1273,17 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         self._fit_workspace(xk, yk, y.ndim == 1)
         return self
 
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        """Fit a named numeric matrix and retain an owned list of its names."""
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y)
+        self.feature_names_in_ = names^
+        return self
+
     def fit_inplace[origin: MutOrigin](
         ref[origin] self, mut X: Self.Input, mut y: Self.Target
     ) raises -> ref[self] Self:
@@ -1319,6 +1342,7 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         for warning in self.fit_warnings:
             self.diagnostics_.append(warning.category + ": " + warning.message)
         self.n_features_in_ = xk.shape[1]
+        self.feature_names_in_ = None
         self._predict_1d = was_1d
         self._fitted = True
 
@@ -1343,6 +1367,20 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
                 + String(self._y_mean.shape[0])
             )
         return normalized(y2, self._y_mean, self._y_std, True)
+
+    def _check_named_input(self, X: ColumnTable[Self.dtype]) raises:
+        _ = self.get_n_features_in()
+        check_named_input(X, self.feature_names_in_)
+
+    def transform(self, X: ColumnTable[Self.dtype]) raises -> Self.Transformed:
+        self._check_named_input(X)
+        return self.transform(X.values())
+
+    def transform(
+        self, X: ColumnTable[Self.dtype], y: Self.Target
+    ) raises -> Self.PairedTransform:
+        self._check_named_input(X)
+        return self.transform(X.values(), y)
 
     def transform(self, X: Self.Input) raises -> Self.Transformed:
         """x_scores = ((X - x_mean) / x_std) @ x_rotations_, shape (n, k)."""
@@ -1373,6 +1411,12 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         var yr = self._normalized_y(y)
         write_back(y, yr)
         return PairedScores(x_scores^, compact_float64(yr) @ self.y_rotations_)
+
+    def fit_transform(
+        mut self, X: ColumnTable[Self.dtype], y: Self.Target
+    ) raises -> Self.PairedTransform:
+        _ = self.fit(X, y)
+        return self.transform(X.values(), y)
 
     def fit_transform(mut self, X: Self.Input, y: Self.Target) raises -> Self.PairedTransform:
         """fit(X, y) followed by the paired transform(X, y)."""
@@ -1420,6 +1464,10 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
                 _put(out, i, j, _at(out, i, j) * _vat(std, j) + _vat(mean, j))
         return out^
 
+    def predict(self, X: ColumnTable[Self.dtype]) raises -> Self.Prediction:
+        self._check_named_input(X)
+        return self.predict(X.values())
+
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         """(X - x_mean) @ coef_.T + intercept_; rank-1 after a 1-D-target fit."""
         self._check_inference_input(X)
@@ -1441,6 +1489,15 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         if self._predict_1d:
             return pred.reshape(Shape(pred.shape[0]))
         return pred^
+
+    def score(
+        self,
+        X: ColumnTable[Self.dtype],
+        y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> Float64:
+        self._check_named_input(X)
+        return self.score(X.values(), y, sample_weight)
 
     def score(
         self,
@@ -1470,7 +1527,8 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         if not self._fitted:
             raise not_fitted_error(Self.name())
         return prefixed_feature_names(
-            Self.name(), self.x_rotations_.shape[1], self.n_features_in_, input_features
+            Self.name(), self.x_rotations_.shape[1], self.n_features_in_,
+            input_features, self.feature_names_in_,
         )
 
 

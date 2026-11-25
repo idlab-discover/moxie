@@ -36,7 +36,7 @@ n_features_in_`, training scores `x_scores_, y_scores_`.
 | Python warnings | `fit_warnings: List[FitWarning]` records the category and message in fit order. The legacy `diagnostics_` list formats each record as `category: message`. |
 | `_x_scores` private on PLSCanonical/CCA | exposed as `x_scores_`/`y_scores_` on all three |
 | float64 outputs for float32 input | same: inputs `NDArray[dtype]`, outputs Float64; inference centers/scales in input dtype like NumPy's in-place ops |
-| `get_feature_names_out(input_features=None)` | returns `List[String]` (`plsregression0`, ...); supplied names are length-checked only (no `feature_names_in_`). `FeatureNamesOut` and `InputFeatureCount` (`get_n_features_in()`) are declared, so pipelines report names and input width |
+| `get_feature_names_out(input_features=None)` | returns `List[String]` (`plsregression0`, ...); supplied names are checked against learned names when present and against the fitted width otherwise. `FeatureNamesOut` and `InputFeatureCount` (`get_n_features_in()`) are declared, so pipelines report names and input width |
 
 Read `model.fit_warnings` after fitting, including on a fitted Pipeline step.
 NIPALS records `ConvergenceWarning` with message
@@ -61,8 +61,9 @@ prediction and transform operations as separate methods, so they take no
 Numerical failures that make SciPy raise (NaN reaching an SVD after a zero
 deflation denominator) raise `LinAlgError: ...` here; NaN in inputs is
 rejected with scikit-learn's first-line message (its imputation hint is
-omitted). Pandas output, fitted input feature names, and pickling still require
-shared support.
+omitted). For `ColumnTable` overloads and `feature_names_in_`, see
+[named dense inputs](../README.md#named-dense-inputs). Pandas output and
+pickling still require shared support.
 
 `PLSEngine` also exposes `projection_weights` (PLSSVD) and `rotations`, and
 `moxie.cross_decomposition._pls.pinv(a, rtol, context)`.

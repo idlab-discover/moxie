@@ -15,6 +15,7 @@ from moxie._feature_metadata import (
     FeatureNamesOut,
     InputFeatureCount,
 )
+from moxie.compose._table import ColumnTable
 from moxie.cross_decomposition._base import CrossDecompositionTransformer
 from moxie.cross_decomposition._contracts import Matrix, PairedScores
 from moxie.cross_decomposition._pls import (
@@ -22,6 +23,7 @@ from moxie.cross_decomposition._pls import (
     as_target_matrix,
     check_consistent_length,
     check_matrix,
+    check_named_input,
     check_n_components_bound,
     check_n_features,
     check_positive_int,
@@ -85,6 +87,7 @@ struct PLSSVD[dtype: DType = DType.float64](
     var y_weights_: Matrix
     """(n_targets, n_components) right singular vectors."""
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var _x_mean: Matrix
     var _y_mean: Matrix
     var _x_std: Matrix
@@ -108,6 +111,7 @@ struct PLSSVD[dtype: DType = DType.float64](
         self.x_weights_ = nm.zeros[DType.float64](Shape(0, 0))
         self.y_weights_ = nm.zeros[DType.float64](Shape(0, 0))
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self._x_mean = nm.zeros[DType.float64](Shape(0))
         self._y_mean = nm.zeros[DType.float64](Shape(0))
         self._x_std = nm.zeros[DType.float64](Shape(0))
@@ -161,6 +165,17 @@ struct PLSSVD[dtype: DType = DType.float64](
         self._fit_workspace(xk, yk)
         return self
 
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[Self.dtype],
+        ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        """Fit a named numeric matrix and retain an owned list of its names."""
+        var names = X.schema().names.copy()
+        _ = self.fit(X.values(), y)
+        self.feature_names_in_ = names^
+        return self
+
     def fit_inplace[origin: MutOrigin](
         ref[origin] self, mut X: Self.Input, mut y: Self.Target
     ) raises -> ref[self] Self:
@@ -200,7 +215,22 @@ struct PLSSVD[dtype: DType = DType.float64](
         self._x_std = scaling.x_std.copy()
         self._y_std = scaling.y_std.copy()
         self.n_features_in_ = xk.shape[1]
+        self.feature_names_in_ = None
         self._fitted = True
+
+    def _check_named_input(self, X: ColumnTable[Self.dtype]) raises:
+        _ = self.get_n_features_in()
+        check_named_input(X, self.feature_names_in_)
+
+    def transform(self, X: ColumnTable[Self.dtype]) raises -> Self.Transformed:
+        self._check_named_input(X)
+        return self.transform(X.values())
+
+    def transform(
+        self, X: ColumnTable[Self.dtype], y: Self.Target
+    ) raises -> Self.PairedTransform:
+        self._check_named_input(X)
+        return self.transform(X.values(), y)
 
     def transform(self, X: Self.Input) raises -> Self.Transformed:
         """((X - x_mean) / x_std) @ x_weights_, shape (n, n_components)."""
@@ -225,6 +255,12 @@ struct PLSSVD[dtype: DType = DType.float64](
         var y_scores = _standardize(y2, self._y_mean, self._y_std) @ self.y_weights_
         return PairedScores(x_scores^, y_scores^)
 
+    def fit_transform(
+        mut self, X: ColumnTable[Self.dtype], y: Self.Target
+    ) raises -> Self.PairedTransform:
+        _ = self.fit(X, y)
+        return self.transform(X.values(), y)
+
     def fit_transform(mut self, X: Self.Input, y: Self.Target) raises -> Self.PairedTransform:
         """fit(X, y) followed by the paired transform(X, y)."""
         _ = self.fit(X, y)
@@ -243,5 +279,6 @@ struct PLSSVD[dtype: DType = DType.float64](
         if not self._fitted:
             raise not_fitted_error(Self.name())
         return prefixed_feature_names(
-            Self.name(), self.x_weights_.shape[1], self.n_features_in_, input_features
+            Self.name(), self.x_weights_.shape[1], self.n_features_in_,
+            input_features, self.feature_names_in_,
         )

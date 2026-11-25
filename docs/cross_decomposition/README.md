@@ -73,8 +73,45 @@ Parameters changed after fit are saved separately from the learned dimensions,
 projection state, and prediction rank. Learned arrays are saved in logical row
 order, so strided arrays load as contiguous arrays. PLS and CCA model files
 store the formatted diagnostics and reconstruct the warning records on load.
-PLS and CCA archives with an explicit score-weight request use schema version
-2. Archives with the default unset request use version 1, as does PLSSVD.
+Positional PLS and CCA archives with an explicit score-weight request use
+schema version 2. Positional archives with the default unset request use version
+1, as does positional PLSSVD. Fitted names use schema version 3 for PLS and CCA
+and version 2 for PLSSVD. Loading an older archive gives an estimator with no
+fitted names.
+
+## Named dense inputs
+
+```mojo
+from moxie.compose import ColumnTable
+from moxie.cross_decomposition import PLSRegression
+
+var names: List[String] = ["mass", "age", "rate"]
+var table = ColumnTable(X, names)
+var model = PLSRegression(n_components=2)
+var scores = model.fit(table, y).transform(table, y)
+var learned_names = model.feature_names_in_.copy()
+```
+
+All four estimators accept a same-dtype `ColumnTable` backed by its constructor
+matrix in `fit`, `fit_transform` and both `transform` forms. PLSRegression,
+PLSCanonical and CCA also accept it in `predict` and `score`. Targets remain
+NuMojo arrays. Table column names are unique strings under the
+[named table contract](../compose/named-columns.md).
+
+A named fit stores an owned `Optional[List[String]]` in `feature_names_in_`.
+Failed fits preserve the prior names and successful positional fits clear them,
+including `fit_inplace`. An unfitted clone has no learned names. When both the
+fit and inference input carry names, inference requires the same names in the
+same order. When one side has no names, inference validates positional width
+and proceeds without emitting Python's name-presence warning. Supplying
+`input_features` to `get_feature_names_out` requires equality with learned
+names when present and the fitted width otherwise. Component names still use
+the estimator class prefix.
+
+Named overloads borrow the numeric matrix and use the estimator's copying path.
+The `*_inplace` methods take NuMojo arrays. To use a mixed table, select a
+numeric block first. Generic compositions still use the estimator's
+NDArray-associated traits.
 
 ## Cross-validation and search
 
@@ -135,6 +172,14 @@ estimators and check Moxie ownership. Negative compilation rejects PLSSVD
 regression and inverse-transform methods; assembly tests reject conflicting
 module and export ownership. The serialization contract checks on-disk
 round trips, exact learned and inference values, and malformed archives.
+It also checks the lifecycle of fitted names and named inference. For the
+pandas-backed reference comparison, build the native contract and pass it to
+the focused oracle.
+
+```sh
+mojo build -O3 --fp-mode=contract=off -I builds/deps tests/cross_decomposition/serialization.mojo -o builds/cross_decomposition_serialization
+python tests/cross_decomposition/named_input_parity.py builds/cross_decomposition_serialization
+```
 
 The parity suites retain 125 PLS/CCA and 93 PLSSVD cases against scikit-learn
 revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Native results are evaluated

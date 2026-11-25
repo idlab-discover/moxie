@@ -3,8 +3,8 @@
 Implemented: PLSSVD fit/transform (single and paired)/fit_transform, scale on
 and off, copy semantics, 1-D and 2-D y, Float32/Float64. Sparse input is
 excluded (the dense-only porting scope; the reference has no sparse
-branch). Python-only surfaces (pandas output, feature_names_in_) are binding
-work.
+branch). [Named dense inputs](../README.md#named-dense-inputs) retain fitted
+feature names. Pandas output remains binding work.
 
 The migrated suite contains five estimator contracts and 93 parity cases
 against the recorded `_pls.py`, all datasets of the PLS child, k in

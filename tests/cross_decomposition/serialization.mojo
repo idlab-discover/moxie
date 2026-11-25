@@ -1,6 +1,7 @@
 from std.testing import assert_equal, assert_raises, assert_true
 from numojo import NDArray, NDArrayStrides, Shape, zeros
 from moxie.base import clone
+from moxie.compose import ColumnTable
 from moxie.cross_decomposition import (
     CCA,
     CCASchema,
@@ -220,7 +221,7 @@ def invalid_state() raises:
         _ = PLSCanonicalSchema[DType.float32].decode(archive)
 
     var invalid = archive.copy()
-    invalid.schema_version = 3
+    invalid.schema_version = 99
     with assert_raises():
         _ = PLSCanonicalSchema.decode(invalid)
     invalid = archive.copy()
@@ -257,6 +258,135 @@ def invalid_state() raises:
         _ = PLSSVDSchema.encode(svd)
 
 
+def encode_values(array: Matrix) raises -> String:
+    var values = List[String](capacity=array.size)
+    for i in range(array.size):
+        values.append(String(array.unsafe_get(i)))
+    return ",".join(values)
+
+
+def emit_named_case(
+    estimator: String, names: List[String], output: List[String], scores: PairedScores
+) raises:
+    print(
+        "named|" + estimator + "|" + ",".join(names) + "|" + ",".join(output)
+        + "|" + encode_values(scores.x_scores) + "|" + encode_values(scores.y_scores)
+    )
+
+
+@no_inline
+def named_pls[flavor: Int, dtype: DType](var model: _PLS[flavor, dtype], single: Bool) raises:
+    comptime Schema = _PLSSchema[flavor, dtype]
+    var x = inputs[dtype]()
+    var y = targets[dtype](single)
+    var names: List[String] = ["mass", "âge", "taux"]
+    var table = ColumnTable(x, names)
+    var reordered: List[String] = ["âge", "mass", "taux"]
+    var wrong = ColumnTable(x, reordered)
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict(table)
+    var scores = model.fit_transform(table, y)
+    assert_equal(model.feature_names_in_.value(), names)
+    same_scores(scores, model.transform(table, y))
+    same_array(model.transform(table), scores.x_scores)
+    same_array(model.predict(table), model.predict(x))
+    var weights = zeros[DType.float64](Shape(6))
+    for i in range(6):
+        weights.unsafe_set(i, Float64(i + 1))
+    assert_equal(model.score(table, y, weights.copy()), model.score(x, y, weights^))
+    with assert_raises(contains="The feature names should match those that were passed during fit."):
+        _ = model.predict(wrong)
+    with assert_raises(contains="The feature names should match those that were passed during fit."):
+        _ = model.transform(wrong, y)
+    with assert_raises(contains="The feature names should match those that were passed during fit."):
+        _ = model.score(wrong, y)
+    with assert_raises(contains="input_features is not equal to feature_names_in_"):
+        _ = model.get_feature_names_out(reordered.copy())
+    var short_names: List[String] = ["mass"]
+    with assert_raises(contains="input_features is not equal to feature_names_in_"):
+        _ = model.get_feature_names_out(short_names^)
+    with assert_raises(contains="inconsistent numbers of samples"):
+        _ = model.fit(wrong, zeros[dtype](Shape(2)))
+    assert_equal(model.feature_names_in_.value(), names)
+
+    var archive = Schema.encode(model)
+    assert_equal(archive.schema_version, 3)
+    var restored = Schema.decode(loads(dumps(archive)))
+    assert_true(restored.get_metadata_routing().score.value().isa[NoneType]())
+    assert_equal(restored.feature_names_in_.value(), names)
+    _ = model.set_score_request(sample_weight=String("validation_weight"))
+    archive = Schema.encode(model)
+    restored = Schema.decode(loads(dumps(archive)))
+    same_archive(Schema.encode(restored), archive)
+    assert_equal(restored.get_metadata_routing().score.requested_name().or_else(""), "validation_weight")
+    same_array(restored.predict(table), model.predict(table))
+    assert_true(not clone(restored).feature_names_in_)
+    emit_named_case(
+        model.name(), restored.feature_names_in_.value(),
+        restored.get_feature_names_out(names.copy()), restored.transform(table, y),
+    )
+
+    var snapshot = restored.copy()
+    _ = restored.fit_inplace(x, y)
+    assert_true(not restored.feature_names_in_)
+    assert_equal(snapshot.feature_names_in_.value(), names)
+    _ = snapshot.fit(wrong, y)
+    assert_equal(snapshot.feature_names_in_.value(), reordered)
+    _ = snapshot.fit(x, y)
+    assert_true(not snapshot.feature_names_in_)
+
+
+@no_inline
+def named_plssvd() raises:
+    var x = inputs[DType.float32]()
+    var y = targets[DType.float32](False)
+    var names: List[String] = ["mass", "âge", "taux"]
+    var table = ColumnTable(x, names)
+    var wrong = ColumnTable(x, ["âge", "mass", "taux"])
+    var model = PLSSVD[DType.float32](2)
+    comptime Schema = PLSSVDSchema[DType.float32]
+    with assert_raises(contains="NotFittedError"):
+        _ = model.transform(table)
+    var scores = model.fit_transform(table, y)
+    same_scores(scores, model.transform(table, y))
+    same_scores(scores, model.transform(x, y))
+    with assert_raises(contains="The feature names should match those that were passed during fit."):
+        _ = model.transform(wrong)
+    var mixed = table.copy()
+    mixed.add_strings("text", ["a", "b", "c", "d", "e", "f"])
+    with assert_raises(contains="mixed ColumnTable"):
+        _ = model.fit(mixed, y)
+    assert_equal(model.feature_names_in_.value(), names)
+    var archive = Schema.encode(model)
+    assert_equal(archive.schema_version, 2)
+    var restored = Schema.decode(loads(dumps(archive)))
+    same_archive(Schema.encode(restored), archive)
+    same_array(restored.transform(table), scores.x_scores)
+    assert_true(not clone(restored).feature_names_in_)
+    emit_named_case(
+        model.name(), restored.feature_names_in_.value(),
+        restored.get_feature_names_out(names.copy()), restored.transform(table, y),
+    )
+    var invalid = archive.copy()
+    # All three names occupy 12 bytes each, including the length prefix.
+    # Replace the last name with the first to simulate a malformed archive.
+    var end = len(archive.manifest)
+    for i in range(4):
+        invalid.manifest[end - 4 + i] = archive.manifest[end - 28 + i]
+    with assert_raises(contains="fitted feature names must be unique"):
+        _ = Schema.decode(invalid)
+    _ = invalid.manifest.pop()
+    with assert_raises():
+        _ = Schema.decode(invalid)
+    model.feature_names_in_ = List[String]()
+    with assert_raises(contains="feature names must match the fitted width"):
+        _ = Schema.encode(model)
+    _ = restored.fit(x, y)
+    assert_true(not restored.feature_names_in_)
+    same_array(restored.transform(table), scores.x_scores)
+    assert_equal(Schema.encode(restored).schema_version, 1)
+
+
 def main() raises:
     pls_round_trip(PLSRegression[DType.float32](2), True)
     pls_round_trip(PLSCanonical(2, algorithm="nipals"), False)
@@ -268,4 +398,8 @@ def main() raises:
     constant_residual()
     score_requests()
     invalid_state()
+    named_pls(PLSRegression[DType.float32](2), True)
+    named_pls(PLSCanonical(2, algorithm="svd"), False)
+    named_pls(CCA(2), False)
+    named_plssvd()
     print("PASS: cross-decomposition model schemas")

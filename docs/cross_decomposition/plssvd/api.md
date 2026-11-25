@@ -25,6 +25,9 @@ predict/score/inverse_transform, matching scikit-learn. Singular vectors for
 exactly zero singular values (k above the rank of X.T @ y) are an arbitrary
 orthonormal completion, as with LAPACK, but may differ from it.
 
+See [named dense inputs](../README.md#named-dense-inputs) for `ColumnTable`
+overloads and fitted `feature_names_in_`.
+
 `fit`, both `set_params` forms, and `fit_inplace` return a mutable borrow of
 the estimator for fluent chaining. Shared-trait calls use current Moxie
 contracts. See the [family guide](../README.md) for validation commands.

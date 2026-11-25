@@ -2844,6 +2844,9 @@
         "moxie.feature_extraction._text_contracts": {
           "file": "src/moxie/feature_extraction/_text_contracts.mojo"
         },
+        "moxie.feature_extraction._tfidf": {
+          "file": "algorithms/text/src/moxie/feature_extraction/_tfidf.mojo"
+        },
         "moxie.feature_extraction._validation": {
           "file": "src/moxie/feature_extraction/_validation.mojo"
         },

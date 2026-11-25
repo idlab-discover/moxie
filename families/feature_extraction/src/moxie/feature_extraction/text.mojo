@@ -1,7 +1,8 @@
 # Adapted from scikit-learn; authors: scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
-"""Public scikit-learn API declarations; all new operations are deferred."""
+"""Native text feature extraction and explicit unsupported declarations."""
 from moxie.feature_extraction._api_types import APIValue
+from moxie.feature_extraction._tfidf import TfidfTransformer, TfidfTransformerParams
 
 struct CountVectorizer(Movable):
 
@@ -192,60 +193,6 @@ struct HashingVectorizer(Movable):
     def transform(mut self, X: Some[Movable]) raises -> APIValue:
         "Scikit-learn signature: transform(self, X)."
         raise Error("NotImplementedError: HashingVectorizer.transform is an API scaffold")
-
-struct TfidfTransformer(Movable):
-
-    "API scaffold for sklearn.feature_extraction.text.TfidfTransformer. Operations are deferred."
-
-    var norm: APIValue
-
-    var use_idf: APIValue
-
-    var smooth_idf: APIValue
-
-    var sublinear_tf: APIValue
-
-    var idf_: APIValue
-
-    var n_features_in_: APIValue
-
-    var feature_names_in_: APIValue
-
-    def get_metadata_routing(mut self) raises -> APIValue:
-        "Scikit-learn signature: get_metadata_routing(self)."
-        raise Error("NotImplementedError: TfidfTransformer.get_metadata_routing is an API scaffold")
-
-    def get_params(mut self, deep: Some[Movable] = True) raises -> APIValue:
-        "Scikit-learn signature: get_params(self, deep=True)."
-        raise Error("NotImplementedError: TfidfTransformer.get_params is an API scaffold")
-
-    def set_params(mut self, params: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_params(self, **params)."
-        raise Error("NotImplementedError: TfidfTransformer.set_params is an API scaffold")
-
-    def set_output(mut self, *, transform: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_output(self, *, transform=None)."
-        raise Error("NotImplementedError: TfidfTransformer.set_output is an API scaffold")
-
-    def fit_transform(mut self, X: Some[Movable], y: Some[Movable] = None, fit_params: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: fit_transform(self, X, y=None, **fit_params)."
-        raise Error("NotImplementedError: TfidfTransformer.fit_transform is an API scaffold")
-
-    def get_feature_names_out(mut self, input_features: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: get_feature_names_out(self, input_features=None)."
-        raise Error("NotImplementedError: TfidfTransformer.get_feature_names_out is an API scaffold")
-
-    def __init__(out self, *, norm: Some[Movable] = "l2", use_idf: Some[Movable] = True, smooth_idf: Some[Movable] = True, sublinear_tf: Some[Movable] = False) raises:
-        "Scikit-learn signature: __init__(self, *, norm='l2', use_idf=True, smooth_idf=True, sublinear_tf=False)."
-        raise Error("NotImplementedError: TfidfTransformer.__init__ is an API scaffold")
-
-    def fit(mut self, X: Some[Movable], y: Some[Movable] = None) raises:
-        "Scikit-learn signature: fit(self, X, y=None)."
-        raise Error("NotImplementedError: TfidfTransformer.fit is an API scaffold")
-
-    def transform(mut self, X: Some[Movable], copy: Some[Movable] = True) raises -> APIValue:
-        "Scikit-learn signature: transform(self, X, copy=True)."
-        raise Error("NotImplementedError: TfidfTransformer.transform is an API scaffold")
 
 struct TfidfVectorizer(Movable):
 

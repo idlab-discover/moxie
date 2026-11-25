@@ -8,15 +8,17 @@ and [image API](../algorithms/image/docs/api.md) for typed parameters, defaults,
 learned state, array types and fluent fit/set_params behavior.
 
 `FeatureExtractor` remains the shared optional transformation contract.
-`FeatureHasher` and the text vectorizers/TF-IDF classes remain explicit raising
-declarations. Deferred helper calls also raise. Their native `APIValue` and
+`text.TfidfTransformer` processes dense count matrices. See the
+[TF-IDF API](../algorithms/text/docs/api.md) for options and dtype rules.
+`FeatureHasher` and the raw-document vectorizers remain explicit raising
+declarations. Unsupported helpers also raise. Their native `APIValue` and
 `APIExpressionDefault` markers preserve source signatures without pretending
 to implement Python objects or callable defaults. `text.ENGLISH_STOP_WORDS`
 is a native immutable tuple, not a Python frozenset.
 
 The focused build precompiles the assembled namespace. Native tests verify
 implemented behavior and rejected deferred constructors; numerical parity covers
-only the supported dictionary and image modes.
+the supported dictionary, image and TF-IDF modes.
 
 ## Composition
 

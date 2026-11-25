@@ -58,7 +58,7 @@ def main():
         for project in [ROOT, ROOT / 'algorithms/dict_hash', ROOT / 'algorithms/image']:
             run(sys.executable, project / 'tools/check.py', action)
     elif action == 'parity':
-        for child in ('dict_hash', 'image'):
+        for child in ('dict_hash', 'image', 'text'):
             project = ROOT / 'algorithms' / child
             run(sys.executable, CORE / 'shared/assembly/tools/assemble_family.py',
                 '--consumer', project, '--lock', CORE / 'DEPENDENCIES.json',

@@ -59,7 +59,7 @@ def check_mixed(case, column, train_categories, test_categories, *, extra_output
     check_composition(case, model, train, test, extra_outputs)
 
 
-def check_composition(case, model, train, test, extra_outputs=()):
+def check_composition(case, model, train, test, extra_outputs=(), *, numeric_width=1):
     expected_fit = model.fit_transform(train)
     expected_transform = model.transform(test)
     output = io.run(ROOT, BUILD / case, capture=True).stdout
@@ -71,8 +71,10 @@ def check_composition(case, model, train, test, extra_outputs=()):
         ("after_failed_refit", expected_transform),
         *((label, expected_transform) for label in extra_outputs),
     ]:
-        errors[label] = io.close(actual[label][:, :1], expected[:, :1], 1e-12, 1e-12, label)
-        np.testing.assert_array_equal(actual[label][:, 1:], expected[:, 1:])
+        errors[label] = io.close(
+            actual[label][:, :numeric_width], expected[:, :numeric_width], 1e-12, 1e-12, label,
+        )
+        np.testing.assert_array_equal(actual[label][:, numeric_width:], expected[:, numeric_width:])
     names = [line.split("|")[1] for line in output.splitlines() if line.startswith("name|")]
     spans = {name: slice(int(start), int(stop)) for _, name, start, stop in
              (line.split("|") for line in output.splitlines() if line.startswith("span|"))}
@@ -112,6 +114,29 @@ def check_categorical_imputation():
     check_composition("mixed_categorical_impute", model, train, test, ("after_fit",))
 
 
+def check_mixed_float_columns():
+    train = pd.DataFrame({
+        "rating": np.array([1.25, 2.5, np.nan, 1.25, 5.0], dtype=np.float32),
+        "age": [10.0, np.nan, 30.0, 40.0, 20.0],
+        "color": pd.Categorical(["red", "blue", "red", "amber", "blue"]),
+    })
+    test = pd.DataFrame({
+        "color": pd.Categorical(["green", None, "red"]),
+        "age": [35.0, np.nan, 15.0],
+        "rating": np.array([1.25, np.nan, 2.5], dtype=np.float32),
+    })
+    model = compose.ColumnTransformer([
+        ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
+         compose.make_column_selector(dtype_include="number")),
+        ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
+         compose.make_column_selector(dtype_include="category")),
+    ])
+    check_composition(
+        "mixed_float_columns", model, train, test, ("after_fit", "after_dtype_change"),
+        numeric_width=2,
+    )
+
+
 if __name__ == "__main__":
     check_mixed("mixed", "color", ["red", "blue", "red", "amber", "blue"], ["green", None, "red"])
     large = 2**53
@@ -120,3 +145,4 @@ if __name__ == "__main__":
         [large + 2, large, large + 1], extra_outputs=("with_extra_categories", "after_fit"),
     )
     check_categorical_imputation()
+    check_mixed_float_columns()

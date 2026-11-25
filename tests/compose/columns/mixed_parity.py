@@ -90,18 +90,29 @@ def check_composition(case, model, train, test, extra_outputs=(), *, numeric_wid
     print(f"{case}: one-hot values, names and spans exact, scaler within 1e-12")
 
 
-def check_categorical_imputation():
+def check_categorical_imputation(case, *, numeric=False):
+    categories = {
+        "amber": 1.5, "red": 2.5, "circle": 3.5,
+        "square": 4.5, "triangle": 5.5, "green": 6.5,
+        "ignored": 1.5, "value": 2.5,
+    }
+
+    def categorical(values):
+        if numeric:
+            values = [categories[value] if value is not None else np.nan for value in values]
+        return pd.Categorical(values)
+
     train = pd.DataFrame({
-        "color": pd.Categorical(["red", None, "red", "amber", None]),
+        "color": categorical(["red", None, "red", "amber", None]),
         "age": [10.0, np.nan, 30.0, 40.0, 20.0],
-        "empty": pd.Categorical([None] * 5),
-        "shape": pd.Categorical(["square", "circle", None, "square", "circle"]),
+        "empty": categorical([None] * 5),
+        "shape": categorical(["square", "circle", None, "square", "circle"]),
     })
     test = pd.DataFrame({
         "age": [35.0, np.nan, 15.0],
-        "shape": pd.Categorical([None, "triangle", "square"]),
-        "color": pd.Categorical(["green", None, "amber"]),
-        "empty": pd.Categorical(["ignored", None, "value"]),
+        "shape": categorical([None, "triangle", "square"]),
+        "color": categorical(["green", None, "amber"]),
+        "empty": categorical(["ignored", None, "value"]),
     })
     model = compose.ColumnTransformer([
         ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
@@ -111,7 +122,7 @@ def check_categorical_imputation():
             encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
         ), compose.make_column_selector(dtype_include="category")),
     ])
-    check_composition("mixed_categorical_impute", model, train, test, ("after_fit",))
+    check_composition(case, model, train, test, ("after_fit",))
 
 
 def check_mixed_float_columns():
@@ -144,5 +155,6 @@ if __name__ == "__main__":
         "mixed_numeric_categories", "product", [large + 1, large, large + 1, -2, large],
         [large + 2, large, large + 1], extra_outputs=("with_extra_categories", "after_fit"),
     )
-    check_categorical_imputation()
+    check_categorical_imputation("mixed_categorical_impute")
+    check_categorical_imputation("mixed_numeric_impute", numeric=True)
     check_mixed_float_columns()

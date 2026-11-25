@@ -100,11 +100,11 @@ Side-by-side notebooks replay `plot_gmm_init`, `plot_concentration_prior` and
 `pixi run -e notebooks notebooks notebooks/mixture/plot_gmm_selection.ipynb`.
 Both searches use a `Variant[Int, String]` grid and call `fit(X, None)`.
 `DenseUnsupervisedSearchAdapter` supplies five unshuffled folds and uses
-the estimator's mean log-likelihood score. For negative BIC, the notebook
-uses a custom adapter with public `select_rows` and passes a typed
-`SearchScorer` through `scoring`. Both adapters share the same parameter
-applier. The notebook compares fold scores, rankings, and held-out scores
-after refitting.
+the estimator's mean log-likelihood score. The negative-BIC adapter delegates
+input validation, fold generation, row selection, fitting and parameter
+application to the same shared adapter. It supplies a typed
+`SearchScorer` through `scoring`. The notebook compares fold scores, rankings
+and held-out scores after refitting.
 
 The notebook also compares `make_pipeline(StandardScaler(), GaussianMixture(2,
 random_state=0))` with the equivalent pinned scikit-learn Pipeline. It checks

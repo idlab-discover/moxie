@@ -315,6 +315,29 @@ struct _MultinomialNBCodec(_AdapterCodec):
         return adapter.estimator().n_features_in_
 
 
+struct _FrozenMultinomialNBCodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[FrozenEstimator[MultinomialNB[]]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.FrozenMultinomialNB"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in frozen MultinomialNB adapter"
+            )
+        return MultinomialNBSchema[].encode(adapter.estimator().estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(FrozenEstimator(MultinomialNBSchema[].decode(archive)))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().estimator().n_features_in_
+
+
 struct _ComplementNBCodec(_AdapterCodec):
     comptime Adapter = ClassifierCalibrationAdapter[ComplementNB[]]
     comptime TypeId: StaticString = (
@@ -336,6 +359,29 @@ struct _ComplementNBCodec(_AdapterCodec):
     @staticmethod
     def feature_count(adapter: Self.Adapter) -> Int:
         return adapter.estimator().n_features_in_
+
+
+struct _FrozenComplementNBCodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[FrozenEstimator[ComplementNB[]]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.FrozenComplementNB"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in frozen ComplementNB adapter"
+            )
+        return ComplementNBSchema[].encode(adapter.estimator().estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(FrozenEstimator(ComplementNBSchema[].decode(archive)))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().estimator().n_features_in_
 
 
 struct _BernoulliNBCodec(_AdapterCodec):
@@ -361,6 +407,29 @@ struct _BernoulliNBCodec(_AdapterCodec):
         return adapter.estimator().n_features_in_
 
 
+struct _FrozenBernoulliNBCodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[FrozenEstimator[BernoulliNB[]]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.FrozenBernoulliNB"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in frozen BernoulliNB adapter"
+            )
+        return BernoulliNBSchema[].encode(adapter.estimator().estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(FrozenEstimator(BernoulliNBSchema[].decode(archive)))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().estimator().n_features_in_
+
+
 struct _CategoricalNBCodec(_AdapterCodec):
     comptime Adapter = ClassifierCalibrationAdapter[CategoricalNB[]]
     comptime TypeId: StaticString = (
@@ -382,6 +451,29 @@ struct _CategoricalNBCodec(_AdapterCodec):
     @staticmethod
     def feature_count(adapter: Self.Adapter) -> Int:
         return adapter.estimator().n_features_in_
+
+
+struct _FrozenCategoricalNBCodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[FrozenEstimator[CategoricalNB[]]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.FrozenCategoricalNB"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in frozen CategoricalNB adapter"
+            )
+        return CategoricalNBSchema[].encode(adapter.estimator().estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(FrozenEstimator(CategoricalNBSchema[].decode(archive)))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().estimator().n_features_in_
 
 
 struct _LDACodec(_AdapterCodec):
@@ -729,9 +821,13 @@ comptime CalibratedSVCClassifierCVSchema = _CalibrationSchema[_SVCCodec]
 comptime CalibratedGaussianNBClassifierCVSchema = _CalibrationSchema[_GaussianNBCodec]
 comptime CalibratedFrozenGaussianNBClassifierCVSchema = _CalibrationSchema[_FrozenGaussianNBCodec]
 comptime CalibratedMultinomialNBClassifierCVSchema = _CalibrationSchema[_MultinomialNBCodec]
+comptime CalibratedFrozenMultinomialNBClassifierCVSchema = _CalibrationSchema[_FrozenMultinomialNBCodec]
 comptime CalibratedComplementNBClassifierCVSchema = _CalibrationSchema[_ComplementNBCodec]
+comptime CalibratedFrozenComplementNBClassifierCVSchema = _CalibrationSchema[_FrozenComplementNBCodec]
 comptime CalibratedBernoulliNBClassifierCVSchema = _CalibrationSchema[_BernoulliNBCodec]
+comptime CalibratedFrozenBernoulliNBClassifierCVSchema = _CalibrationSchema[_FrozenBernoulliNBCodec]
 comptime CalibratedCategoricalNBClassifierCVSchema = _CalibrationSchema[_CategoricalNBCodec]
+comptime CalibratedFrozenCategoricalNBClassifierCVSchema = _CalibrationSchema[_FrozenCategoricalNBCodec]
 comptime CalibratedLDAClassifierCVSchema = _CalibrationSchema[_LDACodec]
 comptime CalibratedQDAClassifierCVSchema = _CalibrationSchema[_QDACodec]
 comptime CalibratedFrozenLDAClassifierCVSchema = _CalibrationSchema[_FrozenLDACodec]

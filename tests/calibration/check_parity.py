@@ -461,6 +461,17 @@ def main():
                     ).fit(X, y, sample_weight=w)
                     add(kind, X, y, w, q, model.predict_proba(q),
                         method, ensemble, model.predict(q), model.classes_)
+
+    def add_frozen_count_cases(name, estimator, X, y, w, q, method):
+        prefit = estimator.fit(X[:45], y[:45])
+        for ensemble in ('auto', True):
+            model = ref.CalibratedClassifierCV(
+                FrozenEstimator(prefit), method=method, cv=3, ensemble=ensemble,
+            ).fit(X[45:], y[45:], sample_weight=w[45:])
+            add(f'production_frozen_{name}', X[45:], y[45:], w[45:], q,
+                model.predict_proba(q), method, ensemble, model.predict(q),
+                model.classes_, X[:45], y[:45])
+
     for n_classes in (2, 3):
         codes = np.arange(90) % n_classes
         rates = np.array([[4, 2, 3], [2, 4, 3], [3, 2, 5]])[codes]
@@ -479,6 +490,12 @@ def main():
                     ).fit(X, y, sample_weight=w)
                     add(kind, X, y, w, q, model.predict_proba(q),
                         method, ensemble, model.predict(q), model.classes_)
+            add_frozen_count_cases(
+                'multinomial', multinomial(alpha=0.25), X, y, w, q, method,
+            )
+            add_frozen_count_cases(
+                'complement', complement(alpha=0.25, norm=True), X, y, w, q, method,
+            )
     for n_classes in (2, 3):
         codes = np.arange(90) % n_classes
         rates = np.array([[1, 3, 2, 1, 2], [3, 1, 1, 2, 1], [2, 2, 3, 1, 3]])[codes]
@@ -493,6 +510,9 @@ def main():
                 ).fit(X, y, sample_weight=w)
                 add('serialized_bernoulli', X, y, w, q, model.predict_proba(q),
                     method, ensemble, model.predict(q), model.classes_)
+            add_frozen_count_cases(
+                'bernoulli', bernoulli(alpha=0.25, binarize=1.5), X, y, w, q, method,
+            )
     for n_classes in (2, 3):
         codes = np.arange(90) % n_classes
         offsets = rng.integers(0, [2, 2, 3], size=(len(codes), 3))
@@ -508,6 +528,9 @@ def main():
                 ).fit(X, y, sample_weight=w)
                 add('serialized_categorical', X, y, w, q, model.predict_proba(q),
                     method, ensemble, model.predict(q), model.classes_)
+            add_frozen_count_cases(
+                'categorical', categorical(alpha=0.25, min_categories=[4, 3, 5]), X, y, w, q, method,
+            )
     fixtures = out / 'cases.txt'
     fixtures.write_text('\n'.join(records) + '\n')
     command = ['mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', 'builds/deps', '-I', 'examples/calibration_support', 'tests/calibration/parity_runner.mojo', '-o', str(out / 'runner')]

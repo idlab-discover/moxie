@@ -304,9 +304,13 @@ calibrator's base estimator. Each schema accepts fitted and unfitted models.
 | `adapt_classifier(GaussianNB(...))` | `CalibratedGaussianNBClassifierCVSchema` |
 | `adapt_classifier(FrozenEstimator(GaussianNB(...)))` | `CalibratedFrozenGaussianNBClassifierCVSchema` |
 | `adapt_classifier(MultinomialNB(...))` | `CalibratedMultinomialNBClassifierCVSchema` |
+| `adapt_classifier(FrozenEstimator(MultinomialNB(...)))` | `CalibratedFrozenMultinomialNBClassifierCVSchema` |
 | `adapt_classifier(ComplementNB(...))` | `CalibratedComplementNBClassifierCVSchema` |
+| `adapt_classifier(FrozenEstimator(ComplementNB(...)))` | `CalibratedFrozenComplementNBClassifierCVSchema` |
 | `adapt_classifier(BernoulliNB(...))` | `CalibratedBernoulliNBClassifierCVSchema` |
+| `adapt_classifier(FrozenEstimator(BernoulliNB(...)))` | `CalibratedFrozenBernoulliNBClassifierCVSchema` |
 | `adapt_classifier(CategoricalNB(...))` | `CalibratedCategoricalNBClassifierCVSchema` |
+| `adapt_classifier(FrozenEstimator(CategoricalNB(...)))` | `CalibratedFrozenCategoricalNBClassifierCVSchema` |
 | `adapt_classifier(LinearDiscriminantAnalysis(...))` | `CalibratedLDAClassifierCVSchema` |
 | `adapt_classifier(QuadraticDiscriminantAnalysis(...))` | `CalibratedQDAClassifierCVSchema` |
 | `adapt_classifier(FrozenEstimator(LinearDiscriminantAnalysis(...)))` | `CalibratedFrozenLDAClassifierCVSchema` |
@@ -334,7 +338,7 @@ representation in the file. The LDA and QDA schemas require
 `covariance_estimator=None`. For CategoricalNB, use `min_categories` for a
 scalar minimum and `min_categories_values=List[Int]([4, 3, 5])` for
 scikit-learn's per-feature minimum. Both settings are preserved in the
-archive. The frozen GaussianNB, LDA and QDA schemas preserve the current base
+archive. The frozen Naive Bayes, LDA and QDA schemas preserve the current base
 snapshot and each fitted calibrator's snapshot, including when the base was
 replaced after calibration. On load the snapshots are independent. Clone still
 retains the restored frozen base and discards the calibration state.
@@ -365,9 +369,10 @@ probabilities. SVC, GaussianNB, MultinomialNB, ComplementNB, BernoulliNB,
 CategoricalNB, LDA and QDA cases exercise native round trips for all three
 calibration methods in ensemble and pooled modes. The weighted ComplementNB
 cases use `norm=True`.
-Frozen GaussianNB, LDA and QDA round trips cover all three methods, automatic
-pooled calibration and explicit ensembles with sample weights. The weighted
-BernoulliNB cases use a nondefault binarization threshold.
+Frozen Naive Bayes, LDA and QDA round trips cover binary and multiclass
+classification, all three methods, automatic pooled calibration and explicit
+ensembles with sample weights. The weighted BernoulliNB cases use a nondefault
+binarization threshold.
 The weighted CategoricalNB cases use per-feature category minima and query
 categories reserved by those minima that were absent during training.
 Restored probabilities match the original Mojo outputs exactly. Against

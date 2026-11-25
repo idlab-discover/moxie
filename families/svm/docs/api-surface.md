@@ -39,6 +39,23 @@ unfitted estimator. The
 compares OvR and OvO class order and predictions exactly and Float64 decision
 values within the family solver tolerance against scikit-learn.
 
+## SVC cross-validation and grid search
+
+`cross_val_score` and `GridSearchCV` accept a pipeline built with
+`make_pipeline(StandardScaler(), SVC())`. Each fold clones both steps and
+fits the scaler on that fold's training rows. The
+[typed SVC search adapter](../examples/model_selection_adapter.mojo) shows
+how to use `EstimatorScore` for accuracy and `select_rows` to subset the
+feature matrix and List targets. Its numeric grid keys are `C` and `gamma`
+for bare SVC or `svc__C` and `svc__gamma` for the default named pipeline.
+The adapter maps these keys into the typed parameter record and supplies
+five unshuffled stratified folds when search omits `cv`. Pass materialized
+`IndexSplit` folds to use a different splitter.
+
+The [RBF parameters notebook](../../../notebooks/svm/plot_rbf_parameters.ipynb)
+compares both compositions with pinned scikit-learn, including candidate order,
+per-fold scores, ranks, best parameters, and predictions from the refitted model.
+
 ## Compile and validate
 
 Run `pixi run build`, `pixi run test` and `pixi run parity` from the family root.

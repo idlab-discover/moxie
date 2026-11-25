@@ -107,6 +107,28 @@ def compare_production[E: CalibrationEstimator, origin: ImmOrigin](
         raise Error(context + ": frozen calibration must fit a single calibrator")
 
 
+def compare_float32[E: CalibrationEstimator, origin: ImmOrigin](
+    mut model: CalibratedClassifierCV[E],
+    x: Array,
+    y: Array,
+    w: Optional[Array],
+    q: Array,
+    expected: Array,
+    fields: List[StringSpan[origin]],
+    context: String,
+) raises:
+    var x32 = x.astype[DType.float32]()
+    var q32 = q.astype[DType.float32]()
+    var probabilities: Array = model.fit(x32, y, w).predict_proba(q32)
+    var predictions: Array = model.predict(q32)
+    compare(model.classes_, array(String(fields[9])), 0, context)
+    compare(probabilities, expected, 5e-6, context)
+    compare(predictions, array(String(fields[8])), 0, context)
+    var expected_score = array(String(fields[10])).item(0)
+    if abs(model.score(x32, y, w) - expected_score) > 2e-12:
+        raise Error(context + ": incorrect weighted score")
+
+
 def main() raises:
     var args = argv()
     var data: String
@@ -262,6 +284,17 @@ def main() raises:
             var expected_folds = 1 if fields[7] == "false" else 5
             if len(model.calibrated_classifiers_) != expected_folds:
                 raise Error(context + ": incorrect number of fitted classifiers")
+        elif kind == "float32_default":
+            var model = CalibratedClassifierCV(
+                cv=3, method=String(fields[6]), ensemble=fields[7] == "true"
+            )
+            compare_float32(model, x, y, w, q, expected, fields, context)
+        elif kind == "float32_gaussian":
+            var model = CalibratedClassifierCV(
+                adapt_classifier(GaussianNB()),
+                cv=3, method=String(fields[6]), ensemble=fields[7] == "true",
+            )
+            compare_float32(model, x, y, w, q, expected, fields, context)
         elif kind == "production_gaussian":
             compare_production(
                 adapt_classifier(GaussianNB()),

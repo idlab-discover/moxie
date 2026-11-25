@@ -20,11 +20,16 @@ var labels = model.predict(X_test)
 ```
 
 `X` has shape `(n_samples, n_features)`; `y` and optional weights have shape
-`(n_samples,)`. All arrays use `numojo.NDArray[DType.float64]`. Inputs must be
-finite and nonempty. Class labels are integer-valued numbers with magnitude
-at most `2**53 - 1`. Weights must be nonnegative with positive finite sum.
-The estimator rejects unsupported dtypes at compile time. Strided inputs use
-NuMojo coordinate indexing; learned arrays do not alias input arrays.
+`(n_samples,)`. The concrete `fit`, `predict_proba`, `predict` and `score`
+methods accept Float32 and Float64 NuMojo feature matrices. Each Float32 call
+materializes one Float64 feature matrix before invoking the estimator or its
+adapters. Contiguous inputs use NuMojo's `astype`, and strided inputs use
+coordinate indexing to preserve their logical order. The associated `Input`
+type used by generic estimators and displays is Float64. Targets, weights,
+learned classes, predicted labels and probabilities also use Float64 arrays.
+Inputs must be finite and nonempty. Class labels are integer-valued numbers
+with magnitude at most `2**53 - 1`. Weights must be nonnegative with positive
+finite sum. Learned arrays do not alias input arrays.
 
 `classes_` is sorted. `predict_proba` returns `(n_samples, n_classes)` with
 columns in that order. `predict` breaks ties in favor of the first class.
@@ -210,8 +215,7 @@ integer or `"cube_root"`. Numeric labels outside the usual `{0, 1}` or `{-1, 1}`
 sets require `pos_label`. Float32 inputs are widened exactly before binning;
 output statistics remain Float64, matching the reference's weighted bin counts.
 String labels use `List[String]` and require an explicit string `pos_label`.
-These additional input types apply to `calibration_curve`; the estimator and
-display interfaces still use Float64 arrays.
+Displays and estimator targets use Float64 arrays.
 
 ## Calibration displays
 
@@ -256,8 +260,7 @@ kwargs, interactive windows and other image formats are not supported.
 
 ## Limits and validation
 
-Remaining gaps include sparse estimators, Float32 or
-string-label estimator fitting, arbitrary fit
+Remaining gaps include sparse estimators, typed estimator labels, arbitrary fit
 metadata, parallel jobs, metadata routing, persistence, feature names and
 Matplotlib object interoperability. Temperature ensemble folds with missing
 training classes are rejected explicitly. These are scope limits, not claims
@@ -280,6 +283,12 @@ probabilities. Default LinearSVC cases cover all three calibrators, weighted
 and unweighted fitting, and every ensemble setting. Frozen production cases
 use disjoint training and calibration data and check that cloning preserves
 fitted state and that automatic ensemble selection fits one calibrator.
+Float32 estimator cases cover all three calibration methods with both response
+types, pooled and ensemble fitting, and weighted scores. The reference receives
+Float32 features for default LinearSVC and features widened from Float32 for
+GaussianNB. scikit-learn's GaussianNB selects its statistics dtype from `X`, so
+its Float32 path can produce different calibrated probabilities. The native
+public test also checks column-major and negative-stride feature layouts.
 Additional checks compare Float32 and string-label curves and native display
 statistics, labels and metadata with the reference. SVG structure and native
 ownership/overlay behavior have separate contract tests.

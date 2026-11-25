@@ -64,13 +64,19 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
                                       algorithm: Optional[String] = None, leaf_size: Optional[Int] = None,
                                       metric: Optional[String] = None, p: Optional[Float64] = None,
                                       metric_params: Optional[Self.M] = None, contamination: Optional[Float64] = None,
-                                      novelty: Optional[Bool] = None, n_jobs: Optional[Int] = None) raises -> ref[self] Self:
-        """Update only the supplied parameters; reset contamination to "auto" (None) through the Params record."""
+                                      novelty: Optional[Bool] = None, n_jobs: Optional[Int] = None,
+                                      contamination_auto: Bool = False) raises -> ref[self] Self:
+        """Update the supplied parameters. Use contamination_auto to reset to sklearn's "auto" mode."""
+        if contamination_auto and contamination:
+            raise Error("ValueError: supply either contamination or contamination_auto")
         var neighbors = self._query.get_params()
         neighbors.update(n_neighbors=n_neighbors, algorithm=algorithm, leaf_size=leaf_size, p=p, metric=metric,
                          metric_params=metric_params.copy(), n_jobs=n_jobs)
         _ = self._query.set_params(neighbors)
-        if contamination: self.contamination = contamination
+        if contamination_auto:
+            self.contamination = None
+        elif contamination:
+            self.contamination = contamination
         if novelty: self.novelty = novelty.value()
         return self
 
@@ -150,10 +156,18 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
         if not self.__sklearn_is_fitted__(): raise Error("NotFittedError: LOF has not been fitted")
         return self._query.kneighbors(X, n_neighbors, return_distance)
 
+    def kneighbors(
+        self, X: Self.Input,
+        n_neighbors: Optional[Int] = None, return_distance: Bool = True,
+    ) raises -> TopKResult[Self.dtype]:
+        if not self.__sklearn_is_fitted__():
+            raise Error("NotFittedError: LOF has not been fitted")
+        return self._query.kneighbors(X, n_neighbors, return_distance)
+
     def score_samples(self, X: nm.NDArray[Self.dtype]) raises -> nm.NDArray[Self.dtype]:
         if not self.novelty: raise Error("AttributeError: score_samples requires novelty=True")
         if not self.__sklearn_is_fitted__(): raise Error("NotFittedError: LOF has not been fitted")
-        var result = self._query.kneighbors(X.copy(),self.n_neighbors_)
+        var result = self._query.kneighbors(X, self.n_neighbors_)
         var density = Self._density(result,self._k_distance)
         return Self._scores(result,density,self._lrd)
 

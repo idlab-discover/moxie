@@ -23,18 +23,21 @@ are Float64. Regression accumulates in Float64.
 
 `fit(X, y)` snapshots inputs; failed validation preserves the preceding fit.
 `clone(model)` returns an unfitted independent configuration. `get_params()` returns
-a typed record; supervised records contain `neighbors: NeighborParams` and
-`weights`. Modify that record and call `set_params(params)`, then refit when changing
-fit-time options. Parameter updates preserve learned state, as in sklearn.
+a typed record. Supervised records contain `neighbors: NeighborParams`, `weights`,
+and the native callable `weighting` option.
+Modify the record and call `set_params(params)`, then refit when changing fit-time
+options. Parameter updates preserve learned state, as in sklearn.
 Fit and set_params return a mutable borrow of self, supporting fluent chaining.
 Read constructor options through `get_params()`; direct Python-style attribute
 assignment is not provided. Keyword `set_params` updates only the supplied fields on
 NearestNeighbors, the KNN/radius estimators (`n_neighbors`/`radius`, `weights`,
 `weighting`, `algorithm`, `leaf_size`, `p`, `metric`, `metric_params`, `n_jobs`, and
 `outlier_label`/`outlier_most_frequent` on RadiusNeighborsClassifier), LOF and KDE,
-for example `model.set_params(n_neighbors=3, weights="distance")`. A supplied value
-cannot reset an Optional to None (such as LOF `contamination` back to `"auto"`); use
-the record for that. As in sklearn, `outlier_label` takes effect at the next fit.
+for example `model.set_params(n_neighbors=3, weights="distance")`. Use the
+record to reset optional fields to `None`. LOF also accepts
+`set_params(contamination_auto=True)` to restore sklearn's `"auto"` mode on the
+next fit. Supplying that flag together with a numeric contamination value raises
+an error. As in sklearn, `outlier_label` takes effect at the next fit.
 
 `kneighbors(X=None, n_neighbors=None, return_distance=True)` returns `TopKResult`.
 `radius_neighbors(X=None, radius=None, return_distance=True, sort_results=False)`
@@ -44,8 +47,10 @@ classifier/regressor and probability traits. NearestNeighbors implements
 UnsupervisedEstimator and KNeighborsQuery. Its radius method returns the concrete
 RadiusResult; the inherited query traits cannot express two different result
 records on one type. LOF implements NoveltyDetector (with novelty gating), and
-KDE implements NeighborDensity. `None`
-excludes the row's own training index while retaining duplicates. Explicit arrays
+KDE implements NeighborDensity. On NearestNeighbors, the KNN/radius estimators
+and LOF, `kneighbors(X)` borrows the feature array directly, including strided views.
+The optional-input overload also accepts `None` for self queries, which exclude
+each row's own training index while retaining duplicates. Explicit arrays
 include self. Equal distances use ascending training index; sklearn backend tie
 selection is unspecified. Radius membership is inclusive. Negative/NaN radii are
 rejected; infinity is accepted. Result distances retain feature dtype.
@@ -116,7 +121,7 @@ var model = NearestNeighbors[DType.float64, WeightedL1[DType.float64]](
     metric_params=WeightedL1[DType.float64](weights.copy()),
 )
 model.fit(X)
-var neighbors = model.kneighbors(Q.view())
+var neighbors = model.kneighbors(Q)
 ```
 
 The example module is in `examples/`; include that directory when compiling your
@@ -140,7 +145,8 @@ nonnegative and shape preserving. Classification rejects a nonempty neighborhood
 whose weights sum to zero. Negative/nonfinite callable or score weights are an
 explicit unsupported extension of sklearn's more permissive weighting surface.
 
-`classes_` contains one target-domain vector per output (StringTarget for strings);
+Classifiers expose one target-domain vector per output in `classes_`
+(`StringTarget` for strings).
 `predict_proba` returns a list of Float64 arrays, one per target
 output, including single-output classification. Regression preserves target rank; classification flattens a single-column
 target like sklearn. Classification `score` is accuracy (subset accuracy for

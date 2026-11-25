@@ -6,15 +6,13 @@ from moxie.neighbors._distance import Metric
 from moxie.neighbors._contracts import DenseMetric, TopKResult, RadiusResult
 from moxie.neighbors._unsupervised import NearestNeighbors, NeighborParams
 from moxie.neighbors._query_engine import NeighborWeights, BuiltinWeights
-from moxie.neighbors._supervised import target_snapshot, target_at, class_arrays, weighted_neighbors, regression, probabilities, classified, prediction_score
+from moxie.neighbors._supervised import target_snapshot, weighted_neighbors, regression, prediction_score
 
 @fieldwise_init
 struct RadiusNeighborsRegressorParams[dtype: DType, M: DenseMetric & Deinitable = Metric[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](Copyable, Movable):
     var neighbors: NeighborParams[Self.dtype, Self.M]
     var weighting: Optional[Self.W]
     var weights: String
-    var outlier_label: Optional[nm.NDArray[Self.dtype]]
-    var outlier_most_frequent: Bool
 
 struct RadiusNeighborsRegressor[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](RadiusNeighborsRegressorAPI):
     comptime Input = nm.NDArray[Self.dtype]
@@ -30,10 +28,6 @@ struct RadiusNeighborsRegressor[dtype: DType = DType.float64, M: DenseMetric & D
     var n_features_in_: Int
     var n_samples_fit_: Int
     var outputs_2d_: Bool
-    var classes_: List[nm.NDArray[Self.dtype]]
-    var outlier_label_: Optional[nm.NDArray[Self.dtype]]
-    var _outlier_label: Optional[nm.NDArray[Self.dtype]]
-    var _outlier_most_frequent: Bool
     var effective_metric_: String
     var effective_metric_params_: Self.M
     var _fit_method: String
@@ -49,23 +43,17 @@ struct RadiusNeighborsRegressor[dtype: DType = DType.float64, M: DenseMetric & D
         self.n_features_in_ = 0
         self.n_samples_fit_ = 0
         self.outputs_2d_ = False
-        self.classes_ = List[nm.NDArray[Self.dtype]]()
-        self.outlier_label_ = None
-        self._outlier_label = None
-        self._outlier_most_frequent = False
         self.effective_metric_ = self._query.effective_metric_
         self.effective_metric_params_ = self._query.effective_metric_params_.copy()
         self._fit_method = "brute"
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self._query.get_params(), self.weighting.copy(), self.weights, self._outlier_label.copy(), self._outlier_most_frequent)
+        return Self.Params(self._query.get_params(), self.weighting.copy(), self.weights)
 
     def set_params[origin: MutOrigin, params_origin: ImmOrigin](ref[origin] self, ref[params_origin] params: Self.Params) raises -> ref[self] Self:
         self._query.set_params(params.neighbors)
         self.weighting = params.weighting.copy()
         self.weights = params.weights
-        self._outlier_label = params.outlier_label.copy()
-        self._outlier_most_frequent = params.outlier_most_frequent
         return self
 
     def set_params[origin: MutOrigin](ref[origin] self, *, radius: Optional[Float64] = None,
@@ -96,12 +84,8 @@ struct RadiusNeighborsRegressor[dtype: DType = DType.float64, M: DenseMetric & D
         var target = target_snapshot(y, X.shape[0], False)
         var query = self._query.__sklearn_clone__()
         query.fit(X)
-        var classes = List[nm.NDArray[Self.dtype]]()
-        var outliers = Optional[nm.NDArray[Self.dtype]](None)
         self._query = query^
         self._y = target^
-        self.classes_ = classes^
-        self.outlier_label_ = outliers^
         self.outputs_2d_ = y.ndim == 2
         self.n_features_in_ = X.shape[1]
         self.n_samples_fit_ = X.shape[0]
@@ -112,6 +96,12 @@ struct RadiusNeighborsRegressor[dtype: DType = DType.float64, M: DenseMetric & D
 
     def kneighbors(self, X: Optional[nm.NDArray[Self.dtype]] = None,
                    n_neighbors: Optional[Int] = None, return_distance: Bool = True) raises -> TopKResult[Self.dtype]:
+        return self._query.kneighbors(X, n_neighbors, return_distance)
+
+    def kneighbors(
+        self, X: Self.Input,
+        n_neighbors: Optional[Int] = None, return_distance: Bool = True,
+    ) raises -> TopKResult[Self.dtype]:
         return self._query.kneighbors(X, n_neighbors, return_distance)
 
     def radius_neighbors(self, X: Optional[nm.NDArray[Self.dtype]] = None,

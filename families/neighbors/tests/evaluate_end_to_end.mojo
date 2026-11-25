@@ -64,7 +64,7 @@ def run[dtype: DType](args: List[String]) raises:
     if kind == "nn":
         var model = NearestNeighbors[dtype](k, radius, algorithm=algorithm, metric=metric, p=p, leaf_size=3)
         _ = model.fit(X)
-        emit_topk("K", model.kneighbors(Q.copy()))
+        emit_topk("K", model.kneighbors(Q))
         emit_topk("S", model.kneighbors())
         emit_radius("R", model.radius_neighbors(Q.copy(), sort_results=True))
         print("M 0", model.effective_metric_)
@@ -99,6 +99,9 @@ def run[dtype: DType](args: List[String]) raises:
         print("O 0", outliers.offset_)
         print("N 0", outliers.n_neighbors_)
         var novelty = LocalOutlierFactor[dtype](k, algorithm=algorithm, metric=metric, p=p, leaf_size=3, contamination=contamination, novelty=True)
+        if not contamination:
+            _ = novelty.set_params(contamination=0.25).fit(X)
+            _ = novelty.set_params(contamination_auto=True)
         _ = novelty.fit(X)
         emit("SS", novelty.score_samples(Q))
         emit("DF", novelty.decision_function(Q))

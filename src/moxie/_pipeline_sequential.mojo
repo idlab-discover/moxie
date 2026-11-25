@@ -90,7 +90,7 @@ struct Pipeline[
 ](SupervisedEstimator, PredictivePipeline, PipelineSteps, UnionFeatureNames, UnionInputFeatures, InputFeatureCount,
   Copyable where conforms_to(P, Copyable) and conforms_to(E, Copyable),
   TransformingPipeline where conforms_to(E, TransformerMixin),
-  FitTransformer where conforms_to(E, TransformerMixin),
+  FitTransformer where conforms_to(E, FitTransformer) or conforms_to(E, TransformerMixin),
   SupervisedScorer where conforms_to(E, SupervisedScorer),
   ClassifierMixin where conforms_to(E, ClassifierMixin),
   NumericClassifierClasses where conforms_to(E, NumericClassifierClasses),
@@ -106,7 +106,7 @@ struct Pipeline[
     Feature names are delegated through both steps when supported.
     Scoring is conditional on the final estimator's SupervisedScorer capability.
     Probability and decision methods follow the final estimator's capabilities.
-    Transformation is available when the final estimator supports it.
+    Training and inference transformations follow separate final-step capabilities.
     """
     comptime Prefix = Self.P
     comptime Final = Self.E
@@ -116,7 +116,11 @@ struct Pipeline[
     comptime ClassLabelDType where conforms_to(
         Self.E, NumericClassifierClasses
     ) = Self.E.ClassLabelDType
-    comptime Transformed where conforms_to(Self.E, TransformerMixin) = Self.E.Transformed
+    comptime Transformed where conforms_to(Self.E, FitTransformer) or conforms_to(
+        Self.E, TransformerMixin
+    ) = Self.E.Transformed if conforms_to(Self.E, TransformerMixin) else (
+        Self.E.Transformed if conforms_to(Self.E, FitTransformer) else NoneType
+    )
     comptime SampleWeight = Self.E.SampleWeight if conforms_to(Self.E, WeightedSupervisedEstimator) else (
         Self.E.SampleWeight if conforms_to(Self.E, SupervisedScorer) else Int
     )
@@ -269,13 +273,17 @@ struct Pipeline[
         check_is_fitted(self)
         comptime if conforms_to(Self.P.Transformed, Deinitable):
             var transformed = self.transformer.transform(X)
-            return self.estimator.transform(rebind[Self.E.Input](transformed))
+            return rebind_var[Self.Transformed](
+                self.estimator.transform(rebind[Self.E.Input](transformed))
+            )
         else:
             comptime assert False, "pipeline needs destructible intermediate values"
 
     def fit_transform(
         mut self, X: Self.Input, y: Optional[Self.Target] = None,
-    ) raises -> Self.Transformed where conforms_to(Self.E, TransformerMixin):
+    ) raises -> Self.Transformed where conforms_to(Self.E, FitTransformer) or conforms_to(
+        Self.E, TransformerMixin
+    ):
         """Fit and transform both steps with the required supervised target."""
         self._validate_names()
         comptime if conforms_to(Self.Target, Copyable & Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
@@ -283,7 +291,18 @@ struct Pipeline[
                 raise Error("ValueError: supervised pipeline fit_transform requires y")
             ref target = y.value()
             var transformed = _fit_transform(self.transformer, X, target)
-            return _fit_transform(self.estimator, rebind[Self.E.Input](transformed), target)
+            comptime if conforms_to(Self.E, FitTransformer):
+                return rebind_var[Self.Transformed](self.estimator.fit_transform(
+                    rebind[Self.E.Input](transformed),
+                    rebind[Optional[Self.E.Target]](y),
+                ))
+            elif conforms_to(Self.E, TransformerMixin):
+                _ = self.estimator.fit(rebind[Self.E.Input](transformed), target)
+                return rebind_var[Self.Transformed](
+                    self.estimator.transform(rebind[Self.E.Input](transformed))
+                )
+            else:
+                comptime assert False, "pipeline final step must support fit_transform or transform"
         else:
             comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
 

@@ -37,6 +37,14 @@ feature dtype. Array targets support rank one or two with Float32, Float64
 or Int64 elements. List targets support String, Int, Int64, Float32 or Float64.
 Each fold preserves target layout and dtype.
 
+For a mixed `ColumnTable`, pass
+`input_rows=Adapter.InputRows(Table.rows, Table.take_rows)`, where `Table`
+is the concrete table type and `Adapter` is the specialized
+`DenseSupervisedAdapter`. The callbacks borrow the input, report its sample
+count, and return an owned selection in index order. The adapter uses the
+estimator's input type for default scoring and applies the same target and
+weight selection as for an NDArray.
+
 Use the same adapter for out-of-fold predictions when the estimator returns
 one of those array or list types. The result keeps the estimator's prediction
 type, dtype and output shape. The optional `fit_metadata=` passes a weight

@@ -252,3 +252,24 @@ checks reordered inference, unseen categories, predictions, R², cloning,
 parameter updates and refitting against pinned scikit-learn. Encoded columns,
 feature names and output spans match exactly. Native schema validation uses
 Mojo errors with descriptive ValueError messages.
+
+Use the same mixed-table pipeline in cross-validation and grid search by
+passing the table's row operations to the model-selection adapter.
+
+```mojo
+from moxie.model_selection import DenseSupervisedAdapter, GridSearchCV, cross_val_score
+
+comptime Adapter = DenseSupervisedAdapter[type_of(pipe)]
+comptime Table = ColumnTable[]
+var adapter = Adapter(
+    apply_params, input_rows=Adapter.InputRows(Table.rows, Table.take_rows),
+)
+var scores = cross_val_score[Adapter](pipe, table, y, adapter)
+var search = GridSearchCV[Adapter](pipe, grid, adapter)
+_ = search.fit(table, y)
+```
+
+The typed `apply_params` callback maps the grid keys to the pipeline's
+parameter record. Each fold fits its own imputer, scaler, encoder and
+predictor. The [mixed Ridge search regression](../../tests/compose/pipeline/mixed_ridge_search.mojo)
+shows how to tune `ridge__alpha` and predict with the refitted pipeline.

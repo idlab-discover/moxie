@@ -143,7 +143,7 @@ def parity():
     frozen_checks.parity(run)
     run(sys.executable, ROOT / 'families/preprocessing/tools/check.py', 'parity-only')
     for name in ["parity.py", "union_parity.py", "compose_parity.py",
-                 "transforming_parity.py", "weighted_fit_parity.py"]:
+                 "transforming_parity.py", "weighted_fit_parity.py", "calibrated_pipeline_parity.py"]:
         run(sys.executable, ROOT / "tests/pipeline" / name)
     run(sys.executable, ROOT / 'tests/dummy/parity.py')
     for relative in [

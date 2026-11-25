@@ -140,8 +140,9 @@ Scoring checks pipeline fitted state, transforms `X` through the prefix, and
 delegates directly to the final estimator. It does not fit any step or call
 `predict`. Targets and weights are forwarded unchanged and only the final
 estimator receives weights. The child owns score semantics, including accuracy
-or R², validation, and configuration-dependent errors. Pipeline does not claim
-`ClassifierMixin` or `RegressorMixin` conformance merely because it can score.
+or R², validation, and configuration-dependent errors. Pipeline conforms to
+`ClassifierMixin` when its final estimator does, including through nesting.
+This lets classifier adapters consume the entire pipeline.
 
 Unsupported final estimators fail at compile time; ordinary fit/predict remains
 available. The foundation scoring trait includes optional weights, so a native

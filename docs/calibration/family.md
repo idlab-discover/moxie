@@ -76,14 +76,18 @@ are implementation details, not additional public sklearn estimators.
 Use `adapt_classifier(estimator)` with the default type specializations of
 `GaussianNB`, `MultinomialNB`, `ComplementNB`, `BernoulliNB`, `CategoricalNB`,
 `LinearDiscriminantAnalysis`, `QuadraticDiscriminantAnalysis`,
-`LogisticRegression`, `LinearSVC` and `SVC`. Pass the result to
+`LogisticRegression` and `SVC`. For `LinearSVC`, use any of `Int`, `Int64`,
+`Float32` or `Float64` as the label type. Pass the result to
 `CalibratedClassifierCV`.
 Adapters with `predict_proba` also support direct use with
 `CalibrationDisplay.from_estimator` after fitting. The adapter prefers
 `decision_function` for calibration and uses `predict_proba` for displays.
 With Naive Bayes it uses probabilities for both. The adapter converts Float64
 calibration targets to the classifier's native numeric list or Int64 array and
-returns its fitted classes in column order. It forwards explicit weights to
+returns its fitted classes in column order. Integral labels must be exactly
+representable in the component's target type. For example,
+`adapt_classifier(LinearSVC[Float32]())` rejects 16777217 because Float32
+rounds it to 16777216. It forwards explicit weights to
 all five Naive Bayes classifiers, LogisticRegression and LinearSVC. The LDA,
 QDA and SVC adapters reject explicit weights. Standalone SVC calibration expects
 feature input with a built-in kernel. Multiclass SVC requires one-vs-rest

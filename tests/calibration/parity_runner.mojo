@@ -29,7 +29,7 @@ from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDis
 from moxie.frozen import FrozenEstimator
 from moxie.linear_model import LogisticRegression
 from moxie.naive_bayes import GaussianNB
-from moxie.svm import SVC
+from moxie.svm import LinearSVC, SVC
 from calibration_centroid import Centroid
 
 
@@ -334,6 +334,16 @@ def main() raises:
         elif kind == "production_logistic":
             compare_production(
                 adapt_classifier(LogisticRegression(tol=1e-10, max_iter=500)),
+                x, y, w, q, expected, fields, context,
+            )
+        elif kind == "list_int64":
+            compare_production(
+                adapt_classifier(LinearSVC[Int64](dual=False, random_state=0, tol=1e-10)),
+                x, y, w, q, expected, fields, context,
+            )
+        elif kind == "list_float32":
+            compare_production(
+                adapt_classifier(LinearSVC[Float32](dual=False, random_state=0, tol=1e-10)),
                 x, y, w, q, expected, fields, context,
             )
         elif kind == "production_frozen_logistic":

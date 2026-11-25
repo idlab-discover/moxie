@@ -1,6 +1,7 @@
 """Dense binary target bridge for classifiers using numeric List labels."""
 
 import numojo as nm
+from moxie._classifier_targets import NumericListTarget
 from moxie.base import (
     ClassifierMixin,
     DecisionFunction,
@@ -38,18 +39,13 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
     comptime Decision where conforms_to(Self.E, DecisionFunction) = Self.E.Decision
     comptime Probabilities where conforms_to(Self.E, ProbabilityPredictor) = Self.E.Probabilities
 
-    comptime _label_dtype = (
-        DType.float64 if Self.E.Target == List[Float64] else
-        DType.float32 if Self.E.Target == List[Float32] else DType.int64
-    )
-    comptime _label = (
-        Int if Self.E.Target == List[Int] else Scalar[Self._label_dtype]
-    )
+    comptime _domain = NumericListTarget[Self.E.Target]
+    comptime _label = Self._domain.Label
 
     var estimator: Self.E
 
     def __init__(out self, var estimator: Self.E):
-        comptime assert Self.E.Target == List[Self._label], (
+        comptime assert Self._domain.supported, (
             "BinaryAdapter requires List[Int], List[Int64], List[Float32] or List[Float64] targets"
         )
         comptime assert Self.E.Prediction == Self.E.Target, (
@@ -88,10 +84,7 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
                 raise Error("ValueError: expected binary codes 0/1 or -1/+1")
             signed = signed or code == -1
             zero = zero or code == 0
-            comptime if Self.E.Target == List[Int]:
-                labels.append(rebind[Self._label](Int(code)))
-            else:
-                labels.append(rebind[Self._label](code.cast[Self._label_dtype]()))
+            labels.append(Self._domain.from_array_label(code))
         if signed and zero:
             raise Error("ValueError: expected binary codes 0/1 or -1/+1")
         return labels^
@@ -127,11 +120,7 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
         var labels = rebind_var[List[Self._label]](self.estimator.predict(X))
         var result = Self.Prediction(nm.Shape(len(labels)))
         for i in range(len(labels)):
-            var code: Float64
-            comptime if Self.E.Target == List[Int]:
-                code = Float64(rebind[Int](labels[i]))
-            else:
-                code = rebind[Scalar[Self._label_dtype]](labels[i]).cast[DType.float64]()
+            var code = Self._domain.as_float64(labels[i])
             if code != -1 and code != 0 and code != 1:
                 raise Error("ValueError: component predicted a value outside the binary codes")
             result[nm.Item(i)] = code.cast[DType.int64]()

@@ -119,11 +119,14 @@ The weighted `fit` overload is available only for components implementing
 (classification; forests use `[Forest, DType.float32, DType.float64]`).
 `LogisticRegression()` supplies the default Float64 features and Int64 labels
 and supports both independent probabilities and chain probability responses.
-DummyClassifier uses List targets and the Naive Bayes classifiers use List
-feature inputs, so they are not direct NDArray component substitutes. The tree
-classifier is also not a direct substitute for
-`predict_proba` (List probabilities). No conversion adapter is supplied by these
-wrappers.
+The wrappers also accept `DecisionTreeClassifier` and
+`KNeighborsClassifier` with numeric NDArray targets. Each fitted link has one
+target, so the wrapper takes the sole matrix from the component's probability
+list. Use Float32 features for trees and the chosen component dtype for
+neighbors. Use `GaussianNB[NumericDomain[DType.int64]]` for the default
+Int64 wrapper labels. The classifier wrappers convert Float64 NDArray weights
+to the `List[Float64]` that GaussianNB consumes. List-target classifiers still
+require an adapter for the wrapper's numeric target vector.
 
 The independent wrappers share their field layout with the chains: they also
 carry `order`, `random_state`, `random_order`, `verbose`, `chain_method`,

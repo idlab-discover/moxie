@@ -17,6 +17,9 @@ def oracle():
     from sklearn.linear_model import _logistic
     from sklearn.model_selection import _split, _validation
     from sklearn.model_selection import KFold
+    from sklearn.naive_bayes import __file__ as naive_bayes_source
+    from sklearn.neighbors import _classification
+    from sklearn.tree import _classes
     from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
     from sklearn.dummy import DummyRegressor
     path = REFERENCE / 'sklearn/multioutput.py'
@@ -25,6 +28,9 @@ def oracle():
         ('sklearn/linear_model/_logistic.py', Path(_logistic.__file__)),
         ('sklearn/model_selection/_split.py', Path(_split.__file__)),
         ('sklearn/model_selection/_validation.py', Path(_validation.__file__)),
+        ('sklearn/naive_bayes.py', Path(naive_bayes_source)),
+        ('sklearn/neighbors/_classification.py', Path(_classification.__file__)),
+        ('sklearn/tree/_classes.py', Path(_classes.__file__)),
     ]:
         expected = subprocess.check_output(['git', '-C', str(REFERENCE), 'show', f'{REVISION}:{relative}'])
         if source.read_bytes() != expected:
@@ -76,6 +82,7 @@ def oracle():
     weighted = module.MultiOutputRegressor(DummyRegressor()).fit(X, y, sample_weight=np.arange(1, 5))
     expected['MultiOutputRegressorWeightedFit'] = weighted.predict(query).ravel().tolist()
     expected.update(components(module, np))
+    expected.update(classifier_components(module, np))
     print(json.dumps(expected))
 
 
@@ -200,6 +207,54 @@ def components(module, np):
         out['ComponentsLogisticChain' + suffix + 'Proba'] = logistic_chain.predict_proba(X).ravel().tolist()
     return out
 
+
+def classifier_components(module, np):
+    """Tree/KNN probability normalization and GaussianNB weight conversion."""
+    import warnings
+
+    from sklearn import config_context
+    from sklearn.naive_bayes import GaussianNB
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.tree import DecisionTreeClassifier
+
+    i = np.arange(12)
+    X = (i * i + 0.1 * i).reshape(-1, 1)
+    X32 = X.astype(np.float32)
+    multiclass = np.column_stack([np.where(i < 6, -3., 4.), np.where(i < 4, 8., np.where(i < 8, 11., 19.))])
+    binary = multiclass.copy()
+    binary[binary[:, 1] == 19., 1] = 11.
+    tree = DecisionTreeClassifier(max_depth=2, random_state=17)
+    wrapped_tree = module.MultiOutputClassifier(tree).fit(X32, multiclass)
+    tree_chain = module.ClassifierChain(tree, chain_method='predict_proba', cv=3).fit(X32, binary)
+    rare = binary.copy()
+    rare[:, 0] = np.where(i == 11, 4., -3.)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='The least populated class in y has only')
+        warnings.filterwarnings('ignore', message='Number of classes in training fold')
+        rare_chain = module.ClassifierChain(tree, chain_method='predict_proba', cv=3).fit(X32, rare)
+    constant = np.zeros_like(X32)
+    log_chain = module.ClassifierChain(tree, chain_method='predict_log_proba', cv=3).fit(constant, binary)
+    knn = module.MultiOutputClassifier(KNeighborsClassifier(n_neighbors=3, algorithm='brute')).fit(X, multiclass)
+    weights = (i % 3 + 1).astype(float)
+    bayes = module.MultiOutputClassifier(GaussianNB()).fit(X, multiclass, sample_weight=weights)
+    with config_context(enable_metadata_routing=True):
+        bayes_chain = module.ClassifierChain(
+            GaussianNB().set_fit_request(sample_weight=True), chain_method='predict_proba',
+        ).fit(X, binary, sample_weight=weights)
+    return {
+        'ComponentsTreeLabels': wrapped_tree.predict(X32).ravel().tolist(),
+        'ComponentsTreeProba': wrapped_tree.predict_proba(X32)[1].ravel().tolist(),
+        'ComponentsTreeChainCVProba': tree_chain.predict_proba(X32).ravel().tolist(),
+        'ComponentsTreeChainCVLabels': tree_chain.predict(X32).ravel().tolist(),
+        'ComponentsTreeChainMissingClassProba': rare_chain.predict_proba(X32).ravel().tolist(),
+        'ComponentsTreeChainLogResponseProba': log_chain.predict_proba(constant).ravel().tolist(),
+        'ComponentsKNNLabels': knn.predict(X).ravel().tolist(),
+        'ComponentsKNNProba': knn.predict_proba(X)[1].ravel().tolist(),
+        'ComponentsGaussianNBLabels': bayes.predict(X).ravel().tolist(),
+        'ComponentsGaussianNBProba': bayes.predict_proba(X)[1].ravel().tolist(),
+        'ComponentsGaussianNBChainProba': bayes_chain.predict_proba(X).ravel().tolist(),
+    }
+
 if __name__ == '__main__':
     if '--oracle' in sys.argv:
         oracle()
@@ -209,7 +264,7 @@ if __name__ == '__main__':
         env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1')
         reference = json.loads(subprocess.check_output([python, __file__, '--oracle'], env=env, text=True))
         output = ''.join(subprocess.check_output([str(ROOT/'builds/tests/multioutput'/name)], env=env, text=True)
-                         for name in ('test_estimators', 'test_components'))
+                         for name in ('test_estimators', 'test_components', 'test_classifier_components'))
         actual = {'ComponentsChainVerbose': verbose_lines(output)}
         for line in output.splitlines():
             if line.startswith('PARITY '):
@@ -234,8 +289,14 @@ if __name__ == '__main__':
                 # independently converged L-BFGS fits, including every chain link.
                 matches = all(math.isclose(a, b, rel_tol=0.0, abs_tol=2e-6)
                               for a, b in zip(actual[name], reference[name]))
+            elif name.startswith('ComponentsGaussianNB') and name.endswith('Proba'):
+                # Weighted moments and log normalization use different reduction orders.
+                matches = all(math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-12)
+                              for a, b in zip(actual[name], reference[name]))
+            elif name.startswith(('ComponentsTree', 'ComponentsKNN')):
+                matches = actual[name] == reference[name]
             elif name.startswith('Components') and not name.endswith(('Labels', 'Order')) and 'Forest' not in name:
-                # Float64 Ridge solves differ from LAPACK in operation order
+                # Float64 Ridge solves differ from LAPACK in operation order.
                 # Weighted chains also propagate those differences between links.
                 # Labels, orders and seeded forest probabilities stay exact.
                 matches = all(math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-12)

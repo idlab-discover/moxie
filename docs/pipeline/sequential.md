@@ -271,6 +271,13 @@ parameter records, clone semantics and feature-name forwarding. The fitted
 query follows the final step. `fit` fits that step and `fit_transform`
 also returns its result.
 
+When both children implement `InverseTransformer`, the pipeline exposes
+`inverse_transform` through that same trait. It applies the last child's
+inverse transform first, then the first child's. The
+[parity test](../../tests/pipeline/transforming_parity.py) checks Float32
+and Float64 output before and after refitting against the pinned
+scikit-learn implementation.
+
 ## Current boundary
 
 This implementation exposes fit, predict, conditional score, per-sample scores,
@@ -278,7 +285,6 @@ decision and probability methods, feature names, input feature counts,
 configuration, cloning and the two factories. The following sklearn Pipeline
 API is **deferred** (absent from the typed API, so use fails at compile time):
 
-- `inverse_transform` on transformer-only pipelines;
 - unsupervised-final pipelines and `fit_predict` (e.g. a clusterer final step);
 - `classes_` forwarding (read `pipe.estimator.classes_`);
 - `passthrough`/`None` steps, `__len__`, integer/slice `__getitem__` and

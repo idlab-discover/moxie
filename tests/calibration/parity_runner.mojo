@@ -25,6 +25,7 @@ from moxie.calibration_serialization import (
     CalibratedCategoricalNBClassifierCVSchema,
     CalibratedClassifierCVSchema,
     CalibratedComplementNBClassifierCVSchema,
+    CalibratedFrozenGaussianNBClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
     CalibratedLDAClassifierCVSchema,
     CalibratedMultinomialNBClassifierCVSchema,
@@ -134,8 +135,11 @@ def compare_serialized[
     fields: List[StringSpan[origin]],
     context: String,
 ) raises where Schema.Model == CalibratedClassifierCV[E]:
+    var ensemble: Variant[Bool, String] = "auto"
+    if String(fields[7]) != "auto":
+        ensemble = fields[7] == "true"
     var model = CalibratedClassifierCV(
-        estimator^, cv=3, method=String(fields[6]), ensemble=fields[7] == "true",
+        estimator^, cv=3, method=String(fields[6]), ensemble=ensemble^,
     )
     _ = model.fit(x, y, w)
     var archive = Schema.encode(rebind[Schema.Model](model))
@@ -144,6 +148,9 @@ def compare_serialized[
     )
     compare_estimator_result(restored, q, expected, fields, context)
     compare(restored.predict_proba(q), model.predict_proba(q), 0, context)
+    var expected_folds = 3 if fields[7] == "true" else 1
+    if len(restored.calibrated_classifiers_) != expected_folds:
+        raise Error(context + ": incorrect number of restored classifiers")
 
 
 def compare_float32[E: CalibrationEstimator, origin: ImmOrigin](
@@ -425,7 +432,7 @@ def main() raises:
             if kind == "production_frozen_gaussian":
                 var estimator = GaussianNB()
                 _ = estimator.fit(train_x, labels)
-                compare_production(
+                compare_serialized[CalibratedFrozenGaussianNBClassifierCVSchema](
                     adapt_classifier(FrozenEstimator(estimator^)),
                     x, y, w, q, expected, fields, context,
                 )

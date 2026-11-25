@@ -296,6 +296,7 @@ calibrator's base estimator. Each schema accepts fitted and unfitted models.
 | Default LinearSVC or `adapt_classifier(LinearSVC(...))` | `CalibratedClassifierCVSchema` |
 | `adapt_classifier(SVC(...))` | `CalibratedSVCClassifierCVSchema` |
 | `adapt_classifier(GaussianNB(...))` | `CalibratedGaussianNBClassifierCVSchema` |
+| `adapt_classifier(FrozenEstimator(GaussianNB(...)))` | `CalibratedFrozenGaussianNBClassifierCVSchema` |
 | `adapt_classifier(MultinomialNB(...))` | `CalibratedMultinomialNBClassifierCVSchema` |
 | `adapt_classifier(ComplementNB(...))` | `CalibratedComplementNBClassifierCVSchema` |
 | `adapt_classifier(BernoulliNB(...))` | `CalibratedBernoulliNBClassifierCVSchema` |
@@ -325,7 +326,11 @@ representation in the file. The LDA and QDA schemas require
 `covariance_estimator=None`. For CategoricalNB, use `min_categories` for a
 scalar minimum and `min_categories_values=List[Int]([4, 3, 5])` for
 scikit-learn's per-feature minimum. Both settings are preserved in the
-archive. See [native model files](../serialization.md) for format and load
+archive. The frozen GaussianNB schema preserves the current base snapshot
+and each fitted calibrator's snapshot, including when the base was replaced
+after calibration. On load the snapshots are independent. Clone still retains
+the restored frozen base and discards the calibration state.
+See [native model files](../serialization.md) for format and load
 limits.
 
 ## Limits and validation

@@ -22,7 +22,11 @@ lexicographic order. Predictions preserve target storage and dtype. Probabilitie
 are Float64. Regression accumulates in Float64.
 
 `fit(X, y)` snapshots inputs; failed validation preserves the preceding fit.
-`clone(model)` returns an unfitted independent configuration. `get_params()` returns
+`clone(model)` returns an unfitted independent configuration. For
+`KNeighborsRegressor`, `model.copy()` also preserves the fitted query state
+and target snapshot for use in compositions such as
+[IterativeImputer](../../impute/algorithms/iterative/docs/api.md).
+`get_params()` returns
 a typed record. Supervised records contain `neighbors: NeighborParams`, `weights`,
 and the native callable `weighting` option.
 Modify the record and call `set_params(params)`, then refit when changing fit-time

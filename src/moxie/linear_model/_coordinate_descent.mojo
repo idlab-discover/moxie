@@ -9,8 +9,14 @@ from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
 from moxie.linear_model._base import LinearRegressor
 from moxie.linear_model._contracts import validate_weights
-from moxie.linear_model._linear_base import preprocess_data, set_intercept, canonical_coef, public_coef, linear_decision, public_prediction, check_predict_input, r2_score, check_finite, compact_vector
-from moxie.linear_model._cd_fast import _CoordinateDesign, coordinate_descent
+from moxie.linear_model._linear_base import (
+    preprocess_data, set_intercept, canonical_coef, public_coef, linear_decision,
+    public_prediction, check_predict_input, r2_score, check_finite,
+    compact_vector, compact_matrix, gram_matrix, transpose_product,
+)
+from moxie.linear_model._cd_fast import (
+    CoordinateResult, _CoordinateDesign, coordinate_descent, coordinate_descent_gram,
+)
 
 
 @fieldwise_init
@@ -163,14 +169,67 @@ struct _FitResult[dtype: DType](Movable):
     var converged: List[Bool]
 
 
-def _fit_coordinate[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], sample_weight: Optional[NDArray[dtype]], initial: Optional[NDArray[dtype]], alpha: Float64, l1_ratio: Float64, fit_intercept: Bool, precompute: Bool, max_iter: Int, tol: Float64, positive: Bool, random_state: Optional[Int], selection: String) raises -> _FitResult[dtype]:
+def _prepare_gram[dtype: DType](
+    X: NDArray[dtype],
+    offset: NDArray[dtype],
+    var precompute: Bool,
+    supplied: Optional[NDArray[dtype]],
+) raises -> Optional[NDArray[dtype]]:
+    var p = X.shape[1]
+    if supplied:
+        var centered = False
+        for j in range(p):
+            centered |= abs(Float64(offset.unsafe_get(j))) > 1e-8
+        if not centered:
+            ref input_gram = supplied.value()
+            if input_gram.ndim != 2 or input_gram.shape[0] != p or input_gram.shape[1] != p:
+                raise Error("ValueError: gram must have shape (n_features, n_features)")
+            check_finite(input_gram, "gram", "ElasticNet")
+            var gram = compact_matrix(input_gram)
+            # Match sklearn's sampled-entry check on the prepared design.
+            var first = p // 2
+            var second = min(first + 1, p - 1)
+            var expected = Float64(0)
+            for i in range(X.shape[0]):
+                expected += (
+                    (Float64(X.unsafe_get(i * p + first)) - Float64(offset.unsafe_get(first)))
+                    * (Float64(X.unsafe_get(i * p + second)) - Float64(offset.unsafe_get(second)))
+                )
+            var actual = Float64(gram.unsafe_get(first * p + second))
+            comptime relative = 1e-4 if dtype == DType.float32 else 1e-7
+            if not isfinite(expected) or abs(expected - actual) > 1e-5 + relative * abs(actual):
+                raise Error("ValueError: gram does not match the prepared design")
+            return Optional(gram^)
+        # The reference switches to auto when centering invalidates a supplied Gram.
+        precompute = X.shape[0] > p
+    if precompute:
+        var computed = gram_matrix(X)
+        check_finite(computed, "gram", "ElasticNet")
+        return Optional(computed^)
+    return None
+
+
+def _fit_coordinate[dtype: DType](
+    X: NDArray[dtype],
+    y: NDArray[dtype],
+    sample_weight: Optional[NDArray[dtype]],
+    initial: Optional[NDArray[dtype]],
+    alpha: Float64,
+    l1_ratio: Float64,
+    fit_intercept: Bool,
+    precompute: Bool,
+    max_iter: Int,
+    tol: Float64,
+    positive: Bool,
+    random_state: Optional[Int],
+    selection: String,
+    supplied_gram: Optional[NDArray[dtype]],
+) raises -> _FitResult[dtype]:
     if not isfinite(alpha) or alpha < 0 or not isfinite(l1_ratio) or l1_ratio < 0 or l1_ratio > 1:
         raise Error("ValueError: alpha must be finite and nonnegative; l1_ratio must be in [0, 1]")
     if max_iter < 1 or not isfinite(tol) or tol < 0:
         raise Error("ValueError: max_iter must be positive and tol finite and nonnegative")
     var random = _random_selection(selection, random_state)
-    if precompute:
-        raise Error("NotImplementedError: Gram coordinate descent is not implemented")
     var normalized = Optional[NDArray[dtype]](None)
     if sample_weight:
         if X.ndim != 2:
@@ -188,6 +247,13 @@ def _fit_coordinate[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], sample_w
     var n = data.X.shape[0]
     var p = data.X.shape[1]
     var k = data.y.shape[1]
+    var gram = _prepare_gram(data.X, data.X_offset, precompute, supplied_gram)
+    var products = Optional[NDArray[dtype]]()
+    if gram:
+        check_finite(data.y, "y", "ElasticNet")
+        var cross = transpose_product(data.X, data.y)
+        check_finite(cross, "X.T @ y", "ElasticNet")
+        products = cross^
     var coef = zeros[dtype](Shape(k, p))
     if initial:
         coef = canonical_coef(initial.value())
@@ -208,11 +274,28 @@ def _fit_coordinate[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], sample_w
             # Each independent target is a separate path in ElasticNet.fit.
             with check_random_state(random_state) as rng:
                 seed = UInt32(rng[].randint(2147483647))
-        var solved = coordinate_descent(
-            data.X, target, start, alpha * l1_ratio * Float64(n),
-            alpha * (1 - l1_ratio) * Float64(n), max_iter, tol, positive,
-            random_seed=seed,
-        )
+        var l1 = alpha * l1_ratio * Float64(n)
+        var l2 = alpha * (1 - l1_ratio) * Float64(n)
+        var solved: CoordinateResult[dtype]
+        if gram:
+            ref cross = products.value()
+            var column = zeros[dtype](Shape(p))
+            for j in range(p):
+                column.unsafe_set(j, cross.unsafe_get(j * k + t))
+            var norm = Float64(0)
+            for i in range(n):
+                var value = Float64(target.unsafe_get(i))
+                norm += value * value
+            if not isfinite(Scalar[dtype](norm)):
+                raise Error("ValueError: squared target norm exceeds the Gram solver dtype range")
+            solved = coordinate_descent_gram(
+                gram.value(), column, start^, norm, l1, l2, max_iter, tol,
+                positive=positive, early_stopping=True, random_seed=seed,
+            )
+        else:
+            solved = coordinate_descent(
+                data.X, target, start, l1, l2, max_iter, tol, positive, random_seed=seed,
+            )
         for j in range(p):
             coef.unsafe_set(t * p + j, solved.coef.unsafe_get(j))
         gaps.unsafe_set(t, Scalar[dtype](solved.dual_gap / Float64(n)))
@@ -373,11 +456,50 @@ struct ElasticNet[dtype: DType = DType.float64](Copyable, LinearRegressor, Weigh
         self._fit(X, y, None)
         return self
 
-    def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, gram_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[gram_origin] gram: Self.Input,
+    ) raises -> ref[self] Self:
+        """Fit using a Gram matrix prepared for this design."""
+        self._fit_gram(X, y, gram, None)
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        gram_origin: ImmOrigin, weight_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[gram_origin] gram: Self.Input, ref[weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
+        self._fit_gram(X, y, gram, Optional(sample_weight.copy()))
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, gram_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[gram_origin] gram: Self.Input, sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        # Scalar weights cancel in the normalized objective.
+        return self.fit(X, y, gram=gram)
+
+    def _fit_gram(
+        mut self, X: Self.Input, y: Self.Target, gram: Self.Input,
+        sample_weight: Optional[Self.SampleWeight],
+    ) raises:
+        var gram_view = gram.view_with_layout(gram.shape, gram.strides, gram.offset)
+        self._fit(X, y, sample_weight, supplied_gram=Optional(gram_view^))
+
+    def _fit(
+        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight],
+        supplied_gram: Optional[Self.Input] = None,
+    ) raises:
         var initial = Optional[NDArray[Self.dtype]](None)
         if self.warm_start and self._fitted:
             initial = self.coef_.copy()
-        var solved = _fit_coordinate(X, y, sample_weight, initial, self.alpha, self.l1_ratio, self.fit_intercept, self.precompute, self.max_iter, self.tol, self.positive, self.random_state, self.selection)
+        var solved = _fit_coordinate(
+            X, y, sample_weight, initial, self.alpha, self.l1_ratio, self.fit_intercept,
+            self.precompute, self.max_iter, self.tol, self.positive, self.random_state,
+            self.selection, supplied_gram,
+        )
         self.coef_ = solved.coef.copy()
         self.intercept_ = solved.intercept.copy()
         self.dual_gap_ = solved.gaps.copy()
@@ -538,11 +660,50 @@ struct Lasso[dtype: DType = DType.float64](Copyable, LinearRegressor, WeightedSu
         self._fit(X, y, None)
         return self
 
-    def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, gram_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[gram_origin] gram: Self.Input,
+    ) raises -> ref[self] Self:
+        """Fit using a Gram matrix prepared for this design."""
+        self._fit_gram(X, y, gram, None)
+        return self
+
+    def fit[
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+        gram_origin: ImmOrigin, weight_origin: ImmOrigin,
+    ](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[gram_origin] gram: Self.Input, ref[weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
+        self._fit_gram(X, y, gram, Optional(sample_weight.copy()))
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, gram_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, ref[gram_origin] gram: Self.Input, sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        # Scalar weights cancel in the normalized objective.
+        return self.fit(X, y, gram=gram)
+
+    def _fit_gram(
+        mut self, X: Self.Input, y: Self.Target, gram: Self.Input,
+        sample_weight: Optional[Self.SampleWeight],
+    ) raises:
+        var gram_view = gram.view_with_layout(gram.shape, gram.strides, gram.offset)
+        self._fit(X, y, sample_weight, supplied_gram=Optional(gram_view^))
+
+    def _fit(
+        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight],
+        supplied_gram: Optional[Self.Input] = None,
+    ) raises:
         var initial = Optional[NDArray[Self.dtype]](None)
         if self.warm_start and self._fitted:
             initial = self.coef_.copy()
-        var solved = _fit_coordinate(X, y, sample_weight, initial, self.alpha, 1.0, self.fit_intercept, self.precompute, self.max_iter, self.tol, self.positive, self.random_state, self.selection)
+        var solved = _fit_coordinate(
+            X, y, sample_weight, initial, self.alpha, 1.0, self.fit_intercept,
+            self.precompute, self.max_iter, self.tol, self.positive, self.random_state,
+            self.selection, supplied_gram,
+        )
         self.coef_ = solved.coef.copy()
         self.intercept_ = solved.intercept.copy()
         self.dual_gap_ = solved.gaps.copy()

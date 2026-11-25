@@ -87,13 +87,43 @@ path_cases += [
     if case['mode'] in ('one-iteration', 'positive', 'explicit')
 ]
 
+# Exercise computed and supplied Gram fits, including both outcomes when
+# centering invalidates the caller's matrix and the weighted gallery workflow.
+gram_cases = []
+for c in cases:
+    if c['mode'] not in ('weighted', 'positive', 'no-intercept', 'warm', 'one-iteration', 'zero-target'):
+        continue
+    gram_cases.append(dict(c, id='computed-gram-' + c['id'], precompute=True))
+    if c['name'] == 'constant' or c['mode'] not in ('no-intercept', 'weighted', 'warm', 'one-iteration'):
+        continue
+    X = c['X']
+    sw = c['sw']
+    weights = np.ones(X.shape[0], dtype=X.dtype) if sw is None else sw * (len(sw) / sw.sum())
+    if c['mode'] in ('weighted', 'warm', 'one-iteration'):
+        # Use symmetric pairs to keep the weighted mean inside sklearn's
+        # absolute 1e-8 check, even with its Float32 reduction order.
+        X = np.stack([X, -X], axis=1).reshape(-1, X.shape[1])
+        y = np.repeat(c['y'], 2, axis=0)
+        y[1::2] = -y[1::2]
+        weights = np.repeat(weights, 2)
+        sw = np.repeat(sw, 2) if sw is not None else None
+    else:
+        y = c['y']
+    scaled = X * np.sqrt(weights)[:, None]
+    gram_cases.append(dict(c, id='supplied-gram-' + c['id'], X=X, y=y, sw=sw, gram=scaled.T @ scaled))
+    if c['mode'] == 'warm' and 'seed' not in c and c['name'] in ('tall', 'wide'):
+        X = c['X'] + 2
+        gram_cases.append(dict(c, id='replaced-gram-' + c['id'], X=X, gram=X.T @ X))
+cases += gram_cases
+
 folder = ROOT / 'builds/parity'
 folder.mkdir(parents=True, exist_ok=True)
 lines=[]
 for c in cases:
     params={k: (int(c[k]) if isinstance(c[k], bool) else c[k]) for k in ('alpha','ratio','intercept','positive','warm','max_iter','tol')}
     if 'seed' in c: params['seed'] = c['seed']
-    arrays={k:c[k] for k in ('X','y','Z')}
+    if c.get('precompute'): params['precompute'] = 1
+    arrays={k:c[k] for k in ('X','y','Z','gram') if k in c}
     if c['sw'] is not None: arrays['sw']=c['sw']
     lines.append(io.case_line(c['id'],c['bits'],params,arrays))
 for case in path_cases:
@@ -113,6 +143,7 @@ for c in cases:
     got=results[c['id']]
     assert 'error' not in got,(c['id'],got)
     kwargs=dict(alpha=c['alpha'],fit_intercept=c['intercept'],positive=c['positive'],warm_start=c['warm'],max_iter=c['max_iter'],tol=c['tol'])
+    kwargs['precompute'] = c.get('gram', c.get('precompute', False))
     if 'seed' in c: kwargs.update(selection='random', random_state=c['seed'])
     if c['ratio'] == 1:
         model = reference.Lasso()
@@ -185,4 +216,4 @@ for case in path_cases:
 )
 print(f'Dense ElasticNet/Lasso path parity passed: {len(path_cases)} cases')
 (folder/'report.json').write_text(json.dumps(dict(revision=io.REVISION,sources=hashes,cases=len(cases),results=report),indent=2)+'\n')
-print(f'Dense ElasticNet/Lasso parity passed: {len(cases)} cases; pinned sklearn Python and Cython {io.REVISION[:10]}')
+print(f'Dense ElasticNet/Lasso parity passed: {len(cases)} cases ({len(gram_cases)} Gram); pinned sklearn Python and Cython {io.REVISION[:10]}')

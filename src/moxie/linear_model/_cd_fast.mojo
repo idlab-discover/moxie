@@ -321,8 +321,9 @@ def coordinate_descent_gram[dtype: DType](
     *,
     positive: Bool = False,
     early_stopping: Bool = False,
+    random_seed: Optional[UInt32] = None,
 ) raises -> CoordinateResult[dtype]:
-    """Cyclic elastic-net steps on a contiguous symmetric Gram system.
+    """Elastic-net steps on a contiguous symmetric Gram system.
 
     Callers supply matching contiguous vectors, the squared target norm and
     unnormalized penalties. The returned result owns the updated coefficients.
@@ -350,10 +351,14 @@ def coordinate_descent_gram[dtype: DType](
         return CoordinateResult[dtype](coef^, Float64(gap), 0, True)
     if a > 0:
         active = _screen_gram(gram, correlations, active, a, b, gap, dualnorm, coef, product)
+    var random = Bool(random_seed)
+    var state = random_seed.value() if random else UInt32(0)
     for iteration in range(max_iter):
         var largest = Scalar[dtype](0)
         var change = Scalar[dtype](0)
-        for j in active:
+        for position in range(len(active)):
+            var index = Int(our_rand_r(state)) % len(active) if random else position
+            var j = active[index]
             var diagonal = gram.unsafe_get(j * p + j)
             if diagonal == 0:
                 continue

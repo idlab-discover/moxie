@@ -2,7 +2,7 @@
 
 Implemented: ElasticNet, Lasso and their single-target paths with the modes
 and typed adaptations in [api.md](api.md). Uses family preprocessing and
-prediction, and the residual engine at shared/coordinate_engine.
+prediction, and the residual and Gram engines at shared/coordinate_engine.
 
 Validation: `pixi run build`, `pixi run test`, `pixi run parity`. Native tests
 cover both dtypes, unfitted calls, clone/params, refits, warm starts, weight
@@ -19,11 +19,17 @@ Float32 tolerance is 3e-4 for reduction order. Target-scaled absolute tolerances
 Float64 iteration counts are enforced by the script. Raw reports are ignored
 under builds/parity. Tests are correctness evidence, not performance claims.
 
-Unfinished dense work includes Gram precomputation, multi-task paths,
+Unfinished dense work includes Gram and multi-task paths,
 MultiTaskLasso, MultiTaskElasticNet and CV. Sparse matrices/targets and sparse
 coefficient conversion remain deferred under session-plan/SPARSITY-SCOPE.md.
-The residual engine supports cyclic and random coordinate selection.
-`precompute=True` raises explicitly.
+Fit parity also checks computed and supplied Gram matrices, weighted and
+zero-target fits, cyclic and seeded random selection, warm refits,
+iteration limits, and the tall and wide fallbacks for invalidated Gram
+matrices. Gram and cross products reuse the family's widened,
+stride-aware reductions. NuMojo matrix multiplication would require a
+separately allocated transposed design for these products. Numax
+`dot` and `nrm2` require compile-time vector extents. The squared target
+norm accumulates directly in Float64 before rounding to the solver dtype.
 Path tests cover generated and supplied grids, positive constraints,
 degenerate inputs, seeded initial coefficients, strided inputs and iteration
 limits in both dtypes. The path shares a single column layout and set of

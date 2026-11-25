@@ -42,9 +42,10 @@ cross-validation and search take a typed adapter per estimator;
 pipelines, a PCA + TruncatedSVD union, clone with nested `set_params`, and the
 PCA/FactorAnalysis log-likelihood `cross_val_score` and
 `GridSearchCV(PCA(), {"n_components": ...})` of
-`plot_pca_vs_fa_model_selection.py`. A pipeline that ends in a decomposition
-estimator (`make_pipeline(StandardScaler(), PCA())`) is not available because
-`moxie.pipeline.Pipeline` requires a supervised final predictor.
+`plot_pca_vs_fa_model_selection.py`. The test also covers a transformer-only
+`make_pipeline(StandardScaler(), PCA())` and three-step principal-component
+regression. In Mojo the three steps use a nested pipeline, written as
+`make_pipeline(StandardScaler(), make_pipeline(PCA(), LinearRegression()))`.
 
 The remaining `_api.mojo` declarations retain recorded reference signatures and
 raise descriptive NotImplementedError messages. Historical scaffold locks and

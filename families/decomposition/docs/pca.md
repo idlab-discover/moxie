@@ -90,11 +90,12 @@ use `Float64(0.95)` for a fraction. Omission selects all available components.
   through `.value()`. Counts are zero before fit. Arrays own their data, and
   later caller mutations do not change the model. `get_feature_names_out`
   returns `pca0`, `pca1`, … and validates an optional input-name list's length.
-- `get_params` returns `PCAParams`; `set_params` accepts that record or named
-  partial updates. Its `copy_input` field represents the constructor's `copy`
-  parameter because the record's native `copy()` operation uses that name.
-  Optional update wrappers distinguish omission from clearing a setting.
-  `clone` copies configuration into an unfitted estimator.
+- `get_params` returns `PCAParams`. The constructor and named `set_params` use
+  the `copy` keyword. Read the flag as `copy_input` on either the estimator
+  or its parameters. Mojo reserves `copy()` on these types for owned copies.
+  A fitted PCA copy owns its learned arrays. `clone` copies configuration
+  into an unfitted estimator. Optional update wrappers distinguish omission
+  from clearing a setting.
 
 `copy=False` requires `fit_inplace` or `fit_transform_inplace`, which accept a
 mutable input. The ordinary fit methods reject it rather than mutating an

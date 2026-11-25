@@ -112,8 +112,16 @@ are declared `raises` and have no captured state. Preprocessors return
 receives the decoded document and replaces all other analysis steps.
 `build_preprocessor()`, `build_tokenizer()` and `build_analyzer()` return
 callable configuration snapshots. `get_stop_words()` returns a set, empty
-by default. Custom regex patterns and built-in accent stripping raise.
-`strip_tags(String)` is available independently.
+by default. Custom regex patterns raise.
+
+`strip_accents="ascii"` keeps the ASCII characters after Unicode 16.0 NFKD
+decomposition. `strip_accents="unicode"` keeps characters whose canonical
+combining class is zero after decomposition. Both modes run after lowercasing
+and before tokenization. Custom preprocessors and custom analyzers replace
+the built-in preprocessing. For a custom accent function, use a typed
+`preprocessor` and include any lowercasing it needs. The
+`strip_accents_ascii(String)`, `strip_accents_unicode(String)`, and
+`strip_tags(String)` functions are available independently.
 
 `min_df` and `max_df` take `Int` document counts or `Float64` document
 proportions. `max_features` enforces the feature limit after document-frequency
@@ -152,14 +160,17 @@ python families/feature_extraction/algorithms/text/tests/count_parity.py
 
 The comparator executes the pinned scikit-learn vectorizer and tokenizer method
 bodies and compares dense counts, feature names, analyzer output and inverse
-transforms exactly. The family contract test `tests/test_count_vectorizer.mojo`
-checks refits, typed callbacks, invalid parameters, byte decoding, a strided
-inverse transform and native TF-IDF composition.
+transforms exactly. It also checks both accent helpers across all Unicode
+scalar values and mixed combining sequences. The family contract test
+`tests/test_count_vectorizer.mojo` checks refits, typed callbacks, invalid
+parameters, byte decoding, a strided inverse transform and native TF-IDF
+composition.
 
 The generated Unicode tables can be rebuilt with the locked Python from
 `algorithms/text/tools/generate_unicode.py`. They derive from [Unicode
 16.0.0](https://www.unicode.org/versions/Unicode16.0.0/) as exposed by CPython
-3.14.7 and carry the accompanying Unicode license.
+3.14.7 and carry the accompanying Unicode license. Hangul syllables use the
+arithmetic decomposition in the [Unicode 16.0 core specification §3.12.2](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G24646).
 
 ## TF-IDF from documents
 

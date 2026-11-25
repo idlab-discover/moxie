@@ -9,8 +9,8 @@ image geometry, analyzer and hasher traits, and the English stop-word tuple.
 
 Sparse inputs, sparse graph output, CSR/CSC/COO construction and sparse
 DictVectorizer output remain deferred. The default sparse settings raise;
-callers must explicitly request dense behavior. `FeatureHasher`,
-`HashingVectorizer` remains a raising declaration. Built-in accent stripping remains unfinished.
+callers must explicitly request dense behavior. `FeatureHasher` and
+`HashingVectorizer` remain raising declarations.
 
 Complex64/complex128 and longdouble/clongdouble dictionary input/output remain
 unfinished dense requirements. The available NDArray and DType contracts do not

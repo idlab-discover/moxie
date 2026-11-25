@@ -267,7 +267,7 @@ trustworthiness and dense exchange helpers. Other manifold algorithms remain
 explicit unsupported declarations. The standalone checkout is not a build dependency.
 
 [Feature extraction](../families/feature_extraction/README.md) is owned by Moxie,
-including dense dictionary and count vectorization, TF-IDF weighting, image
-patches and dense graphs. TF-IDF vectorization, hashing, accent stripping and
-complex or extended dictionary dtypes remain unfinished. Sparse output is
+including dense dictionary and text vectorization, TF-IDF weighting, Unicode
+accent stripping, image patches and dense graphs. Hashing and complex or
+extended dictionary dtypes remain unfinished. Sparse output is
 deferred. The standalone checkout is not a build dependency.

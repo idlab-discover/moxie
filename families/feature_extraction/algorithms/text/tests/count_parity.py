@@ -3,6 +3,7 @@
 import json
 import re
 import subprocess
+import unicodedata
 import warnings
 
 import numpy as np
@@ -12,13 +13,22 @@ from parity import BUILD, MOXIE, REFERENCE, REVISION, compiler_command, pinned_d
 
 
 HEADER = """from std.testing import assert_equal
-from moxie.feature_extraction.text import CountVectorizer, strip_tags
+from moxie.feature_extraction.text import CountVectorizer, strip_accents_ascii, strip_accents_unicode, strip_tags
 from numojo import NDArray, Shape
 
 def check[dtype: DType](actual: NDArray[dtype], shape: Shape, expected: List[Int]) raises:
     assert_equal(actual.shape, shape)
     for i in range(len(expected)):
         assert_equal(actual.unsafe_get(i), Int64(expected[i]).cast[dtype]())
+
+def check_bytes(name: String, actual: String, expected: String) raises:
+    var actual_bytes = actual.as_bytes()
+    var expected_bytes = expected.as_bytes()
+    if len(actual_bytes) != len(expected_bytes):
+        raise Error(String(name, " output length differs from sklearn"))
+    for i in range(len(expected_bytes)):
+        if actual_bytes[i] != expected_bytes[i]:
+            raise Error(String(name, " differs from sklearn at byte ", i))
 """
 
 
@@ -30,7 +40,8 @@ def reference_text():
     return pinned_definitions(
         path,
         {"CountVectorizer", "_VectorizerMixin", "_preprocess", "_analyze", "_check_stop_list",
-         "_document_frequency", "_make_int_array", "strip_tags"},
+         "_document_frequency", "_make_int_array", "strip_accents_ascii",
+         "strip_accents_unicode", "strip_tags"},
         vars(sklearn_text).copy(),
     )
 
@@ -126,6 +137,33 @@ def unicode_case(reference):
     ])
 
 
+def accent_case(definitions):
+    assert unicodedata.unidata_version == "16.0.0"
+    # Distinguish adjacent results, including empty mappings. Check mixed
+    # sequences separately to exercise canonical ordering across code points.
+    scalars = "|".join(chr(cp) for cp in range(0x110000) if not 0xD800 <= cp <= 0xDFFF)
+    sequences = "a\u0308\u0323|\u0301\u0323|ď\u0327|ﬁancé|ﷺ|한글 ㉮|ा️"
+    text = scalars + "|" + sequences
+    fixture = BUILD / "accent-input.txt"
+    fixture.write_bytes(text.encode())
+    forms = [
+        "def accent_stripping() raises:",
+        f'    var input = open({literal(str(fixture))}, "r").read()',
+        f"    assert_equal(input.byte_length(), {fixture.stat().st_size})",
+    ]
+    for mode in ("ascii", "unicode"):
+        name = f"strip_accents_{mode}"
+        expected = BUILD / f"accent-{mode}.txt"
+        expected.write_bytes(definitions[name](text).encode())
+        forms.extend([
+            f'    var {mode}_expected = open({literal(str(expected))}, "r").read()',
+            f"    assert_equal({mode}_expected.byte_length(), {expected.stat().st_size})",
+            f'    check_bytes("{name}", {name}(input), {mode}_expected)',
+            f'    assert_equal({name}(""), "")',
+        ])
+    return "\n".join(forms)
+
+
 def main():
     definitions = reference_text()
     reference = definitions["CountVectorizer"]
@@ -150,6 +188,14 @@ def main():
                 len(cases), reference, char_train, char_query, inspect=char_train + char_query,
                 analyzer=analyzer, ngram_range=ngrams,
             ))
+    accent_train = ["CAFÉ cafe\u0301 ÉTÉ", "ﬂour ① 한글 عربي", "o\u0308\u0304 Café"]
+    accent_query = ["café ＦＬＯＵＲ", "한글 o\u0308"]
+    for mode in ("ascii", "unicode"):
+        for analyzer in ("word", "char", "char_wb"):
+            cases.append(mojo_case(
+                len(cases), reference, accent_train, accent_query, inspect=accent_query,
+                strip_accents=mode, analyzer=analyzer, ngram_range=(1, 2),
+            ))
     for binary in (False, True):
         cases.append(mojo_case(
             len(cases), reference,
@@ -168,6 +214,7 @@ def main():
     tags = ["a<a>é</a>ß", "<> <<x> <a", "<a\nλ>text", "α>", "<\nab> b <x<<>"]
     extra = [
         unicode_case(reference),
+        accent_case(definitions),
         "def tags() raises:\n" + "\n".join(
             f"    assert_equal(strip_tags({literal(s)}), {literal(definitions['strip_tags'](s))})"
             for s in tags
@@ -179,7 +226,8 @@ def main():
         f'    print("count differential case {i}")\n    case_{i}()' for i in range(len(cases))
     )
     source.write_text("\n\n".join(
-        [HEADER, *cases, *extra, f"def main() raises:\n{calls}\n    unicode_edges()\n    tags()\n"]
+        [HEADER, *cases, *extra,
+         f"def main() raises:\n{calls}\n    unicode_edges()\n    accent_stripping()\n    tags()\n"]
     ), encoding="utf-8")
     subprocess.run(compiler_command([
         "mojo", "build", "-O3", "--fp-mode=contract=off", "-I", BUILD / "deps",
@@ -190,8 +238,8 @@ def main():
         print(result.stdout, end="")
         print(result.stderr, end="")
         result.check_returncode()
-    print(f"PASS: {len(cases)} dense CountVectorizer differential cases and Unicode/tag fixtures "
-          f"against sklearn {REVISION}")
+    print(f"PASS: {len(cases)} dense CountVectorizer differential cases, Unicode/tag fixtures "
+          f"and both accent helpers over all Unicode scalar values against sklearn {REVISION}")
 
 
 if __name__ == "__main__":

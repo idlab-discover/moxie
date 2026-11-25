@@ -87,6 +87,8 @@ def main():
         {"analyzer": "char", "ngram_range": (2, 3), "lowercase": False},
         {"analyzer": "char_wb", "ngram_range": (2, 3), "min_df": 2},
         {"vocabulary": ["tea", "café", "absent"], "smooth_idf": False},
+        {"strip_accents": "ascii", "lowercase": False},
+        {"strip_accents": "unicode", "analyzer": "char_wb", "ngram_range": (1, 2)},
     ])
     cases = [mojo_case(i, reference, train, query, **params) for i, params in enumerate(settings)]
     calls = "\n".join(f"    case_{i}()" for i in range(len(cases)))

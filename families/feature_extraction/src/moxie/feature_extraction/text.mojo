@@ -6,7 +6,14 @@ from moxie.feature_extraction._count_vectorizer import (
     CountVectorizer, CountVectorizerParams, DocumentFrequency, TextAnalysis, TextStopWords, TextVocabulary,
 )
 from moxie.feature_extraction._text_analysis import (
-    DocumentAnalyzer, DocumentPreprocessor, DocumentTokenizer, TextPreprocessor, TextTokenizer, strip_tags,
+    DocumentAnalyzer,
+    DocumentPreprocessor,
+    DocumentTokenizer,
+    TextPreprocessor,
+    TextTokenizer,
+    strip_accents_ascii,
+    strip_accents_unicode,
+    strip_tags,
 )
 from moxie.feature_extraction._tfidf import TfidfTransformer, TfidfTransformerParams
 from moxie.feature_extraction._tfidf_vectorizer import TfidfVectorizer, TfidfVectorizerParams
@@ -102,13 +109,5 @@ struct HashingVectorizer(Movable):
     def transform(mut self, X: Some[Movable]) raises -> APIValue:
         "Scikit-learn signature: transform(self, X)."
         raise Error("NotImplementedError: HashingVectorizer.transform is an API scaffold")
-
-def strip_accents_ascii(s: Some[Movable]) raises -> APIValue:
-    "Scikit-learn signature: strip_accents_ascii(s)."
-    raise Error("NotImplementedError: strip_accents_ascii is an API scaffold")
-
-def strip_accents_unicode(s: Some[Movable]) raises -> APIValue:
-    "Scikit-learn signature: strip_accents_unicode(s)."
-    raise Error("NotImplementedError: strip_accents_unicode is an API scaffold")
 
 from ._stop_words import ENGLISH_STOP_WORDS

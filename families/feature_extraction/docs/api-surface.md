@@ -10,12 +10,12 @@ learned state, array types and fluent fit/set_params behavior.
 `FeatureExtractor` remains the shared optional transformation contract.
 `text.CountVectorizer` produces dense counts from documents and
 `text.TfidfTransformer` weights dense count matrices. `text.TfidfVectorizer`
-combines those operations. `text.strip_tags`
-strips simple HTML/XML tags. See the [text API](../algorithms/text/docs/api.md)
+combines those operations. `text.strip_accents_ascii` and
+`text.strip_accents_unicode` apply NFKD-based accent stripping.
+`text.strip_tags` strips simple HTML/XML tags. See the [text API](../algorithms/text/docs/api.md)
 for options, dtype rules and native callable signatures.
-`FeatureHasher`, `HashingVectorizer` and the accent-stripping
-helpers remain explicit raising declarations. `text.ENGLISH_STOP_WORDS`
-is an immutable native tuple.
+`FeatureHasher` and `HashingVectorizer` remain explicit raising declarations.
+`text.ENGLISH_STOP_WORDS` is an immutable native tuple.
 
 The focused build precompiles the assembled namespace. Native tests verify
 implemented behavior and rejected deferred constructors; numerical parity covers

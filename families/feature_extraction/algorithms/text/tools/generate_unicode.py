@@ -49,15 +49,37 @@ def lowercase():
     ]
 
 
+def accent_mappings():
+    offsets = []
+    characters = []
+    for cp in range(128, LIMIT):
+        # The runtime decomposes Hangul syllables arithmetically.
+        if 0xAC00 <= cp <= 0xD7A3:
+            continue
+        char = chr(cp)
+        stripped = [
+            ord(c) for c in unicodedata.normalize("NFKD", char)
+            if unicodedata.combining(c) == 0
+        ]
+        if stripped != [cp]:
+            offsets.extend((cp, len(characters)))
+            characters.extend(stripped)
+    offsets.extend((LIMIT, len(characters)))
+    return offsets, characters
+
+
 def main():
     assert unicodedata.unidata_version == VERSION
     context = [sigma_context(cp) for cp in range(LIMIT)]
+    accent_offsets, accent_characters = accent_mappings()
     tables = {
         "WORD_RANGES": ranges(lambda cp: chr(cp).isalnum() or cp == 0x5F),
         "WHITESPACE_RANGES": ranges(lambda cp: chr(cp).isspace()),
         "CASED_RANGES": ranges(lambda cp: context[cp] == "cased"),
         "CASE_IGNORABLE_RANGES": ranges(lambda cp: context[cp] == "ignorable"),
         "LOWERCASE_PAIRS": lowercase(),
+        "ACCENT_OFFSETS": accent_offsets,
+        "ACCENT_CHARACTERS": accent_characters,
     }
     target = Path(__file__).resolve().parents[1] / "src/moxie/feature_extraction/_unicode_data.mojo"
     target.write_text(

@@ -102,6 +102,37 @@ def test_typed_analysis_hooks() raises:
     assert_equal(custom.build_analyzer()("Remove retain"), ["retain"])
 
 
+def test_accent_preprocessing() raises:
+    var docs: List[String] = ["CAFÉ Café ßß", "cafe"]
+    var model = CountVectorizer(strip_accents="ascii")
+    var counts = model.fit_transform(docs)
+    assert_equal(model.get_feature_names_out(), ["cafe"])
+    assert_equal(counts.unsafe_get(0), 2)
+    var snapshot = model.build_preprocessor()
+    assert_equal(snapshot("ᴬÉ"), "Ae")
+
+    var params = model.get_params()
+    params.strip_accents = String("unicode")
+    params.lowercase = False
+    _ = model.set_params(params).fit(docs)
+    assert_equal(model.get_feature_names_out(), ["CAFE", "Cafe", "cafe", "ßß"])
+    var cloned = clone(model)
+    assert_false(cloned.__sklearn_is_fitted__())
+    assert_equal(cloned.build_preprocessor()("CAFÉ"), "CAFE")
+    assert_equal(snapshot("CAFÉ"), "cafe")
+
+    with assert_raises(contains="ValueError: strip_accents"):
+        _ = CountVectorizer(strip_accents="unknown").build_preprocessor()
+    var custom = CountVectorizer(strip_accents="ascii", preprocessor=uppercase_only)
+    assert_equal(custom.build_preprocessor()("É"), "PRE,É")
+    var analyzer = CountVectorizer(strip_accents="ascii", analyzer=split_on_comma)
+    assert_equal(analyzer.build_analyzer()("CAFÉ,ßß"), ["CAFÉ", "ßß"])
+    var invalid = CountVectorizer(strip_accents="unknown", preprocessor=uppercase_only)
+    assert_equal(invalid.build_preprocessor()("É"), "PRE,É")
+    with assert_raises(contains="ValueError: strip_accents"):
+        _ = invalid.fit(docs)
+
+
 def test_validation_and_decode() raises:
     var docs: List[String] = ["one two", "one three"]
     var model = CountVectorizer(token_pattern="[a-z]+")
@@ -150,6 +181,7 @@ def main() raises:
     test_configuration_and_lifecycle()
     test_fixed_vocabulary_and_strided_inverse()
     test_typed_analysis_hooks()
+    test_accent_preprocessing()
     test_validation_and_decode()
     test_lexical_ties()
     test_count_tfidf_pipeline()

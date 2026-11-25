@@ -6,7 +6,13 @@ from std.collections import Set
 
 from moxie.feature_extraction._stop_words import ENGLISH_STOP_WORDS
 from moxie.feature_extraction._unicode_data import (
-    CASED_RANGES, CASE_IGNORABLE_RANGES, LOWERCASE_PAIRS, WHITESPACE_RANGES, WORD_RANGES,
+    ACCENT_CHARACTERS,
+    ACCENT_OFFSETS,
+    CASED_RANGES,
+    CASE_IGNORABLE_RANGES,
+    LOWERCASE_PAIRS,
+    WHITESPACE_RANGES,
+    WORD_RANGES,
 )
 
 comptime DEFAULT_TOKEN_PATTERN = "(?u)\\b\\w\\w+\\b"
@@ -70,6 +76,57 @@ def _append_codepoint(mut bytes: List[UInt8], cp: Int):
     bytes.append(UInt8(prefix | (cp >> (6 * (width - 1)))))
     for shift in range(6 * (width - 2), -1, -6):
         bytes.append(UInt8(0x80 | ((cp >> shift) & 0x3F)))
+
+
+def _append_hangul_jamo(mut output: List[UInt8], syllable: Int):
+    # Unicode 16.0, section 3.12.2. There are 21 vowels and 28 tail slots.
+    var tail = syllable % 28
+    _append_codepoint(output, 0x1100 + syllable // (21 * 28))
+    _append_codepoint(output, 0x1161 + (syllable // 28) % 21)
+    if tail != 0:
+        _append_codepoint(output, 0x11A7 + tail)
+
+
+def _strip_accents[ascii_only: Bool](s: String) raises -> String:
+    var output = List[UInt8](capacity=s.byte_length())
+    var offsets = ACCENT_OFFSETS.as_bytes()
+    var characters = ACCENT_CHARACTERS.as_bytes()
+    for scalar in s.codepoints():
+        var cp = Int(scalar)
+        if cp < 128:
+            output.append(UInt8(cp))
+            continue
+        if 0xAC00 <= cp <= 0xD7A3:
+            comptime if not ascii_only:
+                _append_hangul_jamo(output, cp - 0xAC00)
+            continue
+        var index = 2 * _find_pair(ACCENT_OFFSETS, cp)
+        if index < 0 or _read_codepoint(offsets, index) != cp:
+            comptime if not ascii_only:
+                _append_codepoint(output, cp)
+            continue
+        var start = _read_codepoint(offsets, index + 1)
+        var end = _read_codepoint(offsets, index + 3)
+        # Canonical ordering only moves nonzero combining classes, which
+        # neither output retains. The table already omits those characters.
+        for i in range(start, end):
+            var character = _read_codepoint(characters, i)
+            comptime if ascii_only:
+                if character < 128:
+                    output.append(UInt8(character))
+            else:
+                _append_codepoint(output, character)
+    return String(from_utf8=Span(output))
+
+
+def strip_accents_ascii(s: String) raises -> String:
+    """Return the ASCII characters of the Unicode 16.0 NFKD decomposition."""
+    return _strip_accents[True](s)
+
+
+def strip_accents_unicode(s: String) raises -> String:
+    """Return the Unicode 16.0 NFKD decomposition without nonzero combining classes."""
+    return _strip_accents[False](s)
 
 
 def _lowercase(document: String) raises -> String:
@@ -215,17 +272,27 @@ def strip_tags(s: String) -> String:
     return output^
 
 
-@fieldwise_init
 struct DocumentPreprocessor(Copyable, Movable):
     var lowercase: Bool
     var callback: Optional[TextPreprocessor]
+    var _accent_function: Optional[TextPreprocessor]
 
-    def __call__(self, document: String) raises -> String:
+    def __init__(
+        out self, lowercase: Bool, callback: Optional[TextPreprocessor],
+        accent_function: Optional[TextPreprocessor] = None,
+    ):
+        self.lowercase = lowercase
+        self.callback = callback
+        self._accent_function = accent_function
+
+    def __call__(self, var document: String) raises -> String:
         if self.callback:
-            return self.callback.value()(document)
+            return self.callback.value()(document^)
         if self.lowercase:
-            return _lowercase(document)
-        return document
+            document = _lowercase(document)
+        if self._accent_function:
+            return self._accent_function.value()(document^)
+        return document^
 
 
 @fieldwise_init

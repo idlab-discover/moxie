@@ -13,6 +13,7 @@ from moxie.feature_extraction._base import FeatureExtractor
 from moxie.feature_extraction._text_analysis import (
     DEFAULT_TOKEN_PATTERN, DocumentAnalyzer, DocumentPreprocessor, DocumentTokenizer,
     TextPreprocessor, TextTokenizer, decode_bytes, decode_document, stop_word_set,
+    strip_accents_ascii, strip_accents_unicode,
 )
 from moxie.feature_extraction._text_contracts import check_ngram_range
 
@@ -20,6 +21,17 @@ comptime DocumentFrequency = Variant[Int, Float64]
 comptime TextStopWords = Variant[NoneType, String, List[String]]
 comptime TextVocabulary = Variant[NoneType, List[String], Dict[String, Int]]
 comptime TextAnalysis = Variant[String, TextTokenizer]
+
+
+def _accent_function(option: Optional[String]) raises -> Optional[TextPreprocessor]:
+    if not option:
+        return None
+    var mode = option.value()
+    if mode == "ascii":
+        return strip_accents_ascii
+    if mode == "unicode":
+        return strip_accents_unicode
+    raise Error("ValueError: strip_accents must be ascii, unicode or None")
 
 
 struct CountVectorizerParams(Copyable, Movable):
@@ -236,9 +248,12 @@ struct CountVectorizer[
         return decode_bytes(doc, self._params.encoding, self._params.decode_error)
 
     def build_preprocessor(self) raises -> DocumentPreprocessor:
-        if not self._params.preprocessor and self._params.strip_accents:
-            raise Error("NotImplementedError: CountVectorizer built-in accent stripping is unavailable")
-        return DocumentPreprocessor(self._params.lowercase, self._params.preprocessor)
+        ref params = self._params
+        if params.preprocessor:
+            return DocumentPreprocessor(params.lowercase, params.preprocessor)
+        return DocumentPreprocessor(
+            params.lowercase, None, _accent_function(params.strip_accents)
+        )
 
     def build_tokenizer(self) raises -> DocumentTokenizer:
         if not self._params.tokenizer:
@@ -333,6 +348,9 @@ struct CountVectorizer[
         _ = _df_limit(self._params.max_df, len(raw_documents))
         if self._params.max_features.or_else(1) < 1:
             raise Error("ValueError: max_features must be positive")
+        # Fit checks the option even when a callback replaces preprocessing.
+        if self._params.preprocessor or self._params.analyzer.isa[TextTokenizer]():
+            _ = _accent_function(self._params.strip_accents)
         check_ngram_range(self._params.ngram_range[0], self._params.ngram_range[1])
         var analyzer = self.build_analyzer()
         if not self._params.vocabulary.isa[NoneType]():

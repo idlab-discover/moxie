@@ -24,3 +24,4 @@ from ._tree_importance import DecisionTreeClassifierImportance
 
 from ._linear_svc_importance import LinearSVCImportance
 from ._logistic_importance import LogisticRegressionImportance
+from ._ridge_classifier_importance import RidgeClassifierImportance

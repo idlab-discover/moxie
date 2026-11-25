@@ -80,6 +80,43 @@ against pinned scikit-learn. Discrete comparisons are exact, including Int64
 labels above 2**53. The respective tolerances 1e-5 and 1e-6 account for
 Float32 rounding and differences in solver termination.
 
+## Ridge classifier
+
+`RidgeClassifierImportance(RidgeClassifier(...))` adapts the native dense
+Ridge classifier for `SelectFromModel`, `RFE` and `RFECV`. The constructor
+infers the feature and label dtypes from the supplied model.
+
+```mojo
+from moxie.feature_selection import DenseSupervisedCV, RFECV, RidgeClassifierImportance, SequentialCV
+from moxie.linear_model import RidgeClassifier
+
+comptime Estimator = RidgeClassifierImportance[]
+var estimator = RidgeClassifierImportance(RidgeClassifier(alpha=0.5))
+var selector = RFECV[DenseSupervisedCV[Estimator]](estimator^, cv=SequentialCV(3))
+# X is a Float64 feature matrix and y is an Int64 label array.
+_ = selector.fit(X, y)
+var classes = selector.classes_()
+var decision = selector.decision_function(X)
+```
+
+The adapter uses the model's numeric label arrays, including multilabel
+indicators. It forwards sample weights in the feature dtype and returns
+owned classes and coefficients. The `"auto"` and `"coef_"` getters both use
+ridge coefficients, with the mean as the default SelectFromModel threshold.
+Binary coefficients are a vector. Multiclass and multilabel coefficients
+are matrices with one row per class or output. RFE and RFECV forward
+predictions, accuracy and decision values after selecting columns.
+`DenseSupervisedCV` accepts Int64, Float32 and Float64 numeric label arrays.
+
+After live assembly, run
+`OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/feature_selection/parity_ridge_classifier.py`.
+Fixtures compare binary Float32, multiclass Float64 and multilabel Float64
+Cholesky fits, including weighted SelectFromModel and RFE. RFECV uses
+stratified folds for single-label targets and ordinary folds for multilabel
+indicators. Discrete comparisons are exact, including Int64 labels above
+2**53. Tolerances of 3e-4 for Float32 and 1e-8 for Float64 match the Ridge
+owner's direct-solver comparisons.
+
 ## Decision trees
 
 `DecisionTreeClassifierImportance` adapts the sibling family's production

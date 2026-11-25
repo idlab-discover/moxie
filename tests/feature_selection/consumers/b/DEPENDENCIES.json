@@ -155,13 +155,16 @@
             "mutual_info_classif": "moxie.feature_selection._mutual_info",
             "mutual_info_regression": "moxie.feature_selection._mutual_info",
             "r_regression": "moxie.feature_selection._univariate_selection",
+            "RidgeClassifierImportance": "moxie.feature_selection._ridge_classifier_importance",
             "LogisticRegressionImportance": "moxie.feature_selection._logistic_importance"
           },
           "moxie.linear_model": {
             "LinearRegression": "moxie.linear_model._least_squares",
             "LinearRegressionParams": "moxie.linear_model._least_squares",
             "LogisticRegression": "moxie.linear_model._logistic",
-            "LogisticRegressionParams": "moxie.linear_model._logistic"
+            "LogisticRegressionParams": "moxie.linear_model._logistic",
+            "RidgeClassifier": "moxie.linear_model._ridge",
+            "RidgeClassifierParams": "moxie.linear_model._ridge"
           }
         },
         "schema": 1
@@ -270,6 +273,9 @@
         "moxie._feature_metadata": {
           "file": "src/moxie/_feature_metadata.mojo"
         },
+        "moxie.feature_selection._ridge_classifier_importance": {
+          "file": "src/moxie/feature_selection/_ridge_classifier_importance.mojo"
+        },
         "moxie.feature_selection._logistic_importance": {
           "file": "src/moxie/feature_selection/_logistic_importance.mojo"
         },
@@ -284,6 +290,9 @@
         },
         "moxie.linear_model._logistic_solver": {
           "file": "src/moxie/linear_model/_logistic_solver.mojo"
+        },
+        "moxie.linear_model._ridge": {
+          "file": "src/moxie/linear_model/_ridge.mojo"
         },
         "moxie.linear_model._ridge_labels": {
           "file": "src/moxie/linear_model/_ridge_labels.mojo"

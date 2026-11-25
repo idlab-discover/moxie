@@ -14,6 +14,7 @@ from moxie.base import (
     clone,
 )
 from moxie.utils.validation import check_is_fitted
+from moxie._feature_metadata import InputFeatureCount
 from moxie.compose._base import TransformedTargetRegressorAPI
 from moxie.compose._table import ColumnTable
 from moxie.linear_model import LinearRegression
@@ -463,6 +464,7 @@ struct TransformedTargetRegressor[
 ](
     Copyable,
     TransformedTargetRegressorAPI,
+    InputFeatureCount where R.Input == NDArray[dtype],
     WeightedSupervisedEstimator where conforms_to(R, WeightedSupervisedEstimator),
 ):
     """Meta-estimator to regress on a transformed target.
@@ -770,6 +772,13 @@ struct TransformedTargetRegressor[
         return _r2_score(y, self.predict(X), sample_weight, log)
 
     # -- inference --------------------------------------------------------
+
+    def get_n_features_in(self) raises -> Int where Self.Input == NDArray[Self.dtype]:
+        """Expose the fitted dense input width to native meta-estimators."""
+        check_is_fitted(self)
+        if self.n_features_in_:
+            return self.n_features_in_.value()
+        raise Error("AttributeError: the regressor input has no fitted feature count")
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         """`inverse_transform(regressor_.predict(X))`, restoring a 1-D training target's rank."""

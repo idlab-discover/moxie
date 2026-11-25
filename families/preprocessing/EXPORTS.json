@@ -26,6 +26,7 @@
       "SplineTransformer": "moxie.preprocessing._polynomial",
       "StandardScaler": "moxie.preprocessing._scalers",
       "TargetEncoder": "moxie.preprocessing._target_encoder",
+      "TargetEncoderSplits": "moxie.preprocessing._target_encoder",
       "add_dummy_feature": "moxie.preprocessing._simple",
       "binarize": "moxie.preprocessing._simple",
       "label_binarize": "moxie.preprocessing._label",

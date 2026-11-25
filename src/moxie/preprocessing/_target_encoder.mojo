@@ -10,7 +10,8 @@ OneHot/Ordinal encoders, through the family `_vocabulary` engine); the target
 is a label container of a `LabelKind` (`NumericLabels[dtype]` or
 `StringLabels`). Encodings follow `_target_encoder_fast.pyx` (m-estimate and
 empirical-Bayes "auto" smoothing). `fit_transform` cross-fits on folds
-from an integer fold count or native model_selection splitters. Target means
+from an integer fold count, native model_selection splitters or explicit
+train/test pairs. Target means
 and variances use NumPy's
 pairwise summation order and dtype, so encodings match sklearn exactly.
 
@@ -18,6 +19,7 @@ Memory: fitted state is O(total categories x classes). A fit or transform
 holds the result, one rows-long Int64 code vector, the numeric target (one
 Float64 or Int per row), a fold vector and one training-row list; there is no
 n x p code or mask table and no n x classes indicator matrix.
+Explicit splits also retain their supplied index lists.
 See docs/api/encoders.md.
 """
 from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
@@ -27,6 +29,7 @@ from numojo import NDArray, Shape, Item
 from moxie._categorical import CategoricalColumn
 from moxie._random import RandomState, check_random_state
 from moxie.base import FitTransformer
+from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
 from moxie.model_selection._split import KFold, StratifiedKFold
 from moxie.preprocessing._base import TargetPreprocessor
 from moxie.preprocessing._common import (
@@ -287,19 +290,71 @@ def _fit_encoding(
     return encoding^
 
 
-def _training_rows(folds: List[Int], fold: Int, mut train: List[Int]):
-    train.clear()
-    for r in range(len(folds)):
-        if folds[r] != fold:
-            train.append(r)
-
-
 # ---------------------------------------------------------------------------
 # TargetEncoder
 
 
-comptime TargetEncoderCV = Variant[Int, KFold, StratifiedKFold]
-comptime _CVUpdate = Variant[type_of(None), Int, KFold, StratifiedKFold]
+def _split_rows(indices: IndexArray) raises -> List[Int]:
+    if indices.ndim != 1:
+        raise Error("ValueError: TargetEncoder split indices must be rank one")
+    var rows = List[Int](capacity=indices.size)
+    for i in range(indices.size):
+        rows.append(Int(indices[Item(i)]))
+    return rows^
+
+
+struct _ExplicitSplit(Copyable):
+    var train: List[Int]
+    var test: List[Int]
+
+    def __init__(out self, split: IndexSplit) raises:
+        self.train = _split_rows(split.train)
+        self.test = _split_rows(split.test)
+
+
+struct TargetEncoderSplits(Copyable, Sized):
+    """A reusable snapshot of explicit train/test index pairs for TargetEncoder."""
+    var _pairs: List[_ExplicitSplit]
+
+    def __init__(out self, splits: List[IndexSplit]) raises:
+        self._pairs = List[_ExplicitSplit](capacity=len(splits))
+        for i in range(len(splits)):
+            self._pairs.append(_ExplicitSplit(splits[i]))
+
+    def __init__[C: SplitCursor & Deinitable](out self, var cursor: C) raises:
+        """Consume a native splitter cursor and preserve its split and row order."""
+        self._pairs = List[_ExplicitSplit]()
+        while True:
+            var next = cursor.next()
+            if not next:
+                break
+            self._pairs.append(_ExplicitSplit(next.take()))
+
+    def __len__(self) -> Int:
+        return len(self._pairs)
+
+    def _test_folds(self, n: Int) raises -> List[Int]:
+        comptime coverage_error = "ValueError: Validation indices from `cv` must cover each sample index exactly once"
+        var folds = List[Int](length=n, fill=-1)
+        for f in range(len(self)):
+            ref split = self._pairs[f]
+            for row in split.train:
+                if row < 0 or row >= n:
+                    raise Error("ValueError: TargetEncoder training index out of bounds")
+            for row in split.test:
+                if row < 0 or row >= n:
+                    raise Error("ValueError: TargetEncoder validation index out of bounds")
+                if folds[row] != -1:
+                    raise Error(coverage_error)
+                folds[row] = f
+        for fold in folds:
+            if fold == -1:
+                raise Error(coverage_error)
+        return folds^
+
+
+comptime TargetEncoderCV = Variant[Int, KFold, StratifiedKFold, TargetEncoderSplits]
+comptime _CVUpdate = Variant[type_of(None), Int, KFold, StratifiedKFold, TargetEncoderSplits]
 
 
 def _test_fold_assignments(var cursor: KFold.Splits, n: Int) raises -> List[Int]:
@@ -418,6 +473,8 @@ struct TargetEncoder[
             self.cv = TargetEncoderCV(cv[KFold].copy())
         elif cv.isa[StratifiedKFold]():
             self.cv = TargetEncoderCV(cv[StratifiedKFold].copy())
+        elif cv.isa[TargetEncoderSplits]():
+            self.cv = TargetEncoderCV(cv[TargetEncoderSplits].copy())
         if shuffle:
             self.shuffle = shuffle.value()
         if random_state:
@@ -443,8 +500,8 @@ struct TargetEncoder[
             raise Error("ValueError: The 'target_type' parameter of TargetEncoder must be a str among {'auto', 'binary', 'continuous', 'multiclass'}. Got '" + t + "' instead.")
         if self.smooth and (isnan(self.smooth.value()) or self.smooth.value() < 0):
             raise Error("ValueError: The 'smooth' parameter of TargetEncoder must be a str among {'auto'} or a float in the range [0.0, inf). Got " + String(self.smooth.value()) + " instead.")
-        if self._n_splits() < 2:
-            raise Error("ValueError: The 'cv' parameter of TargetEncoder must be an int in the range [2, inf), an object implementing 'split' and 'get_n_splits', an iterable or None. Got " + String(self._n_splits()) + " instead.")
+        if self.cv.isa[Int]() and self.cv[Int] < 2:
+            raise Error("ValueError: The 'cv' parameter of TargetEncoder must be an int in the range [2, inf), a supported splitter, or TargetEncoderSplits. Got " + String(self.cv[Int]) + " instead.")
         if self.random_state and (self.random_state.value() < 0 or self.random_state.value() > 4294967295):
             raise Error("ValueError: The 'random_state' parameter of TargetEncoder must be an int in the range [0, 4294967295], an instance of 'numpy.random.mtrand.RandomState' or None or a str among {'deprecated'}. Got " + String(self.random_state.value()) + " instead.")
 
@@ -550,10 +607,22 @@ struct TargetEncoder[
             return self.cv[KFold].n_splits
         if self.cv.isa[StratifiedKFold]():
             return self.cv[StratifiedKFold].n_splits
+        if self.cv.isa[TargetEncoderSplits]():
+            return len(self.cv[TargetEncoderSplits])
         return self.cv[Int]
 
     def _shuffle(self) -> Bool:
         return self.shuffle.value() if self.shuffle else True
+
+    def _training_rows(self, folds: List[Int], fold: Int, mut train: List[Int]):
+        train.clear()
+        if self.cv.isa[TargetEncoderSplits]():
+            for row in self.cv[TargetEncoderSplits]._pairs[fold].train:
+                train.append(row)
+            return
+        for row in range(len(folds)):
+            if folds[row] != fold:
+                train.append(row)
 
     def _cross_fit(self, X: Self.Input, target: _Target, folds: List[Int]) raises -> NDArray[DType.float64]:
         """sklearn fit_transform after check_cv: encodings fitted on each fold's training rows."""
@@ -566,7 +635,7 @@ struct TargetEncoder[
         var train = List[Int](capacity=n)
         var n_splits = self._n_splits()
         for f in range(n_splits):
-            _training_rows(folds, f, train)
+            self._training_rows(folds, f, train)
             var mean_row = List[Float64]()
             var variance_row = List[Float64]()
             for c in range(width):
@@ -581,7 +650,7 @@ struct TargetEncoder[
             var codes = self._core.encode(i, X[i], "ignore")
             var n_categories = self._core.vocabularies[i].size()
             for f in range(n_splits):
-                _training_rows(folds, f, train)
+                self._training_rows(folds, f, train)
                 for c in range(width):
                     var encoding = _fit_encoding(codes, n_categories, target, c, train, False, self.smooth, fold_means[f][c], fold_variances[f][c])
                     var column = i * width + c
@@ -599,6 +668,8 @@ struct TargetEncoder[
         return out^
 
     def _folds(self, y: Self.Y.Labels, n: Int) raises -> List[Int]:
+        if self.cv.isa[TargetEncoderSplits]():
+            return self.cv[TargetEncoderSplits]._test_folds(n)
         if self.cv.isa[KFold]():
             ref splitter = self.cv[KFold]
             var seed = splitter.random_state if splitter.shuffle else Optional[Int](0)
@@ -662,8 +733,9 @@ struct TargetEncoder[
     def fit_transform(mut self, X: Self.Input, y: Self.L) raises -> Self.Transformed:
         """Fit on all rows, then return the cross-fitted encoding of X.
 
-        Folds shuffle with `random_state` (an integer reseeds a fresh
-        RandomState; None draws from the process default stream).
+        With integer `cv`, folds shuffle with `random_state` (an integer
+        reseeds a fresh RandomState; None draws from the process default stream).
+        Explicit split pairs are reused in the supplied order.
         """
         ref labels = rebind[Self.Y.Labels](y)
         var target = self._fit(X, labels)

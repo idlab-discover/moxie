@@ -35,7 +35,7 @@ def expect(case, name, value, kind='array'):
 d.prelude('''
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import seed_global_random_state, RandomState
-from moxie.model_selection import KFold, StratifiedKFold
+from moxie.model_selection import IndexSplit, KFold, StratifiedKFold
 from moxie.preprocessing._vocabulary import CategoryKind, StringKind, StringNaNKind, NumericKind
 from moxie.preprocessing._label import LabelKind, StringLabels, NumericLabels
 from moxie.preprocessing._target_encoder import kfold_test_folds, stratified_kfold_test_folds
@@ -185,6 +185,9 @@ def native_args(kind, kw):
         elif k == 'cv' and isinstance(v, (KFold, StratifiedKFold)):
             shuffle = 'True' if v.shuffle else 'False'
             parts.append(f'cv={type(v).__name__}({v.n_splits}, shuffle={shuffle}, random_state={v.random_state})')
+        elif k == 'cv' and isinstance(v, list):
+            indices = ', '.join(f'IndexSplit({d.input(train)}, {d.input(test)})' for train, test in v)
+            parts.append(f'cv=TargetEncoderSplits([{indices}])')
         elif k == 'smooth':
             parts.append(f'smooth=Optional[Float64]({float(v)!r})')
         elif isinstance(v, str):
@@ -285,6 +288,17 @@ run_case('explicit_kfold', 's', y_cont, dict(cv=KFold(4, shuffle=True, random_st
 run_case('explicit_kfold_binary', 's', y_bin, dict(cv=KFold(4), shuffle=True, random_state=42))
 run_case('explicit_stratified', 's', y_multi_s, dict(cv=StratifiedKFold(4, shuffle=True, random_state=42)))
 run_case('explicit_stratified_global', 's', y_bin, dict(cv=StratifiedKFold(4, shuffle=True)), global_seed=42)
+test_parts = [np.arange(start, n, 3, dtype=np.int64)[::-1] for start in range(3)]
+custom_cv = [
+    (np.resize(test_parts[(i + 1) % 3][::2], 13), test)
+    for i, test in enumerate(test_parts)
+]
+run_case('explicit_pairs_cont', 's', y_cont, dict(cv=custom_cv, smooth=0.0))
+run_case('explicit_pairs_multi', 's', y_multi_s, dict(cv=custom_cv))
+run_case('explicit_pairs_unknown', 's', y_cont,
+         dict(cv=custom_cv, categories=[['red'], ['x'], ['a']]))
+run_case('explicit_pairs_single', 's', y_cont,
+         dict(cv=[(np.arange(0, n, 2, dtype=np.int64), np.arange(n, dtype=np.int64))]))
 # A caller-owned RandomState (sklearn: a RandomState instance) advances across calls.
 for tag, kind, y in [('rng_cont', 's', y_cont), ('rng_multi', 'f', y_multi_s)]:
     Xtr, _ = DATA[kind]
@@ -381,7 +395,18 @@ for name, (ctor, call, reference, needle) in errors.items():
     d.case(f'err_{name}', body)
     expect(f'err_{name}', 'error', needle, 'error')
 
-out = d.run(imports='from moxie.preprocessing import TargetEncoder')
+for tag, splits in [
+    ('overlap', [custom_cv[0], *custom_cv]),
+    ('missing', custom_cv[:-1]),
+]:
+    sk_raises(lambda: TargetEncoder(cv=splits).fit_transform(S, y_cont))
+    d.case(f'err_{tag}',
+           f'var X: List[CategoricalColumn[StringCategories]] = {columns("s", S)}\n'
+           f'var enc = TargetEncoder({native_args("s", dict(cv=splits))})\n'
+           f'_ = enc.fit_transform(X, {d.input(y_cont)})')
+    expect(f'err_{tag}', 'error', 'must cover each sample index exactly once', 'error')
+
+out = d.run(imports='from moxie.preprocessing import TargetEncoder, TargetEncoderSplits')
 
 for case, name, value, kind in checks:
     got = out.get(case, {})

@@ -5,7 +5,9 @@
       "assets": {},
       "exports": {
         "packages": {
-          "moxie.model_selection": {}
+          "moxie.model_selection": {
+            "IndexSplit": "moxie.model_selection._indices"
+          }
         },
         "schema": 1
       },
@@ -267,6 +269,7 @@
             "SplineTransformer": "moxie.preprocessing._polynomial",
             "StandardScaler": "moxie.preprocessing._scalers",
             "TargetEncoder": "moxie.preprocessing._target_encoder",
+            "TargetEncoderSplits": "moxie.preprocessing._target_encoder",
             "TargetPreprocessor": "moxie.preprocessing._base",
             "add_dummy_feature": "moxie.preprocessing._simple",
             "binarize": "moxie.preprocessing._simple",

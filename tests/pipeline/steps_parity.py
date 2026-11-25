@@ -5,9 +5,11 @@ from pathlib import Path
 import subprocess
 import sys
 
+from sklearn.base import clone
 from sklearn.dummy import DummyRegressor
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.utils.validation import check_is_fitted
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -29,6 +31,11 @@ def main():
     pipe = make_pipeline(StandardScaler(), DummyRegressor()).fit(X, y)
     assert pipe[0] is pipe[-2]
     assert pipe[1] is pipe[-1] is pipe.named_steps["dummyregressor"]
+    fresh = clone(pipe)
+    fresh.set_params(steps=[("standardscaler", fresh[0]), ("regression", fresh[1])])
+    renamed_names = list(fresh.named_steps)
+    fresh.steps[-1] = ("standardscaler", fresh[-1])
+    assert fresh.named_steps["standardscaler"] is fresh[-1]
     transformed = pipe[0].transform(X)
     nested = make_pipeline(StandardScaler(), pipe)
     scalers = make_pipeline(StandardScaler(), StandardScaler()).fit(X)
@@ -56,13 +63,23 @@ def main():
         [ROOT / "builds/tests/pipeline/test_pipeline_steps"], text=True, cwd=ROOT
     )
     actual = {}
-    assert f"slice_feature {prefix.get_feature_names_out()[0]}" in output.splitlines()
+    check_is_fitted(pipe.named_steps["dummyregressor"])
+    reference_names = {
+        "slice_feature": [prefix.get_feature_names_out()[0]],
+        "named_steps": [*pipe.named_steps, str(True)],
+        "renamed_steps": renamed_names,
+        "duplicate_steps": list(fresh.named_steps),
+    }
+    names = {}
     for line in output.splitlines():
         label, *values = line.split()
-        if label != "slice_feature":
+        if label in reference_names:
+            names[label] = values
+        else:
             actual[label] = [float(value) for value in values]
+    assert names == reference_names, (names, reference_names)
     assert actual == expected, (actual, expected)
-    print("PASS: pipeline lengths, slices and fitted outputs match exactly.")
+    print("PASS: pipeline names, lengths, slices and fitted outputs match exactly.")
 
 
 if __name__ == "__main__":

@@ -208,6 +208,10 @@ and works when both children have the same type. A missing name raises a
 `KeyError`. A known name with a mismatched type raises a `TypeError`.
 Lookup itself works before fit, just like positional access.
 
+`frozen.named_steps()` borrows the wrapper and exposes the same typed lookup,
+ordered keys, and membership checks as [a sequential pipeline](../pipeline/sequential.md).
+Keep the wrapper alive while using the view.
+
 ### Slicing a frozen pipeline
 
 Use `frozen.slice[stop=1]()` for the prefix, `frozen.slice[-1]()` for

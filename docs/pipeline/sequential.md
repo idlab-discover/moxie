@@ -62,8 +62,19 @@ known name with the wrong type raises a TypeError-style error. Both accessors
 borrow the stored child immutably, before or after fitting. The public child
 fields support mutation. `FrozenEstimator` follows the same
 [access contract](../frozen/api.md#access-to-pipeline-steps).
+
+`pipe.named_steps()` returns a read-only view of the immediate steps. Use
+`view.keys()` for an owned list of names in step order, `name in view` for
+membership, and `view.get[StepType](name)` to borrow a child. The explicit
+type replaces Python's heterogeneous Bunch values and attribute lookup.
+The pipeline must outlive the view. The view reads the current names and child
+state on each call, so it observes renaming and refitting of the source. As
+with sklearn, if direct field edits introduce a duplicate name, lookup returns
+the last matching step. Frozen pipelines expose the same view.
+
 The [step parity check](../../tests/pipeline/steps_parity.py) compares
-lengths, step selection, slices and fitted outputs with pinned scikit-learn.
+name order, step selection, lengths, slices and fitted outputs with pinned
+scikit-learn.
 
 Use `pipe.slice[stop=-1]()` for the prefix, `pipe.slice[-1]()` for the final
 step, and `pipe.slice[]()` for both. Bounds are compile-time, half-open and
@@ -512,10 +523,11 @@ from the pinned checkout, after building `test_pipeline_cluster.mojo` and
 This implementation exposes fit, final-step weighted fit, conditional fit_predict,
 predict, conditional transforms and score, per-sample scores, decision and probability methods,
 ordered numeric classes, feature names, input feature counts, configuration,
-typed step access, read-only slicing, length, cloning and the two factories. The following sklearn Pipeline
+typed step access, a typed `named_steps()` view, read-only slicing, length,
+cloning and the two factories. The following sklearn Pipeline
 API is **deferred** (absent from the typed API, so use fails at compile time):
 
-- `passthrough`/`None` steps and a heterogeneous `named_steps` mapping;
+- `passthrough`/`None` steps;
 - constructor options `memory`, `verbose` and `transform_input`;
 - arbitrary fit parameter routing, metadata routing outside final supervised
   scoring, callbacks,

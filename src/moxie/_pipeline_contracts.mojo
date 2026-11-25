@@ -24,8 +24,16 @@ trait PipelineSteps(BaseEstimator, Sized):
     comptime Final: BaseEstimator
     comptime StepAt[index: Int] = Self.Prefix if index == 0 or index == -2 else Self.Final
 
-    def _step_index(self, name: StringSpan) raises -> Int:
+    def _step_name(self, index: Int) -> String:
         ...
+
+    def _step_index(self, name: StringSpan) raises -> Int:
+        # A duplicate introduced by a public field edit resolves to the last step.
+        if name == self._step_name(1):
+            return 1
+        if name == self._step_name(0):
+            return 0
+        raise Error(t"KeyError: no pipeline step named '{name}'")
 
     def _prefix_step[origin: ImmOrigin](
         ref[origin] self,
@@ -39,6 +47,12 @@ trait PipelineSteps(BaseEstimator, Sized):
 
     def __len__(self) -> Int:
         return 2
+
+    def named_steps[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> NamedPipelineSteps[Self, origin]:
+        """Borrow a name lookup view over the stored steps."""
+        return NamedPipelineSteps[Self, origin](Pointer(to=self))
 
     def step[origin: ImmOrigin, //, index: Int](
         ref[origin] self,
@@ -71,6 +85,31 @@ trait PipelineSteps(BaseEstimator, Sized):
                     Pointer(to=self._final_step())
                 )[]
         raise Error(t"TypeError: pipeline step '{name}' has a different type")
+
+
+@fieldwise_init
+struct NamedPipelineSteps[Parent: PipelineSteps, parent_origin: ImmOrigin](Sized):
+    """Read-only, typed name lookup tied to the owning pipeline."""
+
+    var _parent: Pointer[Self.Parent, origin=Self.parent_origin]
+
+    def __len__(self) -> Int:
+        return 1 if self._parent[]._step_name(0) == self._parent[]._step_name(1) else 2
+
+    def __contains__(self, name: StringSpan) -> Bool:
+        return name == self._parent[]._step_name(0) or name == self._parent[]._step_name(1)
+
+    def keys(self) -> List[String]:
+        """Return the unique step names in insertion order."""
+        var first = self._parent[]._step_name(0)
+        var last = self._parent[]._step_name(1)
+        if first == last:
+            return [first^]
+        return [first^, last^]
+
+    def get[Step: BaseEstimator](self, name: StringSpan) raises -> ref[Self.parent_origin] Step:
+        """Borrow the step of the specified concrete type."""
+        return self._parent[].named_step[Step](name)
 
 
 comptime _SliceBound[bound: Int] = (

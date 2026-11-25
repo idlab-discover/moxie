@@ -186,7 +186,9 @@ def compare(expected, got, query, kind, config):
         np.testing.assert_allclose(got["offset_"], expected.offset_, rtol=3e-5, atol=3e-6)
         np.testing.assert_array_equal(got["prediction"], expected.predict(query))
     else:
-        np.testing.assert_allclose(got["prediction"], expected.predict(query), rtol=3e-5, atol=3e-6)
+        prediction = expected.predict(query)
+        np.testing.assert_allclose(got["prediction"], prediction, rtol=3e-5, atol=3e-6)
+        np.testing.assert_array_equal(got["decision"], got["prediction"])
     if config["kernel"] == "linear":
         np.testing.assert_allclose(got["coef_"], expected.coef_, rtol=3e-5, atol=3e-6)
 

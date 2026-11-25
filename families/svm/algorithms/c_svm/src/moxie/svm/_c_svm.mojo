@@ -1,6 +1,7 @@
 # Adapted from scikit-learn; BSD-3-Clause, see algorithms/c_svm/SCIKIT_LEARN_LICENSE.
 """Dense kernel estimators using the family LIBSVM engine."""
 import numojo as nm
+from moxie.compose._table import ColumnTable
 from std.math import log
 from moxie.base import WeightedSupervisedEstimator
 from moxie.svm._contracts import Dense, Indices, KernelModel, KernelSpec, KernelOptions, KernelProvider, TrainingSnapshot, validate_matrix, validate_vector
@@ -354,6 +355,53 @@ struct SVC[Label: Copyable & Comparable & Deinitable = Float64](
         if not self._model:
             raise Error("NotFittedError: estimator is not fitted")
         return linear_coefficients(self._model.value(), self._kernel, len(self.classes_))
+
+    def fit[
+        dtype: DType,
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[dtype],
+        ref[y_origin] y: Self.Target,
+        *,
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        return self.fit(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
+
+    def fit[
+        dtype: DType, target_dtype: DType,
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[dtype],
+        ref[y_origin] y: nm.NDArray[target_dtype],
+        *,
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        return self.fit(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
+
+    def predict[dtype: DType](self, X: ColumnTable[dtype]) raises -> Self.Prediction:
+        return self.predict(X.values(), feature_names=X.schema().names)
+
+    def decision_function[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
+        return self.decision_function(X.values(), feature_names=X.schema().names)
+
+    def predict_proba[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
+        return self.predict_proba(X.values(), feature_names=X.schema().names)
+
+    def predict_log_proba[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
+        return self.predict_log_proba(X.values(), feature_names=X.schema().names)
+
+    def score[dtype: DType](
+        self, X: ColumnTable[dtype], y: Self.Target, sample_weight: Optional[Dense] = None,
+    ) raises -> Float64:
+        return self.score(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
 
     def predict[dtype: DType](
         self, X: nm.NDArray[dtype], *, feature_names: List[String],
@@ -877,6 +925,33 @@ struct SVR(
         if not self._model:
             raise Error("NotFittedError: estimator is not fitted")
         return linear_coefficients(self._model.value(), self._kernel, 0)
+
+    def fit[
+        dtype: DType, target_dtype: DType,
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[dtype],
+        ref[y_origin] y: nm.NDArray[target_dtype],
+        *,
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        return self.fit(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
+
+    def predict[dtype: DType](self, X: ColumnTable[dtype]) raises -> Self.Prediction:
+        return self.predict(X.values(), feature_names=X.schema().names)
+
+    def decision_function[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
+        return self.decision_function(X.values(), feature_names=X.schema().names)
+
+    def score[dtype: DType](
+        self, X: ColumnTable[dtype], y: Self.Target, sample_weight: Optional[Dense] = None,
+    ) raises -> Float64:
+        return self.score(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
 
     def predict[dtype: DType](
         self, X: nm.NDArray[dtype], *, feature_names: List[String],

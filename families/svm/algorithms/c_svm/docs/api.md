@@ -126,6 +126,27 @@ kernels, the names identify Gram matrix columns in training-row order.
 Callable-kernel fit and provider-based inference use the array directly,
 matching the reference callable path.
 
+All five kernel estimators also take a native
+[`ColumnTable`](../../../../../docs/compose/named-columns.md) on these
+methods and read the names from its schema. Float32 and Float64 tables
+are accepted. The table schema requires unique names. Construct the table
+with all columns in its numeric matrix. Tables with separately added columns
+raise `TypeError`. The same fitted name order is enforced when switching
+between tables and explicit names.
+Classifier fit accepts the same List and numeric array targets as named
+array fit. Classifier score uses the estimator's native List target.
+
+```mojo
+from moxie.compose import ColumnTable
+from moxie.svm import SVC
+
+var names: List[String] = ["length", "width"]
+var model = SVC(kernel="rbf")
+var predictions = model.fit(ColumnTable(X, names), y).predict(
+    ColumnTable(X_query, names),
+)
+```
+
 ## Native model files
 
 Use the experimental [model-file API](../../../../../docs/serialization.md)

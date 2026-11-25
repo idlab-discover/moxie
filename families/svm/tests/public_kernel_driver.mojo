@@ -1,6 +1,7 @@
 """Validation-only bridge exercising the assembled public estimators."""
 from std.sys import argv
 import numojo as nm
+from moxie.compose import ColumnTable
 from moxie.svm import SVC, NuSVC, SVR, NuSVR, OneClassSVM, Gamma, ClassWeight, Probability
 from moxie.warnings import FitWarning
 from moxie.metadata_routing import SampleWeightRequest
@@ -120,15 +121,17 @@ def main() raises:
             costs.labels.append(Float64(t[cursor]))
             costs.values.append(Float64(t[cursor + 1]))
             cursor += 2
+    var training = ColumnTable(x, feature_names)
+    var testing = ColumnTable(query, feature_names)
     if kind == 0:
         var model = SVC(kernel=kernel.copy(), gamma=gamma.copy(), degree=degree, coef0=coef0, tol=tol, shrinking=shrinking, max_iter=limit, C=c, probability=probability, random_state=seed, class_weight=costs.copy(), decision_function_shape=decision_shape.copy(), break_ties=break_ties)
         _ = model.set_fit_request(sample_weight="training_weight").set_score_request(
             sample_weight=False
         )
         if single:
-            _ = model.fit(strided_float32(x), y, feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(ColumnTable(strided_float32(x), feature_names), y, sample_weight=sw.copy())
         else:
-            _ = model.fit(x, labels, feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(training, labels, sample_weight=sw.copy())
         if len(args) == 3:
             model = restore[SVCSchema[]](model, String(args[2]))
         var routing = model.get_metadata_routing()
@@ -146,12 +149,12 @@ def main() raises:
         emit("n_iter_", model.n_iter_)
         emit_list("classes_", model.classes_)
         emit("class_weight_", model.class_weight_)
-        emit("decision", model.decision_function(query, feature_names=feature_names))
-        emit_list("prediction", model.predict(query, feature_names=feature_names))
-        print("SCALAR", "score", model.score(x, labels, feature_names=feature_names, sample_weight=sw.copy()))
+        emit("decision", model.decision_function(testing))
+        emit_list("prediction", model.predict(testing))
+        print("SCALAR", "score", model.score(training, labels, sample_weight=sw.copy()))
         if probability_mode == 1:
-            emit("probability", model.predict_proba(query, feature_names=feature_names))
-            emit("log_probability", model.predict_log_proba(query, feature_names=feature_names))
+            emit("probability", model.predict_proba(testing))
+            emit("log_probability", model.predict_log_proba(testing))
             emit("probA_", model.probA_)
             emit("probB_", model.probB_)
         if kernel == "linear":
@@ -162,9 +165,9 @@ def main() raises:
             sample_weight=False
         )
         if single:
-            _ = model.fit(strided_float32(x), y, feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(ColumnTable(strided_float32(x), feature_names), y, sample_weight=sw.copy())
         else:
-            _ = model.fit(x, labels, feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(training, labels, sample_weight=sw.copy())
         if len(args) == 3:
             model = restore[NuSVCSchema[]](model, String(args[2]))
         var routing = model.get_metadata_routing()
@@ -182,12 +185,12 @@ def main() raises:
         emit("n_iter_", model.n_iter_)
         emit_list("classes_", model.classes_)
         emit("class_weight_", model.class_weight_)
-        emit("decision", model.decision_function(query, feature_names=feature_names))
-        emit_list("prediction", model.predict(query, feature_names=feature_names))
-        print("SCALAR", "score", model.score(x, labels, feature_names=feature_names, sample_weight=sw.copy()))
+        emit("decision", model.decision_function(testing))
+        emit_list("prediction", model.predict(testing))
+        print("SCALAR", "score", model.score(training, labels, sample_weight=sw.copy()))
         if probability_mode == 1:
-            emit("probability", model.predict_proba(query, feature_names=feature_names))
-            emit("log_probability", model.predict_log_proba(query, feature_names=feature_names))
+            emit("probability", model.predict_proba(testing))
+            emit("log_probability", model.predict_log_proba(testing))
             emit("probA_", model.probA_)
             emit("probB_", model.probB_)
         if kernel == "linear":
@@ -196,9 +199,9 @@ def main() raises:
         var model = OneClassSVM(kernel=kernel.copy(), gamma=gamma.copy(), degree=degree, coef0=coef0, tol=tol, shrinking=shrinking, max_iter=limit, nu=nu)
         _ = model.set_fit_request(sample_weight="training_weight")
         if single:
-            _ = model.fit(strided_float32(x), feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(ColumnTable(strided_float32(x), feature_names), sample_weight=sw.copy())
         else:
-            _ = model.fit(x, feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(training, sample_weight=sw.copy())
         if len(args) == 3:
             model = restore[OneClassSVMSchema](model, String(args[2]))
         emit_request("fit", model.get_metadata_routing())
@@ -213,9 +216,9 @@ def main() raises:
         print("SCALAR", "n_features_in_", model.n_features_in_)
         print("ARRAY", "n_iter_", 1)
         print(model.n_iter_)
-        emit("prediction", model.predict(query, feature_names=feature_names))
-        emit("decision", model.decision_function(query, feature_names=feature_names))
-        emit("score_samples", model.score_samples(query, feature_names=feature_names))
+        emit("prediction", model.predict(testing))
+        emit("decision", model.decision_function(testing))
+        emit("score_samples", model.score_samples(testing))
         emit("offset_", model.offset_)
         if kernel == "linear":
             emit("coef_", model.coef_())
@@ -225,9 +228,9 @@ def main() raises:
             sample_weight=False
         )
         if single:
-            _ = model.fit(strided_float32(x), y, feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(ColumnTable(strided_float32(x), feature_names), y, sample_weight=sw.copy())
         else:
-            _ = model.fit(x, y, feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(training, y, sample_weight=sw.copy())
         if len(args) == 3:
             model = restore[SVRSchema](model, String(args[2]))
         var routing = model.get_metadata_routing()
@@ -244,8 +247,9 @@ def main() raises:
         print("SCALAR", "n_features_in_", model.n_features_in_)
         print("ARRAY", "n_iter_", 1)
         print(model.n_iter_)
-        emit("prediction", model.predict(query, feature_names=feature_names))
-        print("SCALAR", "score", model.score(x, y, feature_names=feature_names, sample_weight=sw.copy()))
+        emit("prediction", model.predict(testing))
+        emit("decision", model.decision_function(testing))
+        print("SCALAR", "score", model.score(training, y, sample_weight=sw.copy()))
         if kernel == "linear":
             emit("coef_", model.coef_())
     elif kind == 4:
@@ -254,9 +258,9 @@ def main() raises:
             sample_weight=False
         )
         if single:
-            _ = model.fit(strided_float32(x), y, feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(ColumnTable(strided_float32(x), feature_names), y, sample_weight=sw.copy())
         else:
-            _ = model.fit(x, y, feature_names=feature_names, sample_weight=sw.copy())
+            _ = model.fit(training, y, sample_weight=sw.copy())
         if len(args) == 3:
             model = restore[NuSVRSchema](model, String(args[2]))
         var routing = model.get_metadata_routing()
@@ -273,7 +277,8 @@ def main() raises:
         print("SCALAR", "n_features_in_", model.n_features_in_)
         print("ARRAY", "n_iter_", 1)
         print(model.n_iter_)
-        emit("prediction", model.predict(query, feature_names=feature_names))
-        print("SCALAR", "score", model.score(x, y, feature_names=feature_names, sample_weight=sw.copy()))
+        emit("prediction", model.predict(testing))
+        emit("decision", model.decision_function(testing))
+        print("SCALAR", "score", model.score(training, y, sample_weight=sw.copy()))
         if kernel == "linear":
             emit("coef_", model.coef_())

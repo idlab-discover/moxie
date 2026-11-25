@@ -61,7 +61,7 @@ configuration backed by an estimator-owned entropy stream. All five estimators
 also offer `fit_with_random_state` with a mutable shared `RandomState`, consuming
 one native seed per fitting call. Integer seeds reset on each fit.
 
-Sparse matrices, Python bindings, metadata routing, and reflection
+Sparse matrices, Python bindings, and reflection
 remain outside the accepted dense implementation scope. This native API does not
 claim Python estimator-check compatibility.
 
@@ -74,6 +74,28 @@ positive-weight row of an entire classification class raises a clear error.
 The pinned reference can retain an incompatible public class list when a
 multiclass fit loses a whole class; reproducing that inconsistent model state is
 not supported. Positive class weights and partial row masking remain supported.
+
+## Sample-weight requests
+
+All kernel estimators expose the shared [sample-weight request API](../../../../../docs/interfaces.md#sample-weight-requests).
+SVC, NuSVC, SVR, and NuSVR expose separate fit and score requests. OneClassSVM
+exposes a fit request through the same setter and returns a single
+`SampleWeightRequest` from `get_metadata_routing()`.
+
+```mojo
+var model = SVC()
+_ = model.set_fit_request(sample_weight="training_weight").set_score_request(
+    sample_weight=False
+)
+var requests = model.get_metadata_routing()
+```
+
+`True` requests `sample_weight`, `False` declines it, and `None` resets the
+request to unset. An ASCII identifier is accepted as an alias. Omitting the
+keyword retains the current request. The getter returns an owned copy, and an
+unfitted clone preserves the configured requests. Native setters are always
+available. Direct calls to fit and score accept explicit weights independently
+of requests. Composition parents own automatic forwarding.
 
 ## Native model files
 
@@ -101,9 +123,10 @@ estimator-owned random stream. Fitted models restore the resolved kernel,
 learned state, and probability calibration without refitting. The loader
 rebuilds the public copies of engine arrays from canonical fitted state.
 Changes to those copies are local to the in-memory estimator.
-Version 2 archives restore fit diagnostics from the original fit's options,
-including when the caller later changes `max_iter` or `probability`. Version 1
-archives still load and start with an empty warning history.
+Version 3 preserves sample-weight requests. Versions 1 and 2 load with unset
+requests. Versions 2 and 3 restore diagnostics from the original fit's options,
+even after changes to `max_iter` or `probability`. Version 1 loads with an empty
+warning history.
 
 The archive contains the retained training snapshot, including the Gram
 matrix for a precomputed fit. Query columns for a precomputed fit follow

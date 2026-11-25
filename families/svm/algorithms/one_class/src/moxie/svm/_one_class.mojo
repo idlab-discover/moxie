@@ -10,6 +10,9 @@ from moxie.svm._linear import ClassWeight, _labels, _codes, _weights, _class_wei
 from moxie.svm._base import ProbabilisticSVC, SupportVectorRegressor, OneClassSupportVector
 from moxie._random import RandomState, entropy_state
 from moxie.warnings import FitWarning
+from moxie.metadata_routing import (
+    SampleWeightRequest, SampleWeightUpdate,
+)
 
 @fieldwise_init
 struct OneClassSVMParams(Copyable, Movable):
@@ -53,6 +56,7 @@ struct OneClassSVM(OneClassSupportVector, FitPredictor):
     var n_features_in_: Int
     var n_iter_: Int
     var fit_status_: Int
+    var _fit_request: SampleWeightRequest
     var fit_warnings: List[FitWarning]
     var _fit_diagnostics: Optional[_KernelFitDiagnostics]
     var shape_fit_: nm.Shape
@@ -82,6 +86,7 @@ struct OneClassSVM(OneClassSupportVector, FitPredictor):
         self.n_features_in_ = 0
         self.n_iter_ = 0
         self.fit_status_ = 0
+        self._fit_request = SampleWeightRequest()
         self.fit_warnings = []
         self._fit_diagnostics = None
         self.shape_fit_ = nm.Shape(0, 0)
@@ -131,8 +136,23 @@ struct OneClassSVM(OneClassSupportVector, FitPredictor):
             self.max_iter = max_iter.value().copy()
         return self
 
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure the sample weights requested from a parent during fit."""
+        self._fit_request.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> SampleWeightRequest:
+        """Return an independent copy of the fit request."""
+        return self._fit_request.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(nu=self.nu.copy(), kernel=self.kernel.copy(), degree=self.degree.copy(), gamma=self.gamma.copy(), coef0=self.coef0.copy(), tol=self.tol.copy(), shrinking=self.shrinking.copy(), cache_size=self.cache_size.copy(), verbose=self.verbose.copy(), max_iter=self.max_iter.copy())
+        var cloned = Self(nu=self.nu.copy(), kernel=self.kernel.copy(), degree=self.degree.copy(), gamma=self.gamma.copy(), coef0=self.coef0.copy(), tol=self.tol.copy(), shrinking=self.shrinking.copy(), cache_size=self.cache_size.copy(), verbose=self.verbose.copy(), max_iter=self.max_iter.copy())
+        cloned._fit_request = self._fit_request.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._model)

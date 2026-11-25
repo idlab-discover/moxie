@@ -205,9 +205,9 @@ def _read_request(mut reader: BinaryReader[_]) raises -> SampleWeightRequest:
         var alias_name = reader.string(reader.remaining())
         request.set(alias_name)
         if not request.value().isa[String]():
-            raise Error("ModelSchemaError: invalid linear SVM metadata alias")
+            raise Error("ModelSchemaError: invalid SVM metadata alias")
     elif tag != 0:
-        raise Error("ModelSchemaError: invalid linear SVM metadata request tag")
+        raise Error("ModelSchemaError: invalid SVM metadata request tag")
     return request^
 
 

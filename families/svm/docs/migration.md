@@ -18,8 +18,7 @@ Run `pixi run svm-build`, `pixi run svm-test`, `pixi run svm-parity` and
 reuse binaries produced by `svm-build`; root shared checks use these actions
 after building. Raw outputs stay in ignored `builds/` and `docs/private/`.
 
-The complete dense contract is described in [scope](scope.md). The linear
-estimators support [sample-weight requests](../algorithms/linear/docs/api.md#sample-weight-requests).
+[Scope](scope.md) describes the dense contract, including sample-weight requests.
 See the
 [linear model file API](../algorithms/linear/docs/api.md#native-model-files) and
 the [kernel model file API](../algorithms/c_svm/docs/api.md#native-model-files)

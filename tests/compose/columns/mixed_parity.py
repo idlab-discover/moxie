@@ -176,6 +176,34 @@ def check_mixed_integer_columns():
     )
 
 
+def check_mixed_boolean_columns():
+    train = pd.DataFrame({
+        "active": np.array([True, False, True, False, True], dtype=bool),
+        "age": [10.0, np.nan, 30.0, 40.0, 20.0],
+        "color": pd.Categorical(["red", "blue", "red", "amber", "blue"]),
+    })
+    test = pd.DataFrame({
+        "age": [35.0, np.nan, 15.0],
+        "color": pd.Categorical(["green", None, "red"]),
+        "active": np.array([False, True, False], dtype=bool),
+    })
+    selector = compose.make_column_selector
+    dense_kinds = ["number", "bool"]
+    assert selector(dtype_include="bool")(train) == ["active"]
+    assert selector(dtype_include="number")(train) == ["age"]
+    assert selector(dtype_include=dense_kinds)(train) == ["active", "age"]
+    assert selector(dtype_exclude="bool")(train) == ["age", "color"]
+    model = compose.ColumnTransformer([
+        ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
+         selector(dtype_include=dense_kinds)),
+        ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
+         selector(dtype_include="category")),
+    ])
+    check_composition(
+        "mixed_boolean_columns", model, train, test, ("after_fit",), numeric_width=2,
+    )
+
+
 if __name__ == "__main__":
     check_mixed("mixed", "color", ["red", "blue", "red", "amber", "blue"], ["green", None, "red"])
     large = 2**53
@@ -187,3 +215,4 @@ if __name__ == "__main__":
     check_categorical_imputation("mixed_numeric_impute", numeric=True)
     check_mixed_float_columns()
     check_mixed_integer_columns()
+    check_mixed_boolean_columns()

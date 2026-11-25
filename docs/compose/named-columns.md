@@ -11,13 +11,13 @@ count must match the numeric block. `add_strings(name, column, position=None)`
 accepts a `List[String]` with the same row count and insertion rules. A matrix
 with shape `(rows, 0)` can seed a table whose columns are all added individually.
 `add_numeric(name, column, position=None)` takes a rank-one Float32, Float64,
-or Int64 NuMojo array with the same row count and insertion rules. It copies
+Int64, or Bool NuMojo array with the same row count and insertion rules. It copies
 the logical values from strided inputs into compact storage of the original
 column dtype.
 
 Copying a table creates an independent snapshot. `schema()` returns its own
 `ColumnSchema` with actual storage kinds
-(`float32`, `float64`, `int64`, `category`, `string`).
+(`float32`, `float64`, `int64`, `bool`, `category`, `string`).
 `values()` borrows the original matrix when it represents the entire table.
 It raises once any column has been added individually.
 `categorical_columns[Domain](indices)` copies categorical
@@ -56,11 +56,13 @@ A subsequent array fit clears learned names; failed fits preserve previous
 state. Supplied `get_feature_names_out(input_features)` must match fitted names.
 
 `make_column_selector(dtype_include=..., dtype_exclude=...)` returns a named
-key from a table or schema. Use `["number"]` for all numeric columns or
+key from a table or schema. Use `["number"]` for floating-point and integer columns or
 `["category"]` for categorical columns of any domain and `["string"]` for
 raw text. `"floating"` matches both float dtypes. `"integer"`,
 `"signedinteger"`, and `"int"` match Int64 storage. `"float32"`, `"float64"`,
-and `"int64"` select exact dtypes. Typed selectors take lists of dtype names.
+and `"int64"` select exact dtypes. Use `["bool"]` for raw Boolean columns or
+`["number", "bool"]` to include them in a numeric branch. Boolean categorical
+columns are selected by `["category"]`. Typed selectors take lists of dtype names.
 Regex `pattern` raises an unsupported-capability error.
 
 ## Mixed numeric and categorical preprocessing
@@ -100,7 +102,8 @@ slice, or dtype selector supplies a collection of features. The component's
 target and dense result dtype must match the table dtype. Numeric components,
 including `"passthrough"`, gather selected numeric columns into an array of
 the table dtype in key order. The constructor matrix sets that dtype.
-This conversion can round added Float64 values in a Float32 table and Int64
+At this boundary, raw Boolean values become floating-point zero or one.
+The conversion can round added Float64 values in a Float32 table and Int64
 values outside the exact integer range of either float dtype. Use an Int64
 categorical column when category identity must survive dense encoding. Fitted
 numeric branches accept any supported numeric storage dtype for a fitted name.
@@ -167,6 +170,8 @@ negative-strided Float32 column, with Float64 output.
 The integer case runs the same pipeline over an Int64 column and a Float64
 column, and compares dtype selection, reordered inference, conversion beyond
 Float64's exact integer range, and output metadata.
+The Boolean case checks selection, owned strided input, reordered inference
+and the dense pipeline over raw Boolean and Float64 inputs.
 The mixed encoders parity case also compares ordinal codes and multiclass
 target encodings with exact equality, including cross-fitted training output.
 The mixed text comparison checks scalar name and position routing with

@@ -169,7 +169,9 @@ direct-call diagnostics in place of Python warning filters.
 
 Pass optional per-row weights explicitly as `fit_metadata` and `score_metadata`.
 Each weight vector must align with the original samples and use the same dtype
-and container as y. The adapter selects the corresponding rows for each fold.
+and container as y. Moxie checks the full weight vector before selecting rows
+for each fold. Scikit-learn can pass a mismatched-length vector through
+unchanged to each fold.
 The default split is an unshuffled five-fold `KFold`. To supply other splits, pass
 a `List[IndexSplit]` through model selection's `cv` argument.
 

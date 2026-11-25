@@ -24,7 +24,19 @@
     {
       "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python families/manifold/tools/tsne_parity.py",
       "result": "Passed 10 probability, KL and gradient comparisons, 46 distance comparisons, 6 explicit-init fits, both stopping rules, 750 bit-identical Float32 initialization values, 4 PCA initializations and 5 seeded distribution comparisons."
+    },
+    {
+      "command": "python -u families/manifold/tools/check.py isomap",
+      "result": "Passed Float32 and Float64 contracts in the integrated assembly and two isolated consumers, remaining scaffold probes, and manifold source package precompilation."
+    },
+    {
+      "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python -u families/manifold/tools/isomap_parity.py",
+      "result": "Passed 28 dense Isomap fits and two FeatureUnion compositions against pinned sklearn."
+    },
+    {
+      "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python -u families/manifold/tools/isomap_parity.py --notebook",
+      "result": "Passed five focused digits comparisons on 200 training and 20 held-out rows. One held-out query selected different tied neighbors at the cutoff and matched the stable-tie reference."
     }
   ],
-  "scope": "Exact dense TSNE, ClassicalMDS, trustworthiness and dense helpers. Barnes-Hut and the remaining algorithm declarations raise explicit unsupported errors."
+  "scope": "Dense exact and Barnes–Hut TSNE, Isomap, ClassicalMDS, trustworthiness, and dense helpers. MDS, LLE and spectral embedding remain scaffold declarations."
 }

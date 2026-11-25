@@ -18,6 +18,12 @@
         },
         "moxie.decomposition._pca_backend": {
           "file": "src/moxie/decomposition/_pca_backend.mojo"
+        },
+        "moxie.decomposition._kernel_pca": {
+          "file": "src/moxie/decomposition/_kernel_pca.mojo"
+        },
+        "moxie.decomposition._matrix": {
+          "file": "src/moxie/decomposition/_matrix.mojo"
         }
       },
       "assets": {
@@ -36,6 +42,9 @@
       "modules": {
         "moxie.neighbors._contracts": {
           "file": "src/moxie/neighbors/_contracts.mojo"
+        },
+        "moxie.neighbors._base": {
+          "file": "src/moxie/neighbors/_base.mojo"
         }
       },
       "assets": {
@@ -83,6 +92,113 @@
         "schema": 1,
         "packages": {
           "moxie": {}
+        }
+      }
+    },
+    {
+      "id": "nearest",
+      "path": "../neighbors/algorithms/nearest",
+      "modules": {
+        "moxie.neighbors._unsupervised": {
+          "file": "src/moxie/neighbors/_unsupervised.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    },
+    {
+      "id": "spatial_trees",
+      "path": "../neighbors/shared/spatial_trees",
+      "modules": {
+        "moxie.neighbors._kd_tree": {
+          "file": "src/moxie/neighbors/_kd_tree.mojo"
+        },
+        "moxie.neighbors._binary_tree": {
+          "file": "src/moxie/neighbors/_binary_tree.mojo"
+        },
+        "moxie.neighbors._metrics": {
+          "file": "src/moxie/neighbors/_metrics.mojo"
+        },
+        "moxie.neighbors._tree_engine": {
+          "file": "src/moxie/neighbors/_tree_engine.mojo"
+        },
+        "moxie.neighbors._ball_tree": {
+          "file": "src/moxie/neighbors/_ball_tree.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    },
+    {
+      "id": "transforms",
+      "path": "../preprocessing/shared/transforms",
+      "modules": {
+        "moxie.preprocessing._dense_transforms": {
+          "file": "src/moxie/preprocessing/_dense_transforms.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    },
+    {
+      "id": "preprocessing",
+      "path": "../..",
+      "modules": {
+        "moxie.preprocessing._base": {
+          "file": "src/moxie/preprocessing/_base.mojo"
+        },
+        "moxie.preprocessing._common": {
+          "file": "src/moxie/preprocessing/_common.mojo"
+        },
+        "moxie.preprocessing._simple": {
+          "file": "src/moxie/preprocessing/_simple.mojo"
+        },
+        "moxie.preprocessing._validation": {
+          "file": "src/moxie/preprocessing/_validation.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.preprocessing": {}
+        }
+      }
+    },
+    {
+      "id": "kernel-ridge-helpers",
+      "path": "../..",
+      "modules": {
+        "moxie._kernel_ridge._api": {
+          "file": "src/moxie/_kernel_ridge/_api.mojo"
+        },
+        "moxie._kernel_ridge._kernels": {
+          "file": "src/moxie/_kernel_ridge/_kernels.mojo"
+        },
+        "moxie._kernel_ridge._promotion": {
+          "file": "src/moxie/_kernel_ridge/_promotion.mojo"
+        },
+        "moxie._kernel_ridge._solve": {
+          "file": "src/moxie/_kernel_ridge/_solve.mojo"
+        },
+        "moxie._kernel_ridge._validation": {
+          "file": "src/moxie/_kernel_ridge/_validation.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie._kernel_ridge": {}
         }
       }
     }

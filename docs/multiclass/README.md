@@ -56,9 +56,14 @@ exposes `NDArray` probabilities. `moxie.svm.LinearSVC` works through
 converts its binary labels between `NDArray` and numeric `List` values.
 `moxie.discriminant_analysis.LinearDiscriminantAnalysis` works through the
 same adapter with its default `Int` labels and Float32 or Float64 features.
+`moxie.naive_bayes.GaussianNB` works through the adapter in both feature dtypes,
+including incremental OvR and OvO with the default List labels.
 `tests/multiclass/production_parity.py` compares all three wrappers around
-these production components against pinned sklearn. Pass `--group lda` or
-`--group linear-svc` to check that component on its own after assembly.
+these production components against pinned sklearn. Pass `--group lda`,
+`--group linear-svc` or `--group gaussian-nb` to check one component after assembly.
+The GaussianNB group checks the reference's string OvO incremental error, then
+compares Moxie's string predictions and decisions against sklearn with labels
+encoded as sorted integers. See [OvO string labels](one_vs_one.md#string-labels).
 
 Composition: the wrappers work as `Pipeline` final steps and under `clone`,
 `cross_val_score` and `GridSearchCV` (nested `estimator__alpha` through the

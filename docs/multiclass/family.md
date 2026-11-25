@@ -39,11 +39,19 @@ weights configured on the underlying estimator refer to the binary codes.
 The adapter borrows features, keeps the native score weight type and forwards
 decisions, probabilities and log probabilities when the component provides
 those capabilities. It preserves response shape, precision and class order.
+For an incremental classifier whose class declarations use the native target
+type, the adapter also forwards `partial_fit`. Pass optional `classes` as
+rank-one Int64 binary codes. The component validates the declared class set
+and owns the update.
 The multiclass wrappers still require the corresponding dense input and
 response types. `LinearSVC` declares Float64 inputs for generic composition.
 `BinaryAdapter(LinearDiscriminantAnalysis())` uses LDA's default native
 `List[Int]` label type and preserves its decision and probability responses
 for either feature dtype.
+Use `BinaryAdapter(GaussianNB())` with the default Float64 features and
+`BinaryAdapter(GaussianNB[dtype=DType.float32]())` for Float32 features. OvR
+and OvO can fit incrementally with either. OutputCode uses 0/1 codes and the
+positive-class probabilities.
 Use `adapter.estimator` to inspect the underlying model, and use the adapter's
 typed `get_params` and `set_params` to configure it. A fitted copy owns its
 state independently, while `clone` returns an unfitted adapter.

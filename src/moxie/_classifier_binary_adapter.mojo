@@ -4,6 +4,7 @@ import numojo as nm
 from moxie.base import (
     ClassifierMixin,
     DecisionFunction,
+    IncrementalClassifier,
     LogProbabilityPredictor,
     ProbabilityPredictor,
     clone,
@@ -16,6 +17,7 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
     Copyable,
     Movable,
     PairwiseInput,
+    IncrementalClassifier where conforms_to(E, IncrementalClassifier),
     DecisionFunction where conforms_to(E, DecisionFunction),
     ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
     LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
@@ -31,6 +33,7 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
     comptime Input = Self.E.Input
     comptime Target = nm.NDArray[DType.int64]
     comptime Prediction = Self.Target
+    comptime Classes = Self.Target
     comptime SampleWeight = Self.E.SampleWeight
     comptime Decision where conforms_to(Self.E, DecisionFunction) = Self.E.Decision
     comptime Probabilities where conforms_to(Self.E, ProbabilityPredictor) = Self.E.Probabilities
@@ -98,6 +101,26 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
     ) raises -> ref[self] Self:
         var labels = Self._native_target(y)
         _ = self.estimator.fit(X, rebind[Self.E.Target](labels))
+        return self
+
+    def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+    ) raises -> ref[self] Self where conforms_to(Self.E, IncrementalClassifier):
+        """Convert batch labels and the optional class declaration to native lists."""
+        comptime assert Self.E.Classes == Self.E.Target, (
+            "BinaryAdapter requires incremental class declarations to use the native target type"
+        )
+        var labels = Self._native_target(y)
+        var native_classes: Optional[List[Self._label]] = None
+        if classes:
+            native_classes = Self._native_target(classes.value())
+        _ = self.estimator.partial_fit(
+            X, rebind[Self.E.Target](labels),
+            rebind[Optional[Self.E.Classes]](native_classes),
+        )
         return self
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:

@@ -6,6 +6,7 @@ from moxie.serialization import (
     ModelSchema,
     dtype_code,
 )
+from moxie.metadata_routing import SampleWeightRequest
 from moxie.warnings import FitWarning
 from ._contracts import Matrix
 from ._pls import (
@@ -25,6 +26,7 @@ from ._plssvd import PLSSVD, PLSSVDParams
 
 
 comptime _VERSION = 1
+comptime _PLS_REQUEST_VERSION = 2
 comptime _PREFIX = "moxie.cross_decomposition."
 
 
@@ -104,6 +106,22 @@ def _check_weight_ranks(x_weights: Matrix, y_weights: Matrix) raises:
         raise Error("ModelSchemaError: invalid weight ranks")
 
 
+def _read_score_request(mut reader: BinaryReader) raises -> SampleWeightRequest:
+    var request = SampleWeightRequest()
+    if reader.boolean():
+        var alias_name = reader.string(reader.remaining())
+        try:
+            request.set(alias_name.copy())
+        except:
+            raise Error("ModelSchemaError: invalid PLS sample-weight alias")
+        # The setter also accepts the unchanged sentinel and the canonical name.
+        if not request.value().isa[String]():
+            raise Error("ModelSchemaError: invalid PLS sample-weight alias")
+    else:
+        request.set(reader.boolean())
+    return request^
+
+
 struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
     comptime Model = _PLS[Self.flavor, Self.dtype]
 
@@ -165,13 +183,26 @@ struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
             _write_array(archive, "_y_mean", model._y_mean, q)
             _write_array(archive, "_x_std", model._x_std, p, positive=True)
             _write_array(archive, "_y_std", model._y_std, q, positive=True)
+        var request = model._score_request.value()
+        if not request.isa[NoneType]():
+            archive.schema_version = _PLS_REQUEST_VERSION
+            var is_alias = request.isa[String]()
+            writer.boolean(is_alias)
+            if is_alias:
+                writer.string(request[String])
+            else:
+                writer.boolean(request[Bool])
         archive.manifest = writer^.finish()
         archive.validate()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(_PREFIX + Self.Model.name(), _VERSION)
+        var has_request = archive.schema_version == _PLS_REQUEST_VERSION
+        archive.expect(
+            _PREFIX + Self.Model.name(),
+            _PLS_REQUEST_VERSION if has_request else _VERSION,
+        )
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         _check_input_dtype[Self.dtype](reader)
@@ -181,6 +212,8 @@ struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
         )
         var model = Self.Model(params=params)
         if not reader.boolean():
+            if has_request:
+                model._score_request = _read_score_request(reader)
             reader.finish()
             _expect_arrays(archive, 0)
             return model^
@@ -204,7 +237,7 @@ struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
         var diagnostics_count = reader.count(min(k, reader.remaining() // 8))
         for _ in range(diagnostics_count):
             var diagnostic = reader.string(reader.remaining())
-            # Version 1 archives store warning categories and messages together.
+            # Archives store warning categories and messages together.
             for category in [_CONVERGENCE_WARNING, _USER_WARNING]:
                 var prefix = String(category) + ": "
                 if diagnostic.startswith(prefix):
@@ -213,6 +246,8 @@ struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
                     )
                     break
             model.diagnostics_.append(diagnostic^)
+        if has_request:
+            model._score_request = _read_score_request(reader)
         reader.finish()
 
         model.x_weights_ = _read_array(archive, "x_weights_", p, k)

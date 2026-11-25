@@ -866,6 +866,7 @@
             "PLSCanonical": "moxie.cross_decomposition._pls",
             "CCA": "moxie.cross_decomposition._pls",
             "PLSEngine": "moxie.cross_decomposition._pls",
+            "PLSMetadataRequest": "moxie.cross_decomposition._pls",
             "PLSParams": "moxie.cross_decomposition._pls",
             "PLSSVD": "moxie.cross_decomposition._plssvd",
             "PLSSVDParams": "moxie.cross_decomposition._plssvd",

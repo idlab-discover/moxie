@@ -6,11 +6,12 @@ fit_transform/score`: modes A/B, both deflation modes, scale=True/False,
 copy semantics, 1-D and 2-D targets, max_iter/tol diagnostics, constant
 residual early stop, Float32/Float64 inputs. Sparse input is excluded by
 the dense-only porting scope (the reference has no sparse branch either);
-it is never densified. Python-only surfaces (pandas set_output,
-feature_names_in_, routing, pickling) are binding work.
+it is never densified. PLS and CCA expose native score-weight requests.
+Automatic parent forwarding, pandas output, fitted input feature names,
+and Python pickling require shared support.
 
 The migrated suite contains 15 estimator contracts, six engine tests and
-124 parity cases against the recorded
+125 parity cases against the recorded
 `_pls.py` executed from the reference checkout: tall/wide/tiny/two-sample,
 ill-conditioned, constant columns/targets, 1-D y, max_iter=2, full-rank,
 copy=False paths, Float32 and 11 invalid-input/parameter error cases.

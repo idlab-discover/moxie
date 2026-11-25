@@ -19,6 +19,7 @@ from moxie._feature_metadata import (
     FeatureNamesOut,
     InputFeatureCount,
 )
+from moxie.metadata_routing import SampleWeightRequest, SampleWeightUpdate
 from moxie.warnings import FitWarning
 from moxie.cross_decomposition._base import (
     CrossDecompositionTransformer,
@@ -836,6 +837,13 @@ comptime _CCA = 2
 
 
 @fieldwise_init
+struct PLSMetadataRequest(Copyable, Movable):
+    """Metadata accepted by the native PLS regression and CCA score methods."""
+
+    var score: SampleWeightRequest
+
+
+@fieldwise_init
 struct PLSParams(Copyable, Movable, Writable):
     """Constructor configuration shared by PLSRegression, PLSCanonical, CCA.
 
@@ -1039,6 +1047,7 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
     var _y_std: Matrix
     var _predict_1d: Bool
     var _fitted: Bool
+    var _score_request: SampleWeightRequest
 
     def __init__(
         out self,
@@ -1100,6 +1109,7 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         self._y_std = _vector(0)
         self._predict_1d = False
         self._fitted = False
+        self._score_request = SampleWeightRequest()
         self._check_algorithm_parameter(params.algorithm)
 
     @staticmethod
@@ -1186,8 +1196,22 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         _ = self.set_params(params)
         return self
 
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure how a parent supplies sample weights to score."""
+        self._score_request.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> PLSMetadataRequest:
+        return PLSMetadataRequest(self._score_request.copy())
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(params=self.get_params())
+        var cloned = Self(params=self.get_params())
+        cloned._score_request = self._score_request.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted

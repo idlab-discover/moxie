@@ -36,6 +36,9 @@
         "moxie.linear_model._contracts": {
           "file": "src/moxie/linear_model/_contracts.mojo"
         },
+        "moxie.linear_model._least_angle": {
+          "file": "src/moxie/linear_model/_least_angle.mojo"
+        },
         "moxie.linear_model._linear_base": {
           "file": "src/moxie/linear_model/_linear_base.mojo"
         },

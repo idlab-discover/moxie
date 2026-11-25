@@ -73,6 +73,7 @@ also rejected. This is deliberately stricter than Python's mutable
 | `OutlierMixin` | Corresponding trait identity and inference methods |
 | `FeatureNamesOut` (`moxie._feature_metadata`) | `get_feature_names_out(input_features=None)`, so `Pipeline.get_feature_names_out` works through a frozen step |
 | `InputFeatureCount` | `get_n_features_in()`, the native counterpart of delegated `n_features_in_` |
+| `EstimatorTagsProvider` | `get_tags(frozen)` from `moxie.base` returns the child's native tags with `_skip_test=True` |
 
 Wrapped `Pipeline` and `FeatureUnion` instances expose the first child's input
 width through `get_n_features_in()`. The query uses the child's learned state.
@@ -152,9 +153,18 @@ false for nonclusterers. It neither fits the estimator nor exposes `fit_predict`
 
 This family-local query adapts sklearn's `sklearn.base.is_clusterer` location:
 the shared Mojo `ClusterMixin` bundles identity with required `fit_predict`.
-Frozen wrappers therefore still do not conform to that trait. Shared tags and
-a framework-wide identity-only trait remain outside this family change. A
-predictive clusterer's independent `Predictor` capability can still be forwarded.
+Frozen wrappers therefore still do not conform to that trait. A predictive
+clusterer's independent `Predictor` capability can still be forwarded.
+Shared cluster identity remains open.
+
+### Estimator tags
+
+When the child implements [`EstimatorTagsProvider`](../interfaces.md#estimator-tags),
+`get_tags(frozen)` works before and after fit, through clones and nested
+wrappers. The snapshot preserves the child's input-rank flags and sets
+`_skip_test=True` for the wrapper. Editing the snapshot leaves the child and
+subsequent queries unchanged. Wrapping an estimator without the optional tag
+trait leaves the tag query unavailable at compile time.
 
 ### Access to pipeline steps
 
@@ -205,8 +215,8 @@ name or mismatched type raises `KeyError`. Use
 - Fit, partial fit, and parameter changes return a mutable borrow of this wrapper.
   Nested parameter rejection occurs at compile time rather than as a Python
   `ValueError`.
-- Arbitrary fit `*args`/`**kwargs`, dynamic metadata routing, Python tags
-  (including `_skip_test`), bindings, and serialization remain outside the
+- Arbitrary fit `*args`/`**kwargs`, dynamic metadata routing, tags outside
+  the shared native record, bindings, and serialization remain outside the
   native interface. Classification and regression identity use Mojo traits.
 
 The example's real `DummyRegressor` implements only unweighted mean fitting and
@@ -265,10 +275,10 @@ fixtures are exactly representable and require exact equality; R2 allows
 dependencies execute only this comparison tooling. This evidence establishes the
 documented native scope, not full Python API parity.
 
-The focused incremental/identity comparison uses synthetic stateful probes, not
-additional estimator integrations. It loads both `_frozen.py` and `base.py` from
-the same pinned checkout and compares ten integer observations exactly. Run it
-from this project with a reference Python environment:
+The focused incremental, identity, and tag comparison uses synthetic stateful
+probes. It loads both `_frozen.py` and `base.py` from the same pinned checkout
+and compares 15 observations exactly. Run it from this project with a reference
+Python environment.
 
 ```sh
 pixi run python tests/frozen/compare_frozen_updates.py --sklearn-root ../scikit-learn
@@ -284,7 +294,7 @@ Moxie's `pixi run parity` includes both comparisons automatically.
 | `test_composite_fit` | Nine negative compilation checks include rejection of `fit_predict` and `fit_transform` |
 | `test_clone_frozen`, `test_check_is_fitted` | `test_frozen.mojo` covers shared allocation, clone lifetime, unfitted errors and repeated no-op fit |
 | `test_frozen_params` | Typed parameter records, restoration, same-type replacement, and compile-time rejection of nested updates |
-| `test_frozen_tags` | Classifier, regressor and outlier trait identity plus recursive cluster identity; arbitrary Python tags are unsupported |
+| `test_frozen_tags` | Native input tags and wrapper-only `_skip_test` in `test_frozen_updates.mojo`, plus trait identity in capability and cluster probes |
 | `test_frozen_metadata_routing` | Dynamic metadata routing remains open. Positional and named step access have separate native and sklearn comparison coverage |
 
 `test_frozen_composition.mojo` wraps production estimators: a fitted

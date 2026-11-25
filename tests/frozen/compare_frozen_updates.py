@@ -74,6 +74,12 @@ def main():
         def __sklearn_is_fitted__(self):
             return self.state != 0
 
+        def __sklearn_tags__(self):
+            tags = super().__sklearn_tags__()
+            tags.input_tags.one_d_array = True
+            tags.input_tags.two_d_array = False
+            return tags
+
         def fit(self, X, y=None):
             raise AssertionError('inner fit must not run')
 
@@ -124,6 +130,16 @@ def main():
     cluster = Frozen(ClusterProbe())
     assert base.is_clusterer(cluster)  # identity does not require fitted state
     nested_cluster = Frozen(cluster)
+    tags = cluster.__sklearn_tags__()
+    expected['tags_one_d_array'] = int(tags.input_tags.one_d_array)
+    expected['tags_two_d_array'] = int(tags.input_tags.two_d_array)
+    expected['tags_skip_test'] = int(tags._skip_test)
+    expected['tags_child_skip_test'] = int(cluster.estimator.__sklearn_tags__()._skip_test)
+    expected['tags_nested_skip_test'] = int(nested_cluster.__sklearn_tags__()._skip_test)
+    tags.input_tags.one_d_array = False
+    tags._skip_test = False
+    assert cluster.__sklearn_tags__().input_tags.one_d_array
+    assert cluster.__sklearn_tags__()._skip_test
     cluster.partial_fit(3)
     nested_cluster.partial_fit(4, 5)
     cluster.fit(999, None)
@@ -144,7 +160,7 @@ def main():
         assert key not in actual, key
         actual[key] = int(value)
     assert actual == expected, (actual, expected)
-    print(f'Passed {len(expected)} focused incremental/identity comparisons at sklearn {REVISION}')
+    print(f'Passed {len(expected)} incremental, identity, and tag comparisons at sklearn {REVISION}')
 
 
 if __name__ == '__main__':

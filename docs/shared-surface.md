@@ -33,23 +33,20 @@ not implemented. Estimator families document their own modules.
 
 ## `sklearn.metrics`
 
-There is no `moxie.metrics` module. Scoring currently lives in three places:
+[Dense classification metrics](metrics/classification.md) are available from
+`moxie.metrics`. The module exports `accuracy_score`, `zero_one_loss`, and
+`hamming_loss`. Each supports optional sample weights and can be called from a
+`moxie.model_selection.TypedScorer`.
 
-- Estimator `score` methods: accuracy for `ClassifierMixin`, R² for
-  `RegressorMixin`, and estimator-specific scores (density, mixture, PCA, ...).
-- `moxie.model_selection` typed scorers: callers write a `TypedScorer` or
-  `SearchScorer` struct; there are no string scorer names, `get_scorer`,
-  `make_scorer` or `check_scoring`. See the
-  [model selection plumbing](../families/model_selection/docs/plumbing.md).
-- Family-private helpers, such as accuracy and R² inside estimators, distance
-  kernels in neighbors, kernel ridge and Gaussian processes, and
-  `moxie.calibration.calibration_curve` (sklearn's `calibration` module).
+Estimator `score` methods provide accuracy for `ClassifierMixin`, R² for
+`RegressorMixin`, and estimator-specific scores for other families.
+[Model selection](../families/model_selection/docs/plumbing.md) uses typed
+scorer structs. Families also retain their private metric helpers and
+`moxie.calibration.calibration_curve` remains in the calibration module.
 
-All 86 names exported by `sklearn.metrics` are deferred: classification,
-regression, ranking and clustering metrics, `pairwise_distances`,
-`pairwise_kernels` and the named kernels, `DistanceMetric`, scorer factories
-and the display objects. A drop-in user can compute only estimator-defined
-scores natively.
+Additional classification metrics, regression, ranking and clustering
+metrics, pairwise kernels and distances, scorer factories and display
+objects remain open.
 
 ## `sklearn.datasets`
 

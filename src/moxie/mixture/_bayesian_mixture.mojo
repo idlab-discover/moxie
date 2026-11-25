@@ -23,6 +23,7 @@ from std.math import abs, isfinite
 from std.utils.numerics import inf
 from moxie._mixture_linalg.special_gamma import digamma, gammaln, betaln
 from moxie._random import RandomState, entropy_state
+from moxie.base import FitPredictor
 from moxie.mixture._base import MixtureDensity
 from moxie.mixture._contracts import EMControl, check_input
 from moxie.mixture._em import MixtureEMModel, EMSettings, run_em, weighted_log_prob
@@ -389,7 +390,7 @@ def _positive(value: Optional[Float64], name: String) raises:
             raise Error(String("ValueError: The '", name, "' parameter of BayesianGaussianMixture must be None or a float in the range (0.0, inf). Got ", v, " instead."))
 
 
-struct BayesianGaussianMixture[dtype: DType = DType.float64](MixtureDensity, Copyable):
+struct BayesianGaussianMixture[dtype: DType = DType.float64](MixtureDensity, FitPredictor, Copyable):
     """Variational Bayesian estimation of a Gaussian mixture.
 
     Parameters, defaults and learned attributes follow
@@ -400,6 +401,7 @@ struct BayesianGaussianMixture[dtype: DType = DType.float64](MixtureDensity, Cop
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
     comptime Prediction = NDArray[DType.int64]
+    comptime Labels = Self.Prediction
     comptime Probabilities = NDArray[Self.dtype]
     comptime SampleScores = NDArray[Self.dtype]
     comptime Samples = Tuple[NDArray[DType.float64], NDArray[DType.int64]]
@@ -722,7 +724,7 @@ struct BayesianGaussianMixture[dtype: DType = DType.float64](MixtureDensity, Cop
         _ = self.fit_predict_with_rng(X, rng)
         return self
 
-    def fit_predict(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> NDArray[DType.int64]:
+    def fit_predict(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Labels:
         """Fit and return labels of the final E-step (y is ignored)."""
         var rng = RandomState(self.random_state.value()) if self.random_state else entropy_state()
         return self.fit_predict_with_rng(X, rng)

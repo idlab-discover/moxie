@@ -105,14 +105,15 @@ log-likelihood score. Pass the negative-BIC function in a typed
 `SearchScorer` through `scoring` to select by BIC. The notebook compares each
 search's fold scores, rankings, and held-out score after refitting.
 
-The notebook also compares direct composition of `StandardScaler` and
-`GaussianMixture` with the equivalent pinned scikit-learn Pipeline. Fit the
-scaler on training data with `fit_transform`, then call that same scaler's
-`transform` before predicting or scoring new rows. Clone both steps for a
-configuration-only copy and update each child through its typed `set_params`.
-The notebook checks held-out labels, probabilities and log likelihoods, plus
-clone and refit behavior. An unsupervised final step in Moxie's shared Pipeline
-is tracked in #21 part 1.
+The notebook also compares `make_pipeline(StandardScaler(), GaussianMixture(2,
+random_state=0))` with the equivalent pinned scikit-learn Pipeline. It checks
+held-out labels and log likelihoods through `predict`, `score_samples` and
+`score`. Use `clone(pipe)` for an unfitted copy and update the nested estimator
+record through `pipe.get_params()` and `pipe.set_params(params)`. Both mixtures
+expose their existing training labels through the shared `FitPredictor` trait,
+so `pipe.fit_predict(X)` can fit the updated pipeline and return its labels.
+For probabilities, call `pipe.estimator.predict_proba(pipe.transformer.transform(X))`.
+Shared Pipeline probability forwarding is tracked in #21 part 1.
 
 Benchmark tooling remains at `tests/mixture/{gaussian,bayesian}/benchmark.py`;
 run with `pixi run python` after building. It writes under `benchmarks/mixture/`.

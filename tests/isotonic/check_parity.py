@@ -19,6 +19,8 @@ import numpy as np
 import scipy
 from scipy.optimize import isotonic_regression as scipy_isotonic
 import sklearn
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[2]
 REVISION = "4358542a1bd39af2e7e1cbace8b9fed067473c5b"
@@ -107,6 +109,18 @@ def main():
             fields += [target, sw, [model.score(query, target, sample_weight=sw)]]
         add(*fields)
 
+    def pipeline():
+        x = np.asarray([7, -2, 3, 3, 10, 16], dtype=dtype)
+        y = np.asarray([9, -1, 6, 2, 8, 13], dtype=dtype)
+        query = np.asarray([18, 5, -4, 3, 12, 0], dtype=dtype)
+        model = make_pipeline(
+            StandardScaler(), reference.IsotonicRegression(out_of_bounds="clip")
+        ).fit(x[:, None], y)
+        expected = model.predict(query[:, None])
+        assert expected.dtype == dtype
+        add("pipeline", x, y, query, expected)
+
+    pipeline()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(240):
@@ -158,6 +172,7 @@ def main():
     float64_records = records
     records = []
     dtype = np.float32
+    pipeline()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(150):

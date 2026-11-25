@@ -4,7 +4,7 @@ Supported exports are `IsotonicRegression`, `isotonic_regression`, and
 `check_increasing` in `moxie.isotonic`, based on scikit-learn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 
-Dense Float64 and Float32 lists support weighted PAVA, increasing/decreasing
+Dense Float64 and Float32 NDArrays and lists support weighted PAVA, increasing/decreasing
 fits, automatic direction, predictor tie consolidation, threshold compression,
 linear interpolation, lower/upper bounds and all three out-of-bounds modes.
 The estimator accepts 1-D and one-column X and returns 1-D predictions.
@@ -27,7 +27,7 @@ estimator traits, clone and fitted-state validation. Moxie owns
 snapshot is consumed.
 
 Language adaptations include compile-time dtype selection, explicit conversion
-of integer/mixed-dtype inputs, same-dtype weight lists, fluent in-place fit and typed
+of integer/mixed-dtype inputs, same-dtype weight vectors, fluent in-place fit and typed
 parameter records. Python warnings, reflection, bindings, pandas output,
 metadata routing and serialization are separate binding work. Direct `f_` is a
 native method; feature-name inputs are accepted and ignored. See [API](api.md)
@@ -36,9 +36,8 @@ for validation differences and copy/ownership semantics.
 Validation commands from the Moxie root:
 
 ```sh
-pixi run build
-pixi run test
-pixi run parity
+pixi run python tools/isotonic_checks.py test
+pixi run python tools/isotonic_checks.py parity
 ```
 
 The build compiles the live assembled package. Ownership checks compare
@@ -47,8 +46,9 @@ tests cover invalid shapes, empty/nonfinite inputs, weight errors, unfitted
 access and failed refits; compile-failure checks reject missing predictor
 capability and implicit mixed-dtype conversion. Parity executes the pinned
 local Python module and a locally compiled copy of its Cython tie engine:
-623 Float64 cases and 456 Float32 cases, including weighted scores. Threshold
-counts, X thresholds, domain and direction must match exactly. Value tolerances
+624 Float64 cases and 457 Float32 cases, including weighted scores and scaler
+pipeline predictions. Threshold counts, X thresholds, domain and direction
+must match exactly. Value tolerances
 are `2e-12` for Float64 and `2e-6` for Float32, allowing pooling/reduction order
 and rounding differences. Python and SciPy are validation tools only.
 

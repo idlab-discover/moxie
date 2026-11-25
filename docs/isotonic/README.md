@@ -2,8 +2,8 @@
 
 Moxie owns `IsotonicRegression`, `isotonic_regression`, and `check_increasing`
 in `src/moxie/isotonic.mojo`. Import them from `moxie.isotonic`.
-The retired sibling checkout is not required. The implementation retains
-Float32 and Float64 lists, including one-column estimator inputs.
+The estimator accepts Float32 and Float64 NDArrays and supports one-column
+pipelines. Concrete List overloads and List thresholds are also available.
 
 See [API and adaptations](api.md), [supported scope](scope.md), and
 [license notices](THIRD_PARTY_NOTICES). The [example](../../examples/isotonic.mojo)
@@ -24,13 +24,11 @@ module matches the Moxie source.
 The parity runner executes the clean local scikit-learn source at
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`, including its compiled Cython tie
 engine. The installed scikit-learn wheel supplies validation infrastructure.
-It generates 623 Float64 and 456 Float32 cases. Outputs use tolerances of
-`2e-12` and `2e-6` respectively; threshold counts, X thresholds, domain,
-direction and NaN locations must match exactly. Evidence is written to
+It generates 624 Float64 and 457 Float32 cases, including scaler pipeline
+predictions. The respective tolerances are `2e-12` and `2e-6`. Threshold
+counts, X thresholds, domain, direction and NaN locations must match exactly. Evidence is written to
 ignored `builds/isotonic/parity/`. This is bounded core behavior coverage,
 not full Python API parity.
 
-Moxie's existing Mojo 1.0.0 and MAX 26.5.0 lock remains unchanged.
-List storage and the existing solver are retained; this integration adds no
-NDArray interface or serialization. Calibration's independent isotonic
-implementation remains outside this integration.
+The estimator uses the existing List-based solver. Calibration uses its List
+overloads for isotonic calibration.

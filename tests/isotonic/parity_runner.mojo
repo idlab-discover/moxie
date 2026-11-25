@@ -1,6 +1,9 @@
 """Read oracle fixtures produced by check_parity.py; no Python runtime."""
 from std.sys import argv
-from std.testing import assert_raises
+from std.testing import assert_equal, assert_raises
+from numojo import array
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
 from std.math import isfinite, isnan
 from moxie.isotonic import (
     IsotonicRegression,
@@ -101,6 +104,18 @@ def run_cases[dtype: DType]() raises:
             )
             if result != (fields[3] == "true"):
                 raise Error(context + ": direction mismatch")
+        elif kind == "pipeline":
+            var x = vector[dtype](String(fields[1]))
+            var y = vector[dtype](String(fields[2]))
+            var query = vector[dtype](String(fields[3]))
+            var pipe = make_pipeline(
+                StandardScaler[dtype](),
+                IsotonicRegression[dtype](out_of_bounds="clip"),
+            )
+            _ = pipe.fit(array(x, [len(x), 1]), array(y, [len(y)]))
+            var predictions = pipe.predict(array(query, [len(query), 1]))
+            assert_equal(predictions.ndim, 1)
+            compare(predictions.tolist(), vector[dtype](String(fields[4])), context)
         else:
             var X = vector[dtype](String(fields[1]))
             var y = vector[dtype](String(fields[2]))
@@ -113,10 +128,13 @@ def run_cases[dtype: DType]() raises:
                 increasing=direction^,
                 out_of_bounds=String(fields[7]),
             )
+            var x_array = array(X, [len(X), 1])
+            var target = array(y, [len(y)])
             if fields[3] == "-":
-                _ = model.fit(X, y)
+                _ = model.fit(x_array, target)
             else:
-                _ = model.fit(X, y, sample_weight=vector[dtype](String(fields[3])))
+                var weights = vector[dtype](String(fields[3]))
+                _ = model.fit(x_array, target, sample_weight=array(weights, [len(weights)]))
             compare(
                 model.X_thresholds_,
                 vector[dtype](String(fields[8])),
@@ -129,8 +147,11 @@ def run_cases[dtype: DType]() raises:
                 context + " y thresholds",
             )
             var query = vector[dtype](String(fields[10]))
+            var query_array = array(query, [len(query)])
+            var predictions = model.predict(query_array)
+            assert_equal(predictions.ndim, 1)
             compare(
-                model.predict(query),
+                predictions.tolist(),
                 vector[dtype](String(fields[11])),
                 context + " predict",
             )
@@ -148,10 +169,12 @@ def run_cases[dtype: DType]() raises:
                 0.0,
             )
             if kind == "score":
+                var score_target = vector[dtype](String(fields[14]))
+                var score_weights = vector[dtype](String(fields[15]))
                 var score = model.score(
-                    query,
-                    vector[dtype](String(fields[14])),
-                    optional_vector[dtype](String(fields[15])),
+                    query_array,
+                    array(score_target, [len(score_target)]),
+                    array(score_weights, [len(score_weights)]),
                 )
                 compare([score], vector[DType.float64](String(fields[16])), context + " R2", 2e-6 if dtype == DType.float32 else 2e-12)
         count += 1

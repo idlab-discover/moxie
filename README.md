@@ -129,7 +129,7 @@ Dense [discriminant analysis](docs/discriminant_analysis/README.md) is integrate
 Import `LinearDiscriminantAnalysis` and `QuadraticDiscriminantAnalysis` from
 `moxie.discriminant_analysis`; the retired sibling checkout is not required.
 
-[Isotonic regression](docs/isotonic/README.md) is owned by Moxie, with Float32/Float64 List inputs.
+[Isotonic regression](docs/isotonic/README.md) is owned by Moxie, with Float32/Float64 NDArray and List inputs.
 The retired isotonic sibling is not a build dependency.
 
 [Random projection](docs/random_projection/README.md) is owned by Moxie, including Gaussian and sparse

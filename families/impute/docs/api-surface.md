@@ -1,7 +1,9 @@
 # Public imputation API
 
 The family build assembles one `moxie.impute` namespace. Its `SimpleImputer`,
-`IntegerSimpleImputer`, `StringSimpleImputer`, `StringMissingIndicator`, and `MissingIndicator` exports resolve to the concrete implementations in
+`IntegerSimpleImputer`, `StringSimpleImputer`, `CategoricalNumericImputer`,
+`CategoricalStringImputer`, `StringMissingIndicator` and `MissingIndicator`
+exports resolve to the concrete implementations in
 `algorithms/simple/src/moxie/impute`. Their signatures, supported inputs and
 Mojo adaptations are documented in [the algorithm API](../algorithms/simple/docs/api.md).
 String imputation uses the family-local `StringMatrix` input and
@@ -35,7 +37,9 @@ parameter records follow the [shared interface contract](interfaces.md).
 | SimpleImputer, dense floating data | `SimpleImputer`, including native callback strategies | Documented ownership and inverse edge adaptations |
 | SimpleImputer, dense integer data | `IntegerSimpleImputer` | Typed output and range adaptations |
 | SimpleImputer, string data | `StringSimpleImputer` | Retained empty most-frequent columns requiring numeric zero; inverse; heterogeneous categories |
+| SimpleImputer, typed categorical columns | `CategoricalStringImputer`, `CategoricalNumericImputer` | One category domain per stage, most-frequent and constant; separate indicator stage |
 | MissingIndicator, dense numeric data | `MissingIndicator` | Sparse output and unsupported numeric dtypes |
+| MissingIndicator, typed categorical columns | `MissingIndicator` | One category domain per call, using the column missing tag |
 | MissingIndicator, string data | `StringMissingIndicator` | Heterogeneous categories; sparse output |
 | KNNImputer, dense floating data | `KNNImputer` using live neighbors query engine | See the KNN API for callback and dtype adaptations |
 | IterativeImputer | Dense deterministic and posterior imputation, native regressors and integer input promotion to Float64 | See the iterative API for uncertainty and RNG contracts |

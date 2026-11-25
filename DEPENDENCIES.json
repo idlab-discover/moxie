@@ -2142,6 +2142,7 @@
             "SimpleImputer": "moxie.impute._simple",
             "StringImputationResult": "moxie.impute._string",
             "StringMatrix": "moxie.impute._string",
+            "CategoricalNumericImputer": "moxie.impute._categorical_numeric",
             "CategoricalStringImputer": "moxie.impute._string",
             "StringSimpleImputer": "moxie.impute._string",
             "StringMissingIndicator": "moxie.impute._string",
@@ -2169,6 +2170,9 @@
         },
         "moxie.impute._simple": {
           "file": "algorithms/simple/src/moxie/impute/_simple.mojo"
+        },
+        "moxie.impute._categorical_numeric": {
+          "file": "algorithms/simple/src/moxie/impute/_categorical_numeric.mojo"
         },
         "moxie.impute._string": {
           "file": "algorithms/simple/src/moxie/impute/_string.mojo"

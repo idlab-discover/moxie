@@ -119,8 +119,10 @@ restore the unset request. Omitting the argument keeps the previous request.
 The typed request is separate from constructor parameters. An unfitted clone
 retains the request. Direct `score` calls accept an explicit
 weight array independently of the request. The fit slot is unset because
-neither estimator accepts fit weights. Automatic forwarding belongs to the
-parent composition.
+neither estimator accepts fit weights. With either estimator as the final step
+of a two-stage supervised [Pipeline](../pipeline/sequential.md#scoring), call
+`pipe.score(X, y, metadata={"validation_weight": weights.copy()})` after
+setting the alias on `pipe.estimator`.
 
 ## Native model persistence
 

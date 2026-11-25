@@ -14,10 +14,12 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+from sklearn import config_context
 from sklearn.datasets import make_blobs
+from sklearn.exceptions import UnsetMetadataPassedError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from oracle import load, ROOT, REVISION
+from oracle import load, ROOT, REVISION, _module
 from named_input_parity import check_named_input
 
 ORACLE = load()
@@ -236,6 +238,49 @@ def check_pipeline_projection(output):
     print(f'PASS: pinned sklearn scaler → LDA projection, four comparisons (max errors {errors})')
 
 
+def check_pipeline_routed_scores(output):
+    records = {}
+    for line in output.splitlines():
+        if line.startswith('routed_score '):
+            _, dtype, kind, score = line.split()
+            assert (dtype, kind) not in records
+            records[dtype, kind] = float(score)
+    models = {'lda': DA.LinearDiscriminantAnalysis, 'qda': DA.QuadraticDiscriminantAnalysis}
+    dtypes = (np.float32, np.float64)
+    assert set(records) == {(dtype.__name__, kind) for dtype in dtypes for kind in models}
+
+    routing = _module('sklearn.utils._da_pipeline_routing', 'sklearn/utils/_metadata_requests.py')
+    training_y = np.arange(45) % 3
+    score_y = training_y.copy()
+    score_y[0] = 1
+    for dtype in dtypes:
+        X = composition_features(45).astype(dtype)
+        weights = (1 + np.arange(45) % 7).astype(dtype)
+        for kind, model in models.items():
+            pipe = ORACLE['pipeline'].make_pipeline(ORACLE['data'].StandardScaler(), model())
+            pipe.fit(X, training_y)
+            final_name, final = pipe.steps[-1]
+            with config_context(enable_metadata_routing=True):
+                with np.testing.assert_raises(UnsetMetadataPassedError):
+                    pipe.score(X, score_y, sample_weight=weights)
+                final.set_score_request(sample_weight=False)
+                with np.testing.assert_raises_regex(TypeError, 'unexpected argument'):
+                    pipe.score(X, score_y, sample_weight=weights)
+                final.set_score_request(sample_weight=True)
+                expected = pipe.score(X, score_y, sample_weight=weights)
+                final.set_score_request(sample_weight='validation_weight')
+                # The pinned Pipeline.score inserts sample_weight=None alongside
+                # the alias. Exercise the pinned router with the supplied key only.
+                routed = routing.process_routing(pipe, 'score', validation_weight=weights)
+                alias_score = final.score(pipe.steps[0][1].transform(X), score_y,
+                                          **routed[final_name].score)
+                assert alias_score == expected
+            # The sklearn metric may round its weighted result in Float32.
+            np.testing.assert_allclose(records[dtype.__name__, kind], expected, rtol=0,
+                                       atol=1e-7 if dtype == np.float32 else 1e-15)
+    print('PASS: pinned sklearn Pipeline score routing for LDA and QDA in Float32 and Float64')
+
+
 def check_lda_search(output):
     records = defaultdict(list)
     for line in output.splitlines():
@@ -416,6 +461,7 @@ def main():
     composition = ROOT / 'builds/tests/discriminant_analysis/composition'
     output = subprocess.check_output([str(composition), '--composition-parity'], text=True)
     check_pipeline_projection(output)
+    check_pipeline_routed_scores(output)
     check_lda_search(output)
     check_named_input(DA, ROOT / 'builds/tests/discriminant_analysis/serialization')
 

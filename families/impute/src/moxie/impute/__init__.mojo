@@ -5,6 +5,7 @@ from ._indicator import MissingIndicator
 from ._knn import KNNImputer
 from ._iterative import IterativeBound, IterativeImputer, IterativeParams
 from ._string import (
+    CategoricalStringImputer,
     StringMissingIndicator,
     StringSimpleImputer,
     StringMatrix,

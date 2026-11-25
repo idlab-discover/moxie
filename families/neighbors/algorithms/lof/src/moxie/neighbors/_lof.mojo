@@ -1,7 +1,7 @@
 """Dense Local Outlier Factor using exact streaming neighbor queries."""
 import numojo as nm
 from std.math import max, isfinite, isnan, floor
-from moxie.base import BaseEstimator
+from moxie.base import BaseEstimator, FitPredictor
 from moxie.warnings import FitWarning
 from moxie.neighbors._base import NoveltyDetector
 from moxie.neighbors._unsupervised import NearestNeighbors, NeighborParams
@@ -14,10 +14,14 @@ struct LOFParams[dtype: DType, M: DenseMetric & Deinitable = Metric[dtype]](Copy
     var contamination: Optional[Float64]
     var novelty: Bool
 
-struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype]](NoveltyDetector):
+struct LocalOutlierFactor[
+    dtype: DType = DType.float64,
+    M: DenseMetric & Deinitable = Metric[dtype],
+](NoveltyDetector, FitPredictor):
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = Self.Input
     comptime Prediction = Self.Input
+    comptime Labels = Self.Prediction
     comptime Decision = Self.Input
     comptime SampleScores = Self.Input
     comptime Params = LOFParams[Self.dtype, Self.M]
@@ -211,10 +215,14 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
         for i in range(scores.shape[0]): scores.unsafe_set(i,Scalar[Self.dtype](-1) if scores.unsafe_get(i)<0 else Scalar[Self.dtype](1))
         return scores^
 
-    def fit_predict(mut self, X: nm.NDArray[Self.dtype], y: Optional[nm.NDArray[Self.dtype]] = None) raises -> nm.NDArray[Self.dtype]:
-        if self.novelty: raise Error("AttributeError: fit_predict requires novelty=False")
-        self.fit(X,y)
+    def fit_predict(
+        mut self, X: Self.Input, y: Optional[Self.Target] = None,
+    ) raises -> Self.Labels:
+        if self.novelty:
+            raise Error("AttributeError: fit_predict requires novelty=False")
+        _ = self.fit(X, y)
         var labels = nm.ones[Self.dtype](nm.Shape(self.n_samples_fit_))
         for i in range(self.n_samples_fit_):
-            if Float64(self.negative_outlier_factor_.unsafe_get(i)) < self.offset_: labels.unsafe_set(i,-1)
+            if Float64(self.negative_outlier_factor_.unsafe_get(i)) < self.offset_:
+                labels.unsafe_set(i, -1)
         return labels^

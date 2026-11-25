@@ -2,6 +2,7 @@
 """Dense kernel estimators using the family LIBSVM engine."""
 import numojo as nm
 from std.math import log
+from moxie.base import FitPredictor
 from moxie.svm._contracts import Dense, Indices, KernelModel, KernelSpec, KernelOptions, KernelProvider, TrainingSnapshot, validate_matrix, validate_vector
 from moxie.svm._libsvm import LibSVM
 from moxie.svm._classification import Gamma, Probability, class_scores, support_counts, linear_coefficients, public_support, checked_int32, _KernelFitDiagnostics
@@ -24,12 +25,13 @@ struct OneClassSVMParams(Copyable, Movable):
     var max_iter: Int
 
 
-struct OneClassSVM(OneClassSupportVector):
+struct OneClassSVM(OneClassSupportVector, FitPredictor):
     comptime Params = OneClassSVMParams
     comptime Input = Dense
     comptime SampleWeight = Dense
     comptime Target = Dense
     comptime Prediction = Indices
+    comptime Labels = Self.Prediction
     comptime Decision = Dense
     comptime Probabilities = Dense
     comptime SampleScores = Dense
@@ -210,7 +212,20 @@ struct OneClassSVM(OneClassSupportVector):
     def score_samples(self, X: Dense) raises -> Dense:
         return self.decision_function(X) + self.offset_.unsafe_get(0)
 
-    def fit_predict(mut self, X: Dense, y: Optional[Dense] = None, sample_weight: Optional[Dense] = None) raises -> Indices:
+    def fit_predict(
+        mut self, X: Self.Input, y: Optional[Self.Target] = None,
+    ) raises -> Self.Labels:
+        return self.fit_predict(X, y, None)
+
+    def fit_predict(
+        mut self, X: Self.Input, *, sample_weight: Optional[Self.SampleWeight],
+    ) raises -> Self.Labels:
+        return self.fit_predict(X, None, sample_weight)
+
+    def fit_predict(
+        mut self, X: Self.Input, y: Optional[Self.Target],
+        sample_weight: Optional[Self.SampleWeight],
+    ) raises -> Self.Labels:
         _ = self.fit(X, y, sample_weight)
         return self.predict(X)
 

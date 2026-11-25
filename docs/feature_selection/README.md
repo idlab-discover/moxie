@@ -12,6 +12,9 @@ export contributions and use Moxie's current dependency manifests.
 The [Titanic release-highlight notebook](../../notebooks/release_highlights/plot_release_highlights_1_1_0.ipynb)
 checks the feature names emitted by a mixed-column preprocessor and
 `SelectKBest` in the order used by the fitted logistic regression coefficients.
+The [SVM–ANOVA notebook](../../notebooks/svm/plot_svm_anova.ipynb) checks
+stratified cross-validation and grid search over a pipeline with
+`SelectPercentile`, `StandardScaler`, and `SVC`.
 
 Run from Moxie:
 

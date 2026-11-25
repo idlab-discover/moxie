@@ -86,6 +86,7 @@ def production_reference():
     return (
         nb.GaussianNB,
         nb.MultinomialNB,
+        nb.ComplementNB,
         da.LinearDiscriminantAnalysis,
         da.QuadraticDiscriminantAnalysis,
         logistic.LogisticRegression,
@@ -316,7 +317,7 @@ def main():
                     False, False, model.predict(q))
     # Cover both response protocols, weighted fitting and class-column ordering
     # with production classifiers rather than a shared test double.
-    gaussian, multinomial, lda, qda, logistic, ref.LinearSVC, svc = production_reference()
+    gaussian, multinomial, complement, lda, qda, logistic, ref.LinearSVC, svc = production_reference()
     production = [
         ('gaussian', gaussian(), True),
         ('lda', lda(), False),
@@ -418,11 +419,15 @@ def main():
         for method in ('sigmoid', 'isotonic', 'temperature'):
             y = codes if method == 'temperature' else 5 * codes - 7
             for ensemble in (False, True):
-                model = ref.CalibratedClassifierCV(
-                    multinomial(alpha=0.25), method=method, cv=3, ensemble=ensemble,
-                ).fit(X, y, sample_weight=w)
-                add('serialized_multinomial', X, y, w, q, model.predict_proba(q),
-                    method, ensemble, model.predict(q), model.classes_)
+                for kind, estimator in (
+                    ('serialized_multinomial', multinomial(alpha=0.25)),
+                    ('serialized_complement', complement(alpha=0.25, norm=True)),
+                ):
+                    model = ref.CalibratedClassifierCV(
+                        estimator, method=method, cv=3, ensemble=ensemble,
+                    ).fit(X, y, sample_weight=w)
+                    add(kind, X, y, w, q, model.predict_proba(q),
+                        method, ensemble, model.predict(q), model.classes_)
     fixtures = out / 'cases.txt'
     fixtures.write_text('\n'.join(records) + '\n')
     command = ['mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', 'builds/deps', '-I', 'examples/calibration_support', 'tests/calibration/parity_runner.mojo', '-o', str(out / 'runner')]

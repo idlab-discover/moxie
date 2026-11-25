@@ -84,7 +84,9 @@ def adapt_classifier(
     def classes(model: ComplementNB[]) raises -> Array:
         return _numeric_classes(model.classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "ComplementNB")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "ComplementNB")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(

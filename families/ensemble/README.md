@@ -8,7 +8,8 @@ Implemented: RandomForestClassifier, RandomForestRegressor,
 ExtraTreesClassifier, ExtraTreesRegressor, BaseEnsemble and the shared dense
 forest/sampling engine. Other estimator declarations raise explicitly.
 See [forests](docs/forests.md), [scope](docs/scope.md), and
-[API status](docs/api-surface.md) for supported inputs and limitations.
+[API status](docs/api-surface.md) for supported inputs and limitations. The private
+[histogram bin mapper](docs/hgb-binning.md) has focused contract and parity checks.
 
 Run from the Moxie root, using its locked toolchain:
 

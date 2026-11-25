@@ -5,6 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 MOXIE=ROOT.parents[1]
 sys.path.insert(0, str(MOXIE / "tools"))
 from compiler_limits import compiler_command
+ENSEMBLE_SRC = MOXIE / 'src/moxie/ensemble'
 CONSUMERS=[ROOT/'tests/consumers'/n for n in ('a','b')]
 FLAGS=['-O3','--fp-mode=contract=off']
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -23,22 +24,32 @@ def execute(*args,root=ROOT):
     if p.stdout: print(p.stdout,end='',flush=True)
     return p
 
+def ensemble_sources():
+    for path in sorted(ENSEMBLE_SRC.rglob('*.mojo')):
+        if path.stem != '__init__':
+            relative = path.relative_to(ENSEMBLE_SRC).with_suffix('')
+            yield 'moxie.ensemble.' + '.'.join(relative.parts), path
+
+
 def check_owned(lock):
     owner=next(p for p in lock['projects'] if p['id']=='moxie')
-    files={'moxie.ensemble.'+p.stem for p in (MOXIE/'src/moxie/ensemble').glob('*.mojo') if p.stem!='__init__'}
+    files = {module for module, _ in ensemble_sources()}
     assert {m for m in owner['modules'] if m.startswith('moxie.ensemble.')} == files
-    exports=json.loads((ROOT/'EXPORTS.json').read_text())['packages']['moxie.ensemble']
-    assert owner['exports']['packages']['moxie.ensemble']==exports
+    exports = json.loads((ROOT/'EXPORTS.json').read_text())['packages']
+    assert {package: symbols for package, symbols in owner['exports']['packages'].items()
+            if package == 'moxie.ensemble' or package.startswith('moxie.ensemble.')} == (
+        {package: symbols for package, symbols in exports.items() if package != 'moxie'}
+    )
     for project in lock['projects']:
         assert 'moxie-ensemble' not in project['path'], project['path']
 
 def ownership(root):
     deps=root/'builds/deps'
     report=json.loads((deps/'ASSEMBLY.json').read_text())
-    for source in (MOXIE/'src/moxie/ensemble').glob('*.mojo'):
-        if source.stem == '__init__': continue
-        assert report['modules']['moxie.ensemble.'+source.stem]==['moxie']
-        assert (deps/'moxie/ensemble'/source.name).read_bytes()==source.read_bytes()
+    for module, source in ensemble_sources():
+        assert report['modules'][module] == ['moxie']
+        assembled = deps / (module.replace('.', '/') + '.mojo')
+        assert assembled.read_bytes() == source.read_bytes()
     check_owned(json.loads((root/'builds/resolved.json').read_text()))
 
 def resolve(root):
@@ -70,7 +81,7 @@ def build():
     execute('mojo','precompile',ROOT/'builds/deps/moxie','-I',ROOT/'builds/deps','-o',ROOT/'builds/moxie.mojoc')
     for p in sorted((ROOT/'tests').glob('test_*.mojo')):
         compile_file(p,ROOT/'builds'/p.stem)
-    for driver in ('sampling_driver','forest_driver','public_forest_driver','public_edge_driver'):
+    for driver in ('sampling_driver','forest_driver','public_forest_driver','public_edge_driver','hgb_binning_driver'):
         compile_file(ROOT/'tests'/(driver+'.mojo'),ROOT/'builds'/driver)
     compile_file(ROOT/'examples/estimator.mojo',ROOT/'builds/example')
     compile_file(ROOT/'examples/plumbing.mojo',ROOT/'builds/plumbing_example')
@@ -125,22 +136,42 @@ def test():
     assembly_errors()
     print('PASS: dense contracts, two isolated composed consumers, missing sources and ownership/export conflicts')
 
+def pinned_oracle():
+    provenance = json.loads((ROOT/'docs/private/forest_engine/oracle-build.json').read_text())
+    revision = json.loads((ROOT/'PROVENANCE.json').read_text())['sklearn_revision']
+    assert provenance['revision'] == revision
+    archive = subprocess.check_output(['git', '-C', str(MOXIE.parent/'scikit-learn'), 'archive', revision])
+    assert hashlib.sha256(archive).hexdigest() == provenance['archive_sha256']
+    assert Path(provenance['source']).resolve() == ROOT/'builds/reference'
+    oracle = ROOT/'builds/oracle-env/bin/python'
+    if not oracle.exists():
+        raise SystemExit('missing builds/oracle-env: run `pixi run ensemble-prepare-oracle` first')
+    return oracle
+
+
+def hgb_binning():
+    # The bin mapper is private and the public HGB estimators do not call it yet.
+    assemble(ROOT)
+    ownership(ROOT)
+    for name in ('test_hgb_binning', 'hgb_binning_driver'):
+        compile_file(ROOT/'tests'/f'{name}.mojo', ROOT/'builds'/name)
+    execute(ROOT/'builds/test_hgb_binning')
+    execute(pinned_oracle(), ROOT/'tests/hgb_binning_parity.py')
+
+
 def main():
     try:
+        if sys.argv[1] == 'hgb-binning':
+            hgb_binning()
+            return
         if not sys.argv[1].endswith('-only'): build()
         if sys.argv[1] in ('test','test-only'): test()
         elif sys.argv[1] in ('parity','parity-only'):
-            # Exact comparisons against the independently built, pinned source reference.
             ownership(ROOT)
-            provenance=json.loads((ROOT/'docs/private/forest_engine/oracle-build.json').read_text())
-            revision=json.loads((ROOT/'PROVENANCE.json').read_text())['sklearn_revision']
-            assert provenance['revision']==revision
-            archive=subprocess.check_output(['git','-C',str(MOXIE.parent/'scikit-learn'),'archive',revision])
-            assert hashlib.sha256(archive).hexdigest()==provenance['archive_sha256']
-            assert Path(provenance['source']).resolve()==ROOT/'builds/reference'
-            oracle=ROOT/'builds/oracle-env/bin/python'
-            if not oracle.exists(): raise SystemExit('missing builds/oracle-env: run `pixi run ensemble-prepare-oracle` first')
-            for script in ('sampling_parity.py','forest_parity.py','public_forest_parity.py','public_edge_parity.py'): execute(oracle,ROOT/'tests'/script)
+            oracle = pinned_oracle()
+            for script in ('sampling_parity.py','forest_parity.py','public_forest_parity.py',
+                           'public_edge_parity.py','hgb_binning_parity.py'):
+                execute(oracle, ROOT/'tests'/script)
         elif sys.argv[1]=='start': execute(ROOT/'builds/example')
         elif sys.argv[1]!='build': raise ValueError(sys.argv[1])
     except subprocess.CalledProcessError as exc:

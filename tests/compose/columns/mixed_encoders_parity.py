@@ -12,7 +12,7 @@ import compose_parity_io as io
 from overlay import activate
 
 activate()
-from sklearn.model_selection import LeaveOneOut, PredefinedSplit, StratifiedKFold
+from sklearn.model_selection import LeaveOneOut, LeavePOut, PredefinedSplit, RepeatedStratifiedKFold, StratifiedKFold
 from sklearn.preprocessing import OrdinalEncoder, TargetEncoder
 
 COMPOSE = "sklearn/compose/_column_transformer.py"
@@ -38,7 +38,9 @@ def main():
         ("target", TargetEncoder(smooth=0., cv=list(StratifiedKFold(2).split(train, y))), ["color"]),
         ("automatic", TargetEncoder(target_type="continuous", cv=None, shuffle=False), ["color"]),
         ("leave_one_out", TargetEncoder(cv=LeaveOneOut()), ["color"]),
+        ("leave_p_out", TargetEncoder(cv=LeavePOut(1)), ["color"]),
         ("predefined", TargetEncoder(cv=PredefinedSplit([0, 1, 0, 1, 0, 1])), ["color"]),
+        ("repeated", TargetEncoder(cv=RepeatedStratifiedKFold(n_splits=2, n_repeats=1, random_state=0)), ["color"]),
         ("numeric", "passthrough", ["age"]),
     ])
     expected_fit = model.fit_transform(train, y)

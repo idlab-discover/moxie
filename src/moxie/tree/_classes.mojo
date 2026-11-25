@@ -814,11 +814,7 @@ struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DTyp
         return self.tree_.max_depth
     def get_n_leaves(self) raises -> Int:
         self._ready()
-        var count = 0
-        for node in self.tree_.nodes:
-            if node.left_child == -1:
-                count += 1
-        return count
+        return self.tree_.n_leaves()
     def cost_complexity_pruning_path(self, X: Features, y: Self.Target, sample_weight: Optional[Values] = None) raises -> PruningPath:
         var estimator = self.__sklearn_clone__()
         estimator.params.ccp_alpha = 0

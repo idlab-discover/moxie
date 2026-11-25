@@ -1,12 +1,13 @@
 """Dense extension contracts and shared NuMojo prediction (sklearn _BaseNB)."""
 import numojo as nm
 from numojo import NDArray, Shape, Item
-from std.math import isfinite, isnan
+from std.math import isfinite, isnan, min
 from moxie._labels import (
     NumericEncoding, StringEncoding, StringTarget, check_classification_targets,
     encode_column,
 )
-from moxie._naive_bayes_common import _exp, _log, _weights
+from moxie._naive_bayes_common import _alpha_fit_warnings, _exp, _log, _weights
+from moxie.warnings import FitWarning
 
 comptime DenseMatrix = NDArray[DType.float64]
 comptime Labels = List[Int]
@@ -523,6 +524,17 @@ struct FeatureAlpha(Copyable, Movable):
                     raise Error("ValueError: alpha must be finite and nonnegative")
         elif not isfinite(self.scalar) or self.scalar < 0:
             raise Error("ValueError: alpha must be finite and nonnegative")
+
+    def _fit_warnings(self, force_alpha: Bool) raises -> List[FitWarning]:
+        if force_alpha:
+            return []
+        var minimum = self.scalar
+        if self.values:
+            ref values = self.values.value()
+            minimum = values.item(0)
+            for i in range(1, values.shape[0]):
+                minimum = min(minimum, values.item(i))
+        return _alpha_fit_warnings(minimum, force_alpha)
 
 
 @fieldwise_init

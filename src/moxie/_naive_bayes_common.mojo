@@ -3,6 +3,7 @@ from std.math import isfinite
 import numojo as nm
 from numax.core.libm import exp as _libm_exp, log as _libm_log
 from moxie.base import IncrementalClassifier, LogProbabilityPredictor
+from moxie.warnings import FitWarning
 
 trait NaiveBayesClassifier(IncrementalClassifier, LogProbabilityPredictor):
     pass
@@ -116,12 +117,25 @@ def _log_priors(
     return result^
 
 
+comptime _ALPHA_FLOOR: Float64 = 1e-10
+
+
 def _alpha(alpha: Float64, force_alpha: Bool) raises -> Float64:
     if not isfinite(alpha) or alpha < 0:
         raise Error("ValueError: alpha must be finite and nonnegative")
-    if not force_alpha and alpha < 1e-10:
-        return 1e-10
+    if not force_alpha and alpha < _ALPHA_FLOOR:
+        return _ALPHA_FLOOR
     return alpha
+
+
+def _alpha_fit_warnings(alpha: Float64, force_alpha: Bool) -> List[FitWarning]:
+    if not force_alpha and alpha < _ALPHA_FLOOR:
+        return [FitWarning(
+            "UserWarning",
+            "alpha too small will result in numeric errors, setting alpha = "
+            "1.0e-10. Use `force_alpha=True` to keep alpha unchanged.",
+        )]
+    return []
 
 
 def _check_binarize(threshold: Optional[Float64]) raises:

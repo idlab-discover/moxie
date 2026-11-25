@@ -16,6 +16,7 @@ import re
 import json
 import os
 import subprocess
+import warnings
 
 import numpy as np
 import sklearn
@@ -613,6 +614,55 @@ for name, dtype, options in (
     pipeline.fit(data, -y)
     compare("pipe.estimator.classes_", pipeline.classes_, labels=True)
     compare("pipe.predict_proba(Q)", pipeline.predict_proba(query))
+
+# The shared warning record mirrors sklearn's alpha diagnostic once per
+# successful call, even when several vector entries require the floor.
+for name in ("MultinomialNB", "ComplementNB", "BernoulliNB", "CategoricalNB"):
+    for vector in (False, True) if name != "CategoricalNB" else (False,):
+        ident = f"case_{len(case_names)}"
+        case_names.append(ident)
+        values = [[0., 2.], [1., 0.], [2., 2.], [1., 1.]]
+        labels = [-2, -2, 7, 7]
+        alpha = [0., 1e-12] if vector else 0.
+        kwargs = "alpha_values=alpha^" if vector else "alpha=0.0"
+        model = getattr(nb, name)(alpha=alpha, force_alpha=False)
+        lines.extend([f"\n@no_inline\ndef {ident}() raises:",
+                      f"    var X = dense_from_lists({literal(values)})",
+                      f"    var y: List[Int] = {literal(labels)}"])
+        if vector:
+            lines.append("    var alpha = dense_from_lists([[0.0, 1e-12]]).reshape(nm.Shape(2))")
+        lines.extend([f"    var model = {name}({kwargs}, force_alpha=False)",
+                      "    assert_equal(len(model.fit_warnings), 0)"])
+        for method in ("fit", "partial_fit"):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                getattr(model, method)(values, labels)
+            assert len(caught) == 1, (name, method, caught)
+            warning = caught[0]
+            lines.extend([f"    _ = model.{method}(X, y)",
+                          "    assert_equal(len(model.fit_warnings), 1)",
+                          f"    assert_equal(model.fit_warnings[0].category, {literal(warning.category.__name__)})",
+                          f"    assert_equal(model.fit_warnings[0].message, {literal(str(warning.message))})"])
+            compare("model.predict_proba(X)", model.predict_proba(values))
+        lines.extend(["    var copied = model.copy()",
+                      "    var fresh = clone(model)",
+                      "    assert_equal(len(fresh.fit_warnings), 0)",
+                      "    _ = model.set_params(force_alpha=True)",
+                      "    with assert_raises():",
+                      "        _ = model.fit(X, List[Int]([7]))",
+                      "    assert_equal(len(model.fit_warnings), 1)",
+                      "    with assert_raises():",
+                      "        _ = model.partial_fit(X, List[Int]([7]))",
+                      "    assert_equal(len(model.fit_warnings), 1)",
+                      "    _ = model.partial_fit(X, y)",
+                      "    assert_equal(len(model.fit_warnings), 0)",
+                      "    assert_equal(len(copied.fit_warnings), 1)",
+                      "    _ = model.set_params(force_alpha=False)",
+                      "    _ = model.fit(X, y)",
+                      "    assert_equal(len(model.fit_warnings), 1)",
+                      "    _ = model.set_params(force_alpha=True)",
+                      "    _ = model.fit(X, y)",
+                      "    assert_equal(len(model.fit_warnings), 0)"])
 
 # Bound compilation memory while retaining every case and its original index.
 parser = argparse.ArgumentParser(description=__doc__)

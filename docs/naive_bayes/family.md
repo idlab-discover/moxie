@@ -318,8 +318,13 @@ each batch. Negative weights raise even where sklearn accepts them. All-zero
 rejection matches the pinned reference. Explicit priors must be finite and nonnegative; Gaussian priors must also sum to one. Unknown
 incremental labels raise consistently for every model.
 
-`force_alpha=False` floors each scalar or vector alpha entry to `1e-10`; the
-floor is applied without emitting a Python-style warning. `force_alpha=True` preserves zero alpha.
+`force_alpha=False` floors each scalar or vector alpha entry to `1e-10`.
+All four discrete classifiers record one `moxie.warnings.FitWarning` in
+`fit_warnings` when an entry is floored. The record has category
+`UserWarning` and the pinned scikit-learn message. Each successful `fit` or
+`partial_fit` replaces the list. Failed calls preserve it, fitted copies own
+their records, and unfitted clones start with an empty list. Read the list on
+the fitted estimator or pipeline child. `force_alpha=True` preserves zero alpha.
 Degenerate likelihoods can consequently produce infinities or NaNs, just as
 in sklearn; these are not replaced by fabricated uniform probabilities.
 Normalization follows `scipy.special.logsumexp`: a row whose maximum is

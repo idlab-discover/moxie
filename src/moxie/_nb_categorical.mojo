@@ -1,8 +1,9 @@
 """Native dense CategoricalNB; sklearn 4358542a1bd3 (BSD-3-Clause)."""
 import numojo as nm
+from moxie.warnings import FitWarning
 from numojo import NDArray, Shape, Item
 from moxie._dense import sum_axis2d
-from moxie._naive_bayes_common import _scalar_weights
+from moxie._naive_bayes_common import _alpha_fit_warnings, _scalar_weights
 from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
 from moxie._naive_bayes_common import NaiveBayesClassifier, _Matrix, _alpha, _log, _check_prior, _log_priors
@@ -73,6 +74,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
     var _domain: Optional[Self.D]
     var class_count_: DenseMatrix
     var class_log_prior_: DenseMatrix
+    var fit_warnings: List[FitWarning]
     var n_features_in_: Int
     var category_count_: List[DenseMatrix]
     var feature_log_prob_: List[DenseMatrix]
@@ -97,6 +99,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self.classes_ = Self.D.empty_target()
         self._domain = None
         self.class_count_ = nm.zeros[DType.float64](Shape(0))
+        self.fit_warnings = []
         self.class_log_prior_ = nm.zeros[DType.float64](Shape(0))
         self.n_features_in_ = 0
         self.category_count_ = List[DenseMatrix]()
@@ -383,6 +386,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
                     smoothed[Item(c, k)] = _log(smoothed.item(c, k)) - _log(totals.item(c))
             self.feature_log_prob_.append(smoothed^)
         self.class_log_prior_ = _log_priors(self.class_count_, self.class_prior, self.fit_prior)
+        self.fit_warnings = _alpha_fit_warnings(self.alpha, self.force_alpha)
 
     def predict_joint_log_proba[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> DenseMatrix:
         check_is_fitted(self)

@@ -3,8 +3,8 @@
 Use `from moxie.linear_model import ElasticNet, Lasso` with the family or child
 assembled `builds/deps` namespace. See `examples/elastic_net.mojo`.
 
-Both support Float32/Float64 (compile-time dtype), cyclic selection, alpha,
-fit_intercept, max_iter, tol, positive, warm_start, independent multi-output
+Both support Float32/Float64 (compile-time dtype), cyclic and random
+selection, alpha, fit_intercept, max_iter, tol, positive, warm_start, independent multi-output
 regression, nonnegative array weights and scalar weights. ElasticNet also takes
 l1_ratio in [0,1]. Scalar weights cancel from the average-loss objective, as in
 the pinned reference. Array weights are normalized to sum to n_samples before
@@ -31,11 +31,14 @@ starts reuse coefficients and reconstruct the intercept with the new means;
 incompatible feature/output counts raise. A converged warm start may take
 zero iterations, as in the pinned local reference.
 
-Open dense work includes random selection, Gram precomputation and supplied
-Gram arrays, multi-task group penalties, and CV variants. `random_state`
-accepts None or a 32-bit unsigned seed represented as Int. Python
-`check_input=False`, mutable RandomState objects, metadata routing and
-feature names have no native interface.
+Open dense work includes Gram precomputation and supplied Gram arrays,
+multi-task group penalties, and CV variants. `selection="random"` draws
+coordinates with replacement from the active set. `random_state` accepts
+a 32-bit unsigned seed as `Int`, or `None` for Moxie's shared default
+stream. An integer resets the stream at each fit and for each independently
+fitted target, including warm refits. The cyclic solver skips RNG draws.
+Python `check_input=False`, mutable RandomState objects, metadata routing
+and feature names have no native interface.
 
 ## Single-target regularization paths
 
@@ -43,9 +46,11 @@ Import `enet_path` and `lasso_path` from `moxie.linear_model`, or call
 `ElasticNet[dtype].path` and `Lasso[dtype].path`. The path takes a dense
 Float32 or Float64 feature matrix and a same-dtype target vector. It uses the
 data as supplied. Center the inputs first when a fit with an intercept is
-required. The same cyclic residual solver runs at every alpha and starts
-from the preceding solution. Optional `coef_init` is a same-dtype vector with
-one entry per feature. Pass a view (for example, `coef_init=initial.view()`)
+required. The residual solver starts each alpha from the preceding solution.
+The default selection is cyclic. For random selection, the path uses one
+MT19937 stream and takes a fresh solver seed at each alpha, including points
+that converge without a sweep. Optional `coef_init` is a same-dtype vector
+with one entry per feature. Pass a view (for example, `coef_init=initial.view()`)
 to supply an optional array while retaining the original handle. The path
 preserves caller inputs. It packs the feature
 matrix by column once and reuses that buffer for the full path.
@@ -69,4 +74,4 @@ meet the gap criterion. Each gap uses the average-loss scale of the public
 objective.
 
 The native path uses the residual engine and always validates inputs.
-The dense multi-task, Gram and random-selection path engines remain open.
+The dense multi-task and Gram path engines remain open.

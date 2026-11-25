@@ -1,4 +1,4 @@
-"""Cyclic parity using the pinned Python AND Cython sources.
+"""Dense coordinate parity using the pinned Python AND Cython sources.
 
 Float64 1e-8; Float32 3e-4 for BLAS reduction-order differences. Absolute
 error scales with max(1, |y|)^2. Float64 iteration counts must be exact;
@@ -29,7 +29,7 @@ for bits, dtype in ((64, np.float64), (32, np.float32)):
                 if mode == 'column': target = target.reshape(-1, 1)
                 sw = rng.uniform(.2, 2, n).astype(dtype) if mode == 'weighted' else None
                 if sw is not None and n > 2: sw[0] = 0
-                cases.append(dict(id=f'{name}-{ratio}-{mode}-{bits}', bits=bits, X=X, y=target, Z=rng.normal(size=(4, p)).astype(dtype),
+                cases.append(dict(id=f'{name}-{ratio}-{mode}-{bits}', bits=bits, name=name, mode=mode, X=X, y=target, Z=rng.normal(size=(4, p)).astype(dtype),
                     alpha=100. if mode == 'large-alpha' else .1, ratio=ratio, intercept=mode != 'no-intercept',
                     positive=mode == 'positive', warm=mode == 'warm', max_iter=1 if mode == 'one-iteration' else 1000, tol=1e-4, sw=sw))
 path_cases = []
@@ -66,34 +66,54 @@ for bits, dtype in ((64, np.float64), (32, np.float32)):
             if mode == 'increasing':
                 count, eps = 7, 3.
             path_cases.append(dict(
-                id=f'path-{name}-{ratio}-{mode}-{bits}', bits=bits,
+                id=f'path-{name}-{ratio}-{mode}-{bits}', bits=bits, mode=mode,
                 X=design, y=target, ratio=ratio, count=count, eps=eps,
                 alphas=alphas, initial=initial, max_iter=max_iter, positive=positive,
             ))
+
+# Short sweeps expose the sampled coordinate order. Warm and weighted fits,
+# positive constraints, pure L2 (no screening) and independent targets reuse it.
+cases += [
+    dict(case, id=f"random-{seed}-{case['id']}", seed=seed)
+    for case in cases
+    for seed in (0, 4294967295)
+    if case['name'] in ('tall', 'multi')
+    and case['mode'] in ('one-iteration', 'warm', 'weighted', 'positive')
+]
+path_cases += [
+    dict(case, id=f"random-{seed}-{case['id']}", seed=seed)
+    for case in path_cases
+    for seed in (0, 4294967295)
+    if case['mode'] in ('one-iteration', 'positive', 'explicit')
+]
 
 folder = ROOT / 'builds/parity'
 folder.mkdir(parents=True, exist_ok=True)
 lines=[]
 for c in cases:
     params={k: (int(c[k]) if isinstance(c[k], bool) else c[k]) for k in ('alpha','ratio','intercept','positive','warm','max_iter','tol')}
+    if 'seed' in c: params['seed'] = c['seed']
     arrays={k:c[k] for k in ('X','y','Z')}
     if c['sw'] is not None: arrays['sw']=c['sw']
     lines.append(io.case_line(c['id'],c['bits'],params,arrays))
 for case in path_cases:
     params = {k: case[k] for k in ('ratio', 'count', 'eps', 'max_iter')}
     params.update(path=1, positive=int(case['positive']))
+    if 'seed' in case: params['seed'] = case['seed']
     arrays = {k: case[k] for k in ('X', 'y', 'alphas', 'initial') if case[k] is not None}
     lines.append(io.case_line(case['id'], case['bits'], params, arrays))
 fixtures=folder/'fixtures.txt'; fixtures.write_text('\n'.join(lines)+'\n')
 output=subprocess.run([str(ROOT/'builds/parity_driver'),str(fixtures)],env=environment(ROOT),text=True,capture_output=True,check=True).stdout
 (folder/'native.txt').write_text(output)
 results=io.parse_results(output)
+assert len(results) == len(cases) + len(path_cases)
 assert set(results) == {c['id'] for c in cases + path_cases}
 report=[]
 for c in cases:
     got=results[c['id']]
     assert 'error' not in got,(c['id'],got)
     kwargs=dict(alpha=c['alpha'],fit_intercept=c['intercept'],positive=c['positive'],warm_start=c['warm'],max_iter=c['max_iter'],tol=c['tol'])
+    if 'seed' in c: kwargs.update(selection='random', random_state=c['seed'])
     model=reference.Lasso(**kwargs) if c['ratio']==1 else reference.ElasticNet(l1_ratio=c['ratio'],**kwargs)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -124,6 +144,8 @@ for case in path_cases:
         max_iter=case['max_iter'], return_n_iter=True,
         alphas=case['count'] if case['alphas'] is None else case['alphas'],
     )
+    if 'seed' in case:
+        kwargs.update(selection='random', random_state=case['seed'])
     if case['initial'] is not None:
         kwargs['coef_init'] = case['initial'].copy()
     if case['ratio'] == 1:
@@ -156,6 +178,6 @@ for case in path_cases:
 (folder/'path-report.json').write_text(
     json.dumps(dict(revision=io.REVISION, sources=hashes, results=path_report), indent=2) + '\n'
 )
-print(f'Cyclic ElasticNet/Lasso path parity passed: {len(path_cases)} cases')
+print(f'Dense ElasticNet/Lasso path parity passed: {len(path_cases)} cases')
 (folder/'report.json').write_text(json.dumps(dict(revision=io.REVISION,sources=hashes,cases=len(cases),results=report),indent=2)+'\n')
-print(f'Cyclic ElasticNet/Lasso parity passed: {len(cases)} cases; pinned sklearn Python and Cython {io.REVISION[:10]}')
+print(f'Dense ElasticNet/Lasso parity passed: {len(cases)} cases; pinned sklearn Python and Cython {io.REVISION[:10]}')

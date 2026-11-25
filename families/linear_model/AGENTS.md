@@ -7,11 +7,11 @@ validation directories here and implementation modules under
 relevant child docs before changing an estimator or solver.
 
 Keep a single implementation of preprocessing, prediction and coefficient
-contracts in `_linear_base` and `_contracts`. `_cd_fast` owns the cyclic
-coordinate engine. Smooth and SGD directories contain prerequisite probes,
-not implemented engines; RidgeCV has no implementation. Keep those limits
-explicit. Shared RNG is owned by ../../shared/random; `our_rand_r` now exists,
-but random coordinate selection and SGD integration remain unfinished.
+contracts in `_linear_base` and `_contracts`. `_cd_fast` owns the residual
+and Gram coordinate engines. Smooth and SGD directories contain prerequisite
+probes, not implemented engines. RidgeCV has no implementation. Keep those
+limits explicit. Use the RNG primitives in ../../shared/random for stochastic
+solver work.
 
 Use the live current Moxie contracts. Preserve the compatible toolchain locks,
 reference revision, source provenance and license assets. Dependency manifests

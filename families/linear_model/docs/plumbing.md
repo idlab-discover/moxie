@@ -167,12 +167,13 @@ worktrees. Moxie owns `_random`, `_dense`, estimator contracts and validation.
 Runtime learning remains pure Mojo. Python, NumPy, SciPy and sklearn are
 validation tools only. Preserve `-O3 --fp-mode=contract=off`.
 
-## Cyclic coordinate implementation
+## Coordinate descent implementation
 
 `shared/coordinate_engine` owns `_cd_fast.coordinate_descent` (prepared X,
 vector y, owned initial coefficients, unnormalized L1/L2 penalties, max_iter,
-tol and positivity). It returns owned coefficients, dual gap, iteration count
-and convergence status. `algorithms/elastic_net` owns ElasticNet and Lasso:
-weight normalization, lifecycle and public parameter/shape semantics. Both use
+tol, positivity and an optional random seed). It returns owned coefficients,
+dual gap, iteration count and convergence status. `algorithms/elastic_net`
+owns ElasticNet and Lasso, including weight normalization, solver seed
+generation, paths, lifecycle and public parameter/shape semantics. Both use
 family `_linear_base` for centering, intercepts, decisions and R2. See the child
-API for diagnostics and explicit random/Gram/path/multi-task limitations.
+API for diagnostics, supported paths and remaining Gram and multi-task work.

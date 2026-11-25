@@ -60,7 +60,8 @@ before rounding. SGD and Adam coefficients retain the input dtype.
   `Optional[Int]()` to clear it. Omitting the keyword keeps the existing value.
 - Learned state is read through `n_features_in_()`, `n_iter_()`, `t_()`,
   `n_layers_()`, `n_outputs_()`, `out_activation_()`, `loss_()`,
-  `best_loss_()`, `loss_curve_()`, and the classifier's `classes_()`.
+  `best_loss_()`, `loss_curve_()`, `validation_scores_()`,
+  `best_validation_score_()`, and the classifier's `classes_()`.
   Obtain coefficient and intercept snapshots through `coefs_()` and
   `intercepts_()`. Both default to the feature dtype. To read an L-BFGS model
   with Float32 features, use `coefs_[DType.float64]()` and
@@ -81,7 +82,7 @@ domain. Set `warm_start=False` to start a fresh fit when changing those
 boundaries.
 
 Each stochastic warm fit creates a fresh optimizer with the current settings,
-keeps the loss history, best loss and stopping counter, and continues `t_()`.
+keeps the loss history and stopping state, and continues `t_()`.
 `n_iter_()` reports iterations from the current call. Integer seeds are
 reapplied per call, and an explicit RNG skips initialization draws on warm
 fits. A warm L-BFGS refit from L-BFGS state starts from the retained
@@ -90,6 +91,33 @@ converted once for that solve.
 When switching from L-BFGS to SGD or Adam, coefficients convert to the feature
 dtype. Moxie initializes stochastic history if this is the first stochastic
 fit, where pinned scikit-learn requires history from a prior stochastic fit.
+
+## Validation-set early stopping
+
+Set `early_stopping=True` with SGD or Adam. The validation set takes
+`ceil(validation_fraction * n_samples)` rows from the same RNG stream used for
+initialization and minibatch shuffling. One-output classifiers stratify by
+class. Multiclass classifiers and regressors use an unstratified split. Sample
+weights follow their rows and apply to both the training objective and the
+validation score. The split requires at least two validation rows.
+
+After each epoch, the trainer records the held-out accuracy or R². Patience
+uses `tol` and `n_iter_no_change`, including the adaptive SGD rate reduction.
+The returned model restores the coefficients and intercepts from the highest
+validation score. `validation_scores_()` returns an independent history
+snapshot, `best_validation_score_()` returns the highest score, and
+`best_loss_()` returns `None`. The loss curve and `loss_()` still describe
+training loss, and `t_()` counts training rows only. Fresh fits without a
+validation split return `None` for the validation getters. L-BFGS ignores
+`early_stopping`.
+
+Stochastic warm starts in the same stopping mode continue its history and
+patience. Moxie keeps the best checkpoint independently owned across warm
+fits. In pinned scikit-learn, a warm refit can modify the previous checkpoint
+in place after it has been restored. Changing stopping modes on a stochastic
+warm start begins a new stopping record for that mode and retains the loss
+curve and sample counter. The pinned Python implementation can raise when the
+previous mode initialized different history attributes.
 
 ## Incremental training
 
@@ -126,6 +154,6 @@ incremental contract limits every successful call to one stochastic epoch.
 Continuing a fit requires the same input width, hidden topology, output shape
 and output activation. Start a fresh ordinary fit to change these boundaries.
 
-Validation-set early stopping and multilabel classification remain open.
+Multilabel classification remains open.
 Ordinary supervised, weighted and probability traits remain available for
 typed pipelines and dense CV.

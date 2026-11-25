@@ -40,7 +40,10 @@ def cross_validation() raises:
     comptime Adapter = DenseSupervisedAdapter[Estimator, Array, DType.float64]
     var X = arange[DType.float64](24).reshape(Shape(12, 2))
     var y = arange[DType.float64](12)
-    var model = Estimator(hidden_layer_sizes=[3], random_state=0, max_iter=2)
+    var model = Estimator(
+        hidden_layer_sizes=[3], random_state=0, max_iter=2,
+        early_stopping=True, validation_fraction=0.25,
+    )
     var weights = Optional(ones[DType.float64](Shape(12)))
     var scores = cross_val_score[Adapter](
         model, X, y, Adapter(), fit_metadata=weights, score_metadata=weights,

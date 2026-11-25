@@ -11,7 +11,8 @@ from moxie.warnings import FitWarning
 from ._base import MLPClassifierAPI, MLPRegressorAPI
 from ._mlp_engine import _log, _weight_sum
 from ._mlp_model import (
-    MLPParams, _MLPState, _regression_output, _regression_score, _sample_weight, _target_matrix,
+    MLPParams, _MLPState, _class_code, _classification_validation_score, _regression_output,
+    _regression_score, _regression_validation_score, _sample_weight, _target_matrix,
 )
 from ._plumbing import validate_incremental
 
@@ -240,6 +241,12 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
     def best_loss_(self) raises -> Optional[Float64]:
         return self._fitted().best_loss()
 
+    def validation_scores_(self) raises -> Optional[List[Float64]]:
+        return self._fitted().validation_scores()
+
+    def best_validation_score_(self) raises -> Optional[Float64]:
+        return self._fitted().best_validation_score()
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
     ) raises -> ref[self] Self:
@@ -342,10 +349,16 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
                 encoded.unsafe_set(row * width + code, 1)
             else:
                 encoded.unsafe_set(row, code.cast[Self.dtype]())
+        var stratify: Optional[NDArray[DType.int64]] = None
+        if self._params.early_stopping and self._params.solver != "lbfgs" and width == 1:
+            stratify = codes^
         var state = _MLPState(
             X, encoded, self._params, "softmax" if count > 2 else "logistic",
             "log_loss" if count > 2 else "binary_log_loss", rng, weights,
             previous=self._state, incremental=incremental,
+            validation_score=_classification_validation_score[Self.dtype, True] if count == 1
+                else _classification_validation_score[Self.dtype, False],
+            stratify=stratify^,
         )
         var labels = encoding.classes.astype[Self.label_dtype]()
         self.fit_warnings = state.warnings.copy()
@@ -383,17 +396,9 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         var activation = self._fitted().predict_matrix(X, self._params.activation)
         ref classes = self._classes.value()
-        var width = activation.shape[1]
         var result = zeros[Self.label_dtype](Shape(activation.shape[0]))
         for row in range(result.size):
-            var code = 0
-            if width > 1:
-                var start = row * width
-                for column in range(1, width):
-                    if activation.unsafe_get(start + column) > activation.unsafe_get(start + code):
-                        code = column
-            elif classes.size > 1 and activation.unsafe_get(row) > 0.5:
-                code = 1
+            var code = _class_code(activation, row, classes.size == 1)
             result.unsafe_set(row, classes.unsafe_get(code))
         return result^
 
@@ -638,6 +643,12 @@ struct MLPRegressor[dtype: DType = DType.float64](
     def best_loss_(self) raises -> Optional[Float64]:
         return self._fitted().best_loss()
 
+    def validation_scores_(self) raises -> Optional[List[Float64]]:
+        return self._fitted().validation_scores()
+
+    def best_validation_score_(self) raises -> Optional[Float64]:
+        return self._fitted().best_validation_score()
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
     ) raises -> ref[self] Self:
@@ -725,6 +736,7 @@ struct MLPRegressor[dtype: DType = DType.float64](
         var state = _MLPState(
             X, target, self._params, activation, self._params.loss, rng, weights,
             previous=self._state, incremental=incremental,
+            validation_score=_regression_validation_score[Self.dtype],
         )
         self.fit_warnings = state.warnings.copy()
         self._state = state^

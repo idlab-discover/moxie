@@ -8,19 +8,23 @@ and [image API](../algorithms/image/docs/api.md) for typed parameters, defaults,
 learned state, array types and fluent fit/set_params behavior.
 
 `FeatureExtractor` remains the shared optional transformation contract.
-`text.TfidfTransformer` processes dense count matrices. See the
-[TF-IDF API](../algorithms/text/docs/api.md) for options and dtype rules.
-`FeatureHasher` and the raw-document vectorizers remain explicit raising
-declarations. Unsupported helpers also raise. Their native `APIValue` and
-`APIExpressionDefault` markers preserve source signatures without pretending
-to implement Python objects or callable defaults. `text.ENGLISH_STOP_WORDS`
-is a native immutable tuple, not a Python frozenset.
+`text.CountVectorizer` produces dense counts from documents and
+`text.TfidfTransformer` weights dense count matrices. `text.strip_tags`
+strips simple HTML/XML tags. See the [text API](../algorithms/text/docs/api.md)
+for options, dtype rules and native callable signatures.
+`FeatureHasher`, `HashingVectorizer`, `TfidfVectorizer` and the accent-stripping
+helpers remain explicit raising declarations. `text.ENGLISH_STOP_WORDS`
+is an immutable native tuple.
 
 The focused build precompiles the assembled namespace. Native tests verify
 implemented behavior and rejected deferred constructors; numerical parity covers
-the supported dictionary, image and TF-IDF modes.
+the supported dictionary, image and text modes.
 
 ## Composition
+
+`CountVectorizer` composes with `TfidfTransformer` in a
+`TransformerPipeline`. Its compile-time target type can also be matched to a
+downstream estimator's supervised target.
 
 `DictVectorizer(sparse=False)` is a `Pipeline` transformer in front of
 estimators that take `NDArray` input (for example `RidgeClassifier`); nested

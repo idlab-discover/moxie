@@ -3,6 +3,7 @@ import numojo as nm
 from numojo import NDArray, Shape
 from std.testing import assert_equal, assert_raises
 from moxie.base import clone
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.naive_bayes import GaussianNB, NumericDomain
 from moxie.neighbors import KNeighborsClassifier
 from moxie.tree import DecisionTreeClassifier
@@ -98,3 +99,40 @@ def main() raises:
     )
     _ = bayes_chain.fit(X, binary, sample_weight=weights)
     parity["ComponentsGaussianNBChainProba"](bayes_chain.predict_proba(X))
+
+    var integer_targets = multiclass.astype[DType.int64]()
+    var list_bayes = MultiOutputClassifier(GaussianNB())
+    with assert_raises(contains="first partial_fit requires classes"):
+        _ = list_bayes.partial_fit(X, integer_targets)
+    _ = list_bayes.fit(X, integer_targets, sample_weight=weights)
+    assert_equal(list_bayes.classes_[1].item(2), Int64(19))
+    parity["ComponentsGaussianNBListLabels"](list_bayes.predict(X))
+    parity["ComponentsGaussianNBListProba"](list_bayes.predict_proba(X)[1])
+
+    var incremental = clone(list_bayes)
+    var first_X = nm.zeros[DType.float64](Shape(6, 1))
+    var second_X = first_X.copy()
+    var first_y = nm.zeros[DType.int64](Shape(6, 2))
+    var second_y = first_y.copy()
+    for i in range(6):
+        first_X.unsafe_set(i, X.unsafe_get(i))
+        second_X.unsafe_set(i, X.unsafe_get(6 + i))
+        for j in range(2):
+            first_y.unsafe_set(2 * i + j, integer_targets.item(i, j))
+            second_y.unsafe_set(2 * i + j, integer_targets.item(6 + i, j))
+    _ = incremental.partial_fit(first_X, first_y, classes=list_bayes.classes_.copy())
+    _ = incremental.partial_fit(second_X, second_y)
+    parity["ComponentsGaussianNBListIncrementalLabels"](incremental.predict(X))
+    parity["ComponentsGaussianNBListIncrementalProba"](incremental.predict_proba(X)[1])
+
+    var list_chain = ClassifierChain(GaussianNB(), chain_method="predict_proba", cv=3)
+    var integer_binary = binary.astype[DType.int64]()
+    _ = list_chain.fit(X, integer_binary)
+    parity["ComponentsGaussianNBListChainCVLabels"](list_chain.predict(X))
+    parity["ComponentsGaussianNBListChainCVProba"](list_chain.predict_proba(X))
+
+    comptime LDA = LinearDiscriminantAnalysis[DType.float64, Float64]
+    var lda = MultiOutputClassifier[LDA, DType.float64, DType.float64](LDA())
+    _ = lda.fit(X, multiclass)
+    parity["ComponentsLDAListLabels"](lda.predict(X))
+    parity["ComponentsLDAListProba"](lda.predict_proba(X)[1])

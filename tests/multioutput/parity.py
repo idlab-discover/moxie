@@ -22,6 +22,7 @@ def oracle():
     from sklearn.tree import _classes
     from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
     from sklearn.dummy import DummyRegressor
+    from sklearn.discriminant_analysis import __file__ as lda_source
     path = REFERENCE / 'sklearn/multioutput.py'
     for relative, source in [
         ('sklearn/multioutput.py', path),
@@ -29,6 +30,7 @@ def oracle():
         ('sklearn/model_selection/_split.py', Path(_split.__file__)),
         ('sklearn/model_selection/_validation.py', Path(_validation.__file__)),
         ('sklearn/naive_bayes.py', Path(naive_bayes_source)),
+        ('sklearn/discriminant_analysis.py', Path(lda_source)),
         ('sklearn/neighbors/_classification.py', Path(_classification.__file__)),
         ('sklearn/tree/_classes.py', Path(_classes.__file__)),
     ]:
@@ -209,10 +211,11 @@ def components(module, np):
 
 
 def classifier_components(module, np):
-    """Tree/KNN probability normalization and GaussianNB weight conversion."""
+    """Single-target probability, weight and List-label interoperability."""
     import warnings
 
     from sklearn import config_context
+    from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
     from sklearn.naive_bayes import GaussianNB
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn.tree import DecisionTreeClassifier
@@ -241,7 +244,24 @@ def classifier_components(module, np):
         bayes_chain = module.ClassifierChain(
             GaussianNB().set_fit_request(sample_weight=True), chain_method='predict_proba',
         ).fit(X, binary, sample_weight=weights)
+    integer_targets = multiclass.astype(np.int64)
+    list_bayes = module.MultiOutputClassifier(GaussianNB()).fit(X, integer_targets, sample_weight=weights)
+    incremental = module.MultiOutputClassifier(GaussianNB())
+    incremental.partial_fit(X[:6], integer_targets[:6], classes=list_bayes.classes_)
+    incremental.partial_fit(X[6:], integer_targets[6:])
+    list_chain = module.ClassifierChain(GaussianNB(), chain_method='predict_proba', cv=3).fit(
+        X, binary.astype(np.int64)
+    )
+    lda = module.MultiOutputClassifier(LinearDiscriminantAnalysis()).fit(X, multiclass)
     return {
+        'ComponentsGaussianNBListLabels': list_bayes.predict(X).ravel().tolist(),
+        'ComponentsGaussianNBListProba': list_bayes.predict_proba(X)[1].ravel().tolist(),
+        'ComponentsGaussianNBListIncrementalLabels': incremental.predict(X).ravel().tolist(),
+        'ComponentsGaussianNBListIncrementalProba': incremental.predict_proba(X)[1].ravel().tolist(),
+        'ComponentsGaussianNBListChainCVLabels': list_chain.predict(X).ravel().tolist(),
+        'ComponentsGaussianNBListChainCVProba': list_chain.predict_proba(X).ravel().tolist(),
+        'ComponentsLDAListLabels': lda.predict(X).ravel().tolist(),
+        'ComponentsLDAListProba': lda.predict_proba(X)[1].ravel().tolist(),
         'ComponentsTreeLabels': wrapped_tree.predict(X32).ravel().tolist(),
         'ComponentsTreeProba': wrapped_tree.predict_proba(X32)[1].ravel().tolist(),
         'ComponentsTreeChainCVProba': tree_chain.predict_proba(X32).ravel().tolist(),
@@ -292,6 +312,10 @@ if __name__ == '__main__':
             elif name.startswith('ComponentsGaussianNB') and name.endswith('Proba'):
                 # Weighted moments and log normalization use different reduction orders.
                 matches = all(math.isclose(a, b, rel_tol=1e-12, abs_tol=1e-12)
+                              for a, b in zip(actual[name], reference[name]))
+            elif name == 'ComponentsLDAListProba':
+                # SVD and probability normalization can differ in rounding.
+                matches = all(math.isclose(a, b, rel_tol=0.0, abs_tol=1e-12)
                               for a, b in zip(actual[name], reference[name]))
             elif name.startswith(('ComponentsTree', 'ComponentsKNN')):
                 matches = actual[name] == reference[name]

@@ -17,6 +17,7 @@ native adaptation that keeps evaluation independent of concrete estimators.
 | scaffold / `_indices` | `SplitCursor.next(mut self) raises -> Optional[IndexSplit]` | Stream owns each yielded pair; `None` ends iteration. Fresh cursors implement repeated traversal. A splitter can use this as `CrossValidator.Splits`; the inherited associated type stays extensible. |
 | scaffold / `_evaluation` | `TypedScorer` | Associated `Estimator: BaseEstimator & Deinitable`; `Input`, `Target`, and `Metadata` are `Movable & Deinitable`; `score(self, estimator, X, y, metadata) raises -> Float64`. Fitted estimator and arrays are borrowed. Higher is better; loss adapters negate once. |
 | scaffold / `_evaluation` | `EstimatorScore[E, X, Y, Weight=X]` | Calls a `SupervisedScorer` estimator's default score with optional sample weights as score metadata. Specify the concrete input and target types, and the weight type when it differs from the input, so Mojo can verify the lifetimes required by `TypedScorer`. Use the same scorer with validation and search adapters. |
+| scaffold / `_evaluation` | `NegMeanSquaredError[E, X, dtype=.float64]` | Calls `predict` and returns the negated uniform-average mean squared error as Float64. Score metadata is an optional same-dtype vector of sample weights. |
 | scaffold / `_evaluation` | `ParameterAdapter: FitAdapter` | Associated copyable `Value`; `configure(mut estimator, Dict[String, Value])` applies partial constructor parameters, rejects unknown names and clones nested estimator values. Shared by search and validation curves. |
 | scaffold / `_evaluation` | `FitAdapter` | Associated `Scorer: TypedScorer`; `fit(self, mut estimator, X, y, metadata) raises`. Types are exactly the scorer's associated types. Provides explicit supervised, unsupervised, weighted or other capability dispatch without imposing prediction or probability. |
 | validation / `_validation` | `DefaultCVAdapter: CVAdapter` | Supplies a default scorer and materializes omitted folds from the current features and targets. Search adapters inherit the same policy. |
@@ -40,6 +41,24 @@ adapter can use `moxie.multiclass.pairwise_input(estimator)` when configuring
 its policy, then call `select_rows(X, rows, columns=train)` in `input_rows` to
 copy train-by-train and test-by-train blocks. Keep targets and sample-aligned
 metadata on the one-axis row selection path.
+
+`NegMeanSquaredError` is the typed counterpart to sklearn's
+`scoring="neg_mean_squared_error"`. It accepts Float32 or Float64 NuMojo
+vectors and matrices, including strided arrays. A vector and a one-column matrix
+are equivalent. The scorer checks for matching nonempty shapes and finite
+values. If supplied, sample weights must align with the rows and have a
+nonzero sum. Pass a compile-time `predict=` function taking the estimator and
+its input and returning the scorer's dense array when the estimator's
+`predict` returns a different type. The
+[KernelRidge gallery](../../../notebooks/kernel_ridge/plot_kernel_ridge_regression.ipynb)
+uses this hook to select the Float64 arm of its prediction variant.
+
+The scorer computes squared residuals and weighted terms in the input dtype,
+then accumulates in Float64. Numax `subtract` and `square` require its
+row-major tensor interface and each allocates a full result. NuMojo's
+axis-wise `sum` has singleton-output exclusions. Coordinate reads through
+NuMojo `Item` let the scorer reduce one output at a time without residual
+buffers and preserve offsets and strides, including for vectors.
 
 Inputs are borrowed and returned arrays move. `.copy()` owns independent data;
 `.view()` shares mutation. Element strides and offsets follow the numerical

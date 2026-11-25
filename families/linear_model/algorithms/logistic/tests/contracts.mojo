@@ -75,10 +75,10 @@ def contract[dtype: DType]() raises:
     _ = model.set_params(C=2.0, l1_ratio=0.5)
     with assert_raises():
         _ = model.fit(X, y)
-    _ = model.set_params(l1_ratio=0.0, solver=String("saga"))
+    _ = model.set_params(solver=String("sag"))
     with assert_raises():
         _ = model.fit(X, y)
-    _ = model.set_params(solver=String("lbfgs"), dual=True)
+    _ = model.set_params(l1_ratio=0.0, solver=String("lbfgs"), dual=True)
     with assert_raises():
         _ = model.fit(X, y)
     var updated = model.get_params()
@@ -231,6 +231,66 @@ def liblinear_contract[dtype: DType]() raises:
     assert_equal(model.intercept_.unsafe_get(0), 0)
 
 
+def stochastic_contract[dtype: DType](solver: String) raises:
+    var inputs = data[dtype]()
+    ref X = inputs[0]
+    ref y = inputs[1]
+    var model = LogisticRegression[dtype](solver=solver.copy(), max_iter=3, random_state=42)
+    var fresh = clone(model)
+    assert_equal(fresh.get_params().random_state.value(), 42)
+    assert_equal(fresh.get_params().solver, solver)
+    with assert_raises(contains="NotFittedError"):
+        _ = fresh.predict(X)
+    _ = model.fit(X, y)
+    var coef = model.coef_.unsafe_get(0)
+    assert_true(coef > 0)
+    assert_equal(model.n_iter_.unsafe_get(0), 3)
+    assert_equal(model.predict_proba(X).shape[1], 2)
+    _ = model.fit(X, y)
+    assert_equal(model.coef_.unsafe_get(0), coef)
+    _ = fresh.set_params(random_state=19).fit(X, y)
+    assert_true(fresh.coef_.unsafe_get(0) != coef)
+
+    var reversed_X = X.view_with_layout(Shape(6, 2), Strides(-2, 1), 10)
+    var reversed_y = y.view_with_layout(Shape(6), Strides(-1), 5)
+    var contiguous_X = zeros[dtype](Shape(6, 2))
+    var contiguous_y = zeros[DType.int64](Shape(6))
+    for i in range(6):
+        contiguous_X.unsafe_set(2 * i, X.unsafe_get(10 - 2 * i))
+        contiguous_X.unsafe_set(2 * i + 1, X.unsafe_get(11 - 2 * i))
+        contiguous_y.unsafe_set(i, y.unsafe_get(5 - i))
+    _ = fresh.set_params(random_state=42).fit(reversed_X, reversed_y)
+    _ = model.fit(contiguous_X, contiguous_y)
+    assert_equal(fresh.coef_.unsafe_get(0), model.coef_.unsafe_get(0))
+    assert_equal(fresh.intercept_.unsafe_get(0), model.intercept_.unsafe_get(0))
+    assert_equal(fresh.predict(reversed_X).unsafe_get(0), 8)
+
+    _ = model.set_params(warm_start=True, max_iter=0).fit(X, y)
+    assert_equal(model.coef_.unsafe_get(0), fresh.coef_.unsafe_get(0))
+    assert_equal(model.n_iter_.unsafe_get(0), 1)
+    _ = model.set_params(C=inf[DType.float64](), fit_intercept=False, max_iter=1)
+    var no_signal = zeros[dtype](Shape(6, 2))
+    with assert_raises(contains="positive step denominator"):
+        _ = model.fit(no_signal, y)
+    assert_equal(model.coef_.unsafe_get(0), fresh.coef_.unsafe_get(0))
+
+    _ = model.set_params(C=1.0, fit_intercept=True, warm_start=False, max_iter=3)
+    _ = model.fit(X, y, sample_weight=0.0)
+    assert_equal(model.coef_.unsafe_get(0), 0)
+    assert_equal(model.intercept_.unsafe_get(0), 0)
+    assert_equal(model.n_iter_.unsafe_get(0), 1)
+
+    if solver == "saga":
+        var params = model.get_params()
+        params.penalty = String("elasticnet")
+        params.l1_ratio = None
+        _ = model.set_params(params)
+        with assert_raises(contains="elasticnet requires l1_ratio"):
+            _ = model.fit(X, y)
+        _ = model.set_params(l1_ratio=0.5).fit(X, y)
+        assert_true(model.coef_.unsafe_get(0) > 0)
+
+
 def main() raises:
     contract[DType.float64]()
     contract[DType.float32]()
@@ -240,4 +300,8 @@ def main() raises:
     numeric_label_contract()
     liblinear_contract[DType.float32]()
     liblinear_contract[DType.float64]()
+    stochastic_contract[DType.float32]("sag")
+    stochastic_contract[DType.float64]("sag")
+    stochastic_contract[DType.float32]("saga")
+    stochastic_contract[DType.float64]("saga")
     print("PASS: dense LogisticRegression contracts in Float32 and Float64")

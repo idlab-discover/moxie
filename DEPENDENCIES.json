@@ -1614,6 +1614,7 @@
             "SplitCursor": "moxie.model_selection._indices",
             "validate_indices": "moxie.model_selection._indices",
             "EstimatorScore": "moxie.model_selection._evaluation",
+            "NegMeanSquaredError": "moxie.model_selection._evaluation",
             "TypedScorer": "moxie.model_selection._evaluation",
             "FitAdapter": "moxie.model_selection._evaluation",
             "clone_fit_score": "moxie.model_selection._evaluation",
@@ -2122,7 +2123,8 @@
             "StringSimpleImputer": "moxie.impute._string",
             "StringMissingIndicator": "moxie.impute._string",
             "IterativeBound": "moxie.impute._iterative",
-            "IterativeParams": "moxie.impute._iterative"
+            "IterativeParams": "moxie.impute._iterative",
+            "IterativePosteriorRegressor": "moxie.impute._iterative"
           },
           "moxie.utils": {}
         },
@@ -2625,6 +2627,9 @@
         },
         "moxie.svm._linear": {
           "file": "src/moxie/svm/_linear.mojo"
+        },
+        "moxie.svm.linear_serialization": {
+          "file": "src/moxie/svm/linear_serialization.mojo"
         }
       },
       "path": "families/svm/algorithms/linear"
@@ -2706,6 +2711,20 @@
       }
     },
     {
+      "id": "svm-kernel-persistence",
+      "path": "families/svm",
+      "modules": {
+        "moxie.svm.kernel_serialization": {
+          "file": "src/moxie/svm/kernel_serialization.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
+      }
+    },
+    {
       "id": "svm-one-class",
       "path": "families/svm/algorithms/one_class",
       "modules": {
@@ -2738,7 +2757,8 @@
             "MLPRegressorAPI": "moxie.neural_network._base",
             "RBMTransformer": "moxie.neural_network._base",
             "MLPClassifier": "moxie.neural_network._api",
-            "MLPRegressor": "moxie.neural_network._api"
+            "MLPRegressor": "moxie.neural_network._api",
+            "MLPParams": "moxie.neural_network._mlp_model"
           }
         },
         "schema": 1
@@ -2757,8 +2777,8 @@
         "moxie.neural_network._api": {
           "file": "src/moxie/neural_network/_api.mojo"
         },
-        "moxie.neural_network._api_types": {
-          "file": "src/moxie/neural_network/_api_types.mojo"
+        "moxie.neural_network._mlp_model": {
+          "file": "src/moxie/neural_network/_mlp_model.mojo"
         }
       },
       "path": "families/neural_network"

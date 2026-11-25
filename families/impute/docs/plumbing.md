@@ -109,10 +109,10 @@ Iterative uses `List[ImputationStep[Model]]` as its ordered per-round sequence.
 Each Model must implement the foundation SupervisedEstimator/Predictor contracts
 with input NDArray `(observed_rows,predictors)`, target/prediction `(rows,)`, and
 clone producing an unfitted configuration. Each step owns a distinct fitted model
-snapshot. `ImputationStep` holds a model with the fit and predict capabilities
-used in the deterministic implementation. Transform replays the stored ordered
-sequence and preserves sample count. Copying a fitted step preserves learned
-state. Random draws use `moxie._random.RandomState`.
+snapshot. Posterior updates use the model's typed predictive mean and deviation.
+Transform replays the stored ordered sequence and preserves sample count.
+Copying a fitted step preserves learned state. Random draws use
+`moxie._random.RandomState`.
 
 ## Native compatibility obligations
 

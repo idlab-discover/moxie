@@ -1,14 +1,17 @@
 """Dense decomposition persistence contracts."""
 
-from std.math import isinf, isnan
+from std.math import inf, isinf, isnan
 from std.sys import argv
 from std.testing import assert_equal, assert_raises, assert_true
 from numojo import NDArray, NDArrayStrides, Shape, zeros
 from moxie.base import clone
-from moxie.decomposition import FactorAnalysis, PCA, IncrementalPCA, TruncatedSVD
+from moxie.decomposition import FactorAnalysis, FastICA, KernelPCA, PCA, IncrementalPCA, TruncatedSVD
+from moxie.decomposition._fastica import WhitenOption
+from moxie.decomposition._kernel_pca import KernelPower
 from moxie.decomposition._pca import ComponentCount
 from moxie.decomposition_serialization import (
-    FactorAnalysisSchema, PCASchema, IncrementalPCASchema, TruncatedSVDSchema,
+    FactorAnalysisSchema, FastICASchema, KernelPCASchema, PCASchema,
+    IncrementalPCASchema, TruncatedSVDSchema,
 )
 from moxie.serialization import dumps, loads, save_model, load_model
 
@@ -253,6 +256,141 @@ def test_factor_analysis[dtype: DType](path: String) raises:
     assert_true(isinf(degenerate.loglike_[0]) and degenerate.loglike_[0] > 0)
 
 
+def test_fastica[dtype: DType](path: String) raises:
+    comptime Schema = FastICASchema[dtype]
+    var X = training_data[dtype]()
+    var weights = zeros[DType.float64](Shape(2, 2))
+    weights.unsafe_set(0, 1)
+    weights.unsafe_set(1, 0.25)
+    weights.unsafe_set(3, 1)
+    var args = Dict[String, Float64]()
+    args["alpha"] = 1.5
+    args["extra"] = -2
+    var model = FastICA[dtype](2, fun_args=args^, w_init=weights.T(),
+        whiten_solver="eigh", random_state=37)
+    save_model[Schema](model, path)
+    var unfitted = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(model)), dumps(Schema.encode(unfitted)))
+    assert_equal(unfitted.w_init.value().unsafe_get(1), 0)
+    assert_equal(unfitted.w_init.value().unsafe_get(2), 0.25)
+    assert_equal(unfitted.fun_args.value()["alpha"], 1.5)
+    assert_equal(unfitted.fun_args.value()["extra"], -2)
+    with assert_raises(contains="NotFittedError: This FastICA"):
+        _ = unfitted.transform(X)
+
+    _ = model.fit(X)
+    _ = model.set_params(whiten=WhitenOption(False), max_iter=1,
+        n_components=Optional[Optional[Int]](Optional[Int](3)))
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(model)), dumps(Schema.encode(restored)))
+    assert_equal(restored.whiten[Bool], False)
+    assert_equal(restored.max_iter, 1)
+    assert_equal(restored.n_components.value(), 3)
+    assert_equal(restored.components_.value().shape[0], 2)
+    same_array(restored._unmixing.value(), model._unmixing.value())
+    var projected = restored.transform(X)
+    same_array(projected, model.transform(X))
+    same_array(restored.inverse_transform(projected), model.inverse_transform(projected))
+    assert_true(not clone(restored).__sklearn_is_fitted__())
+    model.components_.value().unsafe_set(0, 100)
+    same_array(restored.transform(X), projected)
+
+    var new_weights = zeros[DType.float64](Shape(2))
+    new_weights.unsafe_set(1, inf[DType.float64]())
+    restored.w_init = new_weights^
+    var changed_config = Schema.decode(Schema.encode(restored))
+    assert_equal(changed_config.w_init.value().ndim, 1)
+    assert_true(isinf(changed_config.w_init.value().unsafe_get(1)))
+    same_array(changed_config.transform(X), projected)
+
+    var scalar = zeros[DType.float64](Shape(1))
+    scalar.unsafe_set(0, 2.5)
+    var with_scalar = FastICA[dtype](w_init=scalar[0])
+    var restored_scalar = Schema.decode(Schema.encode(with_scalar))
+    assert_equal(restored_scalar.w_init.value().ndim, 0)
+    assert_equal(restored_scalar.w_init.value().unsafe_get(0), 2.5)
+
+    var uncentered = FastICA[dtype](whiten=False, random_state=37)
+    _ = uncentered.fit(X)
+    var roundtrip = Schema.decode(Schema.encode(uncentered))
+    assert_true(not roundtrip.mean_)
+    assert_true(not roundtrip.whitening_)
+    same_array(roundtrip.transform(X), uncentered.transform(X))
+
+    var archive = Schema.encode(restored)
+    archive.schema_version = 2
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = Schema.decode(archive)
+    archive.schema_version = 1
+    archive.payloads[3].shape = [1, 4]
+    with assert_raises(contains="invalid shape for _unmixing"):
+        _ = Schema.decode(archive)
+    restored.whitening_ = None
+    with assert_raises(contains="missing whitening_"):
+        _ = Schema.encode(restored)
+
+
+def test_kernel_pca[dtype: DType](path: String) raises:
+    comptime Schema = KernelPCASchema[dtype]
+    var X = training_data[dtype]()
+    var params = Dict[String, Float64]()
+    params["unused"] = 3.5
+    var model = KernelPCA[dtype](2, kernel="rbf", gamma=0.1, kernel_params=params^,
+        alpha=0.5, fit_inverse_transform=True, eigen_solver="dense", max_iter=11,
+        iterated_power=3, random_state=7, n_jobs=-1)
+    save_model[Schema](model, path)
+    var unfitted = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(model)), dumps(Schema.encode(unfitted)))
+    assert_equal(unfitted.kernel_params.value()["unused"], 3.5)
+    assert_equal(unfitted.iterated_power[Int], 3)
+    assert_equal(unfitted.n_jobs.value(), -1)
+    with assert_raises(contains="NotFittedError: KernelPCA"):
+        _ = unfitted.transform(X)
+
+    _ = model.fit(X)
+    _ = model.set_params(fit_inverse_transform=False,
+        gamma=Optional[Optional[Float64]](Optional[Float64](0.25)),
+        iterated_power=KernelPower(String("auto")))
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(model)), dumps(Schema.encode(restored)))
+    assert_equal(restored.gamma.value(), 0.25)
+    assert_equal(restored.gamma_, 0.1)
+    assert_equal(restored.iterated_power[String], String("auto"))
+    assert_true(restored.dual_coef_)
+    assert_true(not restored.fit_inverse_transform)
+    var projected = restored.transform(X)
+    same_array(projected, model.transform(X))
+    with assert_raises(contains="inverse transform is not available"):
+        _ = restored.inverse_transform(projected)
+    _ = model.set_params(fit_inverse_transform=True)
+    _ = restored.set_params(fit_inverse_transform=True)
+    same_array(restored.inverse_transform(projected), model.inverse_transform(projected))
+    assert_true(not clone(restored).__sklearn_is_fitted__())
+    model.X_fit_.value().unsafe_set(0, 100)
+    same_array(restored.transform(X), projected)
+
+    var zero = KernelPCA[dtype]()
+    var constant = zeros[dtype](Shape(4, 3))
+    _ = zero.fit(constant)
+    var roundtrip = Schema.decode(loads(dumps(Schema.encode(zero))))
+    assert_equal(roundtrip.transform(constant).shape[1], 0)
+    assert_true(not roundtrip.dual_coef_)
+
+    var archive = Schema.encode(restored)
+    archive.schema_version = 2
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = Schema.decode(archive)
+    archive.schema_version = 1
+    archive.payloads[3].shape = [2, 2]
+    with assert_raises(contains="invalid shape for _kernel_mean"):
+        _ = Schema.decode(archive)
+    restored.eigenvalues_.value().unsafe_set(0, -1)
+    with assert_raises(contains="invalid value in eigenvalues_"):
+        _ = Schema.encode(restored)
+
+
 def main() raises:
     var path = String(argv()[1])
     test_pca[DType.float32](path)
@@ -263,6 +401,10 @@ def main() raises:
     test_truncated_svd[DType.float64](path)
     test_factor_analysis[DType.float32](path)
     test_factor_analysis[DType.float64](path)
+    test_fastica[DType.float32](path)
+    test_fastica[DType.float64](path)
+    test_kernel_pca[DType.float32](path)
+    test_kernel_pca[DType.float64](path)
     var model = PCA[DType.float32]()
     save_model[PCASchema[DType.float32]](model, path)
     with assert_raises(contains="projection dtype mismatch"):
@@ -271,4 +413,4 @@ def main() raises:
     var archive = FactorAnalysisSchema[DType.float32].encode(factor)
     with assert_raises(contains="projection dtype mismatch"):
         _ = FactorAnalysisSchema[DType.float64].decode(archive)
-    print("PASS: PCA, IncrementalPCA, TruncatedSVD and FactorAnalysis serialization contracts in Float32 and Float64")
+    print("PASS: PCA, IncrementalPCA, TruncatedSVD, FactorAnalysis, FastICA and KernelPCA serialization contracts in Float32 and Float64")

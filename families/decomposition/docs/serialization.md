@@ -11,6 +11,8 @@ compile time. The schema dtype defaults to Float64.
 | IncrementalPCA with `RuntimePCABackend` | `IncrementalPCASchema` |
 | TruncatedSVD | `TruncatedSVDSchema` |
 | FactorAnalysis | `FactorAnalysisSchema` |
+| FastICA | `FastICASchema` |
+| KernelPCA | `KernelPCASchema` |
 
 ```mojo
 from moxie.decomposition import IncrementalPCA
@@ -32,6 +34,13 @@ dtypes and restores the sample count needed for the next update. A model fitted
 with `partial_fit` can have `batch_size_ == 0`.
 FactorAnalysis stores its learned arrays and likelihood history in Float64,
 including for Float32 inputs.
+FastICA restores its unmixing matrix and any fitted whitening and centering
+state. It preserves the optional Float64 `w_init` configuration in logical
+row order.
+KernelPCA restores the fitted training data, eigenspace and kernel centering
+statistics, including for precomputed kernels and zero-component fits. It
+stores any learned inverse map independently of the current
+`fit_inverse_transform` setting.
 
 Version 1 supports Float32 and Float64 inputs. Loading checks
 the estimator identity, schema version, dtype, array shapes and fitted metadata.

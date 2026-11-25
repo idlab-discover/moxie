@@ -1,4 +1,4 @@
-"""Compare the composition contract with a build of the local sklearn oracle."""
+"""Compare pipeline grid search and precomputed CV with the pinned sklearn oracle."""
 from collections import defaultdict
 from pathlib import Path
 import os
@@ -7,7 +7,8 @@ import subprocess
 import numpy as np
 import sklearn
 from sklearn.kernel_ridge import KernelRidge
-from sklearn.model_selection import GridSearchCV
+from sklearn.metrics.pairwise import rbf_kernel
+from sklearn.model_selection import GridSearchCV, cross_val_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -62,6 +63,16 @@ def main():
     ):
         np.testing.assert_allclose(observed, expected, rtol=1e-10, atol=1e-12)
     print("PASS: pipeline grid candidate order, 30 fold scores, means, ranks, winner and 40 refit predictions")
+
+    gram = rbf_kernel(X, gamma=1.0)
+    expected = cross_val_score(
+        KernelRidge(alpha=0.1, kernel="precomputed"), gram, y, cv=5, error_score="raise"
+    )
+    # Kernel evaluation and Cholesky use different Float64 operation orders.
+    np.testing.assert_allclose(
+        np.ravel(actual["precomputed_cv"]), expected, rtol=1e-10, atol=1e-12
+    )
+    print("PASS: all five precomputed RBF Gram-matrix fold scores")
 
 
 if __name__ == "__main__":

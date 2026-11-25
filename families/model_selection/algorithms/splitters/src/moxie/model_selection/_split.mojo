@@ -1324,6 +1324,22 @@ def select_rows[dtype: DType](X: NDArray[dtype], indices: IndexArray) raises -> 
     return _rows(X, indices)
 
 
+def select_rows[dtype: DType](
+    X: NDArray[dtype], indices: IndexArray, *, columns: IndexArray,
+) raises -> NDArray[dtype]:
+    """Copy a block of a square pairwise matrix in the given row and column order."""
+    if X.ndim != 2 or X.shape[0] != X.shape[1]:
+        raise Error("ValueError: pairwise splitting requires a square matrix")
+    validate_indices(indices, X.shape[0])
+    validate_indices(columns, X.shape[1])
+    var result = NDArray[dtype](Shape(indices.size, columns.size))
+    for i in range(indices.size):
+        var row = Int(indices[Item(i)])
+        for j in range(columns.size):
+            result[Item(i, j)] = X[Item(row, Int(columns[Item(j)]))]
+    return result^
+
+
 def select_rows[T: Copyable & Deinitable](X: List[T], indices: IndexArray) raises -> List[T]:
     """Copy selected list elements, in index order."""
     validate_indices(indices, len(X))

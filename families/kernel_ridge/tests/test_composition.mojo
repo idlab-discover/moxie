@@ -8,15 +8,16 @@ kernel="rbf", gamma=0.1), {"alpha": [...], "gamma": logspace(-2, 2, 5)}) with
 sklearn's default five unshuffled folds and R2 scoring.
 """
 from numojo import NDArray, Shape, Item
-from std.math import sin
+from std.math import exp, sin
 from std.sys import argv
 from std.testing import assert_equal, assert_raises, assert_true
 from moxie.base import clone
 from moxie.kernel_ridge import KernelRidge, ScalarOrVector
+from moxie.multiclass import pairwise_input
 from moxie.preprocessing import StandardScaler
 from moxie.pipeline import Pipeline, make_pipeline
 from moxie.model_selection import (
-    EstimatorScore, GridSearchCV, IndexArray, IndexSplit, KFold, SearchAdapter,
+    ErrorPolicy, EstimatorScore, GridSearchCV, IndexArray, IndexSplit, KFold, SearchAdapter,
     cross_val_score, select_rows,
 )
 
@@ -66,16 +67,20 @@ struct AlphaGammaSearch(SearchAdapter):
     comptime Scorer = R2
     comptime Value = Float64
 
-    def __init__(out self):
-        pass
+    var _pairwise: Bool
+
+    def __init__(out self, pairwise: Bool = False):
+        self._pairwise = pairwise
 
     def __init__(out self, *, copy: Self):
-        pass
+        self._pairwise = copy._pairwise
 
     def n_samples(self, X: Dense, y: Dense) raises -> Int:
         return y.shape[0]
 
     def input_rows(self, X: Dense, rows: IndexArray, train: IndexArray) raises -> Dense:
+        if self._pairwise:
+            return select_rows(X, rows, columns=train)
         return select_rows(X, rows)
 
     def target_rows(self, y: Dense, rows: IndexArray) raises -> Dense:
@@ -201,7 +206,44 @@ def check_pipeline_search(X: Dense, y: Dense, emit_parity: Bool) raises:
 
 
 def cv_scores(template: KernelRidge[], X: Dense, y: Dense, splits: List[IndexSplit]) raises -> Dense:
-    return cross_val_score[AlphaGammaSearch](template, X, y, AlphaGammaSearch(), R2(), splits, None, None)
+    return cross_val_score[AlphaGammaSearch](
+        template, X, y, AlphaGammaSearch(pairwise_input(template)), R2(),
+        splits, None, None, error_score=ErrorPolicy(True, 0.0),
+    )
+
+
+def check_precomputed_cv(X: Dense, y: Dense, splits: List[IndexSplit], emit_parity: Bool) raises:
+    var model = KernelRidge(alpha=0.1, kernel="rbf", gamma=1.0)
+    assert_true(not pairwise_input(model))
+    var gram = Dense(Shape(X.shape[0], X.shape[0]))
+    for i in range(X.shape[0]):
+        for j in range(X.shape[0]):
+            var delta = X.item(i, 0) - X.item(j, 0)
+            gram[Item(i, j)] = exp(-(delta * delta))
+
+    _ = model.set_params(kernel="precomputed")
+    assert_true(pairwise_input(model))
+    var template = clone(model)
+    assert_true(pairwise_input(template))
+    var scores = cv_scores(template, gram, y, splits)
+    assert_true(not template.__sklearn_is_fitted__())
+    assert_equal(scores.size, len(splits))
+    for i in range(scores.size):
+        var train = splits[i].train.astype[DType.int]()
+        var test = splits[i].test.astype[DType.int]()
+        var train_columns = gram.take(train, axis=1)
+        var manual = clone(template)
+        _ = manual.fit(train_columns.take(train, axis=0), select_rows(y, splits[i].train))
+        assert_equal(
+            scores.item(i),
+            manual.score(train_columns.take(test, axis=0), select_rows(y, splits[i].test)),
+        )
+        if emit_parity:
+            print("precomputed_cv", scores.item(i))
+    with assert_raises():
+        _ = cv_scores(template, X, y, splits)
+    _ = template.set_params(kernel="linear")
+    assert_true(not pairwise_input(template))
 
 
 def main() raises:
@@ -234,6 +276,7 @@ def main() raises:
 
     # cross_val_score clones the template per fold; scores equal manual fits.
     var splits = kfold(40)
+    check_precomputed_cv(X, y, splits, len(argv()) > 1)
     var template = KernelRidge(alpha=0.1, kernel="rbf", gamma=1.0)
     var scores = cv_scores(template, X, y, splits)
     assert_equal(scores.size, 5)

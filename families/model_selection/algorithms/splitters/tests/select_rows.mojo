@@ -23,9 +23,41 @@ def check_array[dtype: DType]() raises:
     assert_equal(empty.shape[1], 2)
 
 
+def check_pairwise_block[dtype: DType]() raises:
+    var source = arange[dtype](16).reshape(Shape(4, 4))
+    var gram = source.view_with_layout(Shape(3, 3), NDArrayStrides(-4, -1), 15)
+    var rows = array[DType.int64]([2, 0, 2], [3])
+    var train = array[DType.int64]([1, 0], [2])
+    var block = select_rows(gram, rows, columns=train)
+    assert_equal(block.shape[0], 3)
+    assert_equal(block.shape[1], 2)
+    assert_equal(block.item(0, 0), 6)
+    assert_equal(block.item(0, 1), 7)
+    assert_equal(block.item(1, 0), 14)
+    assert_equal(block.item(1, 1), 15)
+    assert_equal(block.item(2, 0), 6)
+    assert_equal(block.item(2, 1), 7)
+    block[Item(0, 0)] = 99
+    assert_equal(gram.item(2, 1), 6)
+
+    var empty = IndexArray(Shape(0))
+    assert_equal(select_rows(gram, empty, columns=train).shape[0], 0)
+    assert_equal(select_rows(gram, rows, columns=empty).shape[1], 0)
+    with assert_raises():
+        _ = select_rows(gram, rows, columns=array[DType.int64]([3], [1]))
+    with assert_raises():
+        _ = select_rows(gram, array[DType.int64]([-1], [1]), columns=train)
+    with assert_raises():
+        _ = select_rows(gram, rows, columns=train.reshape(Shape(1, 2)))
+    with assert_raises():
+        _ = select_rows(NDArray[dtype](Shape(3, 4)), rows, columns=train)
+
+
 def main() raises:
     check_array[DType.float32]()
     check_array[DType.float64]()
+    check_pairwise_block[DType.float32]()
+    check_pairwise_block[DType.float64]()
     var indices = array[DType.int64]([2, 0, 2], [3])
     var vector = array[DType.int64]([4, 7, 9], [3])
     var result = select_rows(vector, indices)

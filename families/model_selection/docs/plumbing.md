@@ -35,9 +35,11 @@ Numerical arrays use NuMojo directly. Feature arrays are Float32/Float64 rank-tw
 `(sample, feature)`; target arrays retain rank-one or multioutput rank-two shape
 and estimator-specific label dtype. Scorer associated types permit nonnumeric
 label records, optional targets and explicit metadata records. Metadata must
-separate sample-aligned weights from unsliced fit options. Pairwise estimators
-need an explicit adapter that slices training square kernels and test-vs-train
-rectangles. These are child responsibilities, not implicit generic row slicing.
+separate sample-aligned weights from unsliced fit options. A pairwise CV
+adapter can use `moxie.multiclass.pairwise_input(estimator)` when configuring
+its policy, then call `select_rows(X, rows, columns=train)` in `input_rows` to
+copy train-by-train and test-by-train blocks. Keep targets and sample-aligned
+metadata on the one-axis row selection path.
 
 Inputs are borrowed and returned arrays move. `.copy()` owns independent data;
 `.view()` shares mutation. Element strides and offsets follow the numerical

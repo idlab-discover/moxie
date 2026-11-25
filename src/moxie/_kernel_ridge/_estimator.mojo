@@ -2,6 +2,7 @@
 from std.math import isfinite
 from std.utils import Variant
 from moxie.base import RegressorMixin, WeightedSupervisedEstimator
+from moxie._multiclass_contracts import PairwiseInput
 from moxie.utils.validation import check_is_fitted
 import numojo as nm
 from ._api import (
@@ -83,7 +84,7 @@ def _weights(
 struct KernelRidge[
     dtype: DType = DType.float64,
     Metric: MatrixKernel & Copyable & Deinitable = NoKernel,
-](Copyable, KernelRidgeRegressor, WeightedSupervisedEstimator):
+](Copyable, KernelRidgeRegressor, WeightedSupervisedEstimator, PairwiseInput):
     """Dense mixed-dtype kernel ridge regression with shape-preserving outputs.
 
     Fit uses Cholesky, with minimum-norm least-squares fallback for shared alpha.
@@ -423,6 +424,10 @@ struct KernelRidge[
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted
+
+    def pairwise_input(self) -> Bool:
+        """Report whether the current configuration expects a precomputed Gram matrix."""
+        return self.kernel == "precomputed"
 
     def _validate_kernel_config(self) raises:
         validate_kernel(self.kernel)

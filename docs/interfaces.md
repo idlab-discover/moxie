@@ -26,6 +26,7 @@ recorded revision when adding algorithms; upstream main may have changed.
 | Supervised fit | `SupervisedEstimator` | `fit(X, y)` mutates learned state |
 | Unsupervised fit | `UnsupervisedEstimator` | `fit(X, y=None)` accepts ignored target |
 | Prediction | `Predictor` | `predict(X)` preserves row order |
+| Pairwise input | `moxie.multiclass.PairwiseInput` | Query the current configuration to determine whether CV must slice both axes |
 | Classification | `ClassifierMixin` | `score(X, y, sample_weight=None)` is accuracy |
 | Regression | `RegressorMixin` | Default score semantics are R2 |
 | Probability | `ProbabilityPredictor`, `LogProbabilityPredictor` | Columns follow `classes_`; rows normalize |

@@ -10,7 +10,8 @@ def random_state(fx: Fixture) raises -> Optional[Int]:
 def run[dtype: DType](fx: Fixture) raises:
     var X = fx.array[dtype]("X")
     var y = fx.array[dtype]("y")
-    var model = ElasticNet[dtype](
+    var model = ElasticNet[dtype]()
+    _ = model.set_params(
         alpha=fx.number("alpha"), l1_ratio=fx.number("ratio"),
         fit_intercept=fx.flag("intercept"), tol=fx.number("tol"),
         max_iter=fx.integer("max_iter"), positive=fx.flag("positive"),
@@ -23,7 +24,7 @@ def run[dtype: DType](fx: Fixture) raises:
     else:
         model.fit(X, y)
     if fx.flag("warm"):
-        model.alpha *= 0.5
+        _ = model.set_params(alpha=model.alpha * 0.5)
         if fx.has("sw"):
             model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
         else:
@@ -49,7 +50,8 @@ def run[dtype: DType](fx: Fixture) raises:
 def run_lasso[dtype: DType](fx: Fixture) raises:
     var X = fx.array[dtype]("X")
     var y = fx.array[dtype]("y")
-    var model = Lasso[dtype](
+    var model = Lasso[dtype]()
+    _ = model.set_params(
         alpha=fx.number("alpha"),
         fit_intercept=fx.flag("intercept"), tol=fx.number("tol"),
         max_iter=fx.integer("max_iter"), positive=fx.flag("positive"),
@@ -62,7 +64,7 @@ def run_lasso[dtype: DType](fx: Fixture) raises:
     else:
         model.fit(X, y)
     if fx.flag("warm"):
-        model.alpha *= 0.5
+        _ = model.set_params(alpha=model.alpha * 0.5)
         if fx.has("sw"):
             model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
         else:

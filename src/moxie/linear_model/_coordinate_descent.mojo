@@ -314,15 +314,44 @@ struct ElasticNet[dtype: DType = DType.float64](Copyable, LinearRegressor, Weigh
         self.selection = params.selection.copy()
         return self
 
-    def set_params[origin: MutOrigin](ref[origin] self, *, alpha: Optional[Float64] = None, tol: Optional[Float64] = None, max_iter: Optional[Int] = None, warm_start: Optional[Bool] = None) raises -> ref[self] Self:
+    def set_params[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        alpha: Optional[Float64] = None,
+        l1_ratio: Optional[Float64] = None,
+        fit_intercept: Optional[Bool] = None,
+        precompute: Optional[Bool] = None,
+        max_iter: Optional[Int] = None,
+        copy_X: Optional[Bool] = None,
+        tol: Optional[Float64] = None,
+        warm_start: Optional[Bool] = None,
+        positive: Optional[Bool] = None,
+        random_state: Optional[Int] = None,
+        selection: Optional[String] = None,
+    ) raises -> ref[self] Self:
+        """Update supplied keywords. Use the Params record to clear random_state."""
         if alpha:
             self.alpha = alpha.value()
-        if tol:
-            self.tol = tol.value()
+        if l1_ratio:
+            self.l1_ratio = l1_ratio.value()
+        if fit_intercept:
+            self.fit_intercept = fit_intercept.value()
+        if precompute:
+            self.precompute = precompute.value()
         if max_iter:
             self.max_iter = max_iter.value()
+        if copy_X:
+            self.copy_X = copy_X.value()
+        if tol:
+            self.tol = tol.value()
         if warm_start:
             self.warm_start = warm_start.value()
+        if positive:
+            self.positive = positive.value()
+        if random_state:
+            self.random_state = random_state
+        if selection:
+            self.selection = selection.value().copy()
         return self
 
     def __sklearn_clone__(self) raises -> Self:
@@ -453,15 +482,41 @@ struct Lasso[dtype: DType = DType.float64](Copyable, LinearRegressor, WeightedSu
         self.selection = params.selection.copy()
         return self
 
-    def set_params[origin: MutOrigin](ref[origin] self, *, alpha: Optional[Float64] = None, tol: Optional[Float64] = None, max_iter: Optional[Int] = None, warm_start: Optional[Bool] = None) raises -> ref[self] Self:
+    def set_params[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        alpha: Optional[Float64] = None,
+        fit_intercept: Optional[Bool] = None,
+        precompute: Optional[Bool] = None,
+        max_iter: Optional[Int] = None,
+        copy_X: Optional[Bool] = None,
+        tol: Optional[Float64] = None,
+        warm_start: Optional[Bool] = None,
+        positive: Optional[Bool] = None,
+        random_state: Optional[Int] = None,
+        selection: Optional[String] = None,
+    ) raises -> ref[self] Self:
+        """Update supplied keywords. Use the Params record to clear random_state."""
         if alpha:
             self.alpha = alpha.value()
-        if tol:
-            self.tol = tol.value()
+        if fit_intercept:
+            self.fit_intercept = fit_intercept.value()
+        if precompute:
+            self.precompute = precompute.value()
         if max_iter:
             self.max_iter = max_iter.value()
+        if copy_X:
+            self.copy_X = copy_X.value()
+        if tol:
+            self.tol = tol.value()
         if warm_start:
             self.warm_start = warm_start.value()
+        if positive:
+            self.positive = positive.value()
+        if random_state:
+            self.random_state = random_state
+        if selection:
+            self.selection = selection.value().copy()
         return self
 
     def __sklearn_clone__(self) raises -> Self:

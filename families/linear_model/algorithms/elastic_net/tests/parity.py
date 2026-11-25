@@ -114,13 +114,18 @@ for c in cases:
     assert 'error' not in got,(c['id'],got)
     kwargs=dict(alpha=c['alpha'],fit_intercept=c['intercept'],positive=c['positive'],warm_start=c['warm'],max_iter=c['max_iter'],tol=c['tol'])
     if 'seed' in c: kwargs.update(selection='random', random_state=c['seed'])
-    model=reference.Lasso(**kwargs) if c['ratio']==1 else reference.ElasticNet(l1_ratio=c['ratio'],**kwargs)
+    if c['ratio'] == 1:
+        model = reference.Lasso()
+    else:
+        model = reference.ElasticNet()
+        kwargs['l1_ratio'] = c['ratio']
+    model.set_params(**kwargs)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         model.fit(c['X'],c['y'],sample_weight=c['sw'])
         if c['warm']:
             caught.clear()
-            model.alpha *= .5
+            model.set_params(alpha=model.alpha * .5)
             model.fit(c['X'],c['y'],sample_weight=c['sw'])
     t=1e-8 if c['bits']==64 else 3e-4
     scale=max(1.,float(np.max(np.abs(c['y']))))

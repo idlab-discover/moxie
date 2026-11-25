@@ -1,5 +1,6 @@
 """Dense RadiusNeighborsClassifier; see docs/estimators.md for native type adaptations."""
 import numojo as nm
+from std.sys import stderr
 from moxie.base import BaseEstimator
 from moxie.neighbors._base import RadiusNeighborsClassifierAPI
 from moxie.neighbors._classification_targets import ClassificationTargets, LabelOps
@@ -7,7 +8,7 @@ from moxie.neighbors._distance import Metric
 from moxie.neighbors._contracts import DenseMetric, TopKResult, RadiusResult
 from moxie.neighbors._unsupervised import NearestNeighbors, NeighborParams
 from moxie.neighbors._query_engine import NeighborWeights, BuiltinWeights
-from moxie.neighbors._supervised import target_snapshot, target_at, class_arrays, weighted_neighbors, regression, probabilities, classified, prediction_score
+from moxie.neighbors._supervised import weighted_neighbors, probabilities
 
 @fieldwise_init
 struct RadiusNeighborsClassifierParams[dtype: DType, M: DenseMetric & Deinitable = Metric[dtype], Y: Copyable & Deinitable = nm.NDArray[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](Copyable, Movable):
@@ -159,7 +160,28 @@ struct RadiusNeighborsClassifier[dtype: DType = DType.float64, M: DenseMetric & 
     def predict_proba_with_weights[WeightFn: NeighborWeights](self, X: Optional[nm.NDArray[Self.dtype]], weighting: WeightFn) raises -> List[nm.NDArray[DType.float64]]:
         if not self._y: raise Error("NotFittedError: estimator has not been fitted")
         var rows = weighted_neighbors(self._query, X, True, weighting)
-        return self._y.value().proba(rows,self.outlier_label_)
+        ref targets = self._y.value()
+        var codes = targets.outlier_codes(self.outlier_label_)
+        var probs = probabilities(targets.codes, targets.code_classes, rows, codes)
+        if codes:
+            for i in range(len(rows.offsets) - 1):
+                if rows.offsets[i] != rows.offsets[i + 1]:
+                    continue
+                for col in range(len(targets.classes)):
+                    if codes.value().unsafe_get(col) < 0:
+                        var label = LabelOps[Self.Y].label_text(
+                            self.outlier_label_.value(), col
+                        )
+                        print(
+                            String(
+                                "UserWarning: Outlier label ", label,
+                                " is not in training classes. All class probabilities "
+                                "of outliers will be assigned with 0.",
+                            ),
+                            file=stderr,
+                        )
+                break
+        return probs^
 
     def score(self, X: nm.NDArray[Self.dtype], y: Self.Y, sample_weight: Optional[nm.NDArray[Self.dtype]] = None) raises -> Float64:
         var pred = self.predict(X.copy())

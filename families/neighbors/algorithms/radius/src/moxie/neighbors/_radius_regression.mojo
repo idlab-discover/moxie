@@ -1,5 +1,7 @@
 """Dense RadiusNeighborsRegressor; see docs/estimators.md for native type adaptations."""
 import numojo as nm
+from std.math import isnan
+from std.sys import stderr
 from moxie.base import BaseEstimator
 from moxie.neighbors._base import RadiusNeighborsRegressorAPI
 from moxie.neighbors._distance import Metric
@@ -119,7 +121,16 @@ struct RadiusNeighborsRegressor[dtype: DType = DType.float64, M: DenseMetric & D
     def predict_with_weights[WeightFn: NeighborWeights](self, X: Optional[nm.NDArray[Self.dtype]], weighting: WeightFn) raises -> nm.NDArray[Self.dtype]:
         if not self._y: raise Error("NotFittedError: estimator has not been fitted")
         var rows = weighted_neighbors(self._query, X, True, weighting)
-        return regression(self._y.value(), rows)
+        var prediction = regression(self._y.value(), rows)
+        for i in range(prediction.size):
+            if isnan(prediction.unsafe_get(i)):
+                print(
+                    "UserWarning: One or more samples have no neighbors "
+                    "within specified radius; predicting NaN.",
+                    file=stderr,
+                )
+                break
+        return prediction^
 
     def score(self, X: nm.NDArray[Self.dtype], y: nm.NDArray[Self.dtype], sample_weight: Optional[nm.NDArray[Self.dtype]] = None) raises -> Float64:
         var pred = self.predict(X.copy())

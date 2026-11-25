@@ -1,5 +1,5 @@
 import numojo as nm
-from std.sys import argv
+from std.sys import argv, stderr
 from moxie.neighbors import NearestNeighbors, KNeighborsClassifier, KNeighborsRegressor, RadiusNeighborsClassifier, RadiusNeighborsRegressor, NeighborWeights
 from moxie.neighbors._distance import Metric
 
@@ -22,10 +22,11 @@ def evaluate[dtype: DType](radius_mode: Bool, mode: String, multi: Bool, self_qu
     for i in range(2,7):
         x.unsafe_set(i*2,Float64(i).cast[dtype]())
         x.unsafe_set(i*2+1,Float64((i*i)%5).cast[dtype]())
-    var q = nm.zeros[dtype](nm.Shape(3,2))
+    var q = nm.zeros[dtype](nm.Shape(4,2))
     q.unsafe_set(2,2.5)
     q.unsafe_set(3,1.5)
     q.unsafe_set(4,30)
+    q.unsafe_set(6,40)
     var cols = 2 if multi else 1
     var labels = nm.zeros[dtype](nm.Shape(7,cols) if multi else nm.Shape(7))
     var y = nm.zeros[dtype](nm.Shape(7,cols) if multi else nm.Shape(7))
@@ -39,10 +40,10 @@ def evaluate[dtype: DType](radius_mode: Bool, mode: String, multi: Bool, self_qu
     if precomputed:
         var m = Metric[dtype]("euclidean")
         var dx = nm.zeros[dtype](nm.Shape(7,7))
-        var dq = nm.zeros[dtype](nm.Shape(3,7))
+        var dq = nm.zeros[dtype](nm.Shape(q.shape[0],7))
         for i in range(7):
             for j in range(7): dx.unsafe_set(i*7+j,m.distance(x,i,x,j).cast[dtype]())
-        for i in range(3):
+        for i in range(q.shape[0]):
             for j in range(7): dq.unsafe_set(i*7+j,m.distance(q,i,x,j).cast[dtype]())
         x = dx^
         q = dq^
@@ -51,20 +52,34 @@ def evaluate[dtype: DType](radius_mode: Bool, mode: String, multi: Bool, self_qu
     if not self_query: query = q.view()
     var weight_name = String("distance") if mode == "distance" else String("uniform")
     if radius_mode:
-        var classifier = RadiusNeighborsClassifier[dtype](3.5,weights=weight_name,metric=metric_name,algorithm=algorithm,leaf_size=1,outlier_most_frequent=True)
-        var regressor = RadiusNeighborsRegressor[dtype](3.5,weights=weight_name,metric=metric_name,algorithm=algorithm,leaf_size=1)
-        classifier.fit(x,labels)
-        regressor.fit(x,y)
-        var pred = classifier.predict(query)
-        var probs = classifier.predict_proba(query)
-        var values = regressor.predict(query)
+        var weighting = Optional[SmoothWeights]()
         if mode == "callable":
-            pred = classifier.predict_with_weights(query,SmoothWeights())
-            probs = classifier.predict_proba_with_weights(query,SmoothWeights())
-            values = regressor.predict_with_weights(query,SmoothWeights())
-        emit("C",pred)
-        emit("R",values)
-        for col in range(len(probs)): emit("P"+String(col),probs[col])
+            weighting = SmoothWeights()
+        var outlier_labels = nm.zeros[dtype](nm.Shape(cols))
+        for col in range(cols):
+            outlier_labels.unsafe_set(col, Float64(-99 + col).cast[dtype]())
+        var classifier = RadiusNeighborsClassifier[
+            dtype, Metric[dtype], nm.NDArray[dtype], SmoothWeights
+        ](
+            3.5, weights=weight_name, weighting=weighting, metric=metric_name,
+            algorithm=algorithm, leaf_size=1, outlier_label=outlier_labels^,
+        )
+        var regressor = RadiusNeighborsRegressor[dtype, Metric[dtype], SmoothWeights](
+            3.5, weights=weight_name, weighting=weighting, metric=metric_name,
+            algorithm=algorithm, leaf_size=1,
+        )
+        _ = classifier.fit(x, labels)
+        _ = regressor.fit(x, y)
+        print("predict classifier", file=stderr)
+        var pred = classifier.predict(query)
+        print("predict probabilities", file=stderr)
+        var probs = classifier.predict_proba(query)
+        print("predict regressor", file=stderr)
+        var values = regressor.predict(query)
+        emit("C", pred)
+        emit("R", values)
+        for col in range(len(probs)):
+            emit("P" + String(col), probs[col])
     else:
         var classifier = KNeighborsClassifier[dtype](3,weights=weight_name,metric=metric_name,algorithm=algorithm,leaf_size=1)
         var regressor = KNeighborsRegressor[dtype](3,weights=weight_name,metric=metric_name,algorithm=algorithm,leaf_size=1)

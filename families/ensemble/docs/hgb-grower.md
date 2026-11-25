@@ -29,6 +29,24 @@ updates, use `take_tree()` to keep the predictor and release the partition.
 `predict` takes a rank-2 matrix in the same byte encoding and returns a rank-1
 Float64 array in input row order. It supports strided matrices.
 
+For inference, call `make_raw_tree(grown.tree, mapper)` from the private
+`predictor` module after any loss-specific leaf updates. Pass the same fitted
+mapper that produced the training bins. The result owns a snapshot of the
+tree's leaf values and raw split metadata. Its `predict` accepts strided
+Float32 and Float64 NuMojo matrices and returns a rank-1 Float64 array.
+Traversal reads only the features used on each row's path and allocates
+only the result. Numax `take` and `gather` would require indexed TensorLike
+inputs and intermediate arrays to advance the tree one level at a time.
+
+Numeric splits compare against the original Float64 thresholds. A split in
+the final nonmissing bin puts all non-NaN values on one side, including
+infinities. Categorical features take encoded integer IDs in `[0, 254]`.
+Unknown IDs, NaNs and other values outside that encoding follow the split's
+missing-value branch. The predictor keeps the categorical bitset even if
+the sole known category splits from missing values. In that case the
+pinned scikit-learn tree can drop the bitset when building its predictor
+and send the known category to the wrong child.
+
 Root totals reuse the family's `numpy_sum` reduction with one temporary
 Float64 vector of at most 256 bins. Numax `stats.sum` would require converting
 the bin records to a `TensorLike` and can reassociate the additions. Keeping
@@ -44,5 +62,7 @@ PYTHONDONTWRITEBYTECODE=1 python families/ensemble/tools/check.py hgb-grower
 ```
 
 The driver compares tree structure, splits, gains, leaf values, row
-partitions, and binned predictions bit for bit against scikit-learn
-`4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
+partitions, and binned and raw predictions bit for bit against scikit-learn
+`4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Native contracts cover
+striding, independent leaf snapshots, invalid feature counts, and routing
+the sole known category separately from missing and unknown categories.

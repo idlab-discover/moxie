@@ -1,7 +1,9 @@
+from std.math import inf, nan
 from std.testing import TestSuite, assert_equal, assert_raises
 
 from moxie.ensemble._hist_gradient_boosting.binning import _BinMapper
 from moxie.ensemble._hist_gradient_boosting.grower import grow_tree
+from moxie.ensemble._hist_gradient_boosting.predictor import make_raw_tree
 from moxie.ensemble._hist_gradient_boosting.splitting import _SplitOptions
 from numojo import NDArray, NDArrayStrides, Shape
 
@@ -127,6 +129,116 @@ def test_invalid_configuration_and_stump() raises:
     assert_equal(grown.leaves, [0])
     assert_equal(grown.partition, [0, 1])
     assert_equal(grown.tree.nodes[0].value, 0.0)
+
+
+def test_raw_numeric_prediction_snapshots_updated_leaf_values() raises:
+    var X = NDArray[DType.float64](Shape(4, 1))
+    for i in range(4):
+        X.unsafe_set(i, Float64(i))
+    var mapper = _BinMapper(n_bins=5)
+    var binned = mapper.fit(X).transform(X)
+    var gradients: List[Float32] = [3, 3, -3, -3]
+    var hessians = List[Float32]()
+    var grown = grow_tree(
+        binned,
+        5,
+        Span(gradients),
+        Span(hessians),
+        mapper.n_bins_non_missing_,
+        mapper.is_categorical_,
+        [0],
+        options=_SplitOptions(min_samples_leaf=1),
+    )
+    var left = grown.tree.nodes[0].left
+    grown.tree.nodes[left].value = -17.0
+    var raw = make_raw_tree(grown.tree, mapper)
+    var expected = grown.tree.predict(binned)
+    grown.tree.nodes[left].value = -9.0
+    var domains = List[Optional[List[Float64]]]()
+    var codes: List[Float64] = [0, 1, 2, 3]
+    domains.append(codes^)
+    _ = mapper.fit(X, known_categories=domains^)
+
+    var reverse = X.view_with_layout(Shape(4, 1), NDArrayStrides(-1, 1), 3)
+    var actual = raw.predict(reverse)
+    for i in range(4):
+        assert_equal(actual.unsafe_get(i), expected.unsafe_get(3 - i))
+    assert_equal(actual.unsafe_get(3), -17.0)
+    with assert_raises(contains="feature count"):
+        _ = raw.predict(NDArray[DType.float64](Shape(1, 2)))
+    with assert_raises(contains="NotFittedError"):
+        _ = make_raw_tree(grown.tree, _BinMapper(n_bins=5))
+    with assert_raises(contains="numeric split"):
+        _ = make_raw_tree(grown.tree, mapper)
+
+
+def test_float32_raw_categorical_prediction() raises:
+    var X = NDArray[DType.float32](Shape(72, 1))
+    var categories: List[Float32] = [2, 254, nan[DType.float32]()]
+    var gradients = List[Float32](capacity=72)
+    for row in range(72):
+        X.unsafe_set(row, categories[row // 24])
+        gradients.append(Float32((row // 24 - 1) * 3))
+    var domains = List[Optional[List[Float64]]]()
+    var codes: List[Float64] = [2, 254]
+    domains.append(codes^)
+    var mapper = _BinMapper(n_bins=4)
+    var binned = mapper.fit(X, known_categories=domains^).transform(X)
+    var hessians = List[Float32]()
+    var grown = grow_tree(
+        binned,
+        4,
+        Span(gradients),
+        Span(hessians),
+        mapper.n_bins_non_missing_,
+        mapper.is_categorical_,
+        [0],
+        options=_SplitOptions(min_samples_leaf=1),
+    )
+    var raw = make_raw_tree(grown.tree, mapper)
+    var expected = grown.tree.predict(binned)
+    var query_values: List[Float32] = [
+        2, 254, nan[DType.float32](), 3, 2.5, -1, 255, inf[DType.float32](),
+    ]
+    var query = NDArray[DType.float32](Shape(len(query_values), 1))
+    for i in range(len(query_values)):
+        query.unsafe_set(i, query_values[i])
+    var predictions = raw.predict(query)
+    assert_equal(len(grown.leaves), 3)
+    for i in range(len(query_values)):
+        assert_equal(predictions.unsafe_get(i), expected.unsafe_get(min(i, 2) * 24))
+
+
+def test_single_category_can_split_from_missing() raises:
+    var X = NDArray[DType.float64](Shape(48, 1))
+    var gradients = List[Float32](capacity=48)
+    for row in range(48):
+        X.unsafe_set(row, 42.0 if row < 24 else nan[DType.float64]())
+        gradients.append(Float32(-3 if row < 24 else 3))
+    var domains = List[Optional[List[Float64]]]()
+    var codes: List[Float64] = [42]
+    domains.append(codes^)
+    var mapper = _BinMapper(n_bins=4)
+    var binned = mapper.fit(X, known_categories=domains^).transform(X)
+    var hessians = List[Float32]()
+    var grown = grow_tree(
+        binned,
+        4,
+        Span(gradients),
+        Span(hessians),
+        mapper.n_bins_non_missing_,
+        mapper.is_categorical_,
+        [0],
+        options=_SplitOptions(min_samples_leaf=1),
+    )
+    var query = NDArray[DType.float64](Shape(3, 1))
+    query.unsafe_set(0, 42.0)
+    query.unsafe_set(1, nan[DType.float64]())
+    query.unsafe_set(2, 7.0)
+    var predictions = make_raw_tree(grown.tree, mapper).predict(query)
+    assert_equal(predictions.unsafe_get(0), 3.0)
+    assert_equal(predictions.unsafe_get(1), -3.0)
+    assert_equal(predictions.unsafe_get(2), -3.0)
 
 
 def main() raises:

@@ -21,6 +21,7 @@ from parity_io import case_line, close, load_pinned, parse_results, pinned_code,
 LOSS = "sklearn/linear_model/_linear_loss.py"
 LOGISTIC = "sklearn/linear_model/_logistic.py"
 NEWTON = "sklearn/linear_model/_glm/_newton_solver.py"
+OPTIMIZE = "sklearn/utils/optimize.py"
 
 
 def unsupported_oracle_branch(*args, **kwargs):
@@ -28,7 +29,7 @@ def unsupported_oracle_branch(*args, **kwargs):
 
 
 def oracle():
-    hashes = verify_reference([LOSS, LOGISTIC, NEWTON])
+    hashes = verify_reference([LOSS, LOGISTIC, NEWTON, OPTIMIZE])
     print(f"scikit-learn source SHA256 {hashes}, support wheel {support_version}")
     # These symbols let the module import with the locked 1.9.1 support wheel.
     # The dense smooth solvers do not reach these compatibility shims.
@@ -41,10 +42,14 @@ def oracle():
             setattr(module, name, unsupported_oracle_branch)
     loss = load_pinned(LOSS, register=True)
     newton = load_pinned(NEWTON, register=True)
+    optimize = load_pinned(OPTIMIZE, register=True)
     estimator = load_pinned(LOGISTIC)
     pinned_code(loss.LinearModelLoss.loss_gradient, LOSS)
     pinned_code(loss.LinearModelLoss.gradient_hessian, LOSS)
     pinned_code(newton.NewtonCholeskySolver.inner_solve, NEWTON)
+    pinned_code(loss.LinearModelLoss.gradient_hessian_product, LOSS)
+    pinned_code(optimize._newton_cg, OPTIMIZE)
+    assert estimator._newton_cg is optimize._newton_cg
     assert estimator.NewtonCholeskySolver is newton.NewtonCholeskySolver
     pinned_code(estimator._logistic_regression_path, LOGISTIC)
     pinned_code(estimator.LogisticRegression.fit, LOGISTIC)
@@ -89,6 +94,7 @@ def fixtures():
                     params["refit_C"] = 1.8
                 yield f"{bits}-{classes}-{scenario}", bits, params, arrays
                 yield f"{bits}-{classes}-newton-{scenario}", bits, params | {"solver": "newton-cholesky"}, arrays
+                yield f"{bits}-{classes}-cg-{scenario}", bits, params | {"solver": "newton-cg"}, arrays
 
         params = {
             "C": 1.0, "tol": 1e-4, "max_iter": 100, "intercept": 1,
@@ -104,6 +110,7 @@ def fixtures():
             arrays = {"X": X, "y": y, "Z": X} | options
             yield f"{bits}-invalid-{scenario}", bits, params, arrays
             yield f"{bits}-newton-invalid-{scenario}", bits, params | {"solver": "newton-cholesky"}, arrays
+            yield f"{bits}-cg-invalid-{scenario}", bits, params | {"solver": "newton-cg"}, arrays
 
         # Identical columns make the unpenalized Hessian exactly singular.
         X = np.array([[-2, -2], [-1, -1], [0, 0], [1, 1], [2, 2], [3, 3]], dtype=dtype)
@@ -113,12 +120,27 @@ def fixtures():
             "unpenalized": 1, "solver": "newton-cholesky", "singular": 1,
         }
         yield f"{bits}-newton-singular", bits, params, {"X": X, "y": y, "Z": X}
+        cg = {key: value for key, value in params.items() if key != "singular"} | {"solver": "newton-cg"}
+        yield f"{bits}-cg-singular", bits, cg, {"X": X, "y": y, "Z": X}
+        yield f"{bits}-cg-single-feature", bits, cg, {"X": X[:, :1], "y": y, "Z": X[:, :1]}
+        X_zero = np.zeros((4, 1), dtype=dtype)
+        yield f"{bits}-cg-stationary", bits, cg | {"exact_iterations": 1}, {
+            "X": X_zero, "y": np.array([-3, -3, 8, 8]), "Z": X_zero,
+        }
         yield f"{bits}-newton-singular-budget", bits, params | {"max_iter": 2, "exact_iterations": 1}, {"X": X, "y": y, "Z": X}
         X, y = make_classification(n_samples=10, n_features=20, random_state=42)
         X = X.astype(dtype)
         yield f"{bits}-newton-near-singular", bits, params | {
             "C": 1e30, "unpenalized": 0, "tol": 1e-4, "exact_iterations": 1,
         }, {"X": X, "y": y, "Z": X}
+
+        # Signed sample weights make the initial directional curvature negative.
+        X = np.array([[-8], [-2], [-1], [1], [2], [8]], dtype=dtype)
+        y = np.array([-3, -3, -3, 8, 8, 8])
+        sw = np.array([-1, 1, 1, 1, 1, -1], dtype=dtype)
+        yield f"{bits}-cg-negative-curvature", bits, cg | {
+            "C": 0.7, "unpenalized": 0, "intercept": 0, "cg_negative_curvature": 1,
+        }, {"X": X, "y": y, "sw": sw, "Z": X[2:4]}
 
         line_search_rng = np.random.default_rng(41)
         X = line_search_rng.integers(-6, 7, (9, 3)) * 2 ** line_search_rng.integers(0, 6, (9, 3))
@@ -132,12 +154,13 @@ def fixtures():
 
 
 def reference(model_type, params, arrays):
+    verbose = 2 if params.get("backtracking") or params.get("cg_negative_curvature") else 0
     model = model_type(
         solver=params.get("solver", "lbfgs"),
         C=np.inf if params["unpenalized"] else params["C"],
         tol=params["tol"], max_iter=params["max_iter"], fit_intercept=bool(params["intercept"]),
         class_weight={"balanced": "balanced", "explicit": {-3: 2.0}}.get(params["weight"]),
-        warm_start="refit_C" in params, verbose=2 if params.get("backtracking") else 0,
+        warm_start="refit_C" in params, verbose=verbose,
     )
     X, y, Z = (arrays[key] for key in ("X", "y", "Z"))
     trace = StringIO()
@@ -150,6 +173,8 @@ def reference(model_type, params, arrays):
             model.set_params(C=params["refit_C"]).fit(X, y)
     if params.get("backtracking"):
         assert "line search iteration=2" in trace.getvalue()
+    if params.get("cg_negative_curvature"):
+        assert "detected a negative curvature" in trace.getvalue()
     if params.get("singular"):
         assert any(issubclass(item.category, LinAlgWarning) for item in diagnostics)
     assert model.coef_.dtype == model.intercept_.dtype == X.dtype
@@ -222,6 +247,12 @@ def main():
             params["max_iter"] <= 1 or params.get("backtracking") or params.get("exact_iterations")
         )
         for kind, result in references:
+            # Float32 CG can drift along the unpenalized shared class offset.
+            # The widened reference still compares the raw coefficients and logits.
+            compare_class_contrasts = (
+                bits == 32 and kind == "native-dtype" and solver == "newton-cg"
+                and params["unpenalized"] and result["classes"].size > 2
+            )
             for key, wanted in result.items():
                 actual = observed[ident][key]
                 if key == "iterations" and not exact_iterations:
@@ -238,6 +269,11 @@ def main():
                     atol = 3e-3 if key in {"decision", "log_probability"} else 9e-4
                 else:
                     atol = 5e-6 if key in {"decision", "log_probability"} else 2e-6
+                if compare_class_contrasts and key in {"coef", "decision"}:
+                    axis = 0 if key == "coef" else 1
+                    actual = actual - actual.mean(axis=axis, keepdims=True)
+                    wanted = wanted.astype(np.float64)
+                    wanted -= wanted.mean(axis=axis, keepdims=True)
                 error = close(actual, wanted, 0, atol, f"{ident}/{kind}/{key}")
                 group = f"{bits}/{kind}/{key}"
                 maxima[group] = max(maxima.get(group, 0), error)

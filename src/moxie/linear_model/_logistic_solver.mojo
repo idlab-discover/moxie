@@ -1,10 +1,13 @@
-# Adapted from scikit-learn sklearn/linear_model/_glm/_newton_solver.py.
+# Adapted from scikit-learn sklearn/linear_model/_glm/_newton_solver.py
+# and sklearn/utils/optimize.py.
 # Authors: The scikit-learn developers
+# Original SciPy authors: Travis Oliphant, Eric Jones
 # SPDX-License-Identifier: BSD-3-Clause
 """Native dense solvers for the smooth logistic objective."""
 
 from std.math import abs, inf, isfinite, max, sqrt
-from mojo_optimize import LBFGSB, LBFGSBConfig
+from mojo_optimize import Config, EvaluationState, LBFGSB, LBFGSBConfig, LineSearch, LineSearchConfig
+from mojo_optimize._vectors import dot
 from numojo import NDArray, Shape, full, zeros
 from moxie._linear_linalg import IndefiniteFactor, symmetric_indefinite
 from moxie.linear_model._linear_loss import LogisticLoss
@@ -167,3 +170,92 @@ def logistic_newton[dtype: DType](
         solution.iterations += accepted
         return solution^
     return LogisticSolution(current^, accepted)
+
+def _cg_direction[dtype: DType](
+    mut objective: LogisticLoss[dtype], current: NDArray[DType.float64],
+    gradient: NDArray[DType.float64], mut direction: NDArray[DType.float64],
+    mut residual: NDArray[DType.float64], mut search: NDArray[DType.float64],
+    mut product: NDArray[DType.float64], mut projected: List[Float64],
+) raises:
+    var size = gradient.size
+    var magnitude = _gradient_norm(gradient, False)
+    var target = min(0.5, sqrt(magnitude)) * magnitude
+    for j in range(size):
+        var value = gradient.unsafe_get(j)
+        direction.unsafe_set(j, 0)
+        residual.unsafe_set(j, value)
+        search.unsafe_set(j, -value)
+    var residual_squared = dot(residual, residual)
+    comptime curvature_eps = 3.552713678800501e-15  # 16 * Float64 epsilon.
+    for iteration in range(201):
+        if _gradient_norm(residual, False) <= target:
+            break
+        objective.hessian_product(current, search, product, projected)
+        var curvature = dot(search, product)
+        if not isfinite(curvature):
+            break
+        if curvature <= 0:
+            var norm_squared = dot(search, search)
+            if curvature < -curvature_eps * norm_squared:
+                # Orient the normalized negative-curvature direction downhill.
+                var scale = abs(curvature / norm_squared) / sqrt(norm_squared)
+                if dot(search, gradient) > 0:
+                    scale = -scale
+                for j in range(size):
+                    direction.unsafe_set(j, scale * search.unsafe_get(j))
+            elif iteration == 0:
+                for j in range(size):
+                    direction.unsafe_set(j, search.unsafe_get(j))
+            break
+        var step = residual_squared / curvature
+        if not isfinite(step):
+            break
+        for j in range(size):
+            direction.unsafe_set(j, direction.unsafe_get(j) + step * search.unsafe_get(j))
+            residual.unsafe_set(j, residual.unsafe_get(j) + step * product.unsafe_get(j))
+        var next_squared = dot(residual, residual)
+        var beta = next_squared / residual_squared
+        for j in range(size):
+            search.unsafe_set(j, -residual.unsafe_get(j) + beta * search.unsafe_get(j))
+        residual_squared = next_squared
+
+
+def logistic_newton_cg[dtype: DType](
+    mut objective: LogisticLoss[dtype], var initial: NDArray[DType.float64],
+    outputs: Int, max_iter: Int, tol: Float64,
+) raises -> LogisticSolution:
+    if max_iter == 0:
+        return LogisticSolution(initial^, 0)
+    var size = initial.size
+    var state = EvaluationState[DType.float64](
+        size, Config(max_iterations=max_iter, max_evaluations=Int.MAX),
+    )
+    if not state.initialize(objective, initial):
+        raise Error("RuntimeError: LogisticRegression newton-cg could not evaluate its initial state")
+    var line_search = LineSearch[DType.float64](
+        size, LineSearchConfig(min_step=1e-8, max_step=50),
+    )
+    var direction = zeros[DType.float64](initial.shape)
+    var residual = zeros[DType.float64](initial.shape)
+    var search = zeros[DType.float64](initial.shape)
+    var product = zeros[DType.float64](initial.shape)
+    var projected = List[Float64](length=outputs, fill=0)
+    var previous_loss = state.value
+    while state.iterations < max_iter:
+        if _gradient_norm(state.gradient, True) <= tol:
+            break
+        _cg_direction(objective, state.x, state.gradient, direction, residual, search, product, projected)
+        var slope = dot(state.gradient, direction)
+        if not isfinite(slope) or slope >= 0:
+            break
+        var initial_step = Float64(1)
+        if state.iterations > 0:
+            var estimate = 2.02 * (state.value - previous_loss) / slope
+            if estimate > 0:
+                initial_step = min(1.0, estimate)
+        previous_loss = state.value
+        if not line_search.search(state, objective, direction, initial_step):
+            break
+        if not state.accept_trial():
+            break
+    return LogisticSolution(state.x.copy(), state.iterations)

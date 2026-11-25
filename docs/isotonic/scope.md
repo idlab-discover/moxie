@@ -33,7 +33,8 @@ snapshot is consumed.
 Language adaptations include compile-time dtype selection, explicit conversion
 of integer/mixed-dtype inputs, same-dtype weight vectors, fluent in-place fit and typed
 parameter records. Automatic direction records fit diagnostics through
-`fit_warnings`. Python bindings, reflection, pandas output, and metadata
+`fit_warnings`. Direct direction checks and singleton R² use standard error
+for reference warnings. Python bindings, reflection, pandas output, and metadata
 routing are separate binding work. Direct `f_` is a
 native method; feature-name inputs are accepted and ignored. See [API](api.md)
 for validation differences and copy/ownership semantics.
@@ -51,9 +52,9 @@ tests cover invalid shapes, empty/nonfinite inputs, weight errors, unfitted
 access and failed refits; compile-failure checks reject missing predictor
 capability and implicit mixed-dtype conversion. Parity executes the pinned
 local Python module and a locally compiled copy of its Cython tie engine:
-666 Float64 cases and 499 Float32 cases, including weighted scores, scaler
+676 Float64 cases and 509 Float32 cases, including weighted scores, scaler
 pipeline predictions, interpolator reconstruction, validation edges and
-automatic-fit diagnostics.
+diagnostics from automatic fit, direct direction checks and singleton scores.
 Threshold counts, X thresholds, domain and direction must match exactly. Value tolerances
 are `2e-12` for Float64 and `2e-6` for Float32, allowing pooling/reduction order
 and rounding differences. Python and SciPy are validation tools only.

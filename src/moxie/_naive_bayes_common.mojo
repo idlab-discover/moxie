@@ -8,6 +8,11 @@ from moxie.metadata_routing import (
 )
 from moxie.warnings import FitWarning
 
+def _check_feature_names(fitted_names: Optional[List[String]], names: List[String]) raises:
+    if fitted_names and names != fitted_names.value():
+        raise Error("ValueError: feature names must match the names and order used during fit")
+
+
 trait NaiveBayesClassifier(IncrementalClassifier, LogProbabilityPredictor):
     pass
 

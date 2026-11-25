@@ -1,10 +1,13 @@
 """Native dense CategoricalNB; sklearn 4358542a1bd3 (BSD-3-Clause)."""
 import numojo as nm
+from moxie.compose._table import ColumnTable
 from moxie.warnings import FitWarning
 from numojo import NDArray, Shape, Item
 from moxie._dense import sum_axis2d
 from moxie.metadata_routing import FitScoreMetadataRequest, SampleWeightRequest, SampleWeightUpdate
-from moxie._naive_bayes_common import NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata
+from moxie._naive_bayes_common import (
+    NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata, _check_feature_names,
+)
 from moxie._naive_bayes_common import _alpha_fit_warnings, _scalar_weights
 from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
@@ -81,6 +84,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
     var class_log_prior_: DenseMatrix
     var fit_warnings: List[FitWarning]
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var category_count_: List[DenseMatrix]
     var feature_log_prob_: List[DenseMatrix]
     var n_categories_: NDArray[DType.int64]
@@ -108,6 +112,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self.fit_warnings = []
         self.class_log_prior_ = nm.zeros[DType.float64](Shape(0))
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self.category_count_ = List[DenseMatrix]()
         self.feature_log_prob_ = List[DenseMatrix]()
         self.n_categories_ = nm.zeros[DType.int64](Shape(0))
@@ -427,6 +432,51 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self.class_log_prior_ = _log_priors(self.class_count_, self.class_prior, self.fit_prior)
         self.fit_warnings = _alpha_fit_warnings(self.alpha, self.force_alpha)
 
+    def fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit[input_dtype](X.values(), y, sample_weight=sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
+    def fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        *,
+        sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        return self.fit(X, y, sample_weight=_scalar_weights(X.rows(), sample_weight))
+
+    def partial_fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _check_feature_names(self.feature_names_in_, names)
+        var first = not self.__sklearn_is_fitted__()
+        _ = self.partial_fit[input_dtype](X.values(), y, classes, sample_weight=sample_weight)
+        if first:
+            self.feature_names_in_ = names^
+        return self
+
+    def partial_fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+        *,
+        sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        return self.partial_fit(X, y, classes, sample_weight=_scalar_weights(X.rows(), sample_weight))
+
     def predict_joint_log_proba[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> DenseMatrix:
         check_is_fitted(self)
         _validate_categories(X, self.n_features_in_)
@@ -454,6 +504,29 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
 
     def score[input_dtype: DType](self, X: NDArray[input_dtype], y: Self.Target,
                            sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
+        return weighted_accuracy[Self.D](y, self.predict(X), sample_weight)
+
+    def predict_joint_log_proba[input_dtype: DType](
+        self, X: ColumnTable[input_dtype],
+    ) raises -> DenseMatrix:
+        check_is_fitted(self)
+        _check_feature_names(self.feature_names_in_, X.schema().names)
+        return self.predict_joint_log_proba(X.values())
+
+    def predict[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> Self.Target:
+        var joint = self.predict_joint_log_proba(X)
+        return predict_labels(self._domain.value(), joint)
+
+    def predict_log_proba[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> DenseMatrix:
+        return log_normalize(self.predict_joint_log_proba(X))
+
+    def predict_proba[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> DenseMatrix:
+        return exp_normalize(self.predict_joint_log_proba(X))
+
+    def score[input_dtype: DType](
+        self, X: ColumnTable[input_dtype], y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> Float64:
         return weighted_accuracy[Self.D](y, self.predict(X), sample_weight)
 
     # Trait-typed NDArray[dtype] overloads; they delegate to the generic paths.

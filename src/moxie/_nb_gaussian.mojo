@@ -4,7 +4,7 @@ from numojo import NDArray, Shape, Item
 from std.math import isfinite
 from moxie.compose._table import ColumnTable
 from moxie.metadata_routing import FitScoreMetadataRequest, SampleWeightRequest, SampleWeightUpdate
-from moxie._naive_bayes_common import NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata
+from moxie._naive_bayes_common import NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata, _check_feature_names
 from moxie._naive_bayes_common import _scalar_weights
 from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
@@ -403,7 +403,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         sample_weight: Optional[Self.SampleWeight] = None,
     ) raises -> ref[self] Self:
         var names = X.schema().names.copy()
-        self._check_feature_names(names)
+        _check_feature_names(self.feature_names_in_, names)
         var first = not self.__sklearn_is_fitted__()
         _ = self.partial_fit[input_dtype](X.values(), y, classes, sample_weight)
         if first:
@@ -419,10 +419,6 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         sample_weight: Float64,
     ) raises -> ref[self] Self:
         return self.partial_fit(X, y, classes, _scalar_weights(X.rows(), sample_weight))
-
-    def _check_feature_names(self, names: List[String]) raises:
-        if self.feature_names_in_ and names != self.feature_names_in_.value():
-            raise Error("ValueError: feature names must match the names and order used during fit")
 
     def _update[input_dtype: DType](
         mut self, X: NDArray[input_dtype], y: Self.Target,
@@ -507,7 +503,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         self, X: ColumnTable[input_dtype],
     ) raises -> Self.Array:
         check_is_fitted(self)
-        self._check_feature_names(X.schema().names)
+        _check_feature_names(self.feature_names_in_, X.schema().names)
         return self.predict_joint_log_proba(X.values())
 
     def predict[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> Self.Target:

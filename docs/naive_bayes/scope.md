@@ -2,13 +2,15 @@
 
 All five public estimators live in Moxie core. They preserve List and NDArray
 inputs, boolean/integer/floating feature dtypes, numeric/string label domains,
-weighted fitting, incremental updates and probability prediction. See
+weighted fitting, incremental updates and probability prediction. They also
+accept [named dense tables](family.md#named-dense-inputs). See
 [API coverage](api-surface.md) and [behavioral differences](family.md).
 
 Sparse input remains deferred. Gaussian and categorical validation is dense in
 the reference; multinomial, complement and Bernoulli sparse counting paths are
 not implemented. No sparse input is silently densified. Python reflection,
-pandas output, metadata routing and bindings are outside this integration.
+pandas output and Python bindings are outside this integration. Estimators
+expose [sample-weight requests](family.md#sample-weight-requests) for typed parents.
 [GaussianNB](gaussian/api.md#persistence),
 [MultinomialNB and ComplementNB](counts/scope.md#native-model-files),
 [BernoulliNB](bernoulli/scope.md#native-model-files), and

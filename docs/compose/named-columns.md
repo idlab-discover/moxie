@@ -140,6 +140,13 @@ the encoder. This entry requires a Float64 table and a list-style column key.
 See the [string imputer API](../../families/impute/algorithms/simple/docs/api.md#string-specialization)
 for strategy and indicator behavior.
 
+For nullable numeric categories, use the same pipeline structure with
+`CategoricalNumericImputer[dtype]()` and `OneHotEncoder[NumericKind[dtype]]`.
+The category dtype must match both stages and remains independent of the
+Float64 table dtype. The numeric imputer fills tagged missing cells without
+casting category values and can drop all-missing training columns. Feature
+names and output spans reflect the retained columns.
+
 The matrix-regressor overloads of TransformedTargetRegressor require tables
 backed entirely by their constructor matrix. They store names and validate
 their order at prediction.

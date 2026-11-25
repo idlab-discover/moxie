@@ -1,7 +1,7 @@
 # Dense cyclic estimator scope
 
-Implemented: ElasticNet and Lasso with the modes and typed adaptations in
-[api.md](api.md). Uses family preprocessing/prediction and the single cyclic
+Implemented: ElasticNet, Lasso and their single-target paths with the modes
+and typed adaptations in [api.md](api.md). Uses family preprocessing/prediction and the single cyclic
 coordinate engine at shared/coordinate_engine; no duplicated solver.
 
 Validation: `pixi run build`, `pixi run test`, `pixi run parity`. Native tests
@@ -17,8 +17,23 @@ Float32 3e-4 for reduction order; target-scaled absolute tolerances and exact
 Float64 iteration counts are enforced by the script. Raw reports are ignored
 under builds/parity. Tests are correctness evidence, not performance claims.
 
-Unfinished dense: random selection, Gram precomputation, paths, MultiTaskLasso,
+Unfinished dense: random selection, Gram precomputation, multi-task paths, MultiTaskLasso,
 MultiTaskElasticNet and CV. Sparse matrices/targets and sparse coefficient
 conversion remain deferred under session-plan/SPARSITY-SCOPE.md. Default cyclic
 residual fitting works; precompute=True and selection="random" raise explicitly.
-The family queue remains PARTIAL.
+Path tests cover generated and supplied grids, positive constraints,
+degenerate inputs, seeded initial coefficients, strided inputs and iteration
+limits in both dtypes. The path shares a single column layout and set of
+norms across alpha values. Numax `geomspace` and `dot` require compile-time
+extents. The path uses runtime-size NuMojo `logspace` after handling the
+single-point case and uses a Float64 correlation reduction on the engine's
+packed columns. NuMojo vector `dot` is excluded by the shared numerical policy.
+The correlation reduction avoids a transposed matrix or widened data buffer.
+
+The pinned path comparison covers 72 cases. It checks grids at relative
+tolerances of 2e-9 (Float64) and 2e-6 (Float32), allowing for the geometric-grid
+implementation and BLAS reduction order. Coefficients and dual gaps use the
+fit tolerances above, scaled by target magnitude and its square respectively.
+Float64 path iteration counts are exact in these cases. Float32 counts can
+differ near the convergence threshold and are recorded with the numerical
+comparisons.

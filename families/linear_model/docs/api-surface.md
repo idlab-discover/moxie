@@ -1,12 +1,12 @@
 # Supported public API
 
-`moxie.linear_model` exports seven implemented estimators and one solver function:
+`moxie.linear_model` exports these dense estimators and solver functions:
 
 | Public names | Contract |
 | --- | --- |
 | LinearRegression, LinearRegressionParams | [Least squares](../algorithms/least_squares/docs/api.md) |
 | Ridge, RidgeParams, RidgeClassifier, RidgeClassifierParams, ridge_regression, RidgeRegressionResult, ClassWeight | [Ridge](../algorithms/ridge/docs/api.md) |
-| ElasticNet, ElasticNetParams, Lasso, LassoParams | [Cyclic coordinate estimators](../algorithms/elastic_net/docs/api.md) |
+| ElasticNet, ElasticNetParams, Lasso, LassoParams, enet_path, lasso_path, CoordinatePathResult | [Cyclic coordinate estimators](../algorithms/elastic_net/docs/api.md) |
 | BayesianRidge, BayesianRidgeParams | [Bayesian ridge](../algorithms/bayesian/docs/api.md) |
 | LogisticRegression, LogisticRegressionParams | [Logistic regression](../algorithms/logistic/docs/api.md) |
 

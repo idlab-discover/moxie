@@ -77,6 +77,7 @@ struct StochasticOptions(ImplicitlyCopyable, Movable):
     var tol: Float64
     var n_iter_no_change: Optional[Int]
     var incremental: Bool
+    var verbose: Bool
 
     def __init__(
         out self, *,
@@ -86,6 +87,7 @@ struct StochasticOptions(ImplicitlyCopyable, Movable):
         tol: Float64 = 1e-4,
         n_iter_no_change: Optional[Int] = 10,
         incremental: Bool = False,
+        verbose: Bool = False,
     ):
         self.batch_size = batch_size
         self.max_iter = max_iter
@@ -93,6 +95,7 @@ struct StochasticOptions(ImplicitlyCopyable, Movable):
         self.tol = tol
         self.n_iter_no_change = n_iter_no_change
         self.incremental = incremental
+        self.verbose = verbose
 
 
 @fieldwise_init
@@ -349,6 +352,8 @@ struct StochasticTrainer[dtype: DType](Copyable, Movable):
             self.t += n_samples
             self.loss = accumulated_loss / Float64(n_samples)
             self.loss_curve.append(self.loss)
+            if options.verbose:
+                print("Iteration ", self.n_iter, ", loss = ", self.loss, sep="")
             stopped = self._epoch_ends(options)
             if stopped:
                 break

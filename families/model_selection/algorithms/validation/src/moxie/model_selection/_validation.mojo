@@ -328,6 +328,38 @@ def validation_curve[A: CVAdapter & ParameterAdapter](
             scores.test_scores.reshape(Shape(len(param_range), len(cv))))
 
 
+def validation_curve[A: DefaultCVAdapter & ParameterAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, param_name: String, param_range: List[A.Value],
+    fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata,
+    var scoring: Optional[A.Scorer] = None, var cv: Optional[List[IndexSplit]] = None,
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> Tuple[NDArray[DType.float64], NDArray[DType.float64]]:
+    """Evaluate a parameter range with adapter defaults for omitted folds and scoring."""
+    if not cv:
+        cv = adapter.default_cv(X, y)
+    if not scoring:
+        scoring = adapter.default_scorer()
+    return validation_curve[A](
+        estimator, X, y, adapter, scoring.take(), cv.value(), fit_metadata, score_metadata,
+        param_name=param_name, param_range=param_range, error_score=error_score,
+    )
+
+
+def validation_curve[A: DefaultCVAdapter & ParameterAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, param_name: String, param_range: List[A.Value],
+    var scoring: Optional[A.Scorer] = None, var cv: Optional[List[IndexSplit]] = None,
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> Tuple[NDArray[DType.float64], NDArray[DType.float64]] where conforms_to(A.Scorer.Metadata, Defaultable):
+    """Use default metadata for both fitting and scoring."""
+    return validation_curve[A](
+        estimator, X, y, adapter, param_name=param_name, param_range=param_range,
+        fit_metadata=A.Scorer.Metadata(), score_metadata=A.Scorer.Metadata(),
+        scoring=scoring^, cv=cv^, error_score=error_score,
+    )
+
+
 @fieldwise_init
 struct LearningCurveResult(Movable):
     """Owned size vector and (training size, split) score/timing matrices."""
@@ -494,6 +526,44 @@ def learning_curve[A: CVAdapter, size_dtype: DType = DType.float64](
     return learning_curve[A, size_dtype](estimator, X, y, adapter, scoring^, cv, fit_metadata, score_metadata, rng, train_sizes=train_sizes, shuffle=shuffle, return_times=return_times, exploit_incremental_learning=exploit_incremental_learning, error_score=error_score)
 
 
+def learning_curve[A: DefaultCVAdapter, size_dtype: DType = DType.float64](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata,
+    var scoring: Optional[A.Scorer] = None, var cv: Optional[List[IndexSplit]] = None,
+    train_sizes: Optional[NDArray[size_dtype]] = None,
+    shuffle: Bool = False, random_state: Optional[Int] = None,
+    return_times: Bool = False, exploit_incremental_learning: Bool = False,
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> LearningCurveResult:
+    """Evaluate training sizes with adapter defaults for omitted folds and scoring."""
+    if not cv:
+        cv = adapter.default_cv(X, y)
+    if not scoring:
+        scoring = adapter.default_scorer()
+    return learning_curve[A, size_dtype](
+        estimator, X, y, adapter, scoring.take(), cv.value(), fit_metadata, score_metadata,
+        train_sizes=train_sizes, shuffle=shuffle, random_state=random_state, return_times=return_times,
+        exploit_incremental_learning=exploit_incremental_learning, error_score=error_score,
+    )
+
+
+def learning_curve[A: DefaultCVAdapter, size_dtype: DType = DType.float64](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, var scoring: Optional[A.Scorer] = None,
+    var cv: Optional[List[IndexSplit]] = None, train_sizes: Optional[NDArray[size_dtype]] = None,
+    shuffle: Bool = False, random_state: Optional[Int] = None,
+    return_times: Bool = False, exploit_incremental_learning: Bool = False,
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> LearningCurveResult where conforms_to(A.Scorer.Metadata, Defaultable):
+    """Use default metadata for both fitting and scoring."""
+    return learning_curve[A, size_dtype](
+        estimator, X, y, adapter, fit_metadata=A.Scorer.Metadata(),
+        score_metadata=A.Scorer.Metadata(), scoring=scoring^, cv=cv^,
+        train_sizes=train_sizes, shuffle=shuffle, random_state=random_state, return_times=return_times,
+        exploit_incremental_learning=exploit_incremental_learning, error_score=error_score,
+    )
+
+
 trait PermutationCV:
     """Recompute splits from each permuted target; mutable splitter state is explicit."""
     comptime Adapter: CVAdapter
@@ -514,6 +584,18 @@ struct FixedPermutationCV[A: CVAdapter](PermutationCV):
         for i in range(len(self.splits)):
             result.append(self.splits[i].copy())
         return result^
+
+
+@fieldwise_init
+struct _DefaultPermutationCV[A: DefaultCVAdapter, origin: ImmOrigin](PermutationCV):
+    comptime Adapter = Self.A
+    var adapter: Pointer[Self.A, Self.origin]
+
+    def split(
+        mut self, X: Self.A.Scorer.Input, y: Self.A.Scorer.Target,
+        groups: Optional[SplitLabels],
+    ) raises -> List[IndexSplit]:
+        return self.adapter[].default_cv(X, y)
 
 
 @fieldwise_init
@@ -630,6 +712,41 @@ def permutation_test_score[A: CVAdapter](
 ) raises -> PermutationTestResult:
     var rng = RandomState(random_state)
     return permutation_test_score[A](estimator, X, y, adapter, scoring, cv, fit_metadata, score_metadata, rng, groups=groups, n_permutations=n_permutations)
+
+
+def permutation_test_score[A: DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata,
+    var scoring: Optional[A.Scorer] = None, cv: Optional[List[IndexSplit]] = None,
+    groups: Optional[SplitLabels] = None, n_permutations: Int = 100, random_state: Int = 0,
+) raises -> PermutationTestResult:
+    """Use the adapter's scorer and regenerate omitted folds for each target."""
+    if not scoring:
+        scoring = adapter.default_scorer()
+    if cv:
+        return permutation_test_score[A](
+            estimator, X, y, adapter, scoring.value(), cv.value(), fit_metadata, score_metadata,
+            groups=groups, n_permutations=n_permutations, random_state=random_state,
+        )
+    comptime Provider = _DefaultPermutationCV[A, origin_of(adapter)]
+    var provider = Provider(Pointer(to=adapter))
+    return permutation_test_score[Provider](
+        estimator, X, y, adapter, scoring.value(), provider, fit_metadata, score_metadata,
+        groups=groups, n_permutations=n_permutations, random_state=random_state,
+    )
+
+
+def permutation_test_score[A: DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, var scoring: Optional[A.Scorer] = None, cv: Optional[List[IndexSplit]] = None,
+    groups: Optional[SplitLabels] = None, n_permutations: Int = 100, random_state: Int = 0,
+) raises -> PermutationTestResult where conforms_to(A.Scorer.Metadata, Defaultable):
+    """Use default metadata for both fitting and scoring."""
+    return permutation_test_score[A](
+        estimator, X, y, adapter, fit_metadata=A.Scorer.Metadata(),
+        score_metadata=A.Scorer.Metadata(), scoring=scoring^, cv=cv,
+        groups=groups, n_permutations=n_permutations, random_state=random_state,
+    )
 
 
 trait StringPredictionAdapter(CVAdapter):

@@ -105,7 +105,10 @@ Choose the same dtype and label type when saving and loading, for example
 including both dtypes, every solver and built-in shrinkage choices. The archive
 saves current configuration separately from learned state. A post-fit setting
 change preserves LDA's fitted projection state and QDA's fitted class factors
-on load. QDA archives preserve optional fitted covariances independently of the
+on load. LDA uses version 2 when it saves a prior-renormalization warning,
+including a warning retained after a failed refit. An empty warning list uses
+version 1. The loader accepts both versions.
+QDA archives preserve optional fitted covariances independently of the
 current `store_covariance` setting. Loading validates array shapes, class order
 and the required learned fields.
 
@@ -218,8 +221,12 @@ QDA: `means_` `(K, p)`, `priors_`, `rotations_` (List of `(p, n_k)`), `scalings_
   `eigen` keeps the projection learned at fit time, including whether to subtract `xbar_`.
   sklearn selects centering from the current `solver`. A model fitted with `lsqr` needs a
   new fit with `svd` or `eigen` before it can transform.
-- Python warnings do not exist: LDA priors that do not sum to 1 are renormalized silently
-  (sklearn also emits `UserWarning`).
+- LDA records a `moxie.warnings.FitWarning` in `fit_warnings` when it
+  renormalizes priors whose Float64 sum differs from 1 by more than `1e-5`.
+  The record carries scikit-learn's `UserWarning` category and message.
+  Each successful fit replaces the list. A failed fit preserves the last
+  successful warning list while resetting the fitted model. An unfitted
+  clone starts with an empty list.
 - `priors` whose length differs from the number of classes raise `ValueError` (sklearn fails
   later with an unrelated broadcasting error or silently misbehaves).
 - `predict_log_proba` of LDA rounds probabilities to the output dtype before taking

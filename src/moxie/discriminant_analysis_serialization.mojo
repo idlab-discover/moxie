@@ -8,6 +8,8 @@ from moxie.discriminant_analysis import (
     Shrinkage,
 )
 from moxie.serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
+from moxie.warnings import FitWarning
+from moxie._discriminant_analysis._lda import PRIOR_RENORMALIZATION_MESSAGE
 
 
 def _write_array[dtype: DType](
@@ -108,6 +110,12 @@ def _validate_class_order[L: ClassLabel](classes: List[L]) raises:
 def _validate_lda[dtype: DType, L: ClassLabel](
     model: LinearDiscriminantAnalysis[dtype, L]
 ) raises:
+    if len(model.fit_warnings) > 1:
+        raise Error("ModelSchemaError: invalid LDA fit_warnings")
+    if len(model.fit_warnings) == 1:
+        ref warning = model.fit_warnings[0]
+        if warning.category != "UserWarning" or warning.message != PRIOR_RENORMALIZATION_MESSAGE:
+            raise Error("ModelSchemaError: invalid LDA fit_warnings")
     var p = model.n_features_in_
     var k = len(model.classes_)
     if not model.__sklearn_is_fitted__():
@@ -168,17 +176,18 @@ def _validate_lda[dtype: DType, L: ClassLabel](
 struct LinearDiscriminantAnalysisSchema[
     dtype: DType = DType.float64, L: ClassLabel = Int
 ](ModelSchema):
-    """Version 1 state for dense LDA with Int or String labels and built-in covariance."""
+    """Dense LDA state with Int or String labels and built-in covariance."""
 
     comptime Model = LinearDiscriminantAnalysis[Self.dtype, Self.L]
     comptime TypeId = "moxie.discriminant_analysis.LinearDiscriminantAnalysis"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
         comptime assert Self.L == Int or Self.L == String, "LDA schema requires Int or String labels"
         _validate_lda(model)
-        var archive = ModelArchive(Self.TypeId, Self.StateVersion)
+        var has_warning = len(model.fit_warnings) != 0
+        var archive = ModelArchive(Self.TypeId, Self.StateVersion if has_warning else 1)
         var writer = BinaryWriter()
         writer.uint(UInt64(dtype_code[Self.dtype]()))
         writer.boolean(Self.L == String)
@@ -206,13 +215,16 @@ struct LinearDiscriminantAnalysisSchema[
             _write_optional_array(writer, archive, "scalings_", model.scalings_)
             _write_optional_array(writer, archive, "xbar_", model.xbar_)
             _write_optional_array(writer, archive, "explained_variance_ratio_", model.explained_variance_ratio_)
+        if has_warning:
+            writer.boolean(True)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
         comptime assert Self.L == Int or Self.L == String, "LDA schema requires Int or String labels"
-        archive.expect(Self.TypeId, Self.StateVersion)
+        var has_warning = archive.schema_version == Self.StateVersion
+        archive.expect(Self.TypeId, Self.StateVersion if has_warning else 1)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != UInt64(dtype_code[Self.dtype]()):
@@ -245,6 +257,10 @@ struct LinearDiscriminantAnalysisSchema[
             expected_arrays = 4 + Int(Bool(model.covariance_)) + Int(Bool(model.scalings_))
             expected_arrays += Int(Bool(model.xbar_)) + Int(Bool(model.explained_variance_ratio_))
             model._state.record_fit(1, model.n_features_in_)
+        if has_warning:
+            if not reader.boolean():
+                raise Error("ModelSchemaError: invalid LDA fit_warnings")
+            model.fit_warnings.append(FitWarning("UserWarning", PRIOR_RENORMALIZATION_MESSAGE))
         reader.finish()
         if len(archive.payloads) != expected_arrays:
             raise Error("ModelSchemaError: unexpected LDA arrays")

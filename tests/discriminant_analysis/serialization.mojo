@@ -32,9 +32,11 @@ def fitted_round_trips[dtype: DType, L: ClassLabel](y: List[L]) raises:
             n_components=Optional[Int](2),
         )
         var archive = Schema.encode(model)
+        assert_equal(archive.schema_version, 1)
         save_model[Schema](model, path)
         var restored = load_model[Schema](path)
         assert_true(restored.__sklearn_is_fitted__())
+        assert_equal(len(restored.fit_warnings), 0)
         assert_equal(restored.get_n_features_in(), 2)
         assert_equal(restored._fitted_solver, solver)
         assert_equal(restored._max_components, 1)
@@ -109,7 +111,7 @@ def invalid_state() raises:
     with assert_raises(contains="label type mismatch"):
         _ = LinearDiscriminantAnalysisSchema[DType.float64, String].decode(archive)
     var bad = archive.copy()
-    bad.schema_version += 1
+    bad.schema_version = Schema.StateVersion + 1
     with assert_raises(contains="unsupported estimator"):
         _ = Schema.decode(bad)
     bad = archive.copy()
@@ -131,6 +133,44 @@ def invalid_state() raises:
     model.xbar_ = None
     with assert_raises(contains="missing fitted svd center"):
         _ = Schema.encode(model)
+
+
+def lda_fit_warnings_round_trip() raises:
+    comptime Schema = LinearDiscriminantAnalysisSchema[]
+    var X = training_data[DType.float64]()
+    var labels: List[Int] = [1, 1, 1, 1, 1, 2, 2, 2, 2]
+    var unnormalized: List[Float64] = [1.0, 3.0]
+    var model = Schema.Model(solver="lsqr", priors=unnormalized^)
+    _ = model.fit(X, labels)
+    model.priors = None
+    var path = "builds/discriminant-lda-fit-warning.moxie"
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_equal(len(restored.fit_warnings), 1)
+    assert_equal(restored.fit_warnings[0].category, "UserWarning")
+    assert_equal(restored.fit_warnings[0].message, "The priors do not sum to 1. Renormalizing")
+    assert_equal(restored.predict_proba(X).tolist(), model.predict_proba(X).tolist())
+
+    var archive = Schema.encode(model)
+    assert_equal(archive.schema_version, 2)
+    assert_equal(dumps(Schema.encode(restored)), dumps(archive))
+    # BinaryWriter encodes the trailing warning marker as a little-endian UInt64.
+    archive.manifest[len(archive.manifest) - 8] = 0
+    with assert_raises(contains="invalid LDA fit_warnings"):
+        _ = Schema.decode(archive)
+    restored.fit_warnings[0].message = "other diagnostic"
+    with assert_raises(contains="invalid LDA fit_warnings"):
+        _ = Schema.encode(restored)
+
+    # Failed fits reset the fitted arrays while retaining the last successful warning.
+    with assert_raises(contains="inconsistent numbers of samples"):
+        _ = model.fit(X, List[Int]())
+    restored = Schema.decode(Schema.encode(model))
+    assert_false(restored.__sklearn_is_fitted__())
+    assert_equal(len(restored.fit_warnings), 1)
+    _ = restored.fit(X, labels)
+    assert_equal(len(restored.fit_warnings), 0)
+    assert_equal(Schema.encode(restored).schema_version, 1)
 
 
 def qda_fitted_round_trips[dtype: DType, L: ClassLabel](y: List[L]) raises:
@@ -252,6 +292,7 @@ def main() raises:
     fitted_round_trips[DType.float64](text_labels)
     unfitted_and_zero_width()
     invalid_state()
+    lda_fit_warnings_round_trip()
     print("PASS: LDA serialization contracts")
     qda_fitted_round_trips[DType.float32](binary_labels)
     qda_fitted_round_trips[DType.float64](text_labels)

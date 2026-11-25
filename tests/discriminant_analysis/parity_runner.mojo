@@ -124,6 +124,12 @@ def run_lda[
             return
         raise Error(label + ": expected " + fields["error"] + " but fit succeeded")
     model.fit(X, y)
+    if len(model.fit_warnings) != Int(fields["fit_warning_count"]):
+        raise Error(label + ": fit warning count differs")
+    for i in range(len(model.fit_warnings)):
+        ref warning = model.fit_warnings[i]
+        if String(warning.category, ": ", warning.message) != fields["fit_warning_" + String(i)]:
+            raise Error(label + ": fit warning differs")
     var tol = Float64(fields["tol_check"])
     labels_equal(model.classes_, classes, label + " classes_")
     assert_close(model.means_, parse_array[DType.float64](fields["means_"]), tol, label + " means_")

@@ -189,6 +189,26 @@ def test_gaussian(X: Dense, y: Dense) raises:
         _ = GSchema.encode(custom)
 
 
+def test_lda_fold_fit_warnings(X: Dense, y: Dense) raises:
+    comptime LdaSchema = CalibratedLDAClassifierCVSchema
+    var priors: List[Float64] = [1.0, 1.0, 1.0]
+    var model = CalibratedClassifierCV(
+        adapt_classifier(LinearDiscriminantAnalysis(solver="lsqr", priors=priors^)),
+        method="sigmoid", cv=3, ensemble=True,
+    )
+    _ = model.fit(X, y)
+    var archive = LdaSchema.encode(model)
+    var restored = LdaSchema.decode(loads(dumps(archive)))
+    assert_equal_predictions(model, restored, X, y)
+    assert_equal(len(restored.estimator.estimator().fit_warnings), 0)
+    assert_equal(len(restored.calibrated_classifiers_), 3)
+    for fold in restored.calibrated_classifiers_:
+        ref warnings = fold.estimator.estimator().fit_warnings
+        assert_equal(len(warnings), 1)
+        assert_equal(warnings[0].category, "UserWarning")
+        assert_equal(warnings[0].message, "The priors do not sum to 1. Renormalizing")
+
+
 def test_cv_configuration() raises:
     var splits: List[CalibrationSplit] = [
         CalibrationSplit([1, 3, 4], [0, 2]),
@@ -228,6 +248,7 @@ def main() raises:
         y[nm.Item(i)] = label
     test_svc(X, y)
     test_discriminant_configuration(X)
+    test_lda_fold_fit_warnings(X, y)
     test_gaussian(X, y)
     var file = "builds/calibration-test-model.moxie"
     var model = CalibratedClassifierCV(

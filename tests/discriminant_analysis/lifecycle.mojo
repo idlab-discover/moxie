@@ -269,5 +269,42 @@ def test_native_covariance_adapters_in_lda_and_qda() raises:
     check_native_covariance_solvers(OAS(store_precision=False))
 
 
+def test_lda_fit_warnings_follow_successful_fits() raises:
+    var X = toy6()
+    var y = y6()
+    var unnormalized: List[Float64] = [1.0, 3.0]
+    var normalized: List[Float64] = [0.25, 0.75]
+    var lda = LinearDiscriminantAnalysis(priors=unnormalized.copy())
+    assert_equal(len(lda.fit_warnings), 0)
+    _ = lda.fit(X, y)
+    assert_equal(lda.priors_.tolist(), normalized)
+    assert_equal(len(lda.fit_warnings), 1)
+    assert_equal(lda.fit_warnings[0].category, "UserWarning")
+    assert_equal(lda.fit_warnings[0].message, "The priors do not sum to 1. Renormalizing")
+    assert_equal(len(clone(lda).fit_warnings), 0)
+    var fitted_copy = lda.copy()
+    fitted_copy.fit_warnings.clear()
+    assert_equal(len(lda.fit_warnings), 1)
+
+    lda.priors = normalized.copy()
+    assert_equal(len(lda.fit_warnings), 1)
+    with assert_raises(contains="inconsistent numbers of samples"):
+        _ = lda.fit(X, List[Int]())
+    assert_false(lda.__sklearn_is_fitted__())
+    assert_equal(len(lda.fit_warnings), 1)
+
+    _ = lda.fit(X, y)
+    assert_equal(len(lda.fit_warnings), 0)
+    lda.priors = unnormalized^
+    lda.n_components = 2
+    with assert_raises(contains="n_components cannot be larger"):
+        _ = lda.fit(X, y)
+    assert_equal(len(lda.fit_warnings), 0)
+    lda.n_components = None
+    _ = lda.fit(X, y)
+    _ = lda.fit(X, y)
+    assert_equal(len(lda.fit_warnings), 1)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

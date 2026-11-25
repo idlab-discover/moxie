@@ -323,6 +323,30 @@ def test_explicit_splits() raises:
         _ = TargetEncoderSplits(bad_rank)
 
 
+def test_cv_none() raises:
+    var X = table()
+    var y = target()
+    var model = TargetEncoder(cv=None, random_state=42)
+    var default = TargetEncoder(random_state=42)
+    assert_equal(default.cv[Int], 5)
+    var expected = default.fit_transform(X, y)
+    assert_same(model.fit_transform(X, y), expected)
+
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_true(fresh.get_params().cv.isa[type_of(None)]())
+    _ = fresh.set_params(cv=2)
+    _ = fresh.set_params(target_type="continuous")
+    assert_equal(fresh.cv[Int], 2)
+    _ = fresh.set_params(cv=None)
+    assert_true(fresh.cv.isa[type_of(None)]())
+    assert_same(fresh.fit_transform(X, y), expected)
+    _ = fresh.set_params(cv=KFold(2))
+    _ = fresh.set_params(model.get_params())
+    var state = RandomState(42)
+    assert_same(fresh.fit_transform(X, y, state), expected)
+
+
 def main() raises:
     test_lifecycle()
     test_params()
@@ -330,4 +354,5 @@ def main() raises:
     test_folds_and_rng()
     test_cv_configuration()
     test_explicit_splits()
+    test_cv_none()
     print("PASS target encoder lifecycle contracts")

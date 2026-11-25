@@ -36,6 +36,7 @@ def main():
     model = ColumnTransformer([
         ("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1), ["color"]),
         ("target", TargetEncoder(smooth=0., cv=list(StratifiedKFold(2).split(train, y))), ["color"]),
+        ("automatic", TargetEncoder(target_type="continuous", cv=None, shuffle=False), ["color"]),
         ("numeric", "passthrough", ["age"]),
     ])
     expected_fit = model.fit_transform(train, y)

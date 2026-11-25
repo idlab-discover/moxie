@@ -156,9 +156,9 @@ Behavior follows sklearn:
 - `fit_transform` learns each fold's encodings from its training indices and
   applies them to its validation rows. `fit(X, y).transform(X)` uses encodings
   learned on the entire dataset.
-  Integer `cv` uses `StratifiedKFold` when the encoder treats the target as
-  categorical and `type_of_target(y)` is binary or multiclass. It uses
-  `KFold` otherwise. Shuffling defaults to on for integer `cv`. Explicit
+  Integer `cv` and `cv=None` use `StratifiedKFold` when the encoder treats the
+  target as categorical and `type_of_target(y)` is binary or multiclass.
+  Both use `KFold` otherwise and shuffle by default. Explicit
   `KFold` and `StratifiedKFold` use the splitter's own shuffle and seed
   settings. An explicit `StratifiedKFold` requires binary or multiclass
   labels in the original target, even when `target_type="continuous"`.
@@ -182,9 +182,9 @@ Learned attributes:
   `fit_transform_named` record input names.
 
 Explicit splitter objects use the native `moxie.model_selection`
-implementations. Integer `cv` uses the family-local `kfold_test_folds` and
-`stratified_kfold_test_folds` in `_target_encoder`, which return each row's
-test fold.
+implementations. Integer `cv` and `cv=None` use the family-local
+`kfold_test_folds` and `stratified_kfold_test_folds` in `_target_encoder`,
+which return each row's test fold.
 For fold f, training rows are the rows of other folds and test rows are fold
 f's rows, both ascending, exactly as sklearn's `split` yields them. The
 stratified version ranks classes by first appearance, allocates rows to folds
@@ -211,16 +211,20 @@ shuffle, and `n_splits` greater than every class count all raise.
 * `set_params(smooth=..., shuffle=..., random_state=...)` take
   `Optional[Optional[...]]`. The outer `None` leaves the value unchanged, and
   an inner `None` restores `"auto"`/`"deprecated"`.
-* `cv` accepts an integer of at least 2, `KFold`, `StratifiedKFold`, or
-  `TargetEncoderSplits` in the constructor and `set_params`. Pass a
-  `List[IndexSplit]` from `moxie.model_selection` or a native splitter cursor
-  to `TargetEncoderSplits` to snapshot the index pairs. Supply any labels or
-  groups needed by the splitter when constructing the cursor. Each index array
+* `cv` accepts an integer of at least 2, `None`, `KFold`, `StratifiedKFold`, or
+  `TargetEncoderSplits` in the constructor and `set_params`. `cv=None` uses
+  five folds with the same target-based splitter as `cv=5`. The constructor
+  default is the integer `5`. Omitting `cv` in `set_params` keeps the existing
+  configuration. Pass a `List[IndexSplit]` from `moxie.model_selection` or a
+  native splitter cursor to `TargetEncoderSplits` to snapshot the index pairs.
+  Supply any labels or groups needed by the splitter when constructing the
+  cursor. Each index array
   must be rank one and contain zero-based indices. Move the snapshot into
   `cv` with `splits^`, or pass `splits.copy()` to keep it for reuse. The
   public field and `get_params()` store the value in a Mojo variant. For an
-  integer configuration, read `model.cv[Int]`. The caller-owned
-  `RandomState` overload takes integer `cv`.
+  integer configuration, read `model.cv[Int]`. Use
+  `model.cv.isa[type_of(None)]()` to check for explicit `None`. The caller-owned
+  `RandomState` overload accepts integer `cv` or `None`.
 * `target_mean_` is always a vector. sklearn stores a scalar for binary and
   continuous targets. A Float32 target's mean is the NumPy Float32 value, stored
   as Float64.
@@ -270,6 +274,8 @@ Estimator cases cover:
 - integer `cv` 2 to 5 and explicit `KFold` and `StratifiedKFold`,
   including seeded and global shuffling and explicit unshuffled KFold
   overriding the deprecated encoder settings;
+- `cv=None` for continuous, binary and multiclass targets with both seeded
+  and unshuffled splits;
 - explicit train/test pairs with reordered and repeated training rows,
   one split, and missing or overlapping validation rows;
 - explicit categories with unknown training values;

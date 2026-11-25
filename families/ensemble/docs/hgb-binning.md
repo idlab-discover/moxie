@@ -2,9 +2,8 @@
 
 The private `moxie.ensemble._hist_gradient_boosting.binning._BinMapper` fits the
 byte bins used by histogram gradient boosting. It lives in the ensemble
-package alongside the [node histogram module](hgb-histograms.md). The public
-`HistGradientBoostingClassifier` and `HistGradientBoostingRegressor` remain
-raising declarations.
+package alongside the [node histogram module](hgb-histograms.md). It serves
+the public [classifier](hgb-classifier.md) and [regressor](hgb-regressor.md).
 
 ```mojo
 from moxie.ensemble._hist_gradient_boosting.binning import _BinMapper

@@ -2,8 +2,7 @@
 # See families/ensemble/LICENSES/scikit-learn.txt.
 """Public dense histogram gradient boosting regression."""
 
-from std.math import ceil, isfinite
-from std.utils import Variant
+from std.math import ceil
 
 from numojo import NDArray, Shape, full
 
@@ -13,17 +12,15 @@ from moxie.tree._classes import DecisionTreeRegressor
 
 from .._base import EnsembleRegressor, StagedPredictor
 from .binning import _BinMapper
+from .common import (
+    _EarlyStopping, _Interactions, _ValidationSize, _Values, _check_settings,
+    _history, _interaction_groups, _should_stop, _take_rows, _uses_early_stopping,
+)
 from .feature_sampling import _FeatureSampler
 from .grower import grow_tree
 from .losses import _RegressionLoss
 from .predictor import _RawTree, make_raw_tree
 from .splitting import _SplitOptions
-
-
-comptime _Values = NDArray[DType.float64]
-comptime _EarlyStopping = Variant[Bool, String]
-comptime _ValidationSize = Variant[Int, Float64]
-comptime _Interactions = Variant[String, List[List[Int]]]
 
 
 @fieldwise_init
@@ -50,91 +47,10 @@ struct HistGradientBoostingRegressorParams(Copyable, Movable):
     var verbose: Int
     var random_state: Optional[Int]
 
-    def _uses_early_stopping(self, n_samples: Int) raises -> Bool:
-        if self.early_stopping.isa[Bool]():
-            return self.early_stopping[Bool]
-        if self.early_stopping[String] != "auto":
-            raise Error("ValueError: early_stopping must be true, false, or auto")
-        return n_samples > 10_000
-
-    def _check(self) raises:
-        if self.max_iter < 1 or self.max_depth.or_else(1) < 1 or self.max_leaf_nodes.or_else(2) < 2:
-            raise Error("ValueError: invalid iteration, depth, or leaf limit")
-        if not isfinite(self.learning_rate) or self.learning_rate <= 0:
-            raise Error("ValueError: learning_rate must be positive and finite")
-        if not (0.0 < self.max_features <= 1.0) or not (2 <= self.max_bins <= 255):
-            raise Error("ValueError: max_features must be in (0, 1] and max_bins in [2, 255]")
-        if self.quantile and not (0.0 <= self.quantile.value() <= 1.0):
-            raise Error("ValueError: quantile must be in [0, 1]")
-        if self.n_iter_no_change < 1 or not isfinite(self.tol) or self.tol < 0 or self.verbose < 0:
-            raise Error("ValueError: invalid early stopping tolerance, patience, or verbosity")
-        if self.validation_fraction:
-            ref size = self.validation_fraction.value()
-            if size.isa[Int]():
-                if size[Int] < 1:
-                    raise Error("ValueError: validation row count must be positive")
-            elif not (0.0 < size[Float64] < 1.0):
-                raise Error("ValueError: validation fraction must be in (0, 1)")
-        if self.categorical_features and self.categorical_features.value() != "from_dtype":
-            raise Error("ValueError: categorical_features must be from_dtype or None on numeric arrays")
-
-    def _interaction_groups(self, n_features: Int) raises -> List[List[Int]]:
-        var groups = List[List[Int]]()
-        if not self.interaction_cst:
-            return groups^
-        ref constraints = self.interaction_cst.value()
-        if constraints.isa[String]():
-            if constraints[String] == "no_interactions":
-                for i in range(n_features):
-                    groups.append([i])
-            elif constraints[String] == "pairwise":
-                for i in range(n_features):
-                    for j in range(i + 1, n_features):
-                        groups.append([i, j])
-            else:
-                raise Error("ValueError: unknown interaction constraint")
-            return groups^
-        groups = constraints[List[List[Int]]].copy()
-        var listed = List[Bool](length=n_features, fill=False)
-        for group in groups:
-            for feature in group:
-                if not (0 <= feature < n_features):
-                    raise Error("ValueError: interaction feature index is out of range")
-                listed[feature] = True
-        var remaining = List[Int]()
-        for i in range(n_features):
-            if not listed[i]:
-                remaining.append(i)
-        if remaining:
-            groups.append(remaining^)
-        return groups^
-
 
 def _add_prediction(mut raw: _Values, increment: _Values):
     for i in range(raw.size):
         raw.unsafe_set(i, raw.unsafe_get(i) + increment.unsafe_get(i))
-
-
-def _take_rows[dtype: DType](
-    data: NDArray[dtype], indices: NDArray[DType.int64], start: Int, stop: Int
-) raises -> NDArray[dtype]:
-    var count = stop - start
-    if data.ndim == 1:
-        var vector = NDArray[dtype](Shape(count))
-        for i in range(count):
-            var row = Int(indices.unsafe_get(start + i))
-            vector.unsafe_set(i, data.unsafe_get(row * data.strides[0]))
-        return vector^
-
-    var columns = data.shape[1]
-    var matrix = NDArray[dtype](Shape(count, columns))
-    for i in range(count):
-        var row = Int(indices.unsafe_get(start + i))
-        for j in range(columns):
-            matrix.unsafe_set(
-                i * columns + j, data.unsafe_get(row * data.strides[0] + j * data.strides[1])
-            )
-    return matrix^
 
 
 def _validate_target(
@@ -262,12 +178,19 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         var sample_weight_val: Optional[Self.SampleWeight] = None,
     ) raises -> ref[self] Self:
         _BinMapper._check_matrix(X)
-        self._params._check()
+        ref params = self._params
+        _check_settings(
+            params.max_iter, params.max_depth, params.max_leaf_nodes, params.learning_rate,
+            params.max_features, params.max_bins, params.n_iter_no_change, params.tol,
+            params.verbose, params.validation_fraction, params.categorical_features,
+        )
+        if params.quantile and not (0.0 <= params.quantile.value() <= 1.0):
+            raise Error("ValueError: quantile must be in [0, 1]")
         var loss = _RegressionLoss(self._params.loss, self._params.quantile)
         _validate_target(loss, y, X.shape[0], sample_weight)
         if self._params.warm_start and self._model:
             raise Error("NotImplementedError: histogram regression warm starts are pending")
-        var early = self._params._uses_early_stopping(X.shape[0])
+        var early = _uses_early_stopping(params.early_stopping, X.shape[0])
         if early and self._params.scoring.or_else("") != "loss":
             raise Error("NotImplementedError: histogram regression early stopping supports scoring=loss")
         if Bool(X_val) != Bool(y_val) or (sample_weight_val and not X_val):
@@ -324,7 +247,7 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         var baseline = loss.intercept(y, weights)
         var n_features = X.shape[1]
         var monotonic = params.monotonic_cst.value().copy() if params.monotonic_cst else List[Int](length=n_features, fill=0)
-        var interactions = params._interaction_groups(n_features)
+        var interactions = _interaction_groups(params.interaction_cst, n_features)
         var n_bins = params.max_bins + 1
         var mapper = _BinMapper(n_bins=n_bins, random_state=seed)
         _ = mapper.fit(X, sample_weight=weights)
@@ -379,11 +302,11 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
                     ref val_data = validation.value()
                     validation_scores.append(-loss.mean_loss(val_data.y, raw_val, val_data.weights))
                 ref scores = validation_scores if score_validation else train_scores
-                if Self._should_stop(scores, params.n_iter_no_change, params.tol):
+                if _should_stop(scores, params.n_iter_no_change, params.tol):
                     break
 
-        var train_history = Self._history(train_scores)
-        var validation_history = Self._history(validation_scores)
+        var train_history = _history(train_scores)
+        var validation_history = _history(validation_scores)
         self.n_features_in_ = n_features
         self.n_iter_ = len(trees)
         self.n_trees_per_iteration_ = 1
@@ -391,24 +314,6 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         self.train_score_ = train_history^
         self.validation_score_ = validation_history^
         self._model = _FittedRegressor(loss^, baseline, trees^, n_features)
-
-    @staticmethod
-    def _should_stop(scores: List[Float64], patience: Int, tol: Float64) -> Bool:
-        if len(scores) <= patience:
-            return False
-        var start = len(scores) - patience
-        var threshold = scores[start - 1] + tol
-        for i in range(start, len(scores)):
-            if scores[i] > threshold:
-                return False
-        return True
-
-    @staticmethod
-    def _history(scores: List[Float64]) raises -> _Values:
-        var result = _Values(Shape(len(scores)))
-        for i in range(len(scores)):
-            result.unsafe_set(i, scores[i])
-        return result^
 
     def _check_predict(self, X: Self.Input) raises:
         if not self._model:

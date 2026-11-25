@@ -4,6 +4,37 @@ from moxie.base import clone
 from moxie.neighbors import LocalOutlierFactor
 from std.sys import argv
 
+def exercise_fit_warnings[dtype: DType]() raises:
+    var x = nm.zeros[dtype](nm.Shape(4, 1))
+    x.unsafe_set(3, 1)
+    var model = LocalOutlierFactor[dtype](5)
+    assert_equal(len(model.fit_warnings), 0)
+    _ = model.fit(x)
+    assert_equal(len(model.fit_warnings), 1)
+    print("W", "clipped", model.fit_warnings[0].category, model.fit_warnings[0].message)
+
+    _ = model.set_params(n_neighbors=4).fit(x)
+    assert_equal(model.n_neighbors_, 3)
+    assert_equal(len(model.fit_warnings), 0)
+
+    _ = model.set_params(n_neighbors=2).fit_predict(x)
+    assert_equal(len(model.fit_warnings), 1)
+    var duplicate = model.fit_warnings[0].copy()
+    print("W", "duplicates", duplicate.category, duplicate.message)
+    var fresh = clone(model)
+    assert_equal(len(fresh.fit_warnings), 0)
+
+    var singleton = nm.zeros[dtype](nm.Shape(1, 1))
+    with assert_raises():
+        _ = model.fit(singleton)
+    assert_equal(model.n_samples_fit_, 4)
+    assert_equal(len(model.fit_warnings), 1)
+    assert_equal(model.fit_warnings[0].category, duplicate.category)
+    assert_equal(model.fit_warnings[0].message, duplicate.message)
+
+    _ = model.set_params(novelty=True).fit(x)
+    assert_equal(len(model.fit_warnings), 0)
+
 def exercise[dtype: DType]() raises:
     var x = nm.zeros[dtype](nm.Shape(6,1))
     for i in range(5): x.unsafe_set(i,Float64(i).cast[dtype]())
@@ -40,5 +71,9 @@ def exercise[dtype: DType]() raises:
 
 def main() raises:
     var args = argv()
-    if len(args)>1 and args[1]=="f32": exercise[DType.float32]()
-    else: exercise[DType.float64]()
+    if len(args)>1 and args[1]=="f32":
+        exercise[DType.float32]()
+        exercise_fit_warnings[DType.float32]()
+    else:
+        exercise[DType.float64]()
+        exercise_fit_warnings[DType.float64]()

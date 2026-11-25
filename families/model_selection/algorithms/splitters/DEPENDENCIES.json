@@ -16,6 +16,9 @@
             "UnsupervisedEstimator": "moxie.base",
             "clone": "moxie.base"
           },
+          "moxie.metrics": {
+            "accuracy_score": "moxie.metrics._classification"
+          },
           "moxie.utils": {
             "FittedState": "moxie.utils.validation",
             "check_is_fitted": "moxie.utils.validation"
@@ -25,6 +28,12 @@
       },
       "id": "moxie",
       "modules": {
+        "moxie._feature_metadata": {
+          "file": "src/moxie/_feature_metadata.mojo"
+        },
+        "moxie.metrics._classification": {
+          "file": "src/moxie/metrics/_classification.mojo"
+        },
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },
@@ -226,6 +235,9 @@
         "moxie.model_selection._evaluation": {
           "file": "src/moxie/model_selection/_evaluation.mojo"
         },
+        "moxie.model_selection._classification_threshold": {
+          "file": "src/moxie/model_selection/_classification_threshold.mojo"
+        },
         "moxie.model_selection._api": {
           "file": "src/moxie/model_selection/_api.mojo"
         },
@@ -259,7 +271,8 @@
             "Candidate": "moxie.model_selection._candidates",
             "ParameterCandidates": "moxie.model_selection._candidates",
             "ParameterDistribution": "moxie.model_selection._candidates",
-            "FixedThresholdClassifier": "moxie.model_selection._api",
+            "FixedThresholdClassifier": "moxie.model_selection._classification_threshold",
+            "FixedThresholdParams": "moxie.model_selection._classification_threshold",
             "HalvingGridSearchCV": "moxie.model_selection._api",
             "HalvingRandomSearchCV": "moxie.model_selection._api",
             "TunedThresholdClassifierCV": "moxie.model_selection._api",

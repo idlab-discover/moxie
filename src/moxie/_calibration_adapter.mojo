@@ -15,7 +15,13 @@ from .discriminant_analysis import (
 )
 from .frozen import FrozenEstimator
 from .linear_model import LogisticRegression
-from .naive_bayes import GaussianNB
+from .naive_bayes import (
+    BernoulliNB,
+    CategoricalNB,
+    ComplementNB,
+    GaussianNB,
+    MultinomialNB,
+)
 from .pipeline import Pipeline
 from .svm import SVC
 from .svm._linear import LinearSVC
@@ -48,6 +54,78 @@ def adapt_classifier(
         return _numeric_classes(model.estimator().classes_)
 
     return ClassifierCalibrationAdapter(estimator^, classes, "GaussianNB")
+
+
+def adapt_classifier(
+    var estimator: MultinomialNB[],
+) -> ClassifierCalibrationAdapter[MultinomialNB[]]:
+    def classes(model: MultinomialNB[]) raises -> Array:
+        return _numeric_classes(model.classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "MultinomialNB")
+
+
+def adapt_classifier(
+    var estimator: FrozenEstimator[MultinomialNB[]],
+) -> ClassifierCalibrationAdapter[FrozenEstimator[MultinomialNB[]]]:
+    def classes(model: FrozenEstimator[MultinomialNB[]]) raises -> Array:
+        return _numeric_classes(model.estimator().classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "MultinomialNB")
+
+
+def adapt_classifier(
+    var estimator: ComplementNB[],
+) -> ClassifierCalibrationAdapter[ComplementNB[]]:
+    def classes(model: ComplementNB[]) raises -> Array:
+        return _numeric_classes(model.classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "ComplementNB")
+
+
+def adapt_classifier(
+    var estimator: FrozenEstimator[ComplementNB[]],
+) -> ClassifierCalibrationAdapter[FrozenEstimator[ComplementNB[]]]:
+    def classes(model: FrozenEstimator[ComplementNB[]]) raises -> Array:
+        return _numeric_classes(model.estimator().classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "ComplementNB")
+
+
+def adapt_classifier(
+    var estimator: BernoulliNB[],
+) -> ClassifierCalibrationAdapter[BernoulliNB[]]:
+    def classes(model: BernoulliNB[]) raises -> Array:
+        return _numeric_classes(model.classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "BernoulliNB")
+
+
+def adapt_classifier(
+    var estimator: FrozenEstimator[BernoulliNB[]],
+) -> ClassifierCalibrationAdapter[FrozenEstimator[BernoulliNB[]]]:
+    def classes(model: FrozenEstimator[BernoulliNB[]]) raises -> Array:
+        return _numeric_classes(model.estimator().classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "BernoulliNB")
+
+
+def adapt_classifier(
+    var estimator: CategoricalNB[],
+) -> ClassifierCalibrationAdapter[CategoricalNB[]]:
+    def classes(model: CategoricalNB[]) raises -> Array:
+        return _numeric_classes(model.classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "CategoricalNB")
+
+
+def adapt_classifier(
+    var estimator: FrozenEstimator[CategoricalNB[]],
+) -> ClassifierCalibrationAdapter[FrozenEstimator[CategoricalNB[]]]:
+    def classes(model: FrozenEstimator[CategoricalNB[]]) raises -> Array:
+        return _numeric_classes(model.estimator().classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "CategoricalNB")
 
 
 def adapt_classifier(

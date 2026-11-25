@@ -1,4 +1,5 @@
-"""Compare three real LinearRegression compositions to pinned scikit-learn."""
+"""Compare three dense coefficient-selector compositions to pinned scikit-learn."""
+import argparse
 from pathlib import Path
 import subprocess
 import sys
@@ -11,15 +12,14 @@ sys.path.insert(0, str(ROOT / "families/linear_model/tools"))
 from compiler_limits import compiler_command
 import parity_io as oracle
 
-OUTPUT = ROOT / "builds/linear-regression-importance-parity"
 HEADER = """\
 import numojo as nm
 from std.testing import assert_equal, assert_false
 from moxie.feature_selection import (
-    DenseSupervisedCV, FeatureCount, LinearRegressionImportance,
+    BayesianRidgeImportance, DenseSupervisedCV, FeatureCount, LinearRegressionImportance,
     RFE, RFECV, SelectFromModel, SequentialCV,
 )
-from moxie.linear_model import LinearRegression
+from moxie.linear_model import BayesianRidge, LinearRegression
 
 def dump[dtype: DType](array: nm.NDArray[dtype]) raises:
     print(array.ndim)
@@ -30,18 +30,22 @@ def dump[dtype: DType](array: nm.NDArray[dtype]) raises:
 """
 
 
-def pinned_estimators():
+def pinned_estimators(regressor_name):
     base, from_model, rfe = [
         f"sklearn/feature_selection/{name}.py" for name in ("_base", "_from_model", "_rfe")
     ]
     linear = "sklearn/linear_model/_base.py"
-    oracle.verify_reference([base, from_model, rfe, linear])
+    bayes = "sklearn/linear_model/_bayes.py"
+    regressor_source = bayes if regressor_name == "BayesianRidge" else linear
+    oracle.verify_reference(sorted({base, from_model, rfe, linear, regressor_source}))
     common = oracle.load_pinned(base, register=True)
-    regressor = oracle.load_pinned(linear).LinearRegression
+    linear_module = oracle.load_pinned(linear, register=regressor_source == bayes)
+    module = oracle.load_pinned(bayes) if regressor_source == bayes else linear_module
+    regressor = getattr(module, regressor_name)
     model = oracle.load_pinned(from_model)
     elimination = oracle.load_pinned(rfe)
-    oracle.pinned_code(regressor.fit, linear)
-    oracle.pinned_code(regressor.predict, linear)
+    oracle.pinned_code(regressor.fit, regressor_source)
+    oracle.pinned_code(regressor.predict, regressor_source)
     oracle.pinned_code(model.SelectFromModel.fit, from_model)
     oracle.pinned_code(elimination.RFE.fit, rfe)
     oracle.pinned_code(elimination.RFECV.fit, rfe)
@@ -91,11 +95,12 @@ def fixture(dtype, multioutput, regressor, selectors):
     array("X", X)
     array("y", y)
     array("weights", weights)
+    model = f"E({regressor.__name__}[dtype]())"
     cases = (
-        ("sfm", 'SelectFromModel(E(LinearRegression[dtype]()))', {}, True),
-        ("rfe", 'RFE(E(LinearRegression[dtype]()), n_features_to_select=FeatureCount(2), importance_getter="coef_")',
+        ("sfm", f"SelectFromModel({model})", {}, True),
+        ("rfe", f'RFE({model}, n_features_to_select=FeatureCount(2), importance_getter="coef_")',
          {"n_features_to_select": 2, "importance_getter": "coef_"}, True),
-        ("rfecv", 'RFECV[DenseSupervisedCV[E, dtype]](E(LinearRegression[dtype]()), cv=SequentialCV(3))',
+        ("rfecv", f"RFECV[DenseSupervisedCV[E, dtype]]({model}, cv=SequentialCV(3))",
          {"cv": 3}, False),
     )
     for (name, constructor, options, weighted), selector in zip(cases, selectors, strict=True):
@@ -131,23 +136,30 @@ def fixture(dtype, multioutput, regressor, selectors):
 
 
 def main():
-    regressor, selectors = pinned_estimators()
-    OUTPUT.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--bayesian-ridge", action="store_true")
+    bayesian = parser.parse_args().bayesian_ridge
+    model = "BayesianRidge" if bayesian else "LinearRegression"
+    stem = "bayesian-ridge" if bayesian else "linear-regression"
+    output = ROOT / "builds" / f"{stem}-importance-parity"
+    regressor, selectors = pinned_estimators(model)
+    output.mkdir(parents=True, exist_ok=True)
+    targets = [False] if bayesian else [False, True]
     for dtype in (np.float32, np.float64):
         name = np.dtype(dtype).name
-        fixtures = [fixture(dtype, multi, regressor, selectors) for multi in (False, True)]
-        source = OUTPUT / f"{name}.mojo"
+        fixtures = [fixture(dtype, multi, regressor, selectors) for multi in targets]
+        source = output / f"{name}.mojo"
         binary = source.with_suffix("")
-        header = HEADER + f"\ncomptime dtype = DType.{name}\ncomptime E = LinearRegressionImportance[dtype]\n"
-        source.write_text("\n\n".join([header, *(code for code, _, _ in fixtures),
-                                      "def main() raises:\n    check_0()\n    check_1()\n"]))
+        header = HEADER + f"\ncomptime dtype = DType.{name}\ncomptime E = {model}Importance[dtype]\n"
+        main_body = "def main() raises:\n" + "".join(f"    check_{int(multi)}()\n" for multi in targets)
+        source.write_text("\n\n".join([header, *(code for code, _, _ in fixtures), main_body]))
         subprocess.run(compiler_command([
             "mojo", "build", "-O3", "-I", ROOT / "builds/deps", source, "-o", binary,
         ]), check=True)
         actual = iter(subprocess.check_output([binary], text=True).splitlines())
         for multi, (_, expected, exact_count) in enumerate(fixtures):
-            # Match the well-conditioned least-squares owner tolerances.
-            tolerance = 3e-4 if dtype == np.float32 else 1e-8
+            # Float32 uses a widened native solve; Float64 compares Jacobi and LAPACK rounding.
+            tolerance = 3e-4 if dtype == np.float32 else (1e-7 if bayesian else 1e-8)
             for key, value in expected.items():
                 assert next(actual) == key
                 ndim = int(next(actual))
@@ -159,7 +171,7 @@ def main():
             count = exact_count + sum(value.size for value in expected.values())
             print(f"PASS {name}/{['vector', 'multioutput'][multi]} ({count} comparisons)", flush=True)
         assert next(actual, None) is None
-    print(f"PASS LinearRegression selector parity against scikit-learn {oracle.REVISION}")
+    print(f"PASS {model} selector parity against scikit-learn {oracle.REVISION}")
 
 
 if __name__ == "__main__":

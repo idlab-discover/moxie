@@ -150,7 +150,16 @@ explicit unsupported extension of sklearn's more permissive weighting surface.
 Classifiers expose one target-domain vector per output in `classes_`
 (`StringTarget` for strings).
 `predict_proba` returns a list of Float64 arrays, one per target
-output, including single-output classification. Regression preserves target rank; classification flattens a single-column
+output, including single-output classification. Explicitly copying a
+`KNeighborsClassifier` retains its fitted query and targets. Cloning keeps
+only the configuration. To compose KNN with a multiclass wrapper, use the
+[Int64 binary target configuration](../../../docs/multiclass/family.md#k-nearest-neighbors-components).
+`KNeighborsClassifier` implements `moxie.multiclass.PairwiseInput` so
+one-vs-one composition can subset both axes of precomputed training
+distances. The capability follows the current configuration, including a
+typed built-in `metric_params` override, and can change through `set_params`.
+Native callable metrics declare ordinary feature input.
+Regression preserves target rank; classification flattens a single-column
 target like sklearn. Classification `score` is accuracy (subset accuracy for
 multilabel indicators); multiclass-multioutput scoring raises like sklearn,
 although prediction supports those targets. Regression uses uniformly averaged R2, with sklearn's finite
@@ -163,7 +172,11 @@ Radius regression returns NaN for empty neighborhoods. Radius classification
 raises by default; pass `outlier_label` as a one-dimensional array with one label
 per output, or `outlier_most_frequent=True` for the reference's `"most_frequent"`
 setting. An outlier label outside the fitted classes yields all-zero probabilities
-and the requested prediction. Native warnings are not emitted.
+and the requested prediction. Radius regression writes one `UserWarning` if
+any prediction is NaN. Radius classification writes one `UserWarning` per
+output with an outlier label outside its fitted classes when a query has no
+neighbors. Both `predict` and classifier `predict_proba` write the category
+and message to stderr. Label text uses native Mojo formatting.
 
 ## LocalOutlierFactor
 
@@ -177,8 +190,14 @@ and gives `offset_=-1.5`; a value in (0,0.5] uses the linear percentile.
 `predict` require `novelty=True`. Novelty queries include training matches when
 explicitly supplied, preserving the distinction from training factors. Scores
 retain feature dtype; ±1 predictions are floating arrays, a native label-type
-adaptation. Warning emission is not implemented; callable metrics use the same backend
-selection and configuration rules as NearestNeighbors.
+adaptation. Read `fit_warnings: List[FitWarning]` after `fit` or `fit_predict`.
+It records scikit-learn's `UserWarning` for a requested neighbor count above
+the sample count and for extreme training factors caused by duplicates in
+outlier detection mode. Successful fits replace the list. Failed fits preserve
+it, and an unfitted clone starts with an empty list. Read these diagnostics on
+the estimator under the shared [fit warning contract](../../../docs/interfaces.md#fit-warnings).
+Callable metrics use the same backend selection and configuration rules as
+NearestNeighbors.
 
 ## KernelDensity
 

@@ -7,7 +7,7 @@ from moxie.feature_selection._univariate_selection import GenericUnivariateSelec
 from moxie.feature_selection._variance_threshold import VarianceThreshold
 from ._from_model import SelectFromModel, SelectFromModelParams, ModelThreshold, MaxFeatures, FeatureLimitPolicy
 from ._model_importance import SelectionEstimator, IncrementalSelectionEstimator, SelectionClassLabels
-from ._linear_model_importance import LassoImportance, ElasticNetImportance, LinearRegressionImportance
+from ._linear_model_importance import BayesianRidgeImportance, LassoImportance, ElasticNetImportance, LinearRegressionImportance
 from ._ridge_importance import RidgeImportance
 from ._selector_mixin import SelectorMixin
 from ._rfe import RFE, RFEParams, FeatureCount
@@ -23,4 +23,6 @@ from ._incremental_pca_importance import IncrementalPCAImportance, IncrementalPC
 from ._tree_importance import DecisionTreeClassifierImportance
 
 from ._linear_svc_importance import LinearSVCImportance
+from ._svc_importance import SVCImportance
 from ._logistic_importance import LogisticRegressionImportance
+from ._ridge_classifier_importance import RidgeClassifierImportance

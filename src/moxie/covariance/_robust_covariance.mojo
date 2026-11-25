@@ -197,8 +197,17 @@ struct InitialEstimate(Copyable, Movable):
     var covariance: NDArray[DType.float64]
 
 
-def c_step(X: NDArray[DType.float64], n_support: Int, mut random_state: RandomState, remaining_iterations: Int = 30,
-           initial: Optional[InitialEstimate] = None) raises -> CStepResult:
+comptime _CovarianceMethod = def(NDArray[DType.float64]) raises -> NDArray[DType.float64]
+comptime _SupportCovariance = def(
+    NDArray[DType.float64], List[Int], NDArray[DType.float64]
+) raises -> NDArray[DType.float64]
+
+
+def c_step[F: _SupportCovariance](
+    X: NDArray[DType.float64], n_support: Int, mut random_state: RandomState,
+    covariance_method: F, remaining_iterations: Int = 30,
+    initial: Optional[InitialEstimate] = None,
+) raises -> CStepResult:
     """Concentration steps from a random subset or from initial estimates (sklearn `_c_step`)."""
     var n = X.shape[0]
     var dist = nm.zeros[DType.float64](Shape(n))
@@ -221,7 +230,7 @@ def c_step(X: NDArray[DType.float64], n_support: Int, mut random_state: RandomSt
         dist_is_inf = False
         support = smallest(dist, n_support)
     var location = subset_mean(X, support)
-    var covariance = subset_covariance(X, support, location)
+    var covariance = covariance_method(X, support, location)
     var det = fast_logdet(covariance)
     if _is_inf(det):
         precision = pinvh(covariance)
@@ -240,7 +249,7 @@ def c_step(X: NDArray[DType.float64], n_support: Int, mut random_state: RandomSt
         dist_is_inf = False
         support = smallest(dist, n_support)
         location = subset_mean(X, support)
-        covariance = subset_covariance(X, support, location)
+        covariance = covariance_method(X, support, location)
         det = fast_logdet(covariance)
         remaining -= 1
     var previous_dist = dist.copy()
@@ -262,21 +271,25 @@ def c_step(X: NDArray[DType.float64], n_support: Int, mut random_state: RandomSt
     return CStepResult(location^, covariance^, det, support^, dist^)
 
 
-def select_candidates(X: NDArray[DType.float64], n_support: Int, n_trials: Int, select: Int, n_iter: Int,
-                      mut random_state: RandomState) raises -> List[CStepResult]:
+def select_candidates[F: _SupportCovariance](
+    X: NDArray[DType.float64], n_support: Int, n_trials: Int, select: Int,
+    n_iter: Int, mut random_state: RandomState, covariance_method: F,
+) raises -> List[CStepResult]:
     """Best `select` of `n_trials` random-start c_step runs, by log-determinant."""
     var results = List[CStepResult]()
     for _ in range(n_trials):
-        results.append(c_step(X, n_support, random_state, n_iter))
+        results.append(c_step(X, n_support, random_state, covariance_method, n_iter))
     return _best(results, select)
 
 
-def select_candidates(X: NDArray[DType.float64], n_support: Int, initial: List[InitialEstimate], select: Int, n_iter: Int,
-                      mut random_state: RandomState) raises -> List[CStepResult]:
+def select_candidates[F: _SupportCovariance](
+    X: NDArray[DType.float64], n_support: Int, initial: List[InitialEstimate],
+    select: Int, n_iter: Int, mut random_state: RandomState, covariance_method: F,
+) raises -> List[CStepResult]:
     """Best `select` c_step runs started from the given estimates."""
     var results = List[CStepResult]()
     for k in range(len(initial)):
-        results.append(c_step(X, n_support, random_state, n_iter, initial[k].copy()))
+        results.append(c_step(X, n_support, random_state, covariance_method, n_iter, initial[k].copy()))
     return _best(results, select)
 
 
@@ -317,7 +330,10 @@ def _mask(n: Int, indices: List[Int]) raises -> NDArray[DType.bool]:
     return mask^
 
 
-def _fast_mcd64(X: NDArray[DType.float64], support_fraction: Optional[Float64], mut random_state: RandomState, round32: Bool = False) raises -> Tuple[NDArray[DType.float64], NDArray[DType.float64], List[Int], NDArray[DType.float64]]:
+def _fast_mcd64[F: _SupportCovariance](
+    X: NDArray[DType.float64], support_fraction: Optional[Float64],
+    mut random_state: RandomState, covariance_method: F, round32: Bool,
+) raises -> Tuple[NDArray[DType.float64], NDArray[DType.float64], List[Int], NDArray[DType.float64]]:
     var n = X.shape[0]
     var p = X.shape[1]
     var n_support: Int
@@ -386,7 +402,7 @@ def _fast_mcd64(X: NDArray[DType.float64], support_fraction: Optional[Float64], 
             for k in range(i * n_samples_subsets, (i + 1) * n_samples_subsets):
                 indices.append(Int(samples_shuffle.unsafe_get(k)))
             var subset = _rows(X, indices)
-            var best = select_candidates(subset, h_subset, n_trials, n_best_sub, 2, random_state)
+            var best = select_candidates(subset, h_subset, n_trials, n_best_sub, 2, random_state, covariance_method)
             for k in range(len(best)):
                 all_best.append(InitialEstimate(best[k].location.copy(), best[k].covariance.copy()))
         var n_samples_merged = min(1500, n)
@@ -396,7 +412,7 @@ def _fast_mcd64(X: NDArray[DType.float64], support_fraction: Optional[Float64], 
         var selection = List[Int]()
         for k in range(n_samples_merged):
             selection.append(Int(permutation.unsafe_get(k)))
-        var merged = select_candidates(_rows(X, selection), h_merged, all_best, n_best_merged, 30, random_state)
+        var merged = select_candidates(_rows(X, selection), h_merged, all_best, n_best_merged, 30, random_state, covariance_method)
         if n < 1500:
             var support = List[Int]()
             var dist = nm.zeros[DType.float64](Shape(n))
@@ -410,13 +426,13 @@ def _fast_mcd64(X: NDArray[DType.float64], support_fraction: Optional[Float64], 
         var starts = List[InitialEstimate]()
         for k in range(len(merged)):
             starts.append(InitialEstimate(merged[k].location.copy(), merged[k].covariance.copy()))
-        var full = select_candidates(X, n_support, starts, 1, 30, random_state)
+        var full = select_candidates(X, n_support, starts, 1, 30, random_state, covariance_method)
         return (full[0].location.copy(), full[0].covariance.copy(), full[0].support.copy(), full[0].dist.copy())
-    var best = select_candidates(X, n_support, 30, 10, 2, random_state)
+    var best = select_candidates(X, n_support, 30, 10, 2, random_state, covariance_method)
     var starts = List[InitialEstimate]()
     for k in range(len(best)):
         starts.append(InitialEstimate(best[k].location.copy(), best[k].covariance.copy()))
-    var full = select_candidates(X, n_support, starts, 1, 30, random_state)
+    var full = select_candidates(X, n_support, starts, 1, 30, random_state, covariance_method)
     return (full[0].location.copy(), full[0].covariance.copy(), full[0].support.copy(), full[0].dist.copy())
 
 
@@ -440,18 +456,55 @@ def smallest_indices_sorted(indices: List[Int]) -> List[Int]:
     return result^
 
 
-def fast_mcd[dtype: DType](X: NDArray[dtype], support_fraction: Optional[Float64], mut random_state: RandomState) raises -> FastMCDResult[dtype]:
-    """FastMCD raw robust location/covariance (sklearn `fast_mcd`), shared RNG stream."""
+def _fast_mcd[dtype: DType, F: _SupportCovariance](
+    X: NDArray[dtype], support_fraction: Optional[Float64],
+    mut random_state: RandomState, covariance_method: F,
+) raises -> FastMCDResult[dtype]:
     validate_samples(X, "fast_mcd", min_samples=2)
-    var result = _fast_mcd64(to_float64(X), support_fraction, random_state, dtype == DType.float32)
+    var result = _fast_mcd64(to_float64(X), support_fraction, random_state, covariance_method, dtype == DType.float32)
     return FastMCDResult[dtype](to_array[dtype](result[0]), to_array[dtype](result[1]), _mask(X.shape[0], result[2]),
                                 to_array[dtype](result[3]))
+
+
+def fast_mcd[dtype: DType](
+    X: NDArray[dtype], support_fraction: Optional[Float64], mut random_state: RandomState,
+) raises -> FastMCDResult[dtype]:
+    """FastMCD with empirical covariance and a shared RNG stream."""
+    return _fast_mcd(X, support_fraction, random_state, subset_covariance)
+
+
+def fast_mcd[dtype: DType, F: _CovarianceMethod](
+    X: NDArray[dtype], support_fraction: Optional[Float64], mut random_state: RandomState,
+    *, cov_computation_method: F,
+) raises -> FastMCDResult[dtype]:
+    """FastMCD with a shared RNG and a callable on uncentered Float64 supports."""
+    def compute(
+        samples: NDArray[DType.float64], support: List[Int], _location: NDArray[DType.float64],
+    ) raises {imm cov_computation_method} -> NDArray[DType.float64]:
+        var covariance = cov_computation_method(_rows(samples, support))
+        var p = samples.shape[1]
+        if covariance.ndim != 2 or covariance.shape[0] != p or covariance.shape[1] != p:
+            raise Error(String("ValueError: fast_mcd: cov_computation_method must return a ", p, "x", p, " matrix"))
+        validate_samples(covariance, "fast_mcd cov_computation_method result")
+        # Own each candidate and normalize views before flat indexing.
+        return to_float64(covariance)
+
+    return _fast_mcd(X, support_fraction, random_state, compute)
 
 
 def fast_mcd[dtype: DType](X: NDArray[dtype], support_fraction: Optional[Float64] = None, random_state: Optional[Int] = None) raises -> FastMCDResult[dtype]:
     """FastMCD with an integer seed (fresh RandomState) or None (entropy-seeded state)."""
     var state = RandomState(random_state.value()) if random_state else entropy_state()
     return fast_mcd(X, support_fraction, state)
+
+
+def fast_mcd[dtype: DType, F: _CovarianceMethod](
+    X: NDArray[dtype], support_fraction: Optional[Float64] = None,
+    random_state: Optional[Int] = None, *, cov_computation_method: F,
+) raises -> FastMCDResult[dtype]:
+    """FastMCD with a covariance callable and an integer seed or entropy."""
+    var state = RandomState(random_state.value()) if random_state else entropy_state()
+    return fast_mcd(X, support_fraction, state, cov_computation_method=cov_computation_method)
 
 
 # ---------------------------------------------------------------------------
@@ -497,7 +550,7 @@ struct RobustFit[dtype: DType](Copyable, Movable):
                 rank += 1
         if rank != p:
             print("UserWarning: The covariance matrix associated to your dataset is not full rank", file=stderr)
-        var raw = _fast_mcd64(X64, support_fraction, random_state, Self.dtype == DType.float32)
+        var raw = _fast_mcd64(X64, support_fraction, random_state, subset_covariance, Self.dtype == DType.float32)
         var raw_location = raw[0].copy()
         var raw_covariance = raw[1].copy()
         var raw_support = raw[2].copy()

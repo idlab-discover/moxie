@@ -174,7 +174,7 @@ def check_sample_weight(sample_weight: Values, n: Int) raises:
     if not any_nonzero:
         raise Error("ValueError: sample weights must contain at least one nonzero number")
 
-struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False](BaseEstimator, InputEstimator, Predictor, SupervisedEstimator, SupervisedScorer, WeightedSupervisedEstimator, DenseTreeInspection, DenseDecisionTreeClassifierAPI where classifier, DenseDecisionTreeRegressorAPI where not classifier):
+struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False](Copyable, BaseEstimator, InputEstimator, Predictor, SupervisedEstimator, SupervisedScorer, WeightedSupervisedEstimator, DenseTreeInspection, DenseDecisionTreeClassifierAPI where classifier, DenseDecisionTreeRegressorAPI where not classifier):
     comptime Label = String if Self.string_labels else Scalar[Self.label_dtype]
     comptime ClassLabels = List[String] if Self.string_labels else nm.NDArray[Self.label_dtype]
     comptime WeightMap = Dict[Self.Label, Float64]

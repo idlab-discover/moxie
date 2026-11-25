@@ -64,6 +64,25 @@ def classifier() raises:
     assert_equal(changed.n_layers_(), 2)
     assert_equal(model.n_layers_(), 3)
 
+    var warm = MLPClassifier[DType.float64, DType.int32](
+        [3], warm_start=True, max_iter=1, shuffle=False,
+    )
+    var rng = RandomState(17)
+    _ = warm.fit(X, y, rng)
+    var probe = rng.copy()
+    var warm_prediction = warm.predict_proba(X)
+    with assert_raises(contains="same classes"):
+        _ = warm.fit(X, zeros[DType.int32](Shape(6)), rng)
+    equal(warm_prediction, warm.predict_proba(X))
+    equal(warm.classes_(), y)
+    assert_equal(len(warm.fit_warnings), 1)
+    _ = warm.fit(X, y, rng)
+    assert_equal(warm.t_(), 12)
+    assert_equal(rng.next_uint32(), probe.next_uint32())
+    var fresh = clone(warm)
+    assert_true(fresh.get_params().warm_start)
+    assert_false(fresh.__sklearn_is_fitted__())
+
     with assert_raises(contains="label"):
         _ = model.fit(X, zeros[DType.int32](Shape(6, 2)))
     with assert_raises(contains="one label per sample"):
@@ -116,10 +135,38 @@ def regressor[dtype: DType]() raises:
     with assert_raises(contains="early stopping"):
         var stopping = MLPRegressor[dtype](early_stopping=True, random_state=0)
         _ = stopping.fit(X, target)
-    with assert_raises(contains="warm-start"):
-        var warm = MLPRegressor[dtype](warm_start=True, random_state=0, max_iter=1)
-        _ = warm.fit(X, target)
-        _ = warm.fit(X, target)
+    var warm = MLPRegressor[dtype](warm_start=True, random_state=0, max_iter=1)
+    _ = warm.fit(X, target)
+    var warm_copy = warm.copy()
+    with assert_raises(contains="input width"):
+        _ = warm.fit(zeros[dtype](Shape(6, 1)), target)
+    assert_equal(warm.t_(), 6)
+    _ = warm.fit(X, target)
+    assert_equal(warm.t_(), 12)
+    assert_equal(warm_copy.t_(), 6)
+    assert_equal(warm.n_iter_(), 1)
+
+    var warm_params = warm.get_params()
+    warm_params.solver = "lbfgs"
+    _ = warm.set_params(warm_params).fit(X, target)
+    assert_equal(warm.parameter_dtype(), DType.float64)
+    assert_equal(warm.t_(), 12)
+    var history = warm.loss_curve_()
+    assert_equal(len(history.value()), 2)
+    warm_params.solver = "sgd"
+    _ = warm.set_params(warm_params).fit(X, target)
+    assert_equal(warm.parameter_dtype(), dtype)
+    assert_equal(warm.t_(), 18)
+    history = warm.loss_curve_()
+    assert_equal(len(history.value()), 3)
+
+    var lbfgs_first = clone(warm)
+    warm_params.solver = "lbfgs"
+    _ = lbfgs_first.set_params(warm_params).fit(X, target)
+    warm_params.solver = "adam"
+    _ = lbfgs_first.set_params(warm_params).fit(X, target)
+    assert_equal(lbfgs_first.parameter_dtype(), dtype)
+    assert_equal(lbfgs_first.t_(), 6)
 
     var constant = MLPRegressor[dtype](
         hidden_layer_sizes=[], solver="sgd", max_iter=1, random_state=0,

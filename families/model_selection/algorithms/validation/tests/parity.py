@@ -9,7 +9,7 @@ if '--oracle' not in sys.argv:
     # Moxie's reference environment (sklearn 1.9.1) supplies Python-only infrastructure.
     python=Path(os.environ.get('MOXIE_REFERENCE_PYTHON',str(WORKSPACE/'moxie/.pixi/envs/default/bin/python')))
     env=os.environ.copy();env['PYTHONDONTWRITEBYTECODE']='1'
-    subprocess.run([str(python),str(Path(__file__).resolve()),'--oracle'],env=env,check=True)
+    subprocess.run([str(python),str(Path(__file__).resolve()),'--oracle',*sys.argv[1:]],env=env,check=True)
     raise SystemExit()
 sys.dont_write_bytecode=True
 import numpy as np
@@ -18,7 +18,7 @@ import sklearn.model_selection._validation as infrastructure
 import sklearn.utils._metadata_requests as metadata
 assert sklearn.__version__=='1.9.1',sklearn.__version__
 assert subprocess.check_output(['git','-C',str(ORACLE),'rev-parse','HEAD'],text=True).strip()==REV
-files=['sklearn/model_selection/_validation.py','sklearn/utils/_metadata_requests.py','sklearn/dummy.py','sklearn/naive_bayes.py','sklearn/model_selection/_plot.py']
+files=['sklearn/model_selection/_validation.py','sklearn/utils/_metadata_requests.py','sklearn/dummy.py','sklearn/naive_bayes.py','sklearn/model_selection/_plot.py','sklearn/model_selection/_split.py']
 assert not subprocess.check_output(['git','-C',str(ORACLE),'status','--porcelain','--',*files],text=True)
 ns=vars(infrastructure).copy()
 ns['array_device']=lambda x: None
@@ -29,6 +29,15 @@ functions=[n for n in ast.parse((ORACLE/files[0]).read_text()).body if isinstanc
 for function in functions:function.decorator_list=[]
 exec(compile(ast.Module(body=functions,type_ignores=[]),str(ORACLE/files[0]),'exec'),ns)
 spec=importlib.util.spec_from_file_location('sklearn._moxie_dummy_reference',ORACLE/files[2]);dummy=importlib.util.module_from_spec(spec);spec.loader.exec_module(dummy)
+split_spec = importlib.util.spec_from_file_location('sklearn.model_selection._moxie_split_reference', ORACLE / files[5])
+split = importlib.util.module_from_spec(split_spec)
+split_spec.loader.exec_module(split)
+prediction_ns = dict(ns, check_cv=split.check_cv)
+if '--predictions-only' in sys.argv:
+    from prediction_parity import check_predictions
+
+    check_predictions(prediction_ns, dummy, Path(sys.argv[sys.argv.index('--predictions-only') + 1]).resolve())
+    raise SystemExit()
 X=np.zeros((8,2));y=np.arange(8,dtype=float)
 from sklearn.model_selection import KFold
 cv=list(KFold(4).split(X))

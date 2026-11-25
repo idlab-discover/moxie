@@ -33,8 +33,10 @@ See [examples/multiclass_one_vs_one.mojo](../../examples/multiclass_one_vs_one.m
 (target 0) or `classes_[j]` (target 1), in their original order. At prediction
 time its `predict` output casts the vote. Classifier confidence comes from
 `decision_function` when available, otherwise `predict_proba(X)[:, 1]`.
-Decision values must be `NDArray[float32/float64]` of shape `(n,)` or `(n, 1)`,
-and probabilities `(n, 2)`. Unsupported types fail to compile; invalid shapes raise.
+Decision values must be `NDArray[float32/float64]` of shape `(n,)` or `(n, 1)`.
+Probabilities may be a dense `(n, 2)` Float32 or Float64 array or a
+`List[NDArray[float64]]` containing one such Float64 matrix.
+Unsupported types fail to compile; invalid shapes raise.
 
 Regressor predictions have shape `(n,)`. Regressors supply confidence through
 `predict`, even when they provide a `decision_function`. Only predictions exactly equal to 0 or 1 cast a vote;
@@ -81,6 +83,9 @@ change through `set_params`. Undeclared components default to `False` through
 the exported `pairwise_input(estimator)` helper. This is an explicit Mojo
 capability adaptation, not an implementation of sklearn's full tag system.
 OvO and OvR expose the trait and delegate to their template estimator.
+Use `KNeighborsClassifier[Y=NDArray[DType.int64]](3, metric="precomputed")`
+as the component for a precomputed distance matrix. The same slicing rules
+apply to distances and kernels.
 
 ```mojo
 # MyKernelClassifier implements PairwiseInput and returns True.

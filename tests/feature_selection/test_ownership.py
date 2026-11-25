@@ -8,9 +8,11 @@ for consumer in [ROOT, *(ROOT / 'tests/feature_selection/consumers' / name for n
     manifest = json.loads((consumer / 'DEPENDENCIES.json').read_text())
     owner = next(project for project in manifest['projects'] if project['id'] == 'moxie')
     assert (consumer / owner['path']).resolve() == ROOT
-    adapters = {'LinearRegressionImportance', 'LinearSVCImportance', 'LogisticRegressionImportance'}
+    adapters = {'BayesianRidgeImportance', 'LinearRegressionImportance', 'LinearSVCImportance', 'LogisticRegressionImportance', 'RidgeClassifierImportance', 'SVCImportance'}
     assert PUBLIC | adapters <= owner['exports']['packages']['moxie.feature_selection'].keys()
     report = json.loads((consumer / 'builds/deps/ASSEMBLY.json').read_text())
+    assert report['modules']['moxie.svm._c_svm'] == ['svm-c-svm']
+    assert report['modules']['moxie.svm._libsvm'] == ['svm-libsvm']
     for project in manifest['projects']:
         assert 'moxie-feature_selection' not in project['path']
         assert 'retired-moxie-tree' not in project['path']

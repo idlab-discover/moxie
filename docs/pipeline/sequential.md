@@ -192,9 +192,8 @@ Each call checks fitted state, transforms the prefix, and directly invokes the
 corresponding final method. Pipeline never computes logarithms, calls `predict`,
 normalizes probabilities, sorts classes, or fits steps during inference. The
 final estimator determines output type, shape, dtype, ordering, and validation.
-Class labels remain available on the final estimator; forwarding `classes_`
-is not yet implemented. Unsupported methods fail at compile time, and child
-errors propagate. Extra prediction arguments and metadata routing remain absent.
+Unsupported methods fail at compile time, and child errors propagate. Extra
+prediction arguments and metadata routing remain absent.
 
 Native tests and eight reference cases cover independent capabilities, nested
 and fused-prefix dispatch, cloning, refits, failed fits, and real DummyClassifier
@@ -204,6 +203,22 @@ logs, and single-class refits. This adopted DummyClassifier returns Float64
 probabilities for both input dtypes; Pipeline preserves that type. Probabilities
 compare exactly on these fixtures; logarithms use rtol/atol `1e-12` to allow
 native math rounding. Negative infinity must match exactly.
+
+## Ordered class labels
+
+`pipe.classes_()` returns the final classifier's ordered labels when the
+classifier implements `NumericClassifierClasses`. The pipeline also
+implements that trait, so generic consumers can call `get_classes()`, including
+through nested pipelines. The result uses the final classifier's target
+representation and is owned by the caller. Updating it leaves the fitted
+classifier intact. The classifier controls when labels become available.
+
+Mojo exposes `classes_` as a method. Classifiers that expose only a stored
+`classes_` field still provide it through `pipe.estimator.classes_`.
+The [focused parity check](../../tests/pipeline/classes_parity.py) compares
+class order exactly for direct and nested LogisticRegression pipelines,
+including clone independence and refits with changed labels. It compares
+probability columns within `1e-12` absolute tolerance for solver rounding.
 
 ## Decision values
 
@@ -331,12 +346,11 @@ scikit-learn implementation.
 
 This implementation exposes fit, final-step weighted fit, predict, conditional
 transforms and score, per-sample scores, decision and probability methods,
-feature names, input feature counts, configuration, cloning and the two
-factories. The following sklearn Pipeline
+ordered numeric classes, feature names, input feature counts, configuration,
+cloning and the two factories. The following sklearn Pipeline
 API is **deferred** (absent from the typed API, so use fails at compile time):
 
 - unsupervised-final pipelines and `fit_predict` (e.g. a clusterer final step);
-- `classes_` forwarding (read `pipe.estimator.classes_`);
 - `passthrough`/`None` steps, `__len__`, integer/slice `__getitem__` and
   `named_steps` (use the typed `transformer`/`estimator` fields and names);
 - constructor options `memory`, `verbose` and `transform_input`;

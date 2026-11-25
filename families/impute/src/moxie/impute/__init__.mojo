@@ -2,6 +2,7 @@
 from ._base import Imputer
 from ._simple import SimpleImputer, IntegerSimpleImputer
 from ._indicator import MissingIndicator
+from ._categorical_numeric import CategoricalNumericImputer
 from ._knn import KNNImputer
 from ._iterative import IterativeBound, IterativeImputer, IterativeParams
 from ._string import (

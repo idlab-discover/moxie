@@ -1,13 +1,17 @@
-"""Execute the pinned sklearn reachability/score method bodies on independent queries."""
+"""Compare LOF scores and fit warnings with pinned scikit-learn."""
 import ast, subprocess
 from pathlib import Path
 from types import SimpleNamespace
+import warnings
 import numpy as np
 from scipy.spatial.distance import cdist
+from sklearn.neighbors import _lof as oracle
+
 ROOT=Path(__file__).resolve().parents[1]
 path=ROOT.parents[2]/'scikit-learn/sklearn/neighbors/_lof.py'
 assert subprocess.check_output(['git','-C',str(path.parent),'rev-parse','HEAD'],text=True).strip()=='4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 assert not subprocess.check_output(['git','-C',str(path.parent),'diff','HEAD','--',str(path)],text=True)
+assert Path(oracle.__file__).read_bytes() == path.read_bytes(), oracle.__file__
 ns=dict(np=np,check_is_fitted=lambda *a:None,check_array=lambda x,**kw:x)
 cls=next(n for n in ast.parse(path.read_text()).body if isinstance(n,ast.ClassDef) and n.name=='LocalOutlierFactor')
 for name in ['_local_reachability_density','score_samples']:
@@ -36,4 +40,28 @@ for dtype in ['f32','f64']:
  offset=np.percentile(train,25)
  np.testing.assert_allclose([float(s[1]) for s in lines if s[0]=='O'],[offset],rtol=tol,atol=tol)
  np.testing.assert_array_equal([float(s[1]) for s in lines if s[0]=='L'],np.where(train<offset,-1,1))
-print('PASS LOF: both dtypes, training factors, novelty scores/decisions/labels, contamination percentile and native lifecycle/duplicate checks')
+
+ fixture_rows = np.array([[0], [0], [0], [1]], dtype=typ)
+ expected_warnings = []
+ for case, count, novelty in [
+     ('clipped', 5, False),
+     ('equal_count', 4, False),
+     ('duplicates', 2, False),
+     ('novelty', 2, True),
+ ]:
+     model = oracle.LocalOutlierFactor(n_neighbors=count, novelty=novelty)
+     with warnings.catch_warnings(record=True) as captured:
+         warnings.simplefilter('always')
+         if case == 'duplicates':
+             model.fit_predict(fixture_rows)
+         else:
+             model.fit(fixture_rows)
+     expected_warnings.extend(
+         (case, warning.category.__name__, str(warning.message)) for warning in captured
+     )
+ actual_warnings = [
+     tuple(line.split(maxsplit=3)[1:]) for line in raw.splitlines() if line.startswith('W ')
+ ]
+ assert actual_warnings == expected_warnings, (dtype, actual_warnings, expected_warnings)
+print('PASS LOF: both dtypes, training factors, novelty inference, contamination percentile, '
+      'native lifecycle and exact pinned fit warnings')

@@ -22,7 +22,7 @@ Reference: `../scikit-learn` at
 | chi2, f_classif, f_oneway, f_regression, r_regression | Dense Float32/Float64 inputs in the root and univariate assemblies; native results and dtype differences apply |
 | VarianceThreshold | Dense Float32/Float64 implementation in the root assembly; see [usage and limits](variance.md) |
 | SelectorMixin | Implemented native trait delegating to SelectionState; see [SelectorMixin](selector-mixin.md) |
-| SelectFromModel | Dense wrapper with typed Lasso/ElasticNet/Ridge/LinearSVC/LogisticRegression/DecisionTreeClassifier adapters and conditional partial_fit using IncrementalPCA; see [usage and limits](from_model.md) |
+| SelectFromModel | Dense wrapper with [typed model adapters](from_model.md) and conditional partial_fit using IncrementalPCA |
 | RFE | Dense recursive elimination with typed estimator adapters; see [RFE](rfe.md) |
 | SequentialFeatureSelector | Dense greedy selection through the shared CV engine; see [usage and limits](sequential.md) |
 | RFECV | Dense RFE paths with shared CV contracts; see [usage and limits](rfecv.md) |
@@ -72,8 +72,9 @@ Its real-model contracts and sklearn importance/mask parity run from the root.
 See [the model selector guide](from_model.md) for native differences and gaps.
 
 A production DecisionTreeClassifier adapter supports all four estimator-based
-selectors. The LinearSVC and LogisticRegression adapters support
-SelectFromModel, RFE and RFECV. LinearSVC and DecisionTreeClassifier accept
-string and Int64 targets. LogisticRegression accepts native numeric arrays. See
+selectors. The LinearSVC, linear-kernel SVC, LogisticRegression and
+RidgeClassifier adapters support SelectFromModel, RFE and RFECV. LinearSVC, SVC
+and DecisionTreeClassifier accept string and Int64 targets. LogisticRegression
+and RidgeClassifier accept native numeric arrays. See
 [classifier selection](classifier-selection.md) for capabilities, dependency
 provenance and bounded binary/multiclass parity coverage.

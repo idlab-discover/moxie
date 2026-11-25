@@ -28,7 +28,9 @@ copyable binary classifier or regressor `E` with `NDArray[dtype]` features and
 When `E` has `DecisionFunction`, training targets are **−1 and +1**. Otherwise
 they are **0 and 1**. A component that accepts only 0/1 targets cannot serve as
 a margin component here. Decisions must be Float32/Float64 arrays of shape
-`(n,)` or `(n, 1)`; probabilities must have two columns in class order.
+`(n,)` or `(n, 1)`. Probabilities may be a dense `(n, 2)` Float32 or Float64
+array or a `List[NDArray[float64]]` containing one such Float64 matrix.
+The columns follow class order.
 The wrapper prefers decisions for classifiers when both capabilities exist.
 Regressors require rank-one `(n_samples,)` Float32/Float64 `predict` output;
 column-shaped outputs are rejected. Decoding uses `predict` even when

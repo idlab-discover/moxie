@@ -68,12 +68,31 @@ at least one feature and finite values, matching the shared selector contract.
 `SelectionEstimator` extends the family's `ImportanceProvider` and base estimator
 contracts. An adapter supplies cloning, fitting, feature count, raw importances,
 and the default-threshold and NaN policies. The supplied `LassoImportance`,
-`ElasticNetImportance` and `RidgeImportance` own a real model in `.model`; their
-`"auto"` and `"coef_"` getters return its coefficients. Ridge is not
-l1-penalized, so its default threshold is the mean, as in sklearn. Other getter strings fail clearly. An adapter
+`ElasticNetImportance`, `LinearRegressionImportance` and `RidgeImportance`
+own a fitted or unfitted model in `.model`. Their `"auto"` and `"coef_"`
+getters return a copy of its coefficients. For LinearRegression and Ridge,
+the default threshold is the mean of the aggregated importances, as in sklearn.
+Other getter strings fail clearly. An adapter
 for an estimator exposing both attributes must prefer `coef_` for `"auto"`.
 Custom getter logic belongs in a typed adapter's `importances` method; Python
 attribute paths and dynamic callable objects are not interpreted.
+
+```mojo
+from moxie.feature_selection import LinearRegressionImportance, SelectFromModel
+from moxie.linear_model import LinearRegression
+
+var selector = SelectFromModel(LinearRegressionImportance(LinearRegression()))
+_ = selector.fit(X, y)
+var selected = selector.transform(X)
+```
+
+The explicit `LinearRegressionImportance(model)` adapter lets the same dense
+regressor work with `SelectFromModel`, `RFE`, and
+`RFECV[DenseSupervisedCV[Estimator, dtype]]`, where `Estimator` is
+`LinearRegressionImportance[dtype]`. Use same-dtype Float32 or Float64 arrays
+for `X`, `y`, and optional sample weights. Vector targets keep vector
+coefficients and predictions. For matrix targets, coefficients have shape
+`(n_outputs, n_features)` and predictions retain the target's output axis.
 
 A data-dependent limit implements `FeatureLimitPolicy.resolve[dtype](X)` and is
 passed as `max_features=YourPolicy()`. It is evaluated during fit and stored as

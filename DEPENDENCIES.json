@@ -768,6 +768,7 @@
             "IncrementalPCAUpdateParams": "moxie.feature_selection._incremental_pca_importance",
             "IncrementalSelectionEstimator": "moxie.feature_selection._model_importance",
             "LassoImportance": "moxie.feature_selection._linear_model_importance",
+            "LinearRegressionImportance": "moxie.feature_selection._linear_model_importance",
             "MaxFeatures": "moxie.feature_selection._from_model",
             "ModelThreshold": "moxie.feature_selection._from_model",
             "MutualInfoScorer": "moxie.feature_selection._mutual_info_scorer",

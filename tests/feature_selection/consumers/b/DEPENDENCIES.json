@@ -113,6 +113,7 @@
             "IncrementalPCAUpdateParams": "moxie.feature_selection._incremental_pca_importance",
             "IncrementalSelectionEstimator": "moxie.feature_selection._model_importance",
             "LassoImportance": "moxie.feature_selection._linear_model_importance",
+            "LinearRegressionImportance": "moxie.feature_selection._linear_model_importance",
             "MaxFeatures": "moxie.feature_selection._from_model",
             "ModelThreshold": "moxie.feature_selection._from_model",
             "MutualInfoScorer": "moxie.feature_selection._mutual_info_scorer",
@@ -157,6 +158,8 @@
             "LogisticRegressionImportance": "moxie.feature_selection._logistic_importance"
           },
           "moxie.linear_model": {
+            "LinearRegression": "moxie.linear_model._least_squares",
+            "LinearRegressionParams": "moxie.linear_model._least_squares",
             "LogisticRegression": "moxie.linear_model._logistic",
             "LogisticRegressionParams": "moxie.linear_model._logistic"
           }
@@ -269,6 +272,9 @@
         },
         "moxie.feature_selection._logistic_importance": {
           "file": "src/moxie/feature_selection/_logistic_importance.mojo"
+        },
+        "moxie.linear_model._least_squares": {
+          "file": "src/moxie/linear_model/_least_squares.mojo"
         },
         "moxie.linear_model._linear_loss": {
           "file": "src/moxie/linear_model/_linear_loss.mojo"

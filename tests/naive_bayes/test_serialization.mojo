@@ -6,7 +6,7 @@ from moxie._labels import StringTarget
 from moxie._naive_bayes_dense import ClassDomain, dense_from_lists
 from moxie.naive_bayes import IntListDomain, NumericDomain, StringDomain
 from moxie.naive_bayes_serialization import (
-    ComplementNBSchema, GaussianNBSchema, MultinomialNBSchema,
+    BernoulliNBSchema, ComplementNBSchema, GaussianNBSchema, MultinomialNBSchema,
 )
 from moxie.serialization import BinaryWriter, dumps, dtype_code, load_model, loads, save_model
 
@@ -322,6 +322,90 @@ def complement_file_and_validation() raises:
         _ = Schema.encode(model)
 
 
+def bernoulli_file_round_trip() raises:
+    comptime Schema = BernoulliNBSchema[StringDomain, DType.float32]
+    var path = "builds/naive-bayes-bernoulli-model.moxie"
+    var X = dense_from_lists([[1.0, 0.0], [0.0, 1.0], [0.0, 0.0], [1.0, 1.0]]).astype[DType.float32]()
+    var y = StringTarget(["β", "a\0z", "β", "a\0z"])
+    var alpha_storage = array[DType.float64]([0.25, 99.0, -0.0], [3])
+    var alpha = alpha_storage.view_with_layout(Shape(2), NDArrayStrides(-2), 2)
+    var model = Schema.Model(alpha=2.0, alpha_values=alpha^, force_alpha=False, binarize=None)
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_false(restored.__sklearn_is_fitted__())
+    assert_false(Bool(restored.binarize))
+    assert_equal(restored.alpha, 2.0)
+    assert_equal(restored.alpha_values.value().tolist(), List[Float64]([-0.0, 0.25]))
+    assert_equal(bitcast[DType.uint64, 1](restored.alpha_values.value().item(0)), UInt64(1) << 63)
+    with assert_raises(contains="NotFittedError"):
+        _ = restored.predict(X)
+
+    _ = model.fit(X, y)
+    _ = restored.fit(X, y)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    _ = model.set_params(binarize=Optional[Float64](0.5), force_alpha=True, fit_prior=False,
+                         class_prior=Optional[List[Float64]](List[Float64]([0.75, 0.25])))
+    save_model[Schema](model, path)
+    var before = dumps(Schema.encode(model))
+    restored = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(restored)), before)
+    assert_equal(restored.binarize.value(), 0.5)
+    assert_equal(restored.fit_warnings[0].message, model.fit_warnings[0].message)
+    assert_equal(restored.classes_.get(0), "a\0z")
+    assert_equal(restored.classes_.get(1), "β")
+    assert_equal(restored.predict_proba(X).tolist(), model.predict_proba(X).tolist())
+    assert_false(restored.__sklearn_clone__().__sklearn_is_fitted__())
+    var weights: List[Float64] = [0.25, 2.0, 0.5, 1.0]
+    _ = restored.partial_fit(X, y, sample_weight=weights.copy())
+    assert_equal(dumps(Schema.encode(model)), before)
+    _ = model.partial_fit(X, y, sample_weight=weights^)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+    assert_equal(len(restored.fit_warnings), 0)
+
+
+def bernoulli_raw_state_and_validation() raises:
+    comptime Schema = BernoulliNBSchema[]
+    var X = dense_from_lists([[-4.0, 7.0], [0.0, 2.0]])
+    var y: List[Int] = [1, 2]
+    var model = Schema.Model(binarize=None)
+    _ = model.fit(X, y)
+    # The learned state came from raw inputs. The new threshold only affects future calls.
+    _ = model.set_params(binarize=Optional[Float64](0.0))
+    var archive = Schema.encode(model)
+    var before = dumps(archive)
+    var restored = Schema.decode(loads(before))
+    assert_equal(restored.feature_count_.item(0, 0), -4.0)
+    assert_true(isnan(restored.feature_log_prob_.item(0, 0)))
+    assert_true(restored.feature_log_prob_.item(0, 1) > 0.0)
+    assert_equal(dumps(Schema.encode(restored)), before)
+
+    with assert_raises(contains="dtype mismatch"):
+        _ = BernoulliNBSchema[dtype=DType.float32].decode(archive)
+    with assert_raises(contains="label domain mismatch"):
+        _ = BernoulliNBSchema[NumericDomain[DType.int64]].decode(archive)
+    with assert_raises(contains="unsupported estimator"):
+        _ = MultinomialNBSchema[].decode(archive)
+    var bad = archive.copy()
+    bad.schema_version += 1
+    with assert_raises(contains="unsupported estimator"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    bad.manifest.append(0)
+    with assert_raises(contains="trailing data"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    bad.payloads[2].shape = [4]
+    with assert_raises(contains="invalid shape for feature_count_"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    _ = bad.payloads.pop()
+    with assert_raises(contains="unexpected BernoulliNB arrays"):
+        _ = Schema.decode(bad)
+    model.class_count_[Item(0)] = -1.0
+    with assert_raises(contains="invalid BernoulliNB class count"):
+        _ = Schema.encode(model)
+
+
 def main() raises:
     fitted_round_trip[IntListDomain, DType.float64](List[Int]([2, -1, 2, -1]))
     fitted_round_trip[StringDomain, DType.float32](StringTarget(["β", "a\0z", "β", "a\0z"]))
@@ -364,3 +448,6 @@ def main() raises:
     )
     complement_file_and_validation()
     print("PASS: ComplementNB serialization contracts")
+    bernoulli_file_round_trip()
+    bernoulli_raw_state_and_validation()
+    print("PASS: BernoulliNB serialization contracts")

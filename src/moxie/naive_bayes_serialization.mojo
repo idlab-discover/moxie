@@ -7,7 +7,8 @@ from moxie._dense import sum_axis2d
 from moxie._labels import StringTarget
 from moxie._naive_bayes_dense import ClassDomain, DenseMatrix
 from moxie.naive_bayes import (
-    ComplementNB, GaussianNB, IntListDomain, MultinomialNB, NumericDomain, StringDomain,
+    BernoulliNB, ComplementNB, GaussianNB, IntListDomain, MultinomialNB,
+    NumericDomain, StringDomain,
 )
 from moxie.serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 from moxie.warnings import FitWarning
@@ -213,9 +214,8 @@ struct GaussianNBSchema[
         return model^
 
 
-def _check_count_statistics[complement: Bool, estimator: String](
-    class_counts: DenseMatrix, feature_counts: DenseMatrix,
-    log_priors: DenseMatrix, log_probs: DenseMatrix,
+def _check_count_priors[estimator: String](
+    class_counts: DenseMatrix, log_priors: DenseMatrix,
 ) raises:
     var has_positive_count = False
     for c in range(class_counts.size):
@@ -226,14 +226,22 @@ def _check_count_statistics[complement: Bool, estimator: String](
         if prior == Float64("inf") or (isnan(prior) and isfinite(count)):
             raise Error("ModelSchemaError: invalid " + estimator + " log prior")
         has_positive_count = has_positive_count or count > 0
+    if not has_positive_count:
+        raise Error("ModelSchemaError: fitted " + estimator + " has no positive class count")
+
+
+def _check_count_statistics[complement: Bool, estimator: String](
+    class_counts: DenseMatrix, feature_counts: DenseMatrix,
+    log_priors: DenseMatrix, log_probs: DenseMatrix,
+) raises:
+    _check_count_priors[estimator](class_counts, log_priors)
+    for c in range(class_counts.size):
         for f in range(feature_counts.shape[1]):
             var feature_count = feature_counts.item(c, f)
             var weight = log_probs.item(c, f)
             var invalid_weight = weight < 0 if complement else weight > 0
             if isnan(feature_count) or feature_count < 0 or invalid_weight:
                 raise Error("ModelSchemaError: invalid " + estimator + " feature statistics")
-    if not has_positive_count:
-        raise Error("ModelSchemaError: fitted " + estimator + " has no positive class count")
 
 
 def _check_feature_all(feature_all: DenseMatrix, feature_counts: DenseMatrix) raises:
@@ -508,6 +516,100 @@ struct ComplementNBSchema[
             )
             model.feature_all_ = _read_array[DType.float64](archive, "feature_all_", [features])
             _check_feature_all(model.feature_all_, model.feature_count_)
+            model.n_features_in_ = features
+            model.classes_ = classes^
+            model._domain = domain^
+        reader.finish()
+        return model^
+
+
+struct BernoulliNBSchema[
+    D: ClassDomain = IntListDomain, dtype: DType = DType.float64
+](ModelSchema):
+    """Version 1 state for BernoulliNB with a built-in label domain."""
+
+    comptime Model = BernoulliNB[Self.D, Self.dtype]
+    comptime Estimator = "BernoulliNB"
+    comptime TypeId = "moxie.naive_bayes.BernoulliNB"
+    comptime StateVersion = 1
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self.TypeId, Self.StateVersion)
+        var writer = BinaryWriter()
+        writer.uint(_count_input_dtype_tag[Self.dtype]())
+        writer.uint(_domain_tag[Self.D]())
+        _write_count_config(writer, archive, model.alpha, model.force_alpha,
+                            model.fit_prior, model.class_prior, model.alpha_values)
+
+        writer.boolean(Bool(model.binarize))
+        if model.binarize:
+            writer.scalar(model.binarize.value())
+        var fitted = model.__sklearn_is_fitted__()
+        writer.boolean(fitted)
+        var count = Self.D.check_target(model.classes_)
+        var features = model.n_features_in_
+        if fitted:
+            if not model._domain:
+                raise Error("ModelSchemaError: missing fitted " + Self.Estimator + " label domain")
+            _check_classes[Self.D](model.classes_, count, model._domain.value(), Self.Estimator)
+            writer.integer(features)
+            _write_classes[Self.D](writer, model.classes_, count)
+            _write_count_warning(writer, model.fit_warnings, Self.Estimator)
+            _write_array(archive, "class_count_", model.class_count_, [count])
+            _write_array(archive, "class_log_prior_", model.class_log_prior_, [count])
+            # Raw inputs with binarize=None can produce signed counts and
+            # nonfinite log probabilities. Current configuration may differ from fit.
+            _write_array(archive, "feature_count_", model.feature_count_, [count, features])
+            _write_array(archive, "feature_log_prob_", model.feature_log_prob_, [count, features])
+            _check_count_priors[Self.Estimator](model.class_count_, model.class_log_prior_)
+        elif (
+            features != 0 or count != 0 or model._domain or len(model.fit_warnings) != 0
+            or model.class_count_.shape.tolist() != [0] or model.class_log_prior_.shape.tolist() != [0]
+            or model.feature_count_.shape.tolist() != [0, 0]
+            or model.feature_log_prob_.shape.tolist() != [0, 0]
+        ):
+            raise Error("ModelSchemaError: unfitted " + Self.Estimator + " has learned state")
+        archive.manifest = writer^.finish()
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self.TypeId, Self.StateVersion)
+        archive.validate()
+        var reader = BinaryReader(Span(archive.manifest))
+        if reader.uint() != _count_input_dtype_tag[Self.dtype]():
+            raise Error("ModelSchemaError: " + Self.Estimator + " dtype mismatch")
+        if reader.uint() != _domain_tag[Self.D]():
+            raise Error("ModelSchemaError: " + Self.Estimator + " label domain mismatch")
+        var config = _read_count_config(reader)
+        var has_alpha_values = config.has_alpha_values
+        var binarize: Optional[Float64] = None
+        if reader.boolean():
+            binarize = reader.scalar[DType.float64]()
+        var model = Self.Model(alpha=config.alpha, force_alpha=config.force_alpha,
+                               fit_prior=config.fit_prior, class_prior=config.class_prior.copy(),
+                               binarize=binarize)
+        var fitted = reader.boolean()
+        var expected_arrays = Int(has_alpha_values) + (4 if fitted else 0)
+        if len(archive.payloads) != expected_arrays:
+            raise Error("ModelSchemaError: unexpected " + Self.Estimator + " arrays")
+        if has_alpha_values:
+            model.alpha_values = _read_count_alpha(archive)
+        if fitted:
+            var features = reader.integer()
+            if features < 1:
+                raise Error("ModelSchemaError: invalid " + Self.Estimator + " feature count")
+            var classes = _read_classes[Self.D](reader)
+            var count = Self.D.check_target(classes)
+            var domain = Self.D.from_classes(classes)
+            _check_classes[Self.D](classes, count, domain, Self.Estimator)
+            model.fit_warnings = _read_count_warning(reader, Self.Estimator)
+            model.class_count_ = _read_array[DType.float64](archive, "class_count_", [count])
+            model.class_log_prior_ = _read_array[DType.float64](archive, "class_log_prior_", [count])
+            model.feature_count_ = _read_array[DType.float64](archive, "feature_count_", [count, features])
+            model.feature_log_prob_ = _read_array[DType.float64](archive, "feature_log_prob_", [count, features])
+            _check_count_priors[Self.Estimator](model.class_count_, model.class_log_prior_)
             model.n_features_in_ = features
             model.classes_ = classes^
             model._domain = domain^

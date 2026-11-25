@@ -52,66 +52,6 @@ struct BaseShuffleSplit(Movable):
         "Scikit-learn signature: get_n_splits(self, X=None, y=None, groups=None)."
         raise Error("NotImplementedError: BaseShuffleSplit.get_n_splits is an API scaffold")
 
-struct FixedThresholdClassifier(Movable):
-
-    "API scaffold for sklearn.model_selection._classification_threshold.FixedThresholdClassifier. Operations are deferred."
-
-    var estimator: APIValue
-
-    var threshold: APIValue
-
-    var pos_label: APIValue
-
-    var response_method: APIValue
-
-    var estimator_: APIValue
-
-    var classes_: APIValue
-
-    var n_features_in_: APIValue
-
-    var feature_names_in_: APIValue
-
-    def get_metadata_routing(mut self) raises -> APIValue:
-        "Scikit-learn signature: get_metadata_routing(self)."
-        raise Error("NotImplementedError: FixedThresholdClassifier.get_metadata_routing is an API scaffold")
-
-    def get_params(mut self, deep: Some[Movable] = True) raises -> APIValue:
-        "Scikit-learn signature: get_params(self, deep=True)."
-        raise Error("NotImplementedError: FixedThresholdClassifier.get_params is an API scaffold")
-
-    def set_params(mut self, params: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_params(self, **params)."
-        raise Error("NotImplementedError: FixedThresholdClassifier.set_params is an API scaffold")
-
-    def score(mut self, X: Some[Movable], y: Some[Movable], sample_weight: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: score(self, X, y, sample_weight=None)."
-        raise Error("NotImplementedError: FixedThresholdClassifier.score is an API scaffold")
-
-    def __init__(out self, estimator: Some[Movable], *, threshold: Some[Movable] = "auto", pos_label: Some[Movable] = None, response_method: Some[Movable] = "auto") raises:
-        "Scikit-learn signature: __init__(self, estimator, *, threshold='auto', pos_label=None, response_method='auto')."
-        raise Error("NotImplementedError: FixedThresholdClassifier.__init__ is an API scaffold")
-
-    def fit(mut self, X: Some[Movable], y: Some[Movable], params: Some[Movable] = None) raises:
-        "Scikit-learn signature: fit(self, X, y, **params)."
-        raise Error("NotImplementedError: FixedThresholdClassifier.fit is an API scaffold")
-
-    def predict_proba(mut self, X: Some[Movable]) raises -> APIValue:
-        "Scikit-learn signature: predict_proba(self, X)."
-        raise Error("NotImplementedError: FixedThresholdClassifier.predict_proba is an API scaffold")
-
-    def predict_log_proba(mut self, X: Some[Movable]) raises -> APIValue:
-        "Scikit-learn signature: predict_log_proba(self, X)."
-        raise Error("NotImplementedError: FixedThresholdClassifier.predict_log_proba is an API scaffold")
-
-    def decision_function(mut self, X: Some[Movable]) raises -> APIValue:
-        "Scikit-learn signature: decision_function(self, X)."
-        raise Error("NotImplementedError: FixedThresholdClassifier.decision_function is an API scaffold")
-
-    def predict(mut self, X: Some[Movable]) raises -> APIValue:
-        "Scikit-learn signature: predict(self, X)."
-        raise Error("NotImplementedError: FixedThresholdClassifier.predict is an API scaffold")
-
 struct GridSearchCV(Movable):
 
     "API scaffold for sklearn.model_selection._search.GridSearchCV. Operations are deferred."

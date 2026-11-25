@@ -17,7 +17,7 @@ from moxie.model_selection._results import ErrorPolicy
 from moxie.model_selection._evaluation import FitAdapter
 from moxie.model_selection._results import FitStatus
 from moxie.model_selection._validation import FixedPermutationCV
-from moxie.model_selection._api import FixedThresholdClassifier
+from moxie.model_selection._classification_threshold import FixedThresholdClassifier, FixedThresholdParams
 from moxie.model_selection._search import GridSearchCV
 from moxie.model_selection._split import GroupKFold
 from moxie.model_selection._split import GroupShuffleSplit

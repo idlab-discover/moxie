@@ -4,8 +4,9 @@ Dense rank-2 `NDArray[float32/float64]` or native `ColumnTable` input, dense
 output of the same dtype. Named tables support name/list/slice selection,
 dtype selectors, feature names and name-aligned transform. `n_jobs` uses
 MAX CPU workers with declaration-order output and transactional failed fits.
-Components accept numeric `NDArray[dtype]` selections or lists of native
-categorical columns that share one domain. Targets and results are `NDArray[dtype]`. Up to
+Components accept numeric `NDArray[dtype]` selections, lists of native
+categorical columns that share one domain, or scalar raw text columns as
+`List[String]`. Targets and results are `NDArray[dtype]`. Up to
 8 entries per constructor call (more through explicit `ColumnCons` lists).
 
 Not provided: sparse inputs, sparse component outputs and `sparse_threshold`
@@ -23,5 +24,7 @@ Validation: `pixi run test` and `pixi run parity`; named-column parity covers
 14 Float32/Float64 cases using pandas solely as a reference input adapter.
 Mixed-table parity checks string and Int64 one-hot encoding alongside median
 imputation and scaling, including output names and spans.
+It also checks raw text routed into CountVectorizer alongside one-hot encoding
+and the numeric pipeline.
 Native contracts cover ownership, missing/duplicate names, selectors, refits,
 parallel equivalence and worker failure without publishing partial state.

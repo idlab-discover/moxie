@@ -1,13 +1,13 @@
-"""Owned named numeric and categorical feature columns."""
+"""Owned named numeric, categorical, and text feature columns."""
 from numojo import NDArray
 from std.utils import Variant
 from moxie._categorical import CategoricalColumn, CategoryDomain, NumericCategories, StringCategories
 
 comptime StringColumn = CategoricalColumn[StringCategories]
 comptime NumericColumn[dtype: DType] = CategoricalColumn[NumericCategories[dtype]]
-comptime _TableCategory = Variant[
+comptime _NonNumericColumn = Variant[
     StringColumn, NumericColumn[DType.bool], NumericColumn[DType.int64],
-    NumericColumn[DType.float32], NumericColumn[DType.float64],
+    NumericColumn[DType.float32], NumericColumn[DType.float64], List[String],
 ]
 
 
@@ -26,8 +26,8 @@ struct ColumnSchema(Copyable, Movable):
                 raise Error("ValueError: native column names must be unique")
             seen[name] = True
         for dtype in dtypes:
-            if dtype != "float32" and dtype != "float64" and dtype != "category":
-                raise Error("ValueError: native column schemas support float32, float64 and category")
+            if dtype not in ("float32", "float64", "category", "string"):
+                raise Error("ValueError: native column schemas support float32, float64, category and string")
         self.names = names.copy()
         self.dtypes = dtypes.copy()
 
@@ -44,12 +44,12 @@ struct ColumnSchema(Copyable, Movable):
 
 
 struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
-    """An owned named table with a numeric block and typed categorical columns."""
+    """An owned named table with a numeric block and typed non-numeric columns."""
 
     var _data: NDArray[Self.dtype]
     var _schema: ColumnSchema
     var _locations: List[Int]
-    var _categories: List[_TableCategory]
+    var _non_numeric: List[_NonNumericColumn]
 
     def __init__(out self, X: NDArray[Self.dtype], names: List[String]) raises:
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, "Float32/Float64 tables only"
@@ -64,30 +64,48 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
             self._locations.append(i)
         self._schema = ColumnSchema(names, dtypes)
         self._data = X.copy()
-        self._categories = List[_TableCategory]()
+        self._non_numeric = List[_NonNumericColumn]()
 
     def add_categorical[Domain: CategoryDomain](
         mut self, name: String, column: CategoricalColumn[Domain], *, position: Optional[Int] = None,
     ) raises:
         """Insert an independent categorical column, appending by default."""
+        var index = self._insertion_index(name, column.rows(), position)
+        self._insert_column(index, name, "category", _NonNumericColumn(column.copy()))
+
+    def add_strings(
+        mut self, name: String, column: List[String], *, position: Optional[Int] = None,
+    ) raises:
+        """Insert an owned copy of raw UTF-8 strings, appending by default."""
+        var index = self._insertion_index(name, len(column), position)
+        self._insert_column(index, name, "string", _NonNumericColumn(column.copy()))
+
+    def string_column(self, index: Int) raises -> List[String]:
+        """Copy one raw UTF-8 column in row order."""
+        self._check_index(index, "string")
+        return self._non_numeric[self._locations[index]][List[String]].copy()
+
+    def _insertion_index(self, name: String, rows: Int, position: Optional[Int]) raises -> Int:
         self._check_shape()
         if name in self._schema.names:
             raise Error("ValueError: native column names must be unique")
-        if column.rows() != self._data.shape[0]:
+        if rows != self.rows():
             raise Error("ValueError: all table columns must have the same number of rows")
         var width = len(self._schema.names)
         var index = position.or_else(width)
         if index < 0 or index > width:
             raise Error("ValueError: column insertion position is out of bounds")
-        var stored = _TableCategory(column.copy())
+        return index
+
+    def _insert_column(mut self, index: Int, name: String, kind: String, var column: _NonNumericColumn):
         self._schema.names.insert(index, name)
-        self._schema.dtypes.insert(index, "category")
-        self._locations.insert(index, len(self._categories))
-        self._categories.append(stored^)
+        self._schema.dtypes.insert(index, kind)
+        self._locations.insert(index, len(self._non_numeric))
+        self._non_numeric.append(column^)
 
     def values(ref self) raises -> ref[self._data] NDArray[Self.dtype]:
         """Borrow the matrix when all columns are numeric."""
-        if len(self._categories) > 0:
+        if len(self._non_numeric) > 0:
             raise Error("TypeError: mixed ColumnTable cannot be borrowed as a numeric matrix")
         return self._data
 
@@ -106,7 +124,7 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
         var result = List[Column](capacity=len(indices))
         for index in indices:
             self._check_index(index, "category")
-            ref column = self._categories[self._locations[index]]
+            ref column = self._non_numeric[self._locations[index]]
             if not column.isa[Column]():
                 raise Error(String("TypeError: column '", self._schema.names[index],
                                    "' has a different categorical domain than this component requires"))
@@ -127,5 +145,5 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
             raise Error(String("TypeError: column '", self._schema.names[index], "' requires ", expected, " storage for this component"))
 
     def _check_shape(self) raises:
-        if self._data.ndim != 2 or self._data.shape[1] != len(self._schema.names) - len(self._categories):
+        if self._data.ndim != 2 or self._data.shape[1] != len(self._schema.names) - len(self._non_numeric):
             raise Error("ValueError: table data no longer matches its column schema")

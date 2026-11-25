@@ -7,15 +7,20 @@ rank-2 Float32 or Float64 data and copies the input matrix and names.
 `StringCategories` and `NumericCategories[dtype]` for Bool, Int64, Float32,
 and Float64. The position is
 zero-based and defaults to the end. The name must be unique and the row
-count must match the numeric block. A matrix with shape `(rows, 0)` can
-seed a categorical-only table. All numeric columns share the matrix dtype.
+count must match the numeric block. `add_strings(name, column, position=None)`
+accepts a `List[String]` with the same row count and insertion rules. A matrix
+with shape `(rows, 0)` can seed a table containing only non-numeric columns.
+All numeric columns share the matrix dtype.
 
 Copying a table creates an independent snapshot. `schema()` returns its own
-`ColumnSchema` with actual storage kinds (`float32`, `float64`, `category`).
+`ColumnSchema` with actual storage kinds (`float32`, `float64`, `category`, `string`).
 `values()` borrows the numeric matrix for numeric-only tables and raises on
 mixed tables. `categorical_columns[Domain](indices)` copies categorical
 columns in selection order, preserving the dictionaries and missing codes.
 Omit the domain to read string categorical columns.
+`string_column(index)` copies the raw text at a zero-based column position.
+Raw text stores UTF-8 strings directly, including empty strings. Use a
+nullable string categorical column when you need an explicit missing value.
 
 ```mojo
 from moxie.compose import ColumnTable, ColumnTransformer, ColumnEntry, make_column_selector
@@ -35,7 +40,7 @@ var output_names = model.get_feature_names_out()
 Named keys accept one name (rank-1 component input), a name list (rank-2), or
 `ColumnKey.name_slice(start, stop, step)` with inclusive endpoints (`step` must be None or 1, as in sklearn). Position
 lists, masks and numeric slices also work. Duplicate input names are rejected at table construction. Components receive selected
-numeric arrays or typed categorical columns. The output remains an NDArray; use `get_feature_names_out()`
+numeric arrays, typed categorical columns, or a list of documents. The output remains an NDArray; use `get_feature_names_out()`
 for its names.
 
 A named fit records `feature_names_in_`. At transform time, named inputs may
@@ -47,7 +52,8 @@ state. Supplied `get_feature_names_out(input_features)` must match fitted names.
 
 `make_column_selector(dtype_include=..., dtype_exclude=...)` returns a named
 key from a table or schema. Use `["number"]` for the numeric block or
-`["category"]` for categorical columns of any domain. `"floating"`, `"float32"`
+`["category"]` for categorical columns of any domain and `["string"]` for
+raw text. `"floating"`, `"float32"`
 and `"float64"` also match their respective numeric storage. Typed selectors
 take lists of dtype names. Regex `pattern` raises an unsupported-capability error.
 
@@ -89,6 +95,14 @@ selections. Use `"drop"` for unused categorical columns. A callable taking
 an NDArray requires a numeric-only table. Invalid selections and type changes
 on fitted columns raise errors.
 
+Use a scalar key to route one document column to a text transformer. With a
+Float64 table, for example, `ColumnEntry("words", CountVectorizer[DType.float64](), "review")`
+accepts the raw column added by `table.add_strings("review", documents)`.
+The vectorizer output dtype must match the table dtype. A singleton name list
+or dtype selector represents a two-dimensional selection and raises for a
+text transformer. Dtype selectors can identify text columns before you pass
+a scalar name to the entry.
+
 Categorical selections also support `OrdinalEncoder` and `TargetEncoder`
 with the corresponding domain. For `TargetEncoder`, use a Float64 table and a Float64
 target array. Pass `y.copy()` to keep the target or `y^` to transfer it when
@@ -106,6 +120,9 @@ compares a single ColumnTransformer with median imputation, scaling and one-hot
 encoding, including reordered inputs, unknown categories, names and output spans.
 The mixed encoders parity case also compares ordinal codes and multiclass
 target encodings with exact equality, including cross-fitted training output.
+The mixed text comparison checks scalar name and position routing with
+CountVectorizer alongside the numeric pipeline and OneHotEncoder. Counts,
+one-hot values, output names and output spans are checked exactly.
 
 The [mixed-types notebook](../../notebooks/compose/plot_column_transformer_mixed_types.ipynb)
 puts both transformer pipelines in one ColumnTransformer. The categorical

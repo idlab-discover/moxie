@@ -36,5 +36,6 @@ typed-result and range adaptations. StringSimpleImputer supports most-frequent
 and constant strategies with the documented typed result and empty/inverse limits.
 Standalone string missing indicators use `StringMissingIndicator`.
 `MissingIndicator` accepts a typed selection of `ColumnTable` categorical
-columns. Categorical imputation remains unfinished.
+columns. `CategoricalStringImputer` and `CategoricalNumericImputer` provide
+most-frequent and constant imputation for typed categorical selections.
 Passing these checks is not full dense estimator parity.

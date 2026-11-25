@@ -71,6 +71,12 @@ Use floating-point literals for optional bounds (`0.0`, not `0`).
 - `clone(model)` returns an unfitted model with copied configuration;
   `model.copy()` copies fitted state into independent buffers.
 - `get_feature_names_out()` returns `["isotonicregression0"]` after fitting.
+- `set_output(transform="default")` selects native output for `transform`
+  and `fit_transform`. The output container follows the overload you call,
+  with NDArray input returning NDArray and List input returning List. Omit
+  `transform` or pass `None` to retain the current mode. The setter returns
+  a mutable borrow for chaining. Pandas, Polars and unknown modes raise a
+  Mojo `Error` at the setter.
 
 A successful fit replaces `X_min_`, `X_max_`, `X_thresholds_`, `y_thresholds_`,
 and `increasing_`. Failed fits preserve the previous valid state. Learned fields
@@ -258,10 +264,11 @@ for in-place fitting and typed configuration differences.
 `pixi run python tools/isotonic_checks.py test` covers trait conformance,
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
 strided arrays, direction, bounds, weighted R², and native persistence.
-`pixi run python tools/isotonic_checks.py parity` compares 722 Float64 and
-555 Float32 deterministic cases, including scaler pipeline predictions,
-interpolator reconstruction, validation edges, warning diagnostics, sample-weight requests and input tags,
-against the pinned Python module and Cython tie engine. The scikit-learn
+`pixi run python tools/isotonic_checks.py parity` compares 723 Float64 and
+556 Float32 deterministic cases, including native transform output, scaler
+pipeline predictions, interpolator reconstruction, validation edges, warning
+diagnostics, sample-weight requests and input tags, against the pinned Python
+module and Cython tie engine. The scikit-learn
 support wheel and SciPy come from the locked Pixi environment. Float64 uses
 `atol=rtol=2e-12` and Float32 uses `atol=rtol=2e-6` to allow for differences
 in rounding and reduction order.

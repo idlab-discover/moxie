@@ -31,6 +31,7 @@ REFERENCE_SOURCES = (
     "sklearn/_isotonic.pyx",
     "sklearn/metrics/_regression.py",
     "sklearn/utils/_metadata_requests.py",
+    "sklearn/utils/_set_output.py",
     "sklearn/utils/_tags.py",
 )
 
@@ -87,6 +88,12 @@ def main():
     )
     regression = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(regression)
+    output_source = args.sklearn_checkout / "sklearn/utils/_set_output.py"
+    spec = importlib.util.spec_from_file_location(
+        "sklearn.utils._moxie_reference_output", output_source
+    )
+    reference_output = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reference_output)
     rng = np.random.default_rng(SEED)
     records = []
     dtype = np.float64
@@ -245,6 +252,20 @@ def main():
         assert expected.dtype == dtype
         add("pipeline", x, y, query, expected)
 
+    def default_output():
+        x = np.asarray([0, 1, 2], dtype=dtype)
+        y = np.asarray([1, 4, 2], dtype=dtype)
+        model = reference.IsotonicRegression()
+        set_output = reference_output._SetOutputMixin.set_output
+        assert set_output(model, transform="default") is model
+        fitted = model.fit_transform(x[:, None], y)
+        assert set_output(model, transform=None) is model
+        transformed = model.transform(x)
+        predicted = model.predict(x)
+        for result in (fitted, transformed, predicted):
+            assert result.dtype == dtype and result.shape == x.shape
+        add("default_output", x, y, fitted, transformed, predicted)
+
     def fit_warnings():
         for x, y, mode, weights in [
             ([0], [1], "auto", None),
@@ -306,6 +327,7 @@ def main():
                     add("interpolator", x, y, mode, query, expected)
 
     pipeline()
+    default_output()
     serialization()
     validation_edges()
     fit_warnings()
@@ -365,6 +387,7 @@ def main():
     records = []
     dtype = np.float32
     pipeline()
+    default_output()
     serialization()
     validation_edges()
     fit_warnings()

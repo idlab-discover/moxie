@@ -8,9 +8,11 @@ from std.utils import Variant
 from numojo import NDArray, Shape, arange
 
 from moxie._labels import LabelIndex, StringTarget, encode_column
+from moxie._random import RandomState
 from moxie.base import NumericClassifierClasses, WeightedSupervisedEstimator
-from moxie.metrics import accuracy_score
+from moxie.metrics import accuracy_score, balanced_accuracy_score
 from moxie.model_selection import SplitSize, StratifiedShuffleSplit
+from moxie.model_selection._split import _allocate_classes
 
 from .._base import DecisionEnsemble, ProbabilisticEnsemble, StagedPredictor
 from .._sampling import check_sample_weight, class_weight_factors
@@ -41,6 +43,60 @@ from .splitting import _SplitOptions
 
 comptime _Codes = NDArray[DType.int64]
 comptime _ClassWeight = Variant[NoneType, String, Dict[Int64, Float64]]
+comptime _ScoringSampleSize = 10_000
+
+
+def _stratified_score_rows(
+    y: _Values, n_classes: Int, seed: Int
+) raises -> _Codes:
+    # Group rows in encounter order, matching sklearn's stable class sort.
+    var groups = List[List[Int]](capacity=n_classes)
+    for _ in range(n_classes):
+        groups.append(List[Int]())
+    for i in range(y.size):
+        groups[Int(y.unsafe_get(i * y.strides[0]))].append(i)
+    var counts = _Codes(Shape(n_classes))
+    for k in range(n_classes):
+        counts.unsafe_set(k, Int64(len(groups[k])))
+
+    var rng = RandomState(seed)
+    var quotas = _allocate_classes(counts, _ScoringSampleSize, rng)
+    var rows = _Codes(Shape(_ScoringSampleSize))
+    var offset = 0
+    for k in range(n_classes):
+        ref group = groups[k]
+        var order = rng.permutation(len(group))
+        for j in range(Int(quotas.unsafe_get(k))):
+            rows.unsafe_set(offset, Int64(group[Int(order.unsafe_get(j))]))
+            offset += 1
+    rng.shuffle(rows)
+    return rows^
+
+
+@fieldwise_init
+struct _ClassScoringData(Movable):
+    var targets: _Codes
+    var weights: Optional[_Values]
+    var rows: Optional[_Codes]
+
+    @staticmethod
+    def prepare(
+        y: _Values, weights: Optional[_Values], var rows: Optional[_Codes]
+    ) raises -> Self:
+        var targets: _Codes
+        var score_weights: Optional[_Values] = None
+        if rows:
+            ref indices = rows.value()
+            targets = _take_rows(y, indices, 0, indices.size).astype[DType.int64]()
+            if weights:
+                ref w = weights.value()
+                score_weights = _take_rows(w, indices, 0, indices.size)
+        else:
+            targets = y.astype[DType.int64]()
+            if weights:
+                ref w = weights.value()
+                score_weights = w.view_with_layout(w.shape, w.strides, w.offset)
+        return Self(targets^, score_weights^, rows^)
 
 
 @fieldwise_init
@@ -354,10 +410,10 @@ struct HistGradientBoostingClassifier[
             raise Error("ValueError: classifier loss must be log_loss")
         Self._check_target(y, X.shape[0])
         var early = _uses_early_stopping(params.early_stopping, X.shape[0])
-        if early and params.scoring.or_else("") != "loss":
+        var scoring = params.scoring.or_else("accuracy")
+        if early and scoring not in ("loss", "accuracy", "balanced_accuracy"):
             raise Error(
-                "NotImplementedError: histogram classification early stopping"
-                " supports scoring=loss"
+                "NotImplementedError: unsupported histogram classification scorer"
             )
         if Bool(X_val) != Bool(y_val) or (sample_weight_val and not X_val):
             raise Error(
@@ -564,6 +620,7 @@ struct HistGradientBoostingClassifier[
         var encoder: _CategoryEncoder,
     ) raises:
         ref params = self._params
+        var scoring = params.scoring.or_else("accuracy")
         var baseline: _Values
         var stages = List[List[_RawTree]]()
         var train_scores = List[Float64]()
@@ -595,8 +652,26 @@ struct HistGradientBoostingClassifier[
         var raw = Self._raw_predictions(X, baseline, stages)
         var raw_val = _Values(Shape(0))
         var binned_val: Optional[NDArray[DType.uint8]] = None
+        var train_scoring: Optional[_ClassScoringData] = None
+        var validation_scoring: Optional[_ClassScoringData] = None
+        if early and scoring != "loss":
+            var score_rows: Optional[_Codes] = None
+            if rows > _ScoringSampleSize:
+                score_rows = _stratified_score_rows(
+                    y, loss._n_classes, random.split_seed
+                )
+            train_scoring = _ClassScoringData.prepare(y, weights, score_rows^)
+            if validation:
+                ref val_data = validation.value()
+                validation_scoring = _ClassScoringData.prepare(
+                    val_data.y, val_data.weights, None
+                )
         if early and not resume:
-            train_scores.append(-loss.mean_loss(y, raw, weights))
+            train_scores.append(
+                Self._stopping_score(
+                    scoring, loss, y, raw, weights, train_scoring
+                )
+            )
         if validation:
             ref val_data = validation.value()
             var X_val = encoder.transform(val_data.X)
@@ -605,7 +680,10 @@ struct HistGradientBoostingClassifier[
                 raw_val = Self._raw_predictions(X_val, baseline, stages)
                 if not resume:
                     validation_scores.append(
-                        -loss.mean_loss(val_data.y, raw_val, val_data.weights)
+                        Self._stopping_score(
+                            scoring, loss, val_data.y, raw_val,
+                            val_data.weights, validation_scoring,
+                        )
                     )
 
         var gradients = List[Float32]()
@@ -654,11 +732,18 @@ struct HistGradientBoostingClassifier[
                     "Boosting iteration", iteration + 1, "of", params.max_iter
                 )
             if early:
-                train_scores.append(-loss.mean_loss(y, raw, weights))
+                train_scores.append(
+                    Self._stopping_score(
+                        scoring, loss, y, raw, weights, train_scoring
+                    )
+                )
                 if validation:
                     ref val_data = validation.value()
                     validation_scores.append(
-                        -loss.mean_loss(val_data.y, raw_val, val_data.weights)
+                        Self._stopping_score(
+                            scoring, loss, val_data.y, raw_val,
+                            val_data.weights, validation_scoring,
+                        )
                     )
                 ref scores = validation_scores if validation else train_scores
                 if _should_stop(scores, params.n_iter_no_change, params.tol):
@@ -722,6 +807,32 @@ struct HistGradientBoostingClassifier[
             ):
                 best = k
         return best
+
+    @staticmethod
+    def _stopping_score(
+        scoring: String, loss: _ClassificationLoss, y: _Values, raw: _Values,
+        weights: Optional[_Values], data: Optional[_ClassScoringData],
+    ) raises -> Float64:
+        if not data:
+            return -loss.mean_loss(y, raw, weights)
+        ref sample = data.value()
+        var prediction = _Codes(Shape(sample.targets.size))
+        var columns = raw.shape[1]
+        for i in range(prediction.size):
+            var row = i
+            if sample.rows:
+                row = Int(sample.rows.value().unsafe_get(i))
+            var label = 0 if loss._n_classes == 1 else Self._winning_class(
+                raw, row, columns
+            )
+            prediction.unsafe_set(i, Int64(label))
+        if scoring == "balanced_accuracy":
+            return balanced_accuracy_score(
+                sample.targets, prediction, sample_weight=sample.weights
+            )
+        return accuracy_score(
+            sample.targets, prediction, sample_weight=sample.weights
+        )
 
     def _labels(self, raw: _Values) raises -> Self.Prediction:
         var rows = raw.shape[0]

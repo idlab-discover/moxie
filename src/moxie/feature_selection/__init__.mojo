@@ -23,5 +23,6 @@ from ._incremental_pca_importance import IncrementalPCAImportance, IncrementalPC
 from ._tree_importance import DecisionTreeClassifierImportance
 
 from ._linear_svc_importance import LinearSVCImportance
+from ._svc_importance import SVCImportance
 from ._logistic_importance import LogisticRegressionImportance
 from ._ridge_classifier_importance import RidgeClassifierImportance

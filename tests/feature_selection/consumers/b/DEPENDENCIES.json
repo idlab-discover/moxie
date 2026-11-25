@@ -73,6 +73,59 @@
       "path": "../../../../families/svm/algorithms/linear"
     },
     {
+      "id": "svm-libsvm",
+      "path": "../../../../families/svm/shared/libsvm",
+      "modules": {
+        "moxie.svm._libsvm": {
+          "file": "src/moxie/svm/_libsvm.mojo"
+        },
+        "moxie.svm._cache": {
+          "file": "src/moxie/svm/_cache.mojo"
+        },
+        "moxie.svm._kernels": {
+          "file": "src/moxie/svm/_kernels.mojo"
+        }
+      },
+      "assets": {
+        "licenses/svm-libsvm/LIBSVM.txt": "LICENSES/LIBSVM.txt",
+        "licenses/svm-libsvm/scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.svm": {}
+        }
+      }
+    },
+    {
+      "id": "svm-c-svm",
+      "path": "../../../../families/svm/algorithms/c_svm",
+      "modules": {
+        "moxie.svm._c_svm": {
+          "file": "src/moxie/svm/_c_svm.mojo"
+        },
+        "moxie.svm._classification": {
+          "file": "src/moxie/svm/_classification.mojo"
+        }
+      },
+      "assets": {
+        "licenses/svm-c_svm/scikit-learn.txt": "SCIKIT_LEARN_LICENSE"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.svm": {
+            "SVC": "moxie.svm._c_svm",
+            "SVR": "moxie.svm._c_svm",
+            "Gamma": "moxie.svm._classification",
+            "Probability": "moxie.svm._classification",
+            "SVCParams": "moxie.svm._c_svm",
+            "SVRParams": "moxie.svm._c_svm"
+          }
+        }
+      }
+    },
+    {
       "assets": {
         "licenses/feature-selection-scikit-learn.txt": "LICENSES/feature-selection-scikit-learn.txt"
       },
@@ -100,6 +153,7 @@
             "ConfiguredScorer": "moxie.feature_selection._univariate_selection",
             "DecisionTreeClassifierImportance": "moxie.feature_selection._tree_importance",
             "LinearSVCImportance": "moxie.feature_selection._linear_svc_importance",
+            "SVCImportance": "moxie.feature_selection._svc_importance",
             "DenseSupervisedCV": "moxie.feature_selection._sequential_adapter",
             "DiscreteFeatures": "moxie.feature_selection._mutual_info",
             "ElasticNetImportance": "moxie.feature_selection._linear_model_importance",
@@ -251,6 +305,12 @@
         },
         "moxie.feature_selection._linear_svc_importance": {
           "file": "src/moxie/feature_selection/_linear_svc_importance.mojo"
+        },
+        "moxie._multiclass_contracts": {
+          "file": "src/moxie/_multiclass_contracts.mojo"
+        },
+        "moxie.feature_selection._svc_importance": {
+          "file": "src/moxie/feature_selection/_svc_importance.mojo"
         },
         "moxie.feature_selection._tree_importance": {
           "file": "src/moxie/feature_selection/_tree_importance.mojo"

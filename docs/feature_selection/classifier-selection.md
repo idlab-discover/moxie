@@ -117,6 +117,47 @@ indicators. Discrete comparisons are exact, including Int64 labels above
 2**53. Tolerances of 3e-4 for Float32 and 1e-8 for Float64 match the Ridge
 owner's direct-solver comparisons.
 
+## Linear-kernel SVC
+
+`SVCImportance` adapts the native dense `SVC(kernel="linear")` for
+`SelectFromModel`, `RFE` and `RFECV`.
+
+```mojo
+from moxie.feature_selection import DenseSupervisedCV, RFECV, SVCImportance, SequentialCV
+from moxie.svm import SVC
+
+comptime Estimator = SVCImportance[String]
+var estimator = SVCImportance(SVC[String](kernel="linear", random_state=11))
+var selector = RFECV[DenseSupervisedCV[Estimator]](estimator^, cv=SequentialCV(3))
+# X is a Float64 feature matrix and y is a List[String].
+_ = selector.fit(X, y)
+var classes = selector.classes_()
+var decision = selector.decision_function(X)
+```
+
+Constructing the adapter from a model infers the label type. Use
+`SVCImportance[Label, DType.float32]` for Float32 features and sample weights.
+The adapter promotes these arrays to the SVM engine's Float64 dtype and
+returns importances in the selector's feature dtype. Both `"auto"` and
+`"coef_"` return an owned coefficient matrix with one row for binary
+classification and one row per class pair for multiclass classification.
+The default SelectFromModel threshold is the mean of the aggregated
+importances. Fitting through the adapter requires `kernel="linear"`.
+
+RFE and RFECV forward class order, predictions, accuracy and Float64 decision
+values on the selected columns. A model fitted with `probability=True` also
+provides Float64 probabilities and log probabilities in class order. With
+probability disabled, these methods raise the wrapped estimator's capability
+error.
+
+After live assembly, run
+`OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/feature_selection/parity_svc.py`.
+The six binary Float64 and multiclass Float32 selector cases check strided
+inputs, weights in SelectFromModel and RFE, and stratified RFECV. The oracle
+runs pinned sklearn selectors, SVC wrappers and LIBSVM. Masks, ranks, labels
+and shapes match exactly. Numerical outputs use the SVM owner's tolerances
+of `rtol=3e-5` and `atol=3e-6`.
+
 ## Decision trees
 
 `DecisionTreeClassifierImportance` adapts the sibling family's production

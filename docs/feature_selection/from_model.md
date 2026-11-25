@@ -2,8 +2,9 @@
 
 `SelectFromModel` fits a cloned estimator or reads a prefitted one, then selects
 features by their importances. It delegates optimization to the wrapped model.
-The family supplies adapters for the live dense Lasso, ElasticNet, Ridge,
-LinearSVC, LogisticRegression, DecisionTreeClassifier and IncrementalPCA implementations.
+The family supplies adapters for the live dense Lasso, ElasticNet, LinearRegression,
+Ridge, RidgeClassifier, LinearSVC, linear-kernel SVC, LogisticRegression,
+DecisionTreeClassifier and IncrementalPCA implementations.
 Both Float32 and Float64 features are supported.
 
 ```mojo

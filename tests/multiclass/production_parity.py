@@ -7,7 +7,7 @@ wraps real Moxie estimators and their sklearn counterparts:
 - `moxie.tree.DecisionTreeClassifier` through the dense
   `moxie.feature_selection.DecisionTreeClassifierImportance` adapter
   (predict_proba component; the tree's own API returns List probabilities), and
-- `moxie.svm.LinearSVC`,
+- `moxie.svm.SVC` and `moxie.svm.LinearSVC`,
   `moxie.discriminant_analysis.LinearDiscriminantAnalysis`, and
   `moxie.naive_bayes.GaussianNB` through `BinaryAdapter` for the native List
   targets. GaussianNB also exercises incremental OvR and OvO updates.
@@ -15,8 +15,8 @@ wraps real Moxie estimators and their sklearn counterparts:
 Cases cover OvR, OvO and OutputCode; 2, 3 and 5 classes; int64, float64 and
 string labels; Float32 and Float64 features; seeded OutputCode codebooks.
 
-Run after `pixi run python tools/multiclass_checks.py build`:
-    builds/reference-env/bin/python tests/multiclass/production_parity.py
+Run with the locked toolchain and current sources assembled in builds/deps:
+    builds/reference-env/bin/python tests/multiclass/production_parity.py --group svc
 
 Tolerances:
 - classes, component counts, codebooks, predictions and scores must match exactly;
@@ -30,6 +30,8 @@ Tolerances:
   votes through one division, allowed 1e-14 relative;
 - LinearSVC uses the primal solver with tol=1e-9. Allow 1e-7 relative / 1e-8
   absolute for decision values because of reduction order and stopping;
+- SVC uses the SVM family's public parity tolerance (3e-5 relative / 3e-6
+  absolute) for LIBSVM solver, kernel and probability calibration rounding.
 - LDA uses the default SVD solver. Allow 1e-9 relative / 1e-11 absolute for
   Float64 responses across SVD implementations, and 1e-5 relative / 5e-6
   absolute for Float32 responses because Moxie accumulates in Float64.
@@ -45,6 +47,7 @@ import subprocess
 import sys
 from fractions import Fraction
 from pathlib import Path
+from warnings import catch_warnings, filterwarnings
 
 import numpy as np
 import sklearn
@@ -53,7 +56,7 @@ from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.linear_model import RidgeClassifier
 from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier, OutputCodeClassifier, _predict_binary
 from sklearn.naive_bayes import GaussianNB
-from sklearn.svm import LinearSVC, _classes as svm_classes
+from sklearn.svm import SVC, LinearSVC, _classes as svm_classes
 from sklearn.tree import DecisionTreeClassifier
 
 from ovr_parity import OUT, REFERENCE, REVISION, ROOT, driver, lit, matrix, parse
@@ -63,6 +66,7 @@ TOLERANCE = {
     "ridge32": (2e-4, 1e-5),
     "tree": (1e-14, 1e-15),
     "linear-svc": (1e-7, 1e-8),
+    "svc": (3e-5, 3e-6),
     "lda64": (1e-9, 1e-11),
     "lda32": (1e-5, 5e-6),
     "gaussian-nb64": (1e-9, 1e-11),
@@ -80,6 +84,12 @@ COMPONENTS = {
                     "DecisionTreeClassifierImportance[{dtype}](DecisionTreeClassifier[DType.int64](max_depth=2, random_state=0))"),
     "linear-svc": (lambda: LinearSVC(dual=False, tol=1e-9, random_state=0),
                    "BinaryAdapter(LinearSVC(dual=False, tol=1e-9, random_state=0))"),
+    "svc": (lambda: SVC(tol=1e-6, random_state=0),
+            "BinaryAdapter(SVC(tol=1e-6, random_state=0))"),
+    "svc-probability": (lambda: SVC(probability=True, tol=1e-6, random_state=0),
+                        "BinaryAdapter(SVC(probability=True, tol=1e-6, random_state=0))"),
+    "svc-precomputed": (lambda: SVC(kernel="precomputed", tol=1e-6, random_state=0),
+                        'BinaryAdapter(SVC(kernel="precomputed", tol=1e-6, random_state=0))'),
     "lda": (LinearDiscriminantAnalysis,
             "BinaryAdapter(LinearDiscriminantAnalysis[{dtype}]())"),
     "gaussian-nb": (GaussianNB,
@@ -90,8 +100,16 @@ COMPONENT_TYPE = {
     "tree": "DecisionTreeClassifierImportance[{dtype}]",
     "tree-depth2": "DecisionTreeClassifierImportance[{dtype}]",
     "linear-svc": "BinaryAdapter[LinearSVC[]]",
+    "svc": "BinaryAdapter[SVC[]]",
+    "svc-probability": "BinaryAdapter[SVC[]]",
+    "svc-precomputed": "BinaryAdapter[SVC[]]",
     "lda": "BinaryAdapter[LinearDiscriminantAnalysis[{dtype}]]",
     "gaussian-nb": "BinaryAdapter[GaussianNB[IntListDomain, {dtype}]]",
+}
+SVC_COMPONENTS = ("svc", "svc-probability", "svc-precomputed")
+OUTPUT_CODE_RESPONSE = {
+    "gaussian-nb": ("predict_proba", "Item(i, 1)"),
+    "svc": ("decision_function", "Item(i)"),
 }
 STRINGS = ["setosa", "versicolor", "virginica", "", "zeta"]
 
@@ -101,9 +119,13 @@ def cases(components):
     result = []
     for wrapper in ("ovr", "ovo", "oc"):
         for component in components:
+            if component == "svc-probability" and wrapper != "ovr":
+                continue
+            if component == "svc-precomputed" and wrapper != "ovo":
+                continue
             for k in (2, 3, 5):
                 for labels in ("int64", "float64", "string", "float32-features"):
-                    if labels == "float32-features" and component == "linear-svc":
+                    if labels == "float32-features" and component in ("linear-svc", *SVC_COMPONENTS):
                         continue
                     if labels != "int64" and k != 3:
                         continue
@@ -121,6 +143,8 @@ def cases(components):
                         target = (y * 3 - 7).astype(np.float64)
                     else:
                         target = y * 3 - 7
+                    if component == "svc-precomputed":
+                        X, Xt = X @ X.T, Xt @ X.T
                     for code_size, seed in (((1.5, 0), (2.0, 3)) if wrapper == "oc" else ((None, None),)):
                         result.append(dict(
                             name=f"{wrapper}-{component}-k{k}-{labels}" + (f"-size{code_size}-seed{seed}" if seed is not None else ""),
@@ -151,7 +175,10 @@ def reference(c):
         model.partial_fit(c["X"][:mid], target[:mid], classes=np.unique(target))
         model.partial_fit(c["X"][mid:], target[mid:])
     else:
-        model.fit(c["X"], target)
+        with catch_warnings():
+            if c["component"] == "svc-probability":
+                filterwarnings("ignore", r"The `probability` parameter was deprecated", FutureWarning)
+            model.fit(c["X"], target)
     classes, predict = model.classes_, model.predict(c["Xt"])
     if decoded_classes is not None:
         classes, predict = decoded_classes[classes], decoded_classes[predict]
@@ -162,8 +189,12 @@ def reference(c):
                score=float(model.score(c["X"], target)))
     if c["wrapper"] in ("ovr", "ovo") and hasattr(model, "decision_function"):
         out["decision"] = np.asarray(model.decision_function(c["Xt"]), dtype=float).tolist()
+    if c["wrapper"] == "ovr" and c["component"] == "svc":
+        assert not hasattr(model, "predict_proba")
     if c["wrapper"] == "ovr" and hasattr(model, "predict_proba"):
         out["proba"] = model.predict_proba(c["Xt"]).tolist()
+    if c["component"] == "svc-precomputed":
+        out["pairwise_indices"] = [indices.tolist() for indices in model.pairwise_indices_]
     if c["wrapper"] == "oc":
         out["code_book"] = model.code_book_.tolist()
         out["scores"] = np.array([_predict_binary(e, c["Xt"]) for e in model.estimators_]).T.tolist()
@@ -191,9 +222,10 @@ from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OutputCodeClassi
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
 from moxie.linear_model import RidgeClassifier
 from moxie.naive_bayes import GaussianNB, IntListDomain
-from moxie.svm import LinearSVC
+from moxie.svm import LinearSVC, SVC
 from moxie.tree import DecisionTreeClassifier
 from moxie.feature_selection import DecisionTreeClassifierImportance
+from std.testing import assert_raises
 
 
 def emit(name: String, values: List[String]):
@@ -251,9 +283,22 @@ def emit(name: String, y: StringTarget) raises:
             body.append("    emit('decision', m.decision_function(Xt))")
         if "proba" in ref:
             body.append("    emit('proba', m.predict_proba(Xt))")
+        elif c["wrapper"] == "ovr" and c["component"] == "svc":
+            body += [
+                '    with assert_raises(contains="AttributeError: predict_proba requires probability=True"):',
+                "        _ = m.predict_proba(Xt)",
+            ]
+        if "pairwise_indices" in ref:
+            body.append("""    print('"n_pairs":', len(m.pairwise_indices_.value()), ',')""")
+            for pair in range(len(ref["pairwise_indices"])):
+                body.append(f"    emit('pairwise_{pair}', m.pairwise_indices_.value()[{pair}])")
         if "code_book" in ref:
             body.append("    emit('code_book', m.code_book_)")
-            if c["component"] == "gaussian-nb":
+            if c["component"] in OUTPUT_CODE_RESPONSE:
+                method, index = OUTPUT_CODE_RESPONSE[c["component"]]
+                value = f"response[{index}]"
+                if c["dtype"] == "float32":
+                    value = f"Float64({value})"
                 body += [
                     "    var scores = NDArray[DType.float64](Shape(Xt.shape[0], len(m.estimators_)))",
                     "    for k in range(len(m.estimators_)):",
@@ -262,9 +307,9 @@ def emit(name: String, y: StringTarget) raises:
                     "            for i in range(Xt.shape[0]):",
                     "                scores[Item(i, k)] = Float64(fitted.constant())",
                     "        else:",
-                    "            var proba = fitted.estimator().predict_proba(Xt)",
+                    f"            var response = fitted.estimator().{method}(Xt)",
                     "            for i in range(Xt.shape[0]):",
-                    "                scores[Item(i, k)] = Float64(proba[Item(i, 1)])",
+                    f"                scores[Item(i, k)] = {value}",
                     "    emit('scores', scores)",
                 ]
         body.append("    print('\"end\": 0}')")
@@ -276,6 +321,8 @@ def emit(name: String, y: StringTarget) raises:
 def tolerance(c, key):
     if c["component"] == "linear-svc":
         return TOLERANCE["linear-svc"]
+    if c["component"] in SVC_COMPONENTS:
+        return TOLERANCE["svc"]
     if c["component"] == "lda":
         return TOLERANCE["lda32" if c["dtype"] == "float32" else "lda64"]
     if c["component"] == "gaussian-nb":
@@ -300,6 +347,7 @@ def main():
     groups = {
         "ridge-tree": ("ridge", "ridge-noint", "tree", "tree-depth2"),
         "linear-svc": ("linear-svc",),
+        "svc": SVC_COMPONENTS,
         "lda": ("lda",),
         "gaussian-nb": ("gaussian-nb",),
     }
@@ -310,7 +358,7 @@ def main():
     for group, components in groups.items():
         if selection not in ("all", group):
             continue
-        if group == "linear-svc":
+        if group in ("linear-svc", "svc"):
             assert Path(inspect.getfile(svm_classes)).read_bytes() == (
                 REFERENCE / "sklearn/svm/_classes.py"
             ).read_bytes(), "install the pinned local scikit-learn checkout"
@@ -342,8 +390,13 @@ def main():
                 tied_rows.append((c["name"], rows))
         if "code_book" in ref:
             checks["code_book"] = np.array_equal(ref["code_book"], out["code_book"])
+        if "pairwise_indices" in ref:
+            checks["pairwise_indices"] = out["n_pairs"] == len(ref["pairwise_indices"]) and all(
+                indices == out[f"pairwise_{pair}"]
+                for pair, indices in enumerate(ref["pairwise_indices"])
+            )
         for key in ("decision", "proba", "scores"):
-            if key in ref and (key != "scores" or c["component"] == "gaussian-nb"):
+            if key in ref and (key != "scores" or c["component"] in OUTPUT_CODE_RESPONSE):
                 a, b = np.asarray(ref[key], float), np.asarray(out.get(key, []), float)
                 rtol, atol = tolerance(c, key)
                 checks[key] = a.shape == b.shape and np.allclose(b, a, rtol=rtol, atol=atol)

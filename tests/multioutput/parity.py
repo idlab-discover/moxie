@@ -143,6 +143,13 @@ def components(module, np):
     out['ComponentsClassifierChainIntegerCVLabels'] = label_cv.fit(X, uneven).predict(X).ravel().tolist()
     weighted_cv = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1], cv=KFold(3))
     out['ComponentsRegressorChainCVWeighted'] = weighted_cv.fit(X, Y, sample_weight=w).predict(X).ravel().tolist()
+    fixed_folds = list(KFold(3, shuffle=True, random_state=7).split(X))
+    fixed_regression = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1], cv=fixed_folds[::-1])
+    out['ComponentsRegressorChainFixedCV'] = fixed_regression.fit(X, Y).predict(X).ravel().tolist()
+    fixed_classification = module.ClassifierChain(
+        RidgeClassifier(), order=[0, 2, 1], chain_method='decision_function', cv=fixed_folds,
+    )
+    out['ComponentsDecisionChainFixedCV'] = fixed_classification.fit(X, uneven).decision_function(X).ravel().tolist()
     shuffled_cv = module.ClassifierChain(
         RidgeClassifier(), order=[0, 2, 1], chain_method='decision_function',
         cv=StratifiedKFold(3, shuffle=True, random_state=7),

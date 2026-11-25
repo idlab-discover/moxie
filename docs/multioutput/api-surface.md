@@ -46,7 +46,15 @@ explicit order.
 `verbose=True` prints sklearn's `[Chain] ... (i of n) Processing order k, total=...`
 line after each link is fitted. Set `cv=3`, `cv=KFold(3)`, or
 `cv=StratifiedKFold(3)` on either chain constructor. Import the splitters from
-`moxie.model_selection`. The `ChainParams.cv` value is carried by `get_params`,
+`moxie.model_selection`. To reuse explicit train/test indices, pass
+`cv=ChainFolds(splits)` with a `List[IndexSplit]`, or materialize a splitter's
+cursor with `cv=ChainFolds(splitter.split(n_samples))`. Import `ChainFolds`
+from `moxie.multioutput` and `IndexSplit` from `moxie.model_selection`.
+`ChainFolds` owns its indices and reuses the same splits for every link that
+needs out-of-fold responses. Those responses require the test indices to
+cover each sample exactly once.
+
+The `ChainParams.cv` value is carried by `get_params`,
 `set_params`, and `clone`. Native CV uses the model-selection target dtypes
 Int64, Float32 and Float64. Integer CV uses unshuffled KFold, with stratification
 for a classifier component and binary or multiclass targets. A shuffled native

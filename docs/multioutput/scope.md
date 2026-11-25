@@ -18,9 +18,9 @@ Classifier chains support `predict`, `predict_proba`, `predict_log_proba`, and
 trait. Probability and decision outputs are restored to original target order.
 `predict_log_proba` computes the logarithm of the final positive probabilities.
 Chain CV configuration accepts an integer fold count, a native `KFold` or
-`StratifiedKFold`, or `None`. A per-fit override can also use a custom
-`ChainResponses` provider. Native CV clones components per fold and writes
-held-out responses in original sample order.
+`StratifiedKFold`, fixed `ChainFolds`, or `None`. A per-fit override can also
+use a custom `ChainResponses` provider. Native CV clones components per fold
+and writes held-out responses in original sample order.
 
 ## Current limits
 

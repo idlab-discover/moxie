@@ -26,7 +26,25 @@ struct IndependentParams[P: Copyable & Deinitable](Copyable, Movable):
     var n_jobs: Optional[Int]
 
 
-comptime ChainCV = Variant[type_of(None), Int, KFold, StratifiedKFold]
+struct ChainFolds(Copyable, Movable):
+    """An owned, reusable snapshot of fixed train/test splits."""
+
+    var _splits: List[IndexSplit]
+
+    def __init__(out self, splits: List[IndexSplit]):
+        self._splits = List[IndexSplit](capacity=len(splits))
+        for i in range(len(splits)):
+            ref split = splits[i]
+            self._splits.append(IndexSplit(split.train.copy(), split.test.copy()))
+
+    def __init__[C: SplitCursor & Deinitable](out self, var cursor: C) raises:
+        self._splits = _materialize_chain_folds(cursor^)
+
+    def __init__(out self, *, copy: Self):
+        self = Self(copy._splits)
+
+
+comptime ChainCV = Variant[type_of(None), Int, KFold, StratifiedKFold, ChainFolds]
 
 
 struct ChainParams[P: Copyable & Deinitable](Copyable, Movable):
@@ -240,10 +258,10 @@ struct _SplitterResponses[E: SupervisedEstimator & Predictor & Deinitable, dtype
 
     var cv: ChainCV
 
-    def __init__(out self, cv: ChainCV) raises:
+    def __init__(out self, var cv: ChainCV) raises:
         if cv.isa[Int]() and cv[Int] < 2:
             raise Error("ValueError: n_splits must be at least 2")
-        self.cv = cv.copy()
+        self.cv = cv^
 
     def _splits(self, y: Self.Target) raises -> List[IndexSplit]:
         if self.cv.isa[KFold]():
@@ -261,38 +279,45 @@ struct _SplitterResponses[E: SupervisedEstimator & Predictor & Deinitable, dtype
 
     def cross_val_response(self, estimator: Self.E, X: Self.Input, y: Self.Target, method: String) raises -> Self.Response:
         comptime if Self.label in (DType.int64, DType.float32, DType.float64):
-            var splits = self._splits(y)
-            _checked_prediction_splits(splits, y.size)
-            var codes = IndexArray(Shape(0))
-            var n_classes = 0
-            if method != "predict":
-                var domain = encode_column(y)
-                codes = domain.index.inverse.copy()
-                n_classes = domain.classes.size
-                if Int(Scalar[Self.label](n_classes - 1)) != n_classes - 1:
-                    raise Error("ValueError: global class codes do not fit the component target dtype")
-            var output: Optional[Self.Response] = None
-            for fold in range(len(splits)):
-                ref split = splits[fold]
-                var train_X = _rows(X, split.train)
-                var test_X = _rows(X, split.test)
-                var fold_classes = IndexArray(Shape(0))
-                var train_y: Self.Target
-                if method == "predict":
-                    train_y = _rows(y, split.train)
-                else:
-                    var train_codes = _rows(codes, split.train)
-                    fold_classes = encode_column(train_codes).classes.copy()
-                    train_y = train_codes.astype[Self.label]()
-                var model = clone(estimator)
-                _ = model.fit(rebind[Self.E.Input](train_X), rebind[Self.E.Target](train_y))
-                var predicted = _chain_fold_response[Self.E, Self.dtype, Self.label](
-                    model, test_X, method, fold_classes, n_classes,
-                )
-                _scatter_prediction(output, predicted, split.test, y.size)
-            return output.take()
+            if self.cv.isa[ChainFolds]():
+                return self._fit_folds(estimator, X, y, method, self.cv[ChainFolds]._splits)
+            return self._fit_folds(estimator, X, y, method, self._splits(y))
         else:
             raise Error("ValueError: native chain CV targets must use Int64, Float32 or Float64")
+
+    def _fit_folds(
+        self, estimator: Self.E, X: Self.Input, y: Self.Target, method: String,
+        splits: List[IndexSplit],
+    ) raises -> Self.Response:
+        _checked_prediction_splits(splits, y.size)
+        var codes = IndexArray(Shape(0))
+        var n_classes = 0
+        if method != "predict":
+            var domain = encode_column(y)
+            codes = domain.index.inverse.copy()
+            n_classes = domain.classes.size
+            if Int(Scalar[Self.label](n_classes - 1)) != n_classes - 1:
+                raise Error("ValueError: global class codes do not fit the component target dtype")
+        var output: Optional[Self.Response] = None
+        for fold in range(len(splits)):
+            ref split = splits[fold]
+            var train_X = _rows(X, split.train)
+            var test_X = _rows(X, split.test)
+            var fold_classes = IndexArray(Shape(0))
+            var train_y: Self.Target
+            if method == "predict":
+                train_y = _rows(y, split.train)
+            else:
+                var train_codes = _rows(codes, split.train)
+                fold_classes = encode_column(train_codes).classes.copy()
+                train_y = train_codes.astype[Self.label]()
+            var model = clone(estimator)
+            _ = model.fit(rebind[Self.E.Input](train_X), rebind[Self.E.Target](train_y))
+            var predicted = _chain_fold_response[Self.E, Self.dtype, Self.label](
+                model, test_X, method, fold_classes, n_classes,
+            )
+            _scatter_prediction(output, predicted, split.test, y.size)
+        return output.take()
 
 
 def _score[label: DType, classifier: Bool](y: NDArray[label], pred: NDArray[label], weights: Optional[NDArray[DType.float64]]) raises -> Float64:
@@ -752,10 +777,11 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         return self
 
     def _fit_native_cv(
-        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], cv: ChainCV,
+        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], var cv: ChainCV,
     ) raises:
-        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label](cv)
-        self._fit(X, y, sample_weight, provider, use_cv=not cv.isa[type_of(None)]())
+        var use_cv = not cv.isa[type_of(None)]()
+        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label](cv^)
+        self._fit(X, y, sample_weight, provider, use_cv=use_cv)
 
     def _fit[CV: ChainResponses](
         mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], cv: CV,
@@ -843,7 +869,7 @@ struct RegressorChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: DT
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, cv: ChainCV,
     ) raises -> ref[self] Self:
         """Override the configured splitter for this fit."""
-        self._fit_native_cv(X, y, None, cv)
+        self._fit_native_cv(X, y, None, cv.copy())
         return self
 
     def fit[CV: ChainResponses, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
@@ -936,10 +962,11 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
         return self
 
     def _fit_native_cv(
-        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], cv: ChainCV,
+        mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], var cv: ChainCV,
     ) raises:
-        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label](cv)
-        self._fit(X, y, sample_weight, provider, use_cv=not cv.isa[type_of(None)]())
+        var use_cv = not cv.isa[type_of(None)]()
+        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label](cv^)
+        self._fit(X, y, sample_weight, provider, use_cv=use_cv)
 
     def _fit[CV: ChainResponses](
         mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight], cv: CV,
@@ -1053,7 +1080,7 @@ struct ClassifierChain[E: SupervisedEstimator & Predictor & Deinitable, dtype: D
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, cv: ChainCV,
     ) raises -> ref[self] Self:
         """Override the configured splitter for this fit."""
-        self._fit_native_cv(X, y, None, cv)
+        self._fit_native_cv(X, y, None, cv.copy())
         return self
 
     def fit[CV: ChainResponses, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](

@@ -27,7 +27,8 @@ supported; the adapter and feature dtypes must agree. The target type belongs
 to the estimator. Supplied adapters wrap real Lasso, ElasticNet and Ridge estimators
 (including dense multi-output and sample weights), as well as LinearSVC and
 single-output DecisionTreeClassifier with independent numeric or string
-labels. Estimator restrictions still apply.
+labels. The [LogisticRegression adapter](classifier-selection.md#logistic-regression)
+uses the model’s native numeric label arrays. Estimator restrictions still apply.
 
 ## Parameters and fitted state
 

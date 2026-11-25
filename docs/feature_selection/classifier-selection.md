@@ -44,6 +44,42 @@ values, class order, weighted fits, and RFECV folds and results. Numerical
 tolerances of 3e-6 for Float32 and 2e-7 for Float64 allow coefficient
 rounding and solver termination differences. Discrete comparisons are exact.
 
+## Logistic regression
+
+`LogisticRegressionImportance` wraps native dense logistic regression for
+`SelectFromModel`, `RFE` and `RFECV`. Construct it with a configured estimator
+to infer its feature and label dtypes.
+
+```mojo
+from moxie.feature_selection import DenseSupervisedCV, LogisticRegressionImportance, RFECV, SequentialCV
+from moxie.linear_model import LogisticRegression
+
+comptime Estimator = LogisticRegressionImportance[]
+var estimator = LogisticRegressionImportance(LogisticRegression(C=0.5))
+var selector = RFECV[DenseSupervisedCV[Estimator]](estimator^, cv=SequentialCV(3))
+# X is a Float64 feature matrix and y is an Int64 label array.
+_ = selector.fit(X, y)
+var probabilities = selector.predict_proba(X)
+var classes = selector.classes_()
+```
+
+The adapter uses the model's numeric label arrays and feature dtype
+(Float64 by default). It forwards sample weights and returns owned coefficient
+and class arrays. RFE and RFECV also forward prediction, accuracy, decision
+values, probabilities and log probabilities after selecting columns.
+Probability columns follow the model's sorted class order. Binary decision
+values are a vector and multiclass decision values are a matrix. Both
+`"auto"` and `"coef_"` select the native coefficients. The model's supported
+solvers and penalty settings apply.
+
+After assembling live sources, run
+`OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/feature_selection/parity_logistic_importance.py`.
+The parity fixtures exercise weighted SelectFromModel and RFE and stratified
+RFECV. They compare binary Float32 Newton-Cholesky and multiclass Float64 L-BFGS
+against pinned scikit-learn. Discrete comparisons are exact, including Int64
+labels above 2**53. The respective tolerances 1e-5 and 1e-6 account for
+Float32 rounding and differences in solver termination.
+
 ## Decision trees
 
 `DecisionTreeClassifierImportance` adapts the sibling family's production

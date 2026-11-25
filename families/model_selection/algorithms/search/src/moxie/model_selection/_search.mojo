@@ -1,6 +1,13 @@
 # Adapted from scikit-learn; SPDX-License-Identifier: BSD-3-Clause
 """Serial typed grid/random search, shared candidate evaluation and refitting."""
-from moxie.base import SupervisedEstimator, SupervisedScorer, UnsupervisedScorer, ClassifierMixin, RegressorMixin, BaseEstimator, InputEstimator, clone, Predictor, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, TransformerMixin, InverseTransformer, SampleScorer, WeightedSupervisedEstimator
+from moxie._feature_metadata import InputFeatureCount
+from moxie.base import (
+    BaseEstimator, ClassifierMixin, DecisionFunction, InputEstimator,
+    InverseTransformer, LogProbabilityPredictor, NumericClassifierClasses,
+    Predictor, ProbabilityPredictor, RegressorMixin, SampleScorer,
+    SupervisedEstimator, SupervisedScorer, TransformerMixin, UnsupervisedScorer,
+    WeightedSupervisedEstimator, clone,
+)
 from moxie.model_selection._base import SearchEstimator
 from moxie.model_selection._evaluation import EstimatorScore, TypedScorer, ParameterAdapter
 from moxie.model_selection._validation import (
@@ -531,6 +538,10 @@ struct _Search[A: SearchAdapter, R: SearchRefitPolicy](Movable, Copyable where c
     def check_refit(self) raises:
         require_refit(self.options.refit.enabled(), Bool(self.best_estimator))
 
+    def check_refit_attribute(self, name: String) raises:
+        if not self.best_estimator:
+            raise Error("AttributeError: " + name + " requires a successfully refitted estimator")
+
     def fit(mut self, candidates: List[Dict[String, Self.A.Value]], X: Self.A.Scorer.Input, y: Self.A.Scorer.Target, fit_metadata: Self.A.Scorer.Metadata, score_metadata: Self.A.Scorer.Metadata) raises:
         self.reset()
         var metric = self.options.refit.metric(self.options.metric_names, self.options.multimetric)
@@ -627,12 +638,21 @@ def _domains[D: ParameterDistribution & Copyable & Deinitable](grid: ParameterGr
     return spaces^
 
 
+comptime _NumericClassTarget[E: BaseEstimator] = (
+    E.Target if conforms_to(E, NumericClassifierClasses) else NoneType
+)
+
+
 struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value]](
     SearchEstimator, InputEstimator,
     Copyable where conforms_to(A.Scorer.Estimator, Copyable),
     SupervisedEstimator where conforms_to(A.Scorer.Metadata, Defaultable),
     SupervisedScorer where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, SupervisedScorer),
     ClassifierMixin where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, ClassifierMixin),
+    NumericClassifierClasses where conforms_to(A.Scorer.Metadata, Defaultable)
+        and conforms_to(A.Scorer.Estimator, NumericClassifierClasses)
+        and A.Scorer.Target == _NumericClassTarget[A.Scorer.Estimator],
+    InputFeatureCount where conforms_to(A.Scorer.Estimator, InputFeatureCount),
     RegressorMixin where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, RegressorMixin),
     Predictor where conforms_to(A.Scorer.Estimator, Predictor),
     ProbabilityPredictor where conforms_to(A.Scorer.Estimator, ProbabilityPredictor),
@@ -645,6 +665,9 @@ struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value
     comptime Input = Self.A.Scorer.Input
     comptime Target = Self.A.Scorer.Target
     comptime Metadata = Self.A.Scorer.Metadata
+    comptime ClassLabelDType where conforms_to(
+        Self.E, NumericClassifierClasses
+    ) = Self.E.ClassLabelDType
     comptime SampleWeight = Self.E.SampleWeight if conforms_to(Self.E, SupervisedScorer) else Int
     comptime Params = SearchParams[Self.A, ParameterGrid[Self.A.Value], Self.R]
     comptime Prediction where conforms_to(Self.E, Predictor) = Self.E.Prediction
@@ -734,6 +757,28 @@ struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value
         self._core.check_refit()
         return self._core.best_estimator.value()
 
+    def classes_(self) raises -> _NumericClassTarget[Self.E] where conforms_to(
+        Self.E, NumericClassifierClasses
+    ):
+        """Return the refitted classifier's owned class labels in column order."""
+        self._core.check_refit_attribute("classes_")
+        return rebind_var[_NumericClassTarget[Self.E]](
+            self._core.best_estimator.value().get_classes()
+        )
+
+    def get_classes(self) raises -> Self.Target where conforms_to(
+        Self.E, NumericClassifierClasses
+    ) and Self.Target == _NumericClassTarget[Self.E]:
+        return rebind_var[Self.Target](self.classes_())
+
+    def n_features_in_(self) raises -> Int where conforms_to(Self.E, InputFeatureCount):
+        """Return the refitted estimator's learned input width."""
+        self._core.check_refit_attribute("n_features_in_")
+        return self._core.best_estimator.value().get_n_features_in()
+
+    def get_n_features_in(self) raises -> Int where conforms_to(Self.E, InputFeatureCount):
+        return self.n_features_in_()
+
     def n_splits_(self) raises -> Int:
         self._core.check()
         return self._core.n_splits
@@ -813,6 +858,10 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
     SupervisedEstimator where conforms_to(A.Scorer.Metadata, Defaultable),
     SupervisedScorer where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, SupervisedScorer),
     ClassifierMixin where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, ClassifierMixin),
+    NumericClassifierClasses where conforms_to(A.Scorer.Metadata, Defaultable)
+        and conforms_to(A.Scorer.Estimator, NumericClassifierClasses)
+        and A.Scorer.Target == _NumericClassTarget[A.Scorer.Estimator],
+    InputFeatureCount where conforms_to(A.Scorer.Estimator, InputFeatureCount),
     RegressorMixin where conforms_to(A.Scorer.Metadata, Defaultable) and conforms_to(A.Scorer.Estimator, RegressorMixin),
     Predictor where conforms_to(A.Scorer.Estimator, Predictor),
     ProbabilityPredictor where conforms_to(A.Scorer.Estimator, ProbabilityPredictor),
@@ -825,6 +874,9 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
     comptime Input = Self.A.Scorer.Input
     comptime Target = Self.A.Scorer.Target
     comptime Metadata = Self.A.Scorer.Metadata
+    comptime ClassLabelDType where conforms_to(
+        Self.E, NumericClassifierClasses
+    ) = Self.E.ClassLabelDType
     comptime SampleWeight = Self.E.SampleWeight if conforms_to(Self.E, SupervisedScorer) else Int
     comptime Params = SearchParams[Self.A, RandomSearchSpace[Self.D], Self.R]
     comptime Prediction where conforms_to(Self.E, Predictor) = Self.E.Prediction
@@ -937,6 +989,28 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
     def best_estimator_(ref self) raises -> ref[origin_of(self._core.best_estimator.value())] Self.E:
         self._core.check_refit()
         return self._core.best_estimator.value()
+
+    def classes_(self) raises -> _NumericClassTarget[Self.E] where conforms_to(
+        Self.E, NumericClassifierClasses
+    ):
+        """Return the refitted classifier's owned class labels in column order."""
+        self._core.check_refit_attribute("classes_")
+        return rebind_var[_NumericClassTarget[Self.E]](
+            self._core.best_estimator.value().get_classes()
+        )
+
+    def get_classes(self) raises -> Self.Target where conforms_to(
+        Self.E, NumericClassifierClasses
+    ) and Self.Target == _NumericClassTarget[Self.E]:
+        return rebind_var[Self.Target](self.classes_())
+
+    def n_features_in_(self) raises -> Int where conforms_to(Self.E, InputFeatureCount):
+        """Return the refitted estimator's learned input width."""
+        self._core.check_refit_attribute("n_features_in_")
+        return self._core.best_estimator.value().get_n_features_in()
+
+    def get_n_features_in(self) raises -> Int where conforms_to(Self.E, InputFeatureCount):
+        return self.n_features_in_()
 
     def n_splits_(self) raises -> Int:
         self._core.check()

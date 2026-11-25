@@ -221,7 +221,14 @@ has no implicit score metric. Ordinary `score` uses the configured scalar or
 selected named scorer, not an unrelated default estimator score.
 
 The winner is borrowed through `best_estimator_()`; no fitted copy is fabricated.
-Read wrapped learned metadata such as `classes_` and `n_features_in_` there.
+Both searches expose `classes_()` for estimators implementing
+`NumericClassifierClasses` and `n_features_in_()` for estimators implementing
+`InputFeatureCount`. These accessors read the refitted winner and raise
+`AttributeError` when there is no refitted winner. `classes_()` returns an
+owned label array or list in fitted class order. Searches also forward the
+metadata traits to generic callers. Numeric class trait conformance requires
+defaultable scorer metadata and a scorer target type matching the estimator's
+target. Read other learned attributes through `best_estimator_()`.
 Prediction, probability, log-probability, decision, transform, inverse-transform
 and sample-score methods delegate only when the wrapped estimator implements
 the corresponding capability. Delegated inputs must match the estimator's input

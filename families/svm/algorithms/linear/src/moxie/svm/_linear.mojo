@@ -3,6 +3,7 @@
 import numojo as nm
 from std.math import isfinite, floor
 from moxie.base import WeightedSupervisedEstimator
+from moxie.compose._table import ColumnTable
 from moxie.metadata_routing import (
     FitScoreMetadataRequest,
     FitScoreMetadataRequestProvider,
@@ -12,6 +13,7 @@ from moxie.metadata_routing import (
 from moxie.warnings import FitWarning
 from moxie.svm._contracts import Dense, LinearModel, LinearOptions, validate_matrix, validate_vector
 from moxie.svm._contracts import _check_feature_names, _check_feature_names_width
+from moxie.svm._contracts import _kernel_float64 as _feature_float64
 from moxie.svm._liblinear import LibLinear
 from moxie.svm._base import SupportVectorClassifier, SupportVectorRegressor
 from moxie._random import RandomState, entropy_state
@@ -414,7 +416,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
             _ = self.fit(rebind[Dense](X), y, sample_weight)
         else:
             comptime assert dtype == DType.float32, "LinearSVC requires Float32 or Float64 features"
-            _ = self.fit(X.astype[DType.float64](), y, sample_weight)
+            _ = self.fit(_feature_float64(X), y, sample_weight)
         self.feature_names_in_ = names^
         return self
 
@@ -434,6 +436,32 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
         self.feature_names_in_ = names^
         return self
 
+    def fit[
+        dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[dtype],
+        ref[y_origin] y: Self.Target,
+        *,
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        return self.fit(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
+
+    def decision_function[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
+        return self.decision_function(X.values(), feature_names=X.schema().names)
+
+    def predict[dtype: DType](self, X: ColumnTable[dtype]) raises -> Self.Prediction:
+        return self.predict(X.values(), feature_names=X.schema().names)
+
+    def score[dtype: DType](
+        self, X: ColumnTable[dtype], y: Self.Target, sample_weight: Optional[Dense] = None,
+    ) raises -> Float64:
+        return self.score(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
+
     def decision_function[dtype: DType](
         self, X: nm.NDArray[dtype], *, feature_names: List[String],
     ) raises -> Dense:
@@ -444,7 +472,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
             return self.decision_function(rebind[Dense](X))
         else:
             comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
-            return self.decision_function(X.astype[DType.float64]())
+            return self.decision_function(_feature_float64(X))
 
     def predict[dtype: DType](
         self, X: nm.NDArray[dtype], *, feature_names: List[String],
@@ -456,7 +484,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
             return self.predict(rebind[Dense](X))
         else:
             comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
-            return self.predict(X.astype[DType.float64]())
+            return self.predict(_feature_float64(X))
 
     def score[dtype: DType](
         self,
@@ -473,7 +501,7 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
             return self.score(rebind[Dense](X), y, sample_weight)
         else:
             comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
-            return self.score(X.astype[DType.float64](), y, sample_weight)
+            return self.score(_feature_float64(X), y, sample_weight)
 
     def decision_function(self, X: Dense) raises -> Dense:
         return _decision(X, self.coef_, self.intercept_, self.n_features_in_)
@@ -746,9 +774,33 @@ struct LinearSVR(
                 _ = self.fit(rebind[Dense](X), rebind[Dense](y), sample_weight)
             else:
                 comptime assert xdtype == DType.float32, "LinearSVR requires Float32 or Float64 features"
-                _ = self.fit(X.astype[DType.float64](), rebind[Dense](y), sample_weight)
+                _ = self.fit(_feature_float64(X), rebind[Dense](y), sample_weight)
             self.feature_names_in_ = names^
         return self
+
+    def fit[
+        xdtype: DType, ydtype: DType,
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[xdtype],
+        ref[y_origin] y: nm.NDArray[ydtype],
+        *,
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        return self.fit(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
+
+    def predict[dtype: DType](self, X: ColumnTable[dtype]) raises -> Self.Prediction:
+        return self.predict(X.values(), feature_names=X.schema().names)
+
+    def score[dtype: DType](
+        self, X: ColumnTable[dtype], y: Self.Target, sample_weight: Optional[Dense] = None,
+    ) raises -> Float64:
+        return self.score(
+            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+        )
 
     def predict[dtype: DType](
         self, X: nm.NDArray[dtype], *, feature_names: List[String],
@@ -760,7 +812,7 @@ struct LinearSVR(
             return self.predict(rebind[Dense](X))
         else:
             comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
-            return self.predict(X.astype[DType.float64]())
+            return self.predict(_feature_float64(X))
 
     def score[dtype: DType](
         self,
@@ -777,7 +829,7 @@ struct LinearSVR(
             return self.score(rebind[Dense](X), y, sample_weight)
         else:
             comptime assert dtype == DType.float32, "linear SVM requires Float32 or Float64 features"
-            return self.score(X.astype[DType.float64](), y, sample_weight)
+            return self.score(_feature_float64(X), y, sample_weight)
 
     def predict(self, X: Dense) raises -> Dense:
         return _decision(X, self.coef_, self.intercept_, self.n_features_in_)

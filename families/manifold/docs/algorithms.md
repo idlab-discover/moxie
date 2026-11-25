@@ -80,14 +80,12 @@ Python is validation tooling only.
 
 Trustworthiness compares untied ranks across both dtypes, five metrics and
 multiple neighborhood sizes, with absolute score tolerance `1e-14` for scalar
-rounding. ClassicalMDS compares eigenvalues and sign-fixed coordinates at
-`2e-11` for float64, `2e-8` for float64 Minkowski powers other than 1, 2
-and infinity, and `5e-6` for float32. The locked Mojo power operation differs
-from SciPy by about `1e-10` relative, even for square roots: the `p=1.5`
-fixtures have distance errors below `2.7e-9`. Minkowski `p=1`, `p=2` and
-`p=inf` therefore use exact absolute sums, `sqrt` and maxima. The parity suite
-checks every supported metric, these intermediate distances, eigenvalues and
-coordinates, plus edge fixtures: more components than samples (shape, leading
+rounding. ClassicalMDS compares distances, eigenvalues and sign-fixed
+coordinates across all supported metrics at `2e-11` for float64 and `5e-6`
+for float32. Minkowski `p=1`, `p=2` and `p=inf` use absolute sums,
+square roots of squared sums and maxima, respectively. Other Minkowski
+exponents use the shared scalar Float64 power primitive. The parity suite
+also checks edge fixtures: more components than samples (shape, leading
 spectrum and coordinates; null-space columns are roundoff), zero rows under
 cosine, duplicate rows, constant data, a single sample, asymmetric precomputed
 input and an unsupported metric.

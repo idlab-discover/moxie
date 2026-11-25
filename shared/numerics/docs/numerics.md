@@ -91,7 +91,9 @@ and negative bases with integer exponents. Zero signs, infinities, and NaN
 classification are checked separately. This bound describes the sampled CPU
 results. Keep approximate floating-point flags disabled for numerical parity.
 Neighbors uses the shared primitive for general Minkowski powers and verifies
-weighted and unweighted queries against the pinned reference.
+weighted and unweighted queries against the pinned reference. ClassicalMDS
+uses it for Minkowski dissimilarities and verifies distances, eigenvalues and
+coordinates against the same reference.
 
 Run `python tools/check_std_math_precision.py` from the repository root to
 check direct `from std.math import` declarations in production Mojo sources.
@@ -103,7 +105,6 @@ remaining imports from tracking PR #10 part 5:
 | --- | --- |
 | Cluster | K-means++ local-trial count. |
 | Linear model | Bayesian regression scores, logistic loss and gradient, and logistic probabilities. |
-| Manifold | Classical MDS Minkowski dissimilarities. |
 | Multioutput | Classifier-chain log probabilities. |
 | Neural network | RBM sigmoid and free energy. |
 | Preprocessing | Unused scaler `log` import. |

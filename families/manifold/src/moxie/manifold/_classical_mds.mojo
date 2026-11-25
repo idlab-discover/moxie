@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Classical scaling through the decomposition owner's dense eigensolver."""
 from numojo import NDArray, zeros, Shape
-from std.math import sqrt, abs, pow, isfinite, isinf, isnan
+from std.math import sqrt, abs, isfinite, isinf, isnan
 from moxie.manifold._base import EmbeddingEstimator
 from moxie.manifold._plumbing import validate_matrix, validate_pairwise
 from moxie.manifold._t_sne import _distance
 from moxie.decomposition._svd_engine import symmetric_eigh
-from moxie._dense import sum_axis2d
+from moxie._dense import pow_float64, sum_axis2d
 
 
 @fieldwise_init
@@ -104,11 +104,9 @@ struct ClassicalMDS[dtype: DType = DType.float64](EmbeddingEstimator):
                         for c in range(X.shape[1]):
                             var a = Float64(X.unsafe_get(i * Int(X.strides[0]) + c * Int(X.strides[1])))
                             var b = Float64(X.unsafe_get(j * Int(X.strides[0]) + c * Int(X.strides[1])))
-                            d += pow(abs(a - b), power)
-                        d = pow(d, 1 / power)
+                            d += pow_float64(abs(a - b), power)
+                        d = pow_float64(d, 1 / power)
                     elif self.metric == "minkowski":
-                        # Exact p=1 and p=2 sums; the locked std pow root is
-                        # about 1e-10 relative from sqrt and SciPy.
                         d = _distance(X, i, j, "manhattan" if power == 1 else "sqeuclidean")
                         if power == 2:
                             d = sqrt(d)

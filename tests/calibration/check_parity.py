@@ -242,6 +242,24 @@ def main():
         disp = ref.CalibrationDisplay.from_estimator(estimator, X, y, pos_label=positive)
         add('display_estimator', X, y, None, disp.prob_pred, disp.prob_true, 5, 'uniform', str(positive), 'Centroid', disp.y_prob, disp.ax_.get_xlabel(), disp.ax_.get_ylabel())
         plt.close(disp.figure_)
+    # Keep these fixtures after the existing cases so their seeded draws stay stable.
+    X = rng.normal(size=(61, 3))
+    y = rng.permutation(np.repeat(np.arange(3), [23, 19, 19]))
+    X[:, 0] += y * .6
+    q = rng.normal(size=(13, 3))
+    w = rng.uniform(.2, 2, len(y))
+    for kind, cv in [
+        ('cv_kfold', KFold(3)),
+        ('cv_kfold_shuffled', KFold(3, shuffle=True, random_state=17)),
+        ('cv_stratified_shuffled', StratifiedKFold(3, shuffle=True, random_state=17)),
+    ]:
+        for ensemble in [False, True]:
+            for method in ['sigmoid', 'isotonic', 'temperature']:
+                model = ref.CalibratedClassifierCV(
+                    Centroid(), method=method, cv=cv, ensemble=ensemble
+                ).fit(X, y, sample_weight=w)
+                add(kind, X, y, w, q, model.predict_proba(q), method, ensemble,
+                    False, False, model.predict(q))
     fixtures = out / 'cases.txt'
     fixtures.write_text('\n'.join(records) + '\n')
     command = ['mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', 'builds/deps', '-I', 'examples/calibration_support', 'tests/calibration/parity_runner.mojo', '-o', str(out / 'runner')]
@@ -250,7 +268,7 @@ def main():
     (out / 'results.txt').write_text(result.stdout + result.stderr)
     (out / 'environment.json').write_text(json.dumps(dict(reference=REVISION, seed=SEED, python=platform.python_version(),
         numpy=np.__version__, scipy=scipy.__version__, sklearn=sklearn.__version__, matplotlib=matplotlib.__version__,
-        mojo=subprocess.check_output(['pixi','run','mojo','--version'],cwd=ROOT,text=True).strip(),
+        mojo=subprocess.check_output(['mojo', '--version'],cwd=ROOT,text=True).strip(),
         cases=len(records), command=command), indent=2) + '\n')
     print(result.stdout, end='')
     if result.returncode:

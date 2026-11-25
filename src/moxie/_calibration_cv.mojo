@@ -4,9 +4,8 @@ import numojo as nm
 from std.utils import Variant
 from ._calibration_splits import (
     CalibrationCV,
-    CalibrationSplit,
     validate_splits,
-    stratified_splits,
+    resolve_splits,
 )
 from ._calibration_display import CalibrationDisplayEstimator
 from .base import BaseEstimator, ClassifierMixin, ProbabilityPredictor
@@ -411,13 +410,7 @@ struct CalibratedClassifierCV[E: CalibrationEstimator](
         if classes.size < 2:
             raise Error("ValueError: at least two classes are required")
         var labels = encoded(y, classes)
-        var splits: List[CalibrationSplit]
-        if self.cv.isa[List[CalibrationSplit]]():
-            splits = self.cv[List[CalibrationSplit]].copy()
-        else:
-            var explicit_count = self.cv.isa[Int]()
-            var folds = self.cv[Int] if explicit_count else 5
-            splits = stratified_splits(labels, folds, explicit_count)
+        var splits = resolve_splits(self.cv, labels, classes.size)
         validate_splits(splits, y.size, not use_ensemble)
         var fitted = List[_CalibratedClassifier[Self.E]]()
         var columns = classes.size

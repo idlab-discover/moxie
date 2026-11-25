@@ -6,7 +6,7 @@ from moxie.calibration import CalibratedClassifierCV, CalibrationCV, Calibration
 from moxie.preprocessing import StandardScaler
 from moxie.pipeline import make_pipeline
 from moxie.model_selection import (
-    CVAdapter, TypedScorer, IndexArray, IndexSplit, KFold, cross_val_score,
+    CVAdapter, TypedScorer, IndexArray, IndexSplit, KFold, StratifiedKFold, cross_val_score,
 )
 from calibration_centroid import Centroid
 
@@ -91,12 +91,13 @@ def main() raises:
             assert_equal(a.item(i, j), b.item(i, j))
 
     # Pipeline final step: scaling then calibration equals manual composition.
-    var pipe = make_pipeline(StandardScaler(), Calibrated(Centroid(), cv=3))
+    var splitter = StratifiedKFold(3, shuffle=True, random_state=17)
+    var pipe = make_pipeline(StandardScaler(), Calibrated(Centroid(), cv=splitter.copy()))
     _ = pipe.fit(X, y)
     var scaler = StandardScaler()
     _ = scaler.fit(X)
     var Xs = scaler.transform(X)
-    var manual = Calibrated(Centroid(), cv=3)
+    var manual = Calibrated(Centroid(), cv=splitter^)
     _ = manual.fit(Xs, y)
     var piped = pipe.predict_proba(X)
     var direct = manual.predict_proba(Xs)

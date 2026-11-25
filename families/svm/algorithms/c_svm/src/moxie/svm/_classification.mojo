@@ -4,6 +4,7 @@ import numojo as nm
 from std.math import abs, isfinite
 from moxie.svm._contracts import Dense, Indices, KernelModel, KernelSpec, TrainingSnapshot, validate_matrix
 from moxie.svm._kernels import resolve_gamma
+from moxie.warnings import FitWarning
 
 struct Gamma(Copyable, Movable):
     var mode: String
@@ -51,6 +52,31 @@ struct Probability(Copyable, Movable):
         if not self.boolean and self.mode != "deprecated":
             raise Error("ValueError: probability must be Bool or deprecated")
         return self.mode == "true"
+
+
+@fieldwise_init
+struct _KernelFitDiagnostics(Copyable, Movable):
+    var max_iter: Int
+    var probability_explicit: Bool
+
+    def warnings(self, status: Int) -> List[FitWarning]:
+        var result: List[FitWarning] = []
+        if self.probability_explicit:
+            # Both classifiers name SVC in the pinned reference warning.
+            result.append(FitWarning(
+                "FutureWarning",
+                "The `probability` parameter was deprecated in 1.9 and "
+                "will be removed in version 1.11. "
+                "Use `CalibratedClassifierCV(SVC(), ensemble=False)` "
+                "instead of `SVC(probability=True)`",
+            ))
+        if status == 1:
+            result.append(FitWarning(
+                "ConvergenceWarning",
+                String("Solver terminated early (max_iter=", self.max_iter, ").")
+                + "  Consider pre-processing your data with StandardScaler or MinMaxScaler.",
+            ))
+        return result^
 
 
 def class_scores(raw: Dense, classes: Int, confidence: Bool) raises -> Dense:

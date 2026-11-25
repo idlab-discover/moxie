@@ -1,7 +1,8 @@
 """Validation-only bridge exercising the assembled public estimators."""
 from std.sys import argv
 import numojo as nm
-from moxie.svm import SVC, NuSVC, SVR, NuSVR, OneClassSVM, Gamma, ClassWeight
+from moxie.svm import SVC, NuSVC, SVR, NuSVR, OneClassSVM, Gamma, ClassWeight, Probability
+from moxie.warnings import FitWarning
 from moxie.serialization import ModelSchema, load_model, save_model
 from moxie.svm.kernel_serialization import SVCSchema, NuSVCSchema, SVRSchema, NuSVRSchema, OneClassSVMSchema
 
@@ -26,6 +27,11 @@ def emit_list(name: String, a: List[Float64]) raises:
         print(a[i])
 
 
+def emit_warnings(records: List[FitWarning]):
+    for record in records:
+        print("WARNING", record.category, record.message)
+
+
 def main() raises:
     var args = argv()
     var contents: String
@@ -47,7 +53,10 @@ def main() raises:
     var epsilon = Float64(t[11])
     var tol = Float64(t[12])
     var shrinking = Int(t[13]) != 0
-    var probability = Int(t[14]) != 0
+    var probability_mode = Int(t[14])
+    var probability = Probability("deprecated")
+    if probability_mode >= 0:
+        probability = Probability(probability_mode == 1)
     var limit = Int(t[15])
     var seed = Int(t[16])
     var mode = String(t[17])
@@ -94,6 +103,7 @@ def main() raises:
         emit("n_support_", model.n_support_)
         emit("dual_coef_", model.dual_coef_)
         emit("intercept_", model.intercept_)
+        emit_warnings(model.fit_warnings)
         print("SCALAR", "fit_status_", model.fit_status_)
         print("SCALAR", "n_features_in_", model.n_features_in_)
         emit("n_iter_", model.n_iter_)
@@ -102,7 +112,7 @@ def main() raises:
         emit("decision", model.decision_function(query))
         emit_list("prediction", model.predict(query))
         print("SCALAR", "score", model.score(x, labels, sw.copy()))
-        if probability:
+        if probability_mode == 1:
             emit("probability", model.predict_proba(query))
             emit("log_probability", model.predict_log_proba(query))
             emit("probA_", model.probA_)
@@ -122,6 +132,7 @@ def main() raises:
         emit("n_support_", model.n_support_)
         emit("dual_coef_", model.dual_coef_)
         emit("intercept_", model.intercept_)
+        emit_warnings(model.fit_warnings)
         print("SCALAR", "fit_status_", model.fit_status_)
         print("SCALAR", "n_features_in_", model.n_features_in_)
         emit("n_iter_", model.n_iter_)
@@ -130,7 +141,7 @@ def main() raises:
         emit("decision", model.decision_function(query))
         emit_list("prediction", model.predict(query))
         print("SCALAR", "score", model.score(x, labels, sw.copy()))
-        if probability:
+        if probability_mode == 1:
             emit("probability", model.predict_proba(query))
             emit("log_probability", model.predict_log_proba(query))
             emit("probA_", model.probA_)
@@ -150,6 +161,7 @@ def main() raises:
         emit("n_support_", model.n_support_)
         emit("dual_coef_", model.dual_coef_)
         emit("intercept_", model.intercept_)
+        emit_warnings(model.fit_warnings)
         print("SCALAR", "fit_status_", model.fit_status_)
         print("SCALAR", "n_features_in_", model.n_features_in_)
         print("ARRAY", "n_iter_", 1)
@@ -173,6 +185,7 @@ def main() raises:
         emit("n_support_", model.n_support_)
         emit("dual_coef_", model.dual_coef_)
         emit("intercept_", model.intercept_)
+        emit_warnings(model.fit_warnings)
         print("SCALAR", "fit_status_", model.fit_status_)
         print("SCALAR", "n_features_in_", model.n_features_in_)
         print("ARRAY", "n_iter_", 1)
@@ -194,6 +207,7 @@ def main() raises:
         emit("n_support_", model.n_support_)
         emit("dual_coef_", model.dual_coef_)
         emit("intercept_", model.intercept_)
+        emit_warnings(model.fit_warnings)
         print("SCALAR", "fit_status_", model.fit_status_)
         print("SCALAR", "n_features_in_", model.n_features_in_)
         print("ARRAY", "n_iter_", 1)

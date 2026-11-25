@@ -1,7 +1,7 @@
 # Interface field/signature adaptation from scikit-learn (BSD-3-Clause).
 # Copyright the scikit-learn developers; see LICENSES/scikit-learn.txt.
 """Shared tree records. Algorithms live in their designated child owners."""
-from numojo import NDArray, Shape
+from numojo import NDArray, Shape, empty
 from std.utils import Variant
 from moxie._categorical import CategoricalColumn, StringCategories
 
@@ -54,7 +54,7 @@ struct SplitRecord(Copyable, Movable):
 
 @fieldwise_init
 struct TreeData(Movable):
-    """One owned representation; storage engine owns allocation and traversal."""
+    """Owned tree storage with parallel array snapshots in node ID order."""
     var n_features: Int
     var n_classes: List[Int]
     var n_categories: List[Int]
@@ -65,6 +65,71 @@ struct TreeData(Movable):
     var capacity: Int
     var nodes: List[Node]
     var value: Values
+
+    def children_left(self) raises -> Indices:
+        """Left child IDs, with -1 for leaves."""
+        var result = empty[DType.int64](Shape(self.node_count))
+        for i in range(self.node_count):
+            result.unsafe_set(i, Int64(self.nodes[i].left_child))
+        return result^
+
+    def children_right(self) raises -> Indices:
+        """Right child IDs, with -1 for leaves."""
+        var result = empty[DType.int64](Shape(self.node_count))
+        for i in range(self.node_count):
+            result.unsafe_set(i, Int64(self.nodes[i].right_child))
+        return result^
+
+    def feature(self) raises -> Indices:
+        """Split feature IDs, with -2 for leaves."""
+        var result = empty[DType.int64](Shape(self.node_count))
+        for i in range(self.node_count):
+            result.unsafe_set(i, Int64(self.nodes[i].feature))
+        return result^
+
+    def threshold(self) raises -> Values:
+        """Split thresholds, with -2.0 for leaves and -inf for categorical splits."""
+        var result = empty[DType.float64](Shape(self.node_count))
+        for i in range(self.node_count):
+            result.unsafe_set(i, self.nodes[i].threshold)
+        return result^
+
+    def impurity(self) raises -> Values:
+        """Impurity at each node."""
+        var result = empty[DType.float64](Shape(self.node_count))
+        for i in range(self.node_count):
+            result.unsafe_set(i, self.nodes[i].impurity)
+        return result^
+
+    def n_node_samples(self) raises -> Indices:
+        """Unweighted training sample counts."""
+        var result = empty[DType.int64](Shape(self.node_count))
+        for i in range(self.node_count):
+            result.unsafe_set(i, Int64(self.nodes[i].n_node_samples))
+        return result^
+
+    def weighted_n_node_samples(self) raises -> Values:
+        """Weighted training sample totals."""
+        var result = empty[DType.float64](Shape(self.node_count))
+        for i in range(self.node_count):
+            result.unsafe_set(i, self.nodes[i].weighted_n_node_samples)
+        return result^
+
+    def missing_go_to_left(self) raises -> Mask:
+        """Stored missing-value routing flags."""
+        var result = empty[DType.uint8](Shape(self.node_count))
+        for i in range(self.node_count):
+            result.unsafe_set(i, self.nodes[i].missing_go_to_left)
+        return result^
+
+    def n_leaves(self) -> Int:
+        """Count nodes whose children are both the leaf sentinel."""
+        var count = 0
+        for i in range(self.node_count):
+            ref node = self.nodes[i]
+            if node.left_child == TREE_LEAF and node.right_child == TREE_LEAF:
+                count += 1
+        return count
 
 @fieldwise_init
 struct TrainingData(Movable):

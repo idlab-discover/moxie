@@ -4,18 +4,70 @@ import subprocess,json,hashlib,sys
 from types import SimpleNamespace
 import numpy as np
 import sklearn
-import treelite,treelite.gtil,treelite.sklearn
 from sklearn.ensemble import ExtraTreesClassifier,ExtraTreesRegressor,RandomForestClassifier,RandomForestRegressor
 from sklearn.tree import DecisionTreeClassifier,DecisionTreeRegressor,ExtraTreeClassifier,ExtraTreeRegressor
 ROOT=Path(__file__).resolve().parents[2]
 REV='4358542a1bd39af2e7e1cbace8b9fed067473c5b'
-def main():
+def check_reference():
     assert 'builds/tree/oracle-env' in sklearn.__file__,sklearn.__file__
     source=ROOT.parent/'scikit-learn'
     assert subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()==REV
     for name in ['_classes.py','_criterion.pyx','_splitter.pyx','_partitioner.pyx','_tree.pyx']:
         data=subprocess.check_output(['git','-C',str(source),'show',f'{REV}:sklearn/tree/{name}'])
         assert (ROOT/'builds/tree/reference/sklearn/tree'/name).read_bytes()==data
+
+def structure_parity():
+    fields = (
+        'children_left', 'children_right', 'feature', 'threshold', 'impurity',
+        'n_node_samples', 'weighted_n_node_samples', 'missing_go_to_left',
+    )
+    labels = [0, 0, 1, 1]
+    ordered = np.arange(8, dtype=np.float32).reshape(-1, 1)
+    classes = [0, 0, 0, 0, 1, 1, 2, 2]
+    fixtures = (
+        DecisionTreeClassifier(random_state=0).fit(
+            np.array([[np.nan], [1], [2], [3]], dtype=np.float32), labels
+        ),
+        DecisionTreeRegressor(random_state=0).fit(
+            np.array([[0], [1], [2], [np.nan]], dtype=np.float32),
+            labels, sample_weight=[1.5] * 4,
+        ),
+        ExtraTreeClassifier(random_state=0).fit(
+            np.array([[0], [0], [2], [2]], dtype=np.float32), labels
+        ),
+        DecisionTreeClassifier(random_state=0, max_leaf_nodes=3).fit(ordered, classes),
+        DecisionTreeClassifier(random_state=0, ccp_alpha=0.3).fit(ordered, classes),
+        DecisionTreeClassifier(random_state=0).fit(np.zeros((4, 1), dtype=np.float32), labels),
+    )
+    assert fixtures[0].tree_.missing_go_to_left[0] == 1
+    assert fixtures[1].tree_.missing_go_to_left[0] == 0
+    assert fixtures[4].tree_.node_count < fixtures[3].tree_.node_count
+    summaries = {}
+    nodes = [[] for _ in fixtures]
+    output = subprocess.check_output([ROOT/'builds/tree/structure_driver'], text=True)
+    for line in output.splitlines():
+        tag, case, *values = line.split()
+        if tag == 'CASE':
+            summaries[int(case)] = list(map(int, values))
+        else:
+            assert tag == 'NODE', tag
+            nodes[int(case)].append(list(map(float, values)))
+    for case, estimator in enumerate(fixtures):
+        tree = estimator.tree_
+        assert summaries[case] == [tree.node_count, tree.max_depth, tree.n_leaves]
+        columns = np.asarray(nodes[case])
+        assert columns.shape == (tree.node_count, len(fields))
+        for index, field in enumerate(fields):
+            np.testing.assert_array_equal(columns[:, index], getattr(tree, field),
+                                          err_msg=f'case {case}, field {field}')
+    print(f'PASS: {len(fields)} exact structure arrays and tree metadata across {len(fixtures)} fits')
+
+def main(*, structure_only=False):
+    check_reference()
+    structure_parity()
+    if structure_only:
+        return
+    import treelite,treelite.gtil,treelite.sklearn
     assert treelite.__version__=='4.6.1',treelite.__version__
     exports=ROOT/'builds/tree/treelite/cases';exports.mkdir(parents=True,exist_ok=True)
     for old in exports.glob('*.tl'):old.unlink()
@@ -108,4 +160,5 @@ def main():
     (dest/'parity.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps({'checks':checks,'failures':len(failures),'treelite_cases':treelite_cases,'nan_rows_routed_differently':nan_divergent,'first':failures[:8]},indent=2))
     assert not failures
-if __name__=='__main__':main()
+if __name__=='__main__':
+    main(structure_only=sys.argv[1:] == ['--structure-only'])

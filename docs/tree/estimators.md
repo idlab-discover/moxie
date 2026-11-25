@@ -218,12 +218,24 @@ and SVG sections below for graphical exports.
 
 Learned state includes `tree_`, `n_features_in_`, `n_outputs_`, `max_features_`,
 `classes_`, `n_classes_`, and normalized `feature_importances_`. `tree_` is the
-shared `TreeData` record: node metadata is in `tree_.nodes`, values in the owned
-Float64 `(node_count,n_outputs,max_n_classes)` array. This is a native record
-adaptation, not sklearn's Cython binary layout. Native leaves always use
-`split_kind=-1`; sklearn may retain an unused former split kind on a best-first
-leaf. `get_depth()` and `get_n_leaves()`
-inspect this state. Sparse `decision_path` is absent.
+shared `TreeData` record. Node metadata is in `tree_.nodes`, and values are in
+the owned Float64 `(node_count,n_outputs,max_n_classes)` array. Use the
+following methods to inspect the metadata as parallel arrays:
+
+| Methods | NuMojo dtype |
+| --- | --- |
+| `children_left()`, `children_right()`, `feature()`, `n_node_samples()` | Int64 |
+| `threshold()`, `impurity()`, `weighted_n_node_samples()` | Float64 |
+| `missing_go_to_left()` | UInt8 |
+
+Each method returns an independent rank-one snapshot in node ID order with
+length `node_count`. Calls use Mojo method syntax. Edits to a snapshot leave
+the tree intact. Leaves use child IDs `-1`, feature `-2` and threshold
+`-2.0`. Categorical split thresholds are `-inf`. `tree_.n_leaves()` returns
+the leaf count as a Mojo `Int`. Native leaves use `split_kind=-1`. sklearn
+may retain a former split kind on a best-first leaf. The estimator methods
+`get_depth()` and `get_n_leaves()` inspect the same state. Sparse
+`decision_path` is absent.
 
 `ccp_alpha` prunes after construction. `cost_complexity_pruning_path(X,y,weights)`
 fits an unfitted configuration clone with alpha zero and returns dense

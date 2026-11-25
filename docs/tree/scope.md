@@ -60,12 +60,23 @@ Validation commands: `pixi run tree-build`, `pixi run tree-test`,
 parity commands include tree, storage and criteria validation. The root oracle builds sklearn
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b` locally and checks tree source provenance.
 It compares tree structure, leaf IDs, predictions, importances, scores, and pruning
-paths; IDs/class predictions compare exactly, Float64 comparisons use 2e-12
-relative/absolute tolerance for accumulation and logarithm roundoff on bounded
-rational fixtures. Native tests check lifecycle, strides, class shapes,
-capability rejection, and two independently assembled consumers. The private MAE
+paths. The structure accessor suite compares all eight arrays exactly on six
+fixtures spanning missing-value routing, weighted regression, randomized splits,
+best-first growth, pruning, and a stump. The broader suite compares leaf IDs and
+class predictions exactly and uses 2e-12 absolute and relative tolerance for
+Float64 accumulation and logarithm roundoff on bounded rational fixtures.
+Native tests check lifecycle, strides, class shapes, capability rejection, and
+two independently assembled consumers. The private MAE
 check uses the reference whole-right-child impurity to avoid its defective
 non-root node query.
+
+With dependencies assembled in `builds/deps` and the pinned oracle prepared,
+run the accessor comparison on its own:
+
+```sh
+mojo build -O3 --fp-mode=contract=off -I builds/deps tests/tree/structure_driver.mojo -o builds/tree/structure_driver
+builds/tree/oracle-env/bin/python tests/tree/parity.py --structure-only
+```
 
 Current results: the root build, native contracts, example, negative capability
 checks, and two isolated consumers pass. The full source-built estimator oracle

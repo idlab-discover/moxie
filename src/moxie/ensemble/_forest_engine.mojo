@@ -34,7 +34,9 @@ comptime ForestClassWeight = Variant[NoneType, String, List[Values]]
 """None, "balanced", "balanced_subsample", or per-output factors indexed by class code."""
 
 
-struct BaseEnsemble[E: BaseEstimator & Deinitable](Movable, Sized):
+struct BaseEnsemble[E: BaseEstimator & Deinitable](
+    Movable, Sized, Copyable where conforms_to(E, Copyable),
+):
     """sklearn `BaseEnsemble`: a template estimator and the fitted members cloned from it.
 
     `estimator` is constructor configuration, `estimator_` the validated template
@@ -96,7 +98,7 @@ def _as_matrix(x: Values) raises -> Values:
     return x.reshape(nm.Shape(x.shape[0], 1))
 
 
-struct ForestEngine[classifier: Bool, extra: Bool = False](Movable, Sized):
+struct ForestEngine[classifier: Bool, extra: Bool = False](Copyable, Movable, Sized):
     """sklearn `BaseForest` over `DecisionTree*`/`ExtraTree*` members, built serially.
 
     Configuration fields mirror the forest constructor; the member template in

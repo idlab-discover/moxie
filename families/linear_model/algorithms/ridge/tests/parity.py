@@ -15,8 +15,12 @@ Tolerances (value error <= tol * max(1, |reference|) scaled by max|y|):
 - sparse_cg: Float64 1e-7 (same CG sequence); Float32 SciPy runs CG in
   float32 while native runs Float64: 2e-2 at tol=1e-4, 3e-4 at tol=1e-10.
 - lbfgs (positive=True): same L-BFGS-B port on Float64 objective: 1e-6.
+- sag/saga: Float64 1e-8. Float32 uses 3e-5 for the sampled fixed budgets
+  and 1e-4 for converged fits. Native dense eager updates and Float64
+  accumulation can differ from Cython's lazy scaling and Float32 state.
+  Float32 convergence may differ by one epoch. Float64 and fixed-budget
+  epoch counts must match.
 - classifier labels/classes exact; decision like its solver.
-sag/saga are reported as unfinished (NotImplementedError) and excluded.
 """
 from pathlib import Path
 import json
@@ -30,11 +34,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parents[1] / 'tools'))
 import parity_io as io
 from childcheck import environment
+from pinned_sag import SOURCES as SAG_SOURCES, load as load_pinned_sag
 
 SOURCES = ['sklearn/linear_model/_base.py', 'sklearn/linear_model/_ridge.py']
-hashes = io.verify_reference(SOURCES)
+folder = ROOT / 'builds/parity'
+folder.mkdir(parents=True, exist_ok=True)
+hashes = io.verify_reference([*SOURCES, *SAG_SOURCES])
 io.load_pinned(SOURCES[0], register=True)
 ridge = io.load_pinned(SOURCES[1], register=True)
+ridge.sag_solver = load_pinned_sag(folder / "sag_reference")
 io.pinned_code(ridge.Ridge.fit, SOURCES[1])
 io.pinned_code(ridge._BaseRidge.fit, SOURCES[1])
 io.pinned_code(ridge.ridge_regression, SOURCES[1])
@@ -46,7 +54,8 @@ cases = []
 
 
 def add(kind, name, X, y, Z=None, yz=None, *, alpha=1.0, fit_intercept=True, solver='auto', tol=1e-4,
-        max_iter=None, positive=False, sw=None, class_weight=None, fitted_only=False, float64_only=False):
+        max_iter=None, positive=False, sw=None, class_weight=None, fitted_only=False, float64_only=False,
+        return_intercept=False, random_state=17):
     for bits, dtype in ((64, np.float64),) + (() if float64_only else ((32, np.float32),)):
         cases.append(dict(id=f'{kind}-{name}-{bits}', kind=kind, bits=bits, dtype=dtype, X=np.asarray(X, dtype),
                           y=np.asarray(y, dtype if kind != 'classifier' else np.int64),
@@ -54,7 +63,8 @@ def add(kind, name, X, y, Z=None, yz=None, *, alpha=1.0, fit_intercept=True, sol
                           yz=None if yz is None else np.asarray(yz, dtype if kind != 'classifier' else np.int64),
                           alpha=alpha, fit_intercept=fit_intercept, solver=solver, tol=tol, max_iter=max_iter,
                           positive=positive, sw=None if sw is None else np.asarray(sw, dtype), class_weight=class_weight,
-                          fitted_only=fitted_only and bits == 32))
+                          fitted_only=fitted_only and bits == 32, return_intercept=return_intercept,
+                          random_state=random_state))
 
 
 def regression(n, p, k=None):
@@ -91,7 +101,7 @@ add('ridge', 'positive-multi', *regression(30, 4, 2), positive=True, solver='lbf
 add('ridge', 'positive-weighted', *regression(30, 4), positive=True, sw=rng.uniform(0.5, 2, 30))
 add('ridge', 'tiny', [[1.0], [3.0]], [3.0, 7.0], [[2.0]], [5.0])
 
-for solver in ['auto', 'svd', 'lsqr']:
+for solver in ['auto', 'svd', 'lsqr', 'sag', 'saga']:
     X = rng.normal(size=(40, 4))
     yb = (X[:, 0] + 0.3 * rng.normal(size=40) > 0).astype(int) * 4 - 1  # labels {-1, 3}
     Z = rng.normal(size=(10, 4))
@@ -120,8 +130,29 @@ for solver in ['auto', 'svd', 'lsqr', 'sparse_cg']:
     add('function', f'weighted-{solver}', X, y, solver=solver, sw=rng.uniform(0.5, 2, 20))
 add('function', 'positive', *regression(20, 5)[:2], positive=True)
 
-folder = ROOT / 'builds/parity'
-folder.mkdir(parents=True, exist_ok=True)
+for solver in ('sag', 'saga'):
+    add('ridge', f'tall-{solver}', *regression(30, 5), solver=solver)
+    add('ridge', f'wide-{solver}', *regression(8, 15), solver=solver)
+    X, y, Z, yz = regression(31, 5, 3)
+    w = rng.uniform(0.1, 1.4, 31)
+    w[::9] = 0
+    add('ridge', f'weighted-{solver}', X, y, Z, yz, solver=solver,
+        sw=w.copy(), alpha=[0.3, 1.0, 2.0])
+    w[1] = -0.25
+    add('ridge', f'signed-no-intercept-{solver}', X, y, Z, yz, solver=solver,
+        fit_intercept=False, sw=w, max_iter=3, random_state=0)
+    add('classifier', f'balanced-weighted-{solver}', X, ym[:31], Z, ymz[:len(Z)],
+        solver=solver, class_weight='balanced', sw=w, max_iter=3, random_state=42)
+    add('function', f'weighted-{solver}', X, y, solver=solver, sw=w, max_iter=4)
+    add('function', f'zero-epochs-{solver}', X, y[:, 0], solver=solver, max_iter=0)
+
+for solver in ('auto', 'sag'):
+    X, y = regression(31, 5, 2)[:2]
+    add('function', f'direct-intercept-{solver}', X, y, solver=solver,
+        return_intercept=True, sw=rng.uniform(0.1, 1.2, 31), alpha=[0.8, 2.0])
+    add('function', f'single-intercept-{solver}', X, y[:, 0], solver=solver,
+        return_intercept=True, max_iter=3)
+
 lines = []
 for case in cases:
     arrays = dict(X=case['X'], y=case['y'], alpha=np.atleast_1d(np.asarray(case['alpha'], dtype=np.float64)))
@@ -131,7 +162,8 @@ for case in cases:
     cw = case['class_weight']
     params = dict(kind=case['kind'], fit_intercept=int(case['fit_intercept']), solver=case['solver'], tol=repr(case['tol']),
                   max_iter=-1 if case['max_iter'] is None else case['max_iter'], positive=int(case['positive']),
-                  scalar_alpha=int(np.isscalar(case['alpha'])),
+                  scalar_alpha=int(np.isscalar(case['alpha'])), return_intercept=int(case['return_intercept']),
+                  random_state=case['random_state'],
                   class_weight='none' if cw is None else ('balanced' if cw == 'balanced' else ','.join(f'{k}:{v!r}' for k, v in cw.items())))
     lines.append(io.case_line(case['id'], case['bits'], params, arrays))
 (folder / 'fixtures.txt').write_text('\n'.join(lines) + '\n')
@@ -148,34 +180,64 @@ def tolerance(case, solver):
         return 3e-4 if f32 else 1e-7
     if solver == 'sparse_cg':
         return (2e-2 if case['tol'] > 1e-8 else 3e-4) if f32 else 1e-7
+    if solver in ('sag', 'saga'):
+        if f32:
+            return 1e-4 if case['max_iter'] is None else 3e-5
+        return 1e-8
     if solver == 'lbfgs':
         return 1e-5 if f32 else 1e-6
     return 3e-4 if f32 else 1e-8
 
 
 report = []
+epoch_differences = []
+
+
+def compare_iterations(case, solver, actual, expected):
+    if expected is None:
+        assert actual.size == 0, case['id']
+        return
+    if solver == 'lsqr' and case['kind'] != 'function' and case['bits'] == 32 and case['tol'] < 1e-6:
+        # Near Float32 resolution SciPy's LSQR stopping step can differ.
+        return
+    assert actual.shape == expected.shape, (case['id'], actual.shape, expected.shape)
+    difference = np.abs(actual.astype(int) - expected)
+    if not np.any(difference):
+        return
+    epochs = 1000 if case['max_iter'] is None else case['max_iter']
+    assert (solver in ('sag', 'saga') and case['bits'] == 32 and
+            np.all(difference <= 1) and np.all(np.maximum(actual, expected)[difference > 0] < epochs)), (
+                case['id'], actual, expected)
+    epoch_differences.append(dict(case=case['id'], native=actual.astype(int).tolist(), reference=expected.tolist()))
+
+
 for case in cases:
     got = native[case['id']]
     assert 'error' not in got, (case['id'], got)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         if case['kind'] == 'function':
-            coef, n_iter = ridge.ridge_regression(case['X'], case['y'], case['alpha'], sample_weight=case['sw'],
+            result = ridge.ridge_regression(case['X'], case['y'], case['alpha'], sample_weight=case['sw'],
                                                   solver=case['solver'], max_iter=case['max_iter'], tol=case['tol'],
-                                                  positive=case['positive'], return_n_iter=True)
-            solver = ridge.resolve_solver_for_numpy(case['positive'], False, False) if case['solver'] == 'auto' else case['solver']
+                                                  positive=case['positive'], return_n_iter=True,
+                                                  return_intercept=case['return_intercept'],
+                                                  random_state=case['random_state'])
+            coef, n_iter, *intercept = result
+            solver = ridge.resolve_solver_for_numpy(case['positive'], case['return_intercept'], False) if case['solver'] == 'auto' else case['solver']
             t = tolerance(case, solver)
             scale = max(1.0, float(np.abs(case['y']).max()))
             errors = dict(coef=io.close(got['coef'], coef, t, t * scale, case['id'] + ' coef'))
-            if n_iter is not None:
-                assert list(got['n_iter'].astype(int)) == list(n_iter), (case['id'], got['n_iter'], n_iter)
+            if intercept:
+                errors['intercept'] = io.close(got['intercept'], np.atleast_1d(intercept[0]),
+                                               t, t * scale, case['id'] + ' intercept')
             else:
-                assert got['n_iter'].size == 0, case['id']
+                assert 'intercept' not in got, case['id']
+            compare_iterations(case, solver, got['n_iter'], n_iter)
             report.append(dict(case=case['id'], **errors))
             continue
         Model = ridge.Ridge if case['kind'] == 'ridge' else ridge.RidgeClassifier
         kwargs = dict(alpha=case['alpha'], fit_intercept=case['fit_intercept'], solver=case['solver'], tol=case['tol'],
-                      max_iter=case['max_iter'], positive=case['positive'])
+                      max_iter=case['max_iter'], positive=case['positive'], random_state=case['random_state'])
         if case['kind'] == 'classifier':
             kwargs['class_weight'] = case['class_weight']
         model = Model(**kwargs).fit(case['X'], case['y'], sample_weight=case['sw'])
@@ -189,13 +251,8 @@ for case in cases:
     errors = dict(coef=io.close(got['coef'], model.coef_, t, t * scale, case['id'] + ' coef'),
                   intercept=io.close(got['intercept'], np.broadcast_to(np.atleast_1d(model.intercept_), got['intercept'].shape),
                                      t, t * scale, case['id'] + ' intercept'))
+    compare_iterations(case, model.solver_, got['n_iter'], model.n_iter_)
     if case['kind'] == 'ridge':
-        if model.n_iter_ is None:
-            assert got['n_iter'].size == 0, case['id']
-        elif case['bits'] == 64 or case['tol'] >= 1e-6:
-            # SciPy's LSQR keeps float32 bidiagonalization vectors for float32
-            # data, so near float32 resolution its stopping step can differ.
-            assert list(got['n_iter'].astype(int)) == list(model.n_iter_), (case['id'], got['n_iter'], model.n_iter_)
         errors['pred'] = io.close(got['pred'], model.predict(case['Z']), t, t * scale, case['id'] + ' pred')
         errors['score'] = io.close(got['score'], model.score(case['Z'], case['yz']), 10 * t, 10 * t, case['id'] + ' score')
     else:
@@ -205,21 +262,13 @@ for case in cases:
         assert abs(got['score'] - model.score(case['Z'], case['yz'])) < 1e-12, case['id']
     report.append(dict(case=case['id'], solver=model.solver_, **errors))
 
-# sag/saga: the SAG engine is not ported; confirm the explicit refusal.
-X, y = regression(10, 3)[:2]
-probe = [io.case_line(f'sag-{s}', 64, dict(kind='ridge', fit_intercept=1, solver=s, tol='0.0001', max_iter=-1, positive=0,
-                                            scalar_alpha=1, class_weight='none'),
-                      dict(X=X, y=y, alpha=np.array([1.0]), Z=X, yz=y)) for s in ('sag', 'saga')]
-(folder / 'unfinished.txt').write_text('\n'.join(probe) + '\n')
-refusals = io.parse_results(subprocess.run([str(ROOT / 'builds/parity_driver'), str(folder / 'unfinished.txt')], text=True,
-                                           capture_output=True, check=True).stdout)
-assert all('NotImplementedError' in refusals[k]['error'] for k in ('sag-sag', 'sag-saga')), refusals
-
 (folder / 'report.json').write_text(json.dumps(dict(revision=io.REVISION, sources=hashes, cases=len(cases), seed=20260927,
                                                     numpy=np.__version__, scipy=__import__('scipy').__version__,
-                                                    support_sklearn=__import__('sklearn').__version__, errors=report), indent=2) + '\n')
+                                                    support_sklearn=__import__('sklearn').__version__, errors=report,
+                                                    epoch_differences=epoch_differences), indent=2) + '\n')
 worst = {bits: max(max(v for k, v in r.items() if k not in ('case', 'solver')) for r in report if r['case'].endswith(str(bits)))
          for bits in (32, 64)}
 print(f'Ridge parity passed: {len(cases)} cases (Ridge, RidgeClassifier, ridge_regression; Float32/Float64; solvers '
-      f'auto/svd/cholesky/lsqr/sparse_cg/lbfgs) vs pinned sklearn {io.REVISION[:10]}; max abs error '
-      f'float64={worst[64]:.2e}, float32={worst[32]:.2e}; sag/saga refused as unported')
+      f'auto/svd/cholesky/lsqr/sparse_cg/lbfgs/sag/saga) vs pinned sklearn {io.REVISION[:10]}; max abs error '
+      f'float64={worst[64]:.2e}, float32={worst[32]:.2e}')
+print(f'Float32 SAG/SAGA convergence epoch differences: {epoch_differences}')

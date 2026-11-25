@@ -5,12 +5,15 @@
 Solvers: 'cholesky' (primal normal equations, or the kernel/dual form when
 n_features > n_samples, with sklearn's SVD/lstsq fallbacks), 'svd', 'lsqr'
 (damped LSQR), 'sparse_cg' (CG on the normal or dual operator) and 'lbfgs'
-(L-BFGS-B with nonnegativity bounds for positive=True). 'sag'/'saga' need the
-unported SAG engine and raise NotImplementedError.
+(L-BFGS-B with nonnegativity bounds for positive=True), and stochastic
+average gradients ('sag' and 'saga').
 """
-from numojo import NDArray, Shape, zeros
+from numojo import NDArray, Shape, full, zeros
+from numojo.routines.math.extrema import max as array_max
 from std.math import isfinite, sqrt, inf
 from std.utils import Variant
+from moxie._dense import row_squared_norms
+from moxie._random import check_random_state
 from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
 from moxie.linear_model._base import LinearRegressor, LinearClassifier
@@ -30,6 +33,7 @@ from moxie.linear_model._linear_base import (
     outer_gram,
     transpose_product,
 )
+from moxie.linear_model._sag import dense_sag
 from moxie.linear_model._ridge_labels import (
     ClassWeight,
     LabelEncoding,
@@ -61,6 +65,7 @@ struct RidgeSolution[dtype: DType](Movable):
     var coef: NDArray[Self.dtype]
     var n_iter: Optional[List[Int]]
     var solver: String
+    var intercept: Optional[NDArray[Self.dtype]]
 
 
 def alpha_values(alpha: ScalarOrVector) -> List[Float64]:
@@ -380,6 +385,69 @@ def _solve_lbfgs[dtype: DType](X: NDArray[dtype], Y: NDArray[dtype], alphas: Lis
     return coef^
 
 
+def _uses_sag(solver: String) -> Bool:
+    return solver == "sag" or solver == "saga"
+
+
+def _ridge_scalar_weights[dtype: DType](
+    X: NDArray[dtype], weight: Float64, solver: String,
+) raises -> NDArray[dtype]:
+    if _uses_sag(solver) and X.ndim == 2:
+        return full[dtype](Shape(X.shape[0]), Scalar[dtype](weight))
+    return scalar_weights(X, weight)
+
+
+def _solve_sag[dtype: DType](
+    X: NDArray[dtype], Y: NDArray[dtype], alphas: List[Float64], solver: String,
+    max_iter: Optional[Int], tol: Float64, sample_weight: Optional[NDArray[dtype]],
+    random_state: Optional[Int], fit_intercept: Bool,
+) raises -> RidgeSolution[dtype]:
+    var rows = X.shape[0]
+    var features = X.shape[1]
+    var outputs = Y.shape[1]
+    var epochs = max_iter.value() if max_iter else 1000
+    var max_squared_norm = Float64(array_max(row_squared_norms(X)))
+    var weights = full[DType.float64](Shape(rows), 1.0)
+    if sample_weight:
+        ref values = sample_weight.value()
+        for sample in range(rows):
+            weights.unsafe_set(sample, Float64(values.unsafe_get(sample * Int(values.strides[0]))))
+
+    var coef = zeros[dtype](Shape(outputs, features))
+    var intercept = zeros[dtype](Shape(outputs))
+    var counts = List[Int](capacity=outputs)
+    for output in range(outputs):
+        def row_gradient(
+            sample: Int, coefficients: NDArray[DType.float64], mut gradient: List[Float64],
+        ) {imm X, imm features, imm fit_intercept, imm Y, imm outputs, imm output}:
+            var score = Float64(0)
+            for j in range(features):
+                score += Float64(X.unsafe_get(sample * features + j)) * coefficients.unsafe_get(j)
+            if fit_intercept:
+                score += coefficients.unsafe_get(features)
+            gradient[0] = score - Float64(Y.unsafe_get(sample * outputs + output))
+
+        # sklearn seeds each target separately. An integer creates a new stream
+        # for each target, whereas None draws repeatedly from the global stream.
+        var seed: UInt32
+        with check_random_state(random_state) as rng:
+            seed = UInt32(rng[].randint(1, Int(Int32.MAX)))
+        var initial = zeros[DType.float64](Shape(features + Int(fit_intercept)))
+        var result = dense_sag(
+            X, weights, initial^, 1, fit_intercept, Float64(Scalar[dtype](alphas[output])),
+            0, epochs, tol, seed, solver == "saga", max_squared_norm, 1.0, row_gradient,
+        )
+        for j in range(features):
+            coef.unsafe_set(output * features + j, result.coefficients.unsafe_get(j).cast[dtype]())
+        if fit_intercept:
+            intercept.unsafe_set(output, result.coefficients.unsafe_get(features).cast[dtype]())
+        counts.append(result.iterations)
+    var fitted_intercept = Optional[NDArray[dtype]](None)
+    if fit_intercept:
+        fitted_intercept = intercept^
+    return RidgeSolution[dtype](coef^, counts^, solver, fitted_intercept^)
+
+
 def solve_ridge[
     dtype: DType
 ](
@@ -390,20 +458,24 @@ def solve_ridge[
     max_iter: Optional[Int],
     tol: Float64,
     positive: Bool,
+    sample_weight: Optional[NDArray[dtype]] = None,
+    random_state: Optional[Int] = None,
+    return_intercept: Bool = False,
 ) raises -> RidgeSolution[dtype]:
-    """Dense `_ridge_regression` core on prepared (centered, sqrt-weighted) data.
+    """Dense `_ridge_regression` core on prepared data.
 
     X is compact (samples, features), Y (samples, targets), `alphas` has one
-    entry per target and `solver` is already resolved (not 'auto').
+    entry per target and `solver` is already resolved. SAG and SAGA use raw
+    weights. Other solvers receive data already scaled by sqrt(sample_weight).
     """
+    if _uses_sag(solver):
+        return _solve_sag(X, Y, alphas, solver, max_iter, tol, sample_weight, random_state, return_intercept)
     var n = X.shape[0]
     var p = X.shape[1]
     var used = solver
     var n_iter = Optional[List[Int]](None)
     var coef = zeros[dtype](Shape(Y.shape[1], p))
-    if solver == "sag" or solver == "saga":
-        raise Error(String("NotImplementedError: Ridge solver '", solver, "' needs the SAG engine (sag_fast), which is not yet ported; use 'auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg' or 'lbfgs'"))
-    elif solver == "sparse_cg":
+    if solver == "sparse_cg":
         coef = _solve_sparse_cg(X, Y, alphas, max_iter, tol)
     elif solver == "lsqr":
         var counts = List[Int]()
@@ -424,7 +496,7 @@ def solve_ridge[
             coef = _solve_svd(X, Y, alphas)
         except error:
             raise Error(String("LinAlgError: ridge svd solver failed (", error.kind, " in ", error.operation, ")"))
-    return RidgeSolution[dtype](coef^, n_iter^, used)
+    return RidgeSolution[dtype](coef^, n_iter^, used, None)
 
 
 def _check_iteration_params(max_iter: Optional[Int], tol: Float64, owner: String, minimum: Int) raises:
@@ -438,8 +510,8 @@ def _check_iteration_params(max_iter: Optional[Int], tol: Float64, owner: String
 @fieldwise_init
 struct RidgeRegressionResult[dtype: DType](Movable):
     """ridge_regression output: coef ((features,) or (targets, features)),
-    n_iter (per target for lsqr, else None) and intercept (only with
-    return_intercept, which requires the unported 'sag')."""
+    n_iter (per target for lsqr, sag and saga) and intercept (a vector with
+    return_intercept=True)."""
 
     var coef: NDArray[Self.dtype]
     var n_iter: Optional[List[Int]]
@@ -480,14 +552,14 @@ def ridge_regression[
         raise Error("ValueError: 'lbfgs' solver can be used only when positive=True. Please use another solver.")
     if return_intercept and resolved != "sag":
         raise Error("ValueError: In Ridge, only 'sag' solver can directly fit the intercept. Please change solver to 'sag' or set return_intercept=False.")
-    var data = preprocess_data(X, y, sample_weight, False, True, owner)
+    var data = preprocess_data(X, y, sample_weight, False, not _uses_sag(resolved), owner)
     var alphas = expand_alphas(alpha, data.y.shape[1])
-    var solution = solve_ridge(data.X, data.y, alphas, resolved, max_iter, tol, positive)
+    var solution = solve_ridge(data.X, data.y, alphas, resolved, max_iter, tol, positive, sample_weight, random_state, return_intercept)
     var coef = public_coef(solution.coef, data.y.shape[1] == 1)
     var n_iter = Optional[List[Int]](None)
     if return_n_iter:
         n_iter = solution.n_iter.copy()
-    return RidgeRegressionResult[dtype](coef^, n_iter^, None)
+    return RidgeRegressionResult[dtype](coef^, n_iter^, solution.intercept.copy())
 
 
 @fieldwise_init
@@ -518,7 +590,7 @@ struct Ridge[dtype: DType = DType.float64](Copyable, LinearRegressor, WeightedSu
     Minimizes ||y - Xw||^2 + alpha ||w||^2 (sample-weighted), with one alpha or
     one per target. Learned: `coef_` ((features,) for one target, else
     (targets, features)), `intercept_` ((targets,), length one for one target),
-    `n_iter_` (per-target LSQR iterations, else None), `solver_`, `n_features_in_`.
+    `n_iter_` (per-target LSQR, SAG or SAGA iterations, else None), `solver_`, `n_features_in_`.
     """
 
     comptime Input = NDArray[Self.dtype]
@@ -626,7 +698,7 @@ struct Ridge[dtype: DType = DType.float64](Copyable, LinearRegressor, WeightedSu
         return self
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Float64) raises -> ref[self] Self:
-        self._fit(X, y, Optional(scalar_weights(X, sample_weight)))
+        self._fit(X, y, Optional(_ridge_scalar_weights(X, sample_weight, self.solver)))
         return self
 
     def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[NDArray[Self.dtype]]) raises:
@@ -634,9 +706,9 @@ struct Ridge[dtype: DType = DType.float64](Copyable, LinearRegressor, WeightedSu
         validate_alpha(self.alpha, owner)
         _check_iteration_params(self.max_iter, self.tol, owner, 1)
         var solver = _base_ridge_solver(self.solver, self.positive, owner)
-        var data = preprocess_data(X, y, sample_weight, self.fit_intercept, True, owner)
+        var data = preprocess_data(X, y, sample_weight, self.fit_intercept, not _uses_sag(solver), owner)
         var alphas = expand_alphas(self.alpha, data.y.shape[1])
-        var solution = solve_ridge(data.X, data.y, alphas, solver, self.max_iter, self.tol, self.positive)
+        var solution = solve_ridge(data.X, data.y, alphas, solver, self.max_iter, self.tol, self.positive, sample_weight, self.random_state)
         var intercept = set_intercept(solution.coef, data.X_offset, data.y_offset, data.X_scale, self.fit_intercept)
         var vector = data.y.shape[1] == 1  # sklearn ravels coef_ for a single target
         self.coef_ = public_coef(solution.coef, vector)
@@ -832,7 +904,7 @@ struct RidgeClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.
         return self
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Float64) raises -> ref[self] Self:
-        self._fit(X, y, Optional(scalar_weights(X, sample_weight)))
+        self._fit(X, y, Optional(_ridge_scalar_weights(X, sample_weight, self.solver)))
         return self
 
     def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[NDArray[Self.dtype]]) raises:
@@ -842,9 +914,10 @@ struct RidgeClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.
         var solver = _base_ridge_solver(self.solver, self.positive, owner)
         check_finite(X, "X", owner)
         var prepared = fit_classifier_targets(X, y, sample_weight, self.class_weight, owner)
-        var data = preprocess_data(X, prepared[1], Optional(prepared[2].copy()), self.fit_intercept, True, owner)
+        var weights = Optional(prepared[2].copy())
+        var data = preprocess_data(X, prepared[1], weights, self.fit_intercept, not _uses_sag(solver), owner)
         var alphas = expand_alphas(self.alpha, data.y.shape[1])
-        var solution = solve_ridge(data.X, data.y, alphas, solver, self.max_iter, self.tol, self.positive)
+        var solution = solve_ridge(data.X, data.y, alphas, solver, self.max_iter, self.tol, self.positive, weights, self.random_state)
         var intercept = set_intercept(solution.coef, data.X_offset, data.y_offset, data.X_scale, self.fit_intercept)
         self.coef_ = public_coef(solution.coef, data.y.shape[1] == 1)
         self.intercept_ = intercept^

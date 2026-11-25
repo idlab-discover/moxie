@@ -66,6 +66,9 @@
         "moxie.linear_model._least_squares": {
           "file": "src/moxie/linear_model/_least_squares.mojo"
         },
+        "moxie.linear_model._sag": {
+          "file": "src/moxie/linear_model/_sag.mojo"
+        },
         "moxie.linear_model._ridge": {
           "file": "src/moxie/linear_model/_ridge.mojo"
         },

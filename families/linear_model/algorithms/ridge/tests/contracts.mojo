@@ -109,9 +109,6 @@ def errors_and_lifecycle() raises:
     with assert_raises(contains="lbfgs"):
         var bad = Ridge(solver="lbfgs")
         bad.fit(d[0], d[1])
-    with assert_raises(contains="NotImplementedError"):
-        var bad = Ridge(solver="sag")
-        bad.fit(d[0], d[1])
     with assert_raises(contains="alpha"):
         var bad = Ridge(-1.0)
         bad.fit(d[0], d[1])
@@ -135,6 +132,40 @@ def errors_and_lifecycle() raises:
     assert_false(Bool(silent.n_iter))
     with assert_raises(contains="sag"):
         _ = ridge_regression(d[0], d[1], 1.0, return_intercept=True, solver="svd")
+
+
+def stochastic_contracts[dtype: DType]() raises:
+    var X = matrix[dtype](4, 1, [1.0, 2.0, 3.0, 4.0])
+    var y = vector[dtype]([7.0, 9.0, 11.0, 13.0])
+    var initial = ridge_regression(X, y, 1.0, return_intercept=True,
+                                   return_n_iter=True, max_iter=0, random_state=0)
+    assert_equal(initial.coef.unsafe_get(0), 0)
+    assert_equal(initial.intercept.value().shape[0], 1)
+    assert_equal(initial.intercept.value().unsafe_get(0), 0)
+    assert_equal(initial.n_iter.value()[0], 1)
+    var fitted = ridge_regression(X, y, 1.0, return_intercept=True, random_state=0, tol=1e-7)
+    assert_false(Bool(fitted.n_iter))
+    assert_almost_equal(Float64(fitted.coef.unsafe_get(0)), 5.0 / 3.0, atol=1e-4)
+    assert_almost_equal(Float64(fitted.intercept.value().unsafe_get(0)), 35.0 / 6.0, atol=1e-4)
+
+    var model = Ridge[dtype](solver="saga", random_state=17, max_iter=2)
+    _ = model.fit(X, y, sample_weight=0.5)
+    var first = model.coef_.unsafe_get(0)
+    assert_equal(model.solver_, "saga")
+    assert_equal(model.n_iter_.value()[0], 2)
+    _ = model.fit(X, y, sample_weight=vector[dtype]([0.5, 0.5, 0.5, 0.5]))
+    assert_equal(model.coef_.unsafe_get(0), first)
+    var copied = clone(model)
+    assert_false(copied.__sklearn_is_fitted__())
+    assert_equal(copied.get_params().random_state.value(), 17)
+    _ = model.set_params(solver=Optional(String("cholesky")))
+    _ = model.fit(X, y)
+    assert_false(Bool(model.n_iter_))
+
+    with assert_raises(contains="seed"):
+        _ = ridge_regression(X, y, 1.0, solver="saga", random_state=-1)
+    with assert_raises(contains="ZeroDivisionError"):
+        _ = ridge_regression(nm.zeros[dtype](Shape(4, 1)), y, 1.0, solver="sag")
 
 
 def labels_of(values: List[Int]) raises -> NDArray[DType.int64]:
@@ -227,6 +258,8 @@ def main() raises:
     solvers_agree[DType.float64]()
     shapes_and_alphas[DType.float32]()
     shapes_and_alphas[DType.float64]()
+    stochastic_contracts[DType.float32]()
+    stochastic_contracts[DType.float64]()
     errors_and_lifecycle()
     classifier()
     print("Ridge contracts passed: solver agreement, positive, shapes, per-target alpha, weights, kernel path, errors, lifecycle, classifier")

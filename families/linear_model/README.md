@@ -20,10 +20,9 @@ Compile applications with `-I builds/deps`. Focused family and child checks
 also create isolated namespaces from their live dependency manifests. Root
 `build`, `test`, and `parity` include the corresponding linear-model checks.
 
-The family is partial. ElasticNet/Lasso support cyclic and random residual solving.
-Gram precomputation raises an explicit error. Ridge supports
-auto, svd, cholesky, lsqr, sparse_cg on dense inputs, and positive lbfgs;
-sag/saga remain unimplemented. BayesianRidge supports posterior covariance
+The family is partial. ElasticNet/Lasso support cyclic and random residual and
+Gram solving. Ridge supports auto, svd, cholesky, lsqr, sparse_cg, sag, saga,
+and positive lbfgs on dense inputs. BayesianRidge supports posterior covariance
 and predictive uncertainty. LogisticRegression supports binary and multinomial
 L-BFGS, Newton-CG, Newton-Cholesky, Newton-CD-Gram, SAG and SAGA fits with
 L2 or no penalty. Newton-CD-Gram, SAGA and binary Newton-CD also support L1

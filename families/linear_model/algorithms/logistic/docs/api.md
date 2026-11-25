@@ -168,7 +168,9 @@ and `max_iter=0` returns the initialization with `n_iter_=[1]`. Moxie
 applies the dense updates eagerly in Float64, so low-bit differences and
 iteration counts can vary from sklearn's delayed updates. The row-norm
 vector retains the feature dtype. An unusable step size or nonfinite
-iterate raises a Mojo `Error` with a `ValueError` prefix.
+iterate raises a Mojo `Error` with a `ValueError` prefix. When the product
+of the step size and scaled L2 penalty is one, the error uses the
+reference's `ZeroDivisionError` prefix.
 
 LIBLINEAR uses the existing `moxie.svm._liblinear` engine. Class weights are
 applied once to sample weights, and the engine drops nonpositive effective

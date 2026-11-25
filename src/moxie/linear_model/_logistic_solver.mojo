@@ -1,5 +1,5 @@
-# Adapted from scikit-learn sklearn/linear_model/_glm/_newton_solver.py,
-# sklearn/utils/optimize.py and sklearn/linear_model/_sag_fast.pyx.tp.
+# Adapted from scikit-learn sklearn/linear_model/_glm/_newton_solver.py and
+# sklearn/utils/optimize.py.
 # Authors: The scikit-learn developers
 # Original SciPy authors: Travis Oliphant, Eric Jones
 # SPDX-License-Identifier: BSD-3-Clause
@@ -12,124 +12,40 @@ from numojo import NDArray, Shape, full, zeros
 from numojo.routines.math.extrema import max as array_max
 from moxie._dense import row_squared_norms
 from moxie._linear_linalg import IndefiniteFactor, symmetric_indefinite, symmetric_pinv
-from moxie._random import our_rand_r
+from moxie.linear_model._sag import SAGSolution, dense_sag
 from moxie.linear_model._cd_fast import coordinate_descent, coordinate_descent_gram
 from moxie.linear_model._linear_base import preprocess_data
 from moxie.linear_model._linear_loss import LogisticLoss, logistic_probability
 
 
-@fieldwise_init
-struct LogisticSolution(Movable):
-    var coefficients: NDArray[DType.float64]
-    var iterations: Int
+comptime LogisticSolution = SAGSolution
 
 
 def logistic_sag[dtype: DType](
     X: NDArray[dtype], targets: List[Int], sample_weights: NDArray[DType.float64],
     var coefficients: NDArray[DType.float64], outputs: Int, fit_intercept: Bool,
-    alpha: Float64, beta: Float64, max_iter: Int, tol: Float64, var seed: UInt32,
+    alpha: Float64, beta: Float64, max_iter: Int, tol: Float64, seed: UInt32,
     saga: Bool,
 ) raises -> LogisticSolution:
-    """Apply dense SAG or proximal SAGA updates after every sampled row."""
-    var rows = X.shape[0]
     var features = X.shape[1]
-    if rows > Int(Int32.MAX) or features > Int(Int32.MAX):
-        raise Error("ValueError: LogisticRegression SAG requires at most 2**31 - 1 samples and features")
-    var feature_parameters = features * outputs
-    var alpha_scaled = alpha / Float64(rows)
-    var beta_scaled = beta / Float64(rows)
-    var max_norm = Float64(array_max(row_squared_norms(X)))
-    var lipschitz = 0.25 * (max_norm + Float64(Int(fit_intercept))) + alpha_scaled
-    var denominator = lipschitz
-    if saga:
-        denominator = 2 * lipschitz + min(2 * alpha, lipschitz)
-    if denominator == 0 and max_iter == 0:
-        return LogisticSolution(coefficients^, 1)
-    if not (denominator > 0 and isfinite(denominator)):
-        raise Error("ValueError: LogisticRegression SAG requires a finite positive step denominator")
-    var step = 1 / denominator
-    var shrink = 1 - step * alpha_scaled
-    var threshold = step * beta_scaled
-    if shrink <= 0 or not isfinite(step) or not isfinite(threshold):
-        raise Error("ValueError: LogisticRegression SAG has an invalid step size")
-    if max_iter == 0:
-        # The pinned solver reports one epoch even when the loop is skipped.
-        return LogisticSolution(coefficients^, 1)
-    if rows > Int.MAX // 8 // outputs:
-        raise Error("ValueError: LogisticRegression SAG gradient memory size overflows")
 
-    var seen = List[Bool](length=rows, fill=False)
-    var seen_count = 0
-    var memory = zeros[DType.float64](Shape(rows * outputs))
-    var gradient_sum = zeros[DType.float64](Shape(coefficients.size))
-    var previous = zeros[DType.float64](Shape(feature_parameters))
-    var scores = List[Float64](length=outputs, fill=0)
-    var delta = List[Float64](length=outputs, fill=0)
-    for epoch in range(max_iter):
-        for _ in range(rows):
-            var sample = Int(our_rand_r(seed)) % rows
-            if not seen[sample]:
-                seen[sample] = True
-                seen_count += 1
-            var row = sample * features
-            LogisticLoss[dtype]._project_row(X, row, features, fit_intercept, coefficients, scores)
-            var target = targets[sample]
-            if outputs == 1:
-                scores[0] = -logistic_probability(-scores[0]) if target == 1 else logistic_probability(scores[0])
-            else:
-                var _, _, tail = LogisticLoss[dtype]._exp_shifted_scores(scores)
-                for k in range(outputs):
-                    scores[k] = scores[k] / (1 + tail) - Float64(Int(k == target))
-
-            var sample_weight = sample_weights.unsafe_get(sample)
+    def row_gradient(
+        sample: Int, weights: NDArray[DType.float64], mut scores: List[Float64],
+    ) {imm X, imm features, imm fit_intercept, imm targets, imm outputs}:
+        LogisticLoss[dtype]._project_row(X, sample * features, features, fit_intercept, weights, scores)
+        var target = targets[sample]
+        if outputs == 1:
+            scores[0] = -logistic_probability(-scores[0]) if target == 1 else logistic_probability(scores[0])
+        else:
+            var _, _, tail = LogisticLoss[dtype]._exp_shifted_scores(scores)
             for k in range(outputs):
-                var index = sample * outputs + k
-                var gradient = scores[k] * sample_weight
-                delta[k] = gradient - memory.unsafe_get(index)
-                memory.unsafe_set(index, gradient)
+                scores[k] = scores[k] / (1 + tail) - Float64(Int(k == target))
 
-            var average_step = step / Float64(seen_count)
-            var correction_step = step - average_step if saga else 0
-            # Dense rows touch every feature, so pending gradient and proximal
-            # steps can be applied eagerly without sklearn's sparse bookkeeping.
-            for j in range(features):
-                var value = Float64(X.unsafe_get(row + j))
-                for k in range(outputs):
-                    var index = j * outputs + k
-                    var correction = value * delta[k]
-                    var total = gradient_sum.unsafe_get(index) + correction
-                    gradient_sum.unsafe_set(index, total)
-                    var updated = shrink * coefficients.unsafe_get(index) - (
-                        average_step * total + correction_step * correction
-                    )
-                    if threshold > 0:
-                        var magnitude = abs(updated) - threshold
-                        updated = 0 if magnitude <= 0 else copysign(magnitude, updated)
-                    coefficients.unsafe_set(index, updated)
-            if fit_intercept:
-                for k in range(outputs):
-                    var index = feature_parameters + k
-                    var total = gradient_sum.unsafe_get(index) + delta[k]
-                    gradient_sum.unsafe_set(index, total)
-                    coefficients.unsafe_set(
-                        index, coefficients.unsafe_get(index) - (
-                            average_step * total + correction_step * delta[k]
-                        ),
-                    )
-
-        var max_change = Float64(0)
-        var max_coefficient = Float64(0)
-        for j in range(coefficients.size):
-            var coefficient = coefficients.unsafe_get(j)
-            if not isfinite(coefficient):
-                raise Error("ValueError: LogisticRegression SAG encountered nonfinite coefficients; scale the features")
-            if j < feature_parameters:
-                max_coefficient = max(max_coefficient, abs(coefficient))
-                max_change = max(max_change, abs(coefficient - previous.unsafe_get(j)))
-                previous.unsafe_set(j, coefficient)
-        if max_change == 0 or (max_coefficient > 0 and max_change / max_coefficient <= tol):
-            return LogisticSolution(coefficients^, epoch + 1)
-    return LogisticSolution(coefficients^, max_iter)
+    return dense_sag(
+        X, sample_weights, coefficients^, outputs, fit_intercept, alpha, beta,
+        max_iter, tol, seed, saga, Float64(array_max(row_squared_norms(X))),
+        0.25, row_gradient,
+    )
 
 
 def logistic_lbfgs[dtype: DType](

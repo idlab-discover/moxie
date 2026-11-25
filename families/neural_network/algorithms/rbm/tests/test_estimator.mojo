@@ -50,8 +50,17 @@ def check[dtype: DType]() raises:
         online.partial_fit(X)
         assert_equal(online.n_features_in_, 3)
     else:
-        with assert_raises():
-            model.partial_fit(X)
+        var online = BernoulliRBM[dtype](2, batch_size=2, random_state=42)
+        with assert_raises(contains="BernoulliRBM[float64]"):
+            online.partial_fit(X)
+        assert_equal(online.__sklearn_is_fitted__(), False)
+        var rng_position = rng.state_position()
+        with assert_raises(contains="BernoulliRBM[float64]"):
+            online.partial_fit(X, rng)
+        assert_equal(rng.state_position(), rng_position)
+        model.partial_fit(X)
+        assert_equal(model.components_.shape, Shape(2, 3))
+        assert_equal(model.h_samples_.shape, Shape(2, 2))
 
 
 def errors[dtype: DType]() raises:
@@ -108,9 +117,10 @@ def errors[dtype: DType]() raises:
     var names = model.get_feature_names_out(three^)
     assert_equal(len(names), 2)
     assert_equal(names[0], "bernoullirbm0")
-    comptime if dtype == DType.float64:
-        with assert_raises(contains="feature"):
-            model.partial_fit(zeros[dtype](Shape(2, 4)))
+    with assert_raises(contains="feature"):
+        model.partial_fit(zeros[dtype](Shape(2, 4)))
+    with assert_raises(contains="finite"):
+        model.partial_fit(bad)
     # A failed fit validation leaves the fitted state usable, as in sklearn.
     var params = model.get_params()
     params.n_components = 0
@@ -119,9 +129,21 @@ def errors[dtype: DType]() raises:
     assert_equal(model.components_.shape[0], 2)
 
 
+def check_promoted_input() raises:
+    var X = zeros[DType.float32](Shape(5, 3))
+    var model = BernoulliRBM[DType.float64](2, batch_size=2, random_state=42)
+    model.partial_fit(X)
+    assert_equal(model.components_.shape, Shape(2, 3))
+    assert_equal(model.h_samples_.shape, Shape(2, 2))
+    assert_equal(model.get_n_features_in(), 3)
+    with assert_raises(contains="feature"):
+        model.partial_fit(zeros[DType.float32](Shape(1, 2)))
+
+
 def main() raises:
     errors[DType.float64]()
     errors[DType.float32]()
     check[DType.float64]()
     check[DType.float32]()
-    print("PASS implemented estimator contracts; Float32 partial_fit remains unfinished")
+    check_promoted_input()
+    print("PASS RBM estimator contracts including Float32 incremental input")

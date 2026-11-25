@@ -11,8 +11,8 @@ Before changing estimator behavior, read [scope](docs/scope.md),
 [the numerical policy](../../shared/numerics/docs/numerics.md).
 Use the live core dense storage and RNG owners. Python is validation tooling only.
 
-Run `pixi run neural-network-check` from the Moxie root before committing.
-This checks the supported subset; full MLP training and Float32 RBM incremental
-promotion remain unfinished. Preserve those explicit exclusions.
+Validate the affected estimator and its direct compositions before committing.
+Use the focused commands in [validation](docs/validation.md).
+See [scope](docs/scope.md) for current coverage.
 Historical family guidance, including the changes present before integration,
 is retained in [provenance](provenance/source-AGENTS.md).

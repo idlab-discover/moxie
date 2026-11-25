@@ -50,7 +50,6 @@ def main():
     compile_file(ROOT, ROOT/'tests/kernel_dump.mojo', 'kernel_dump')
     compile_file(ROOT, ROOT/'tests/test_estimator.mojo', 'test_estimator')
     compile_file(ROOT, ROOT/'examples/rbm.mojo', 'example')
-    compile_file(ROOT, ROOT/'tests/repro_float32_partial_fit.mojo', 'repro_float32_partial_fit')
     if action == 'test':
         run(ROOT/'builds/test_kernels')
         run(ROOT/'builds/test_estimator')

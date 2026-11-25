@@ -1,4 +1,5 @@
 import numojo as nm
+from moxie.compose import ColumnEntry, ColumnTransformer
 from std.math import nan, inf, isnan
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
@@ -15,6 +16,21 @@ def check[dtype: DType]() raises:
     selector.fit_named(X, None, [String("a"), String("b"), String("c"), String("d")])
     assert_equal(selector.n_features_in_(), 4)
     assert_equal(selector.get_feature_names_out()[0], "b")
+    assert_equal(selector.get_feature_names_out(List[String]()), ["b", "c"])
+    with assert_raises(contains="length mismatch"):
+        _ = selector.get_feature_names_out(Optional[List[String]](List[String]()))
+    with assert_raises(contains="differ from fit"):
+        _ = selector.get_feature_names_out(Optional[List[String]](["bad", "b", "c", "d"]))
+    var composer = ColumnTransformer(
+        ColumnEntry[VarianceThreshold[dtype], dtype]("variance", VarianceThreshold[dtype](), [3, 2, 0, 1]),
+    )
+    assert_equal(composer.fit_transform(X).shape[1], 2)
+    assert_equal(composer.get_feature_names_out(), ["variance__x2", "variance__x1"])
+    assert_equal(
+        composer.get_feature_names_out(Optional[List[String]](["a", "b", "c", "d"])),
+        ["variance__c", "variance__b"],
+    )
+    var snapshot = selector.copy()
     assert_equal(selector.get_support(True)[List[Int]][1], 2)
     var selected: nm.NDArray[dtype] = selector.transform(X)
     assert_equal(selected.shape[1], 2)
@@ -30,6 +46,8 @@ def check[dtype: DType]() raises:
     _ = selector.set_params(threshold=0.4)
     assert_equal(selector.transform(X).shape[1], 1)
     _ = selector.set_params(threshold=100)
+    assert_equal(snapshot.get_feature_names_out(), ["b", "c"])
+    assert_equal(len(selector.get_feature_names_out()), 0)
     assert_equal(selector.transform(X).shape[1], 0)
     _ = selector.set_params(threshold=0)
     var constant = nm.ones[dtype](nm.Shape(3, 4))

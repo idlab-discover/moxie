@@ -75,6 +75,14 @@ struct SelectionState(Copyable, Movable):
                     result.append("x" + String(j))
         return result^
 
+    def get_feature_names_out(self, input_features: Optional[List[String]]) raises -> List[String]:
+        if input_features:
+            ref names = input_features.value()
+            if len(names) != self.n_features():
+                raise Error("ValueError: input feature names length mismatch")
+            return self.get_feature_names_out(names)
+        return self.get_feature_names_out()
+
     def transform[dtype: DType](self, x: nm.NDArray[dtype]) raises -> nm.NDArray[dtype]:
         comptime assert dtype == DType.float32 or dtype == DType.float64
         self.check()

@@ -1,4 +1,5 @@
-"""Compare native univariate selector names with the pinned sklearn source."""
+"""Compare dense selector feature-name mapping with the pinned sklearn source."""
+import argparse
 import ast
 import json
 import subprocess
@@ -39,9 +40,56 @@ def mojo_names(names):
     return f"List[String]({json.dumps(list(names))})" if len(names) else "List[String]()"
 
 
-def main():
-    namespace = oracle()
-    names_out = reference_names(namespace)
+def compare_selection_state(names_out):
+    source = [
+        "from std.testing import assert_equal, assert_raises",
+        "from moxie.feature_selection import SelectionState",
+        "",
+        "def main() raises:",
+        "    var state = SelectionState()",
+    ]
+    comparisons = 0
+    names = ["north", "west", "east", "south"]
+    for mask in ([True, False, True, False], [False] * 4):
+        native_mask = json.dumps(mask).replace("true", "True").replace("false", "False")
+        ref = SimpleNamespace(n_features_in_=4, get_support=lambda: np.asarray(mask))
+        source.append(f"    state.commit({native_mask})")
+        for supplied in (None, names, []):
+            argument = optional_names(supplied)
+            try:
+                expected = mojo_names(names_out(ref, supplied))
+            except ValueError:
+                source.extend([
+                    '    with assert_raises(contains="length mismatch"):',
+                    f"        _ = state.get_feature_names_out({argument})",
+                ])
+            else:
+                source.append(f"    assert_equal(state.get_feature_names_out({argument}), {expected})")
+            comparisons += 1
+
+        ref.feature_names_in_ = np.asarray(names)
+        source.append(f"    state.commit({native_mask}, {mojo_names(names)})")
+        for supplied in (None, names, ["north", "wrong", "east", "south"]):
+            argument = optional_names(supplied)
+            try:
+                expected = mojo_names(names_out(ref, supplied))
+            except ValueError:
+                source.extend([
+                    '    with assert_raises(contains="differ from fit"):',
+                    f"        _ = state.get_feature_names_out({argument})",
+                ])
+            else:
+                source.append(f"    assert_equal(state.get_feature_names_out({argument}), {expected})")
+            comparisons += 1
+
+    compile_comparisons("selection-state-names-parity", source, comparisons)
+
+
+def optional_names(names):
+    return "None" if names is None else f"Optional[List[String]]({mojo_names(names)})"
+
+
+def compare_univariate(namespace, names_out):
     variants = (
         ("SelectKBest", "k=2", "SelectKBest", {"k": 2}),
         ("SelectKBest", "k=0", "SelectKBest", {"k": 0}),
@@ -86,7 +134,7 @@ def main():
                 f"    _ = {selector}.fit(x_{dt}, y_{dt}.copy())",
             ])
             for supplied in (None, names):
-                argument = "None" if supplied is None else f"Optional[List[String]]({mojo_names(supplied)})"
+                argument = optional_names(supplied)
                 expected = mojo_names(names_out(reference, supplied))
                 source.append(f"    assert_equal({selector}.get_feature_names_out({argument}), {expected})")
                 comparisons += 1
@@ -98,13 +146,29 @@ def main():
             ])
             comparisons += 1
 
+    compile_comparisons("univariate-names-parity", source, comparisons)
+
+
+def compile_comparisons(name, source, comparisons):
     build = ROOT / "builds"
-    program = build / "univariate-names-parity.mojo"
-    binary = build / "univariate-names-parity"
+    program = build / f"{name}.mojo"
+    binary = build / name
     program.write_text("\n".join(source) + "\n")
     run("mojo", "build", "-O3", "-I", build / "deps", program, "-o", binary)
     run(binary)
     print(f"PASS {comparisons} exact feature-name comparisons against sklearn {REV}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--selection-state", action="store_true")
+    args = parser.parse_args()
+    namespace = oracle()
+    names_out = reference_names(namespace)
+    if args.selection_state:
+        compare_selection_state(names_out)
+    else:
+        compare_univariate(namespace, names_out)
 
 
 if __name__ == "__main__":

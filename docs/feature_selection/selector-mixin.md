@@ -42,7 +42,9 @@ return True. Like sklearn's tag, that override disables both finite checks.
 `inverse_transform` always requires finite nonempty input and inserts zeros.
 An empty support mask transforms to shape `(n_samples, 0)`; inverse transformation
 of a zero-column matrix raises. Noncontiguous input is supported and dtype is
-preserved. Empty name lists mean omitted names.
+preserved. A bare empty `List[String]()` means omitted names. The mixin
+implements the composition `FeatureNamesOut` trait, where `None` selects
+learned or generated names and a supplied list must match the fitted width.
 
 Sparse storage, arbitrary Python dtypes/containers, `set_output`, metadata routing
 and Python warnings are outside the accepted scope. The mixin does not emit a

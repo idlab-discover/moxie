@@ -40,11 +40,19 @@ Transform with an all-false mask returns (n,0). Python warning transport is not
 available: callers can inspect `selected_count()==0`; no warning is emitted by
 this primitive. No implicit array coercion or promotion is provided.
 
-`get_feature_names_out(input_features=[])` returns owned selected strings.
-An empty list means omitted names (native adaptation); otherwise length must
-match p and names must equal fitted names when present. Omitted names use fitted
-names or generated `x0`, `x1`, … . Native String lists replace Python object arrays.
+`get_feature_names_out()` returns owned selected strings from fitted names or
+generates `x0`, `x1`, and so on. Every built-in selector implements the native
+`FeatureNamesOut` trait used by `ColumnTransformer`. An explicit
+`Optional[List[String]]` containing a list must match the fitted input width,
+including when that list is empty. Supplied names must match fitted names
+when present. A bare empty `List[String]()` retains the native shorthand for
+omitting names. Native String lists replace Python object arrays.
 Errors use Mojo Error with NotFittedError/ValueError prefixes.
+`VarianceThreshold` and `SelectFromModel` support independent fitted snapshots
+via `copy()`. Their configuration clones remain unfitted.
+
+Run `python tests/feature_selection/univariate/parity_names.py --selection-state`
+to check the shared mapping and optional-list validation against pinned sklearn.
 
 `moxie.feature_selection._contracts` defines:
 

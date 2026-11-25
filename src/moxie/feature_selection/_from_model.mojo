@@ -1,6 +1,7 @@
 # Adapted from scikit-learn; SPDX-License-Identifier: BSD-3-Clause
 """Dense selection by fitted model importances; no model optimization lives here."""
 import numojo as nm
+from moxie._feature_metadata import FeatureNamesOut
 from std.utils import Variant
 from std.math import isnan, isfinite, inf, nan, floor
 from moxie.base import FitTransformer, IncrementalTransformer
@@ -109,7 +110,7 @@ struct SelectFromModelParams[E: SelectionEstimator, L: FeatureLimitPolicy](Copya
     var max_features: Self.L
     var importance_getter: String
 
-struct SelectFromModel[E: SelectionEstimator, L: FeatureLimitPolicy = MaxFeatures](UnsupervisedSelector, FitTransformer, IncrementalTransformer where conforms_to(E, IncrementalSelectionEstimator)):
+struct SelectFromModel[E: SelectionEstimator, L: FeatureLimitPolicy = MaxFeatures](UnsupervisedSelector, FitTransformer, Copyable, FeatureNamesOut, IncrementalTransformer where conforms_to(E, IncrementalSelectionEstimator)):
     comptime Input = nm.NDArray[Self.E.dtype]
     comptime Target = Self.E.Target
     comptime Transformed = Self.Input
@@ -267,7 +268,10 @@ struct SelectFromModel[E: SelectionEstimator, L: FeatureLimitPolicy = MaxFeature
         _ = self.fit(X, y)
         return self.transform(X)
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
+        return self._selected().get_feature_names_out(input_features)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         return self._selected().get_feature_names_out(input_features)
 
     def estimator_(self) raises -> Self.E:

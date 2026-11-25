@@ -1,4 +1,5 @@
 import numojo as nm
+from moxie._feature_metadata import FeatureNamesOut
 from moxie.linear_model import Lasso
 from moxie.feature_selection._sequential import SequentialFeatureSelector, SequentialCV, SequentialCount
 from moxie.feature_selection._sequential_adapter import DenseSupervisedCV, EstimatorCVScore
@@ -88,7 +89,11 @@ def controls() raises:
     var names: List[String] = ["a", "b", "c", "d", "e"]
     s.fit_named(X, y.copy(), names, fit_metadata=Optional[Dense](weights.copy()), score_metadata=Optional[Dense](weights.copy()))
     assert_equal(s.feature_names_in_(), names)
+    comptime assert conforms_to(type_of(s), FeatureNamesOut)
     assert_equal(s.get_feature_names_out()[2], "c")
+    assert_equal(s.get_feature_names_out(List[String]()), s.get_feature_names_out())
+    with assert_raises(contains="length mismatch"):
+        _ = s.get_feature_names_out(Optional[List[String]](List[String]()))
     var transformed = s.transform(X)
     transformed.unsafe_set(0, -99)
     assert_equal(X.unsafe_get(0), Float64(0))

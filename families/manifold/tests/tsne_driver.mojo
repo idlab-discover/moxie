@@ -1,13 +1,30 @@
 """Native t-SNE entry points used by the pinned sklearn comparison."""
 from std.sys import argv
+from std.math import abs
 from numojo import NDArray, Shape, zeros
 from moxie.manifold import TSNE, TSNEMetricParams
 from moxie.manifold._t_sne import (
     _gradient_descent, _joint_probabilities, _kl_divergence, _neighbor_probabilities, _squared_distances,
 )
 from moxie.manifold._barnes_hut_tsne import _barnes_hut_objective
+from moxie.neighbors._distance import at
 
 from trustworthiness_driver import read_matrix
+
+
+def weighted_distance[dtype: DType](
+    X: NDArray[dtype], i: Int, Y: NDArray[dtype], j: Int,
+) raises -> Float64:
+    var distance: Float64 = 0
+    for feature in range(X.shape[1]):
+        distance += Float64(feature + 1) * abs(at(X, i, feature) - at(Y, j, feature))
+    return distance
+
+
+def callback_params[dtype: DType](metric: String) -> Optional[TSNEMetricParams[dtype]]:
+    if metric == "callable":
+        return TSNEMetricParams[dtype](distance=weighted_distance[dtype])
+    return None
 
 
 def write_array[dtype: DType](array: NDArray[dtype]):
@@ -30,6 +47,7 @@ def fit[input_dtype: DType, output_dtype: DType]() raises:
         angle = Float64(String(args[16]))
     var model = TSNE[input_dtype, output_dtype](
         components, method=method, angle=angle, perplexity=perplexity, metric=metric,
+        metric_params=callback_params[input_dtype](metric),
         max_iter=Int(String(args[8])), early_exaggeration=Float64(String(args[9])),
         min_grad_norm=minimum_gradient, n_iter_without_progress=Int(String(args[12])),
         random_state=Int(String(args[13])),
@@ -53,7 +71,7 @@ def pairwise[input_dtype: DType]() raises:
     var args = argv()
     var X = read_matrix[input_dtype](String(args[3]))
     var metric = String(args[4])
-    var params: Optional[TSNEMetricParams[input_dtype]] = None
+    var params = callback_params[input_dtype](metric)
     if len(args) > 5:
         params = TSNEMetricParams[input_dtype](p=Float64(String(args[5])))
     write_array(_squared_distances(X, metric, params))

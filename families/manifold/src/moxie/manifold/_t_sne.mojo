@@ -11,6 +11,7 @@ from moxie._random import check_random_state
 from moxie.decomposition._pca import PCA
 from moxie.manifold._base import EmbeddingEstimator
 from moxie.manifold._barnes_hut_tsne import _Pair, _merge_neighbor_probabilities, _barnes_hut_objective
+from moxie.neighbors._contracts import DenseMetric
 from moxie.neighbors._distance import Metric, at, metric_power
 from moxie.neighbors._query_engine import BruteForce
 from moxie.manifold._plumbing import validate_matrix, validate_pairwise
@@ -88,6 +89,26 @@ comptime _CHECK_INTERVAL = 50
 comptime _MAX_FLOAT64 = 1.7976931348623157e308
 comptime _LearningRate = Variant[String, Float64]
 comptime _Init[dtype: DType] = Variant[String, NDArray[dtype]]
+comptime _DistanceCallback[dtype: DType] = def(
+    NDArray[dtype], Int, NDArray[dtype], Int,
+) thin raises -> Float64
+
+
+@fieldwise_init
+struct _CallableDistance[input_dtype: DType](DenseMetric):
+    comptime dtype = Self.input_dtype
+    var callback: _DistanceCallback[Self.dtype]
+
+    def validate_features(self, n_features: Int) raises:
+        pass
+
+    def distance(
+        self, x: NDArray[Self.dtype], i: Int, y: NDArray[Self.dtype], j: Int,
+    ) raises -> Float64:
+        var distance = self.callback(x, i, y, j)
+        if not isfinite(distance) or distance < 0:
+            raise Error("ValueError: TSNE metric callback must return a finite nonnegative distance")
+        return distance
 
 
 struct TSNEMetricParams[dtype: DType](Copyable, Movable):
@@ -98,17 +119,20 @@ struct TSNEMetricParams[dtype: DType](Copyable, Movable):
     var V: Optional[NDArray[Self.dtype]]
     var VI: Optional[NDArray[Self.dtype]]
     var missing_values: Optional[Float64]
+    var distance: Optional[_DistanceCallback[Self.dtype]]
 
     def __init__(out self, *, p: Optional[Float64] = None,
                  w: Optional[NDArray[Self.dtype]] = None,
                  V: Optional[NDArray[Self.dtype]] = None,
                  VI: Optional[NDArray[Self.dtype]] = None,
-                 missing_values: Optional[Float64] = None):
+                 missing_values: Optional[Float64] = None,
+                 distance: Optional[_DistanceCallback[Self.dtype]] = None):
         self.p = p
         self.w = w.copy()
         self.V = V.copy()
         self.VI = VI.copy()
         self.missing_values = missing_values
+        self.distance = distance
 
 
 @fieldwise_init
@@ -456,12 +480,31 @@ def _metric[dtype: DType](
     )
 
 
+def _metric_callback[dtype: DType](
+    name: String, options: Optional[TSNEMetricParams[dtype]],
+) raises -> Optional[_DistanceCallback[dtype]]:
+    if options:
+        ref params = options.value()
+        if params.distance:
+            if name != "callable" or params.p or params.w or params.V or params.VI or params.missing_values:
+                raise Error("ValueError: metric_params do not match the selected metric")
+            return params.distance
+    if name == "callable":
+        raise Error("ValueError: metric='callable' requires metric_params.distance")
+    return None
+
+
 def _squared_distances[dtype: DType](
     X: NDArray[dtype], name: String, options: Optional[TSNEMetricParams[dtype]],
 ) raises -> NDArray[DType.float32]:
+    var callback = _metric_callback(name, options)
+    if callback:
+        return _symmetric_squared_distances(
+            _CallableDistance[dtype](callback.value()), X, name,
+        )
     var n = X.shape[0]
-    var squared = zeros[DType.float32](Shape(n, n))
     if name == "precomputed":
+        var squared = zeros[DType.float32](Shape(n, n))
         validate_pairwise(X, nonnegative=True, symmetric=False)
         for i in range(n):
             for j in range(n):
@@ -476,13 +519,23 @@ def _squared_distances[dtype: DType](
     var kernel = _metric(name, options, squared_euclidean=True)
     kernel.validate_features(X.shape[1])
     kernel = kernel.self_query_metric(X)
+    return _symmetric_squared_distances(kernel, X, name)
+
+
+def _symmetric_squared_distances[M: DenseMetric](
+    kernel: M, X: NDArray[M.dtype], name: String,
+) raises -> NDArray[DType.float32]:
+    var n = X.shape[0]
+    var squared = zeros[DType.float32](Shape(n, n))
+    var callable_metric = name == "callable"
+    var round_before_squaring = callable_metric or name == "l2" or name == "cosine" or name == "nan_euclidean"
     for i in range(n):
-        for j in range(i + 1, n):
+        for j in range(i if callable_metric else i + 1, n):
             var distance = kernel.distance(X, i, X, j)
             var value = Float32(distance)
-            if name == "l2" or name == "cosine" or name == "nan_euclidean":
+            if round_before_squaring:
                 # These sklearn kernels return Float32 for Float32 inputs.
-                var rounded = distance.cast[dtype]()
+                var rounded = distance.cast[M.dtype]()
                 value = Float32(rounded * rounded)
             elif name != "euclidean":
                 value = Float32(distance * distance)
@@ -541,12 +594,23 @@ def _neighbor_probabilities[dtype: DType](
     X: NDArray[dtype], name: String, options: Optional[TSNEMetricParams[dtype]],
     perplexity: Float64, verbose: Int = 0,
 ) raises -> List[_Pair]:
-    var n = X.shape[0]
-    var k = min(n - 1, Int(3 * perplexity + 1))
+    var callback = _metric_callback(name, options)
+    if callback:
+        return _metric_neighbor_probabilities(
+            _CallableDistance[dtype](callback.value()), X, False, perplexity, verbose,
+        )
     var precomputed = name == "precomputed"
     if precomputed:
         validate_pairwise(X, nonnegative=True, symmetric=False)
     var kernel = _metric("euclidean" if precomputed else name, options)
+    return _metric_neighbor_probabilities(kernel, X, precomputed, perplexity, verbose)
+
+
+def _metric_neighbor_probabilities[M: DenseMetric & Deinitable](
+    kernel: M, X: NDArray[M.dtype], precomputed: Bool, perplexity: Float64, verbose: Int,
+) raises -> List[_Pair]:
+    var n = X.shape[0]
+    var k = min(n - 1, Int(3 * perplexity + 1))
     var search = BruteForce(kernel, precomputed=precomputed)
     search.fit(X)
     if verbose:

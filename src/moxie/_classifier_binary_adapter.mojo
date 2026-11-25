@@ -1,4 +1,4 @@
-"""Dense binary target bridge for classifiers using numeric List labels."""
+"""Dense binary target bridge for classifiers using List labels."""
 
 import numojo as nm
 from moxie._classifier_targets import NumericListTarget
@@ -11,6 +11,7 @@ from moxie.base import (
     clone,
 )
 from moxie._multiclass_contracts import PairwiseInput, pairwise_input
+from moxie.dummy import Label as DummyLabel
 
 
 struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
@@ -23,7 +24,7 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
     ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
     LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
 ):
-    """Adapt rank-one Int64 binary codes to the classifier's numeric List labels.
+    """Adapt rank-one Int64 binary codes to the classifier's native List labels.
 
     Use codes 0/1 for class indicators or -1/+1 for signed margins. Input
     features, sample weights, decisions and probabilities use the component's
@@ -40,13 +41,14 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
     comptime Probabilities where conforms_to(Self.E, ProbabilityPredictor) = Self.E.Probabilities
 
     comptime _domain = NumericListTarget[Self.E.Target]
-    comptime _label = Self._domain.Label
+    comptime _uses_dummy_labels = Self.E.Target == List[DummyLabel]
+    comptime _label = DummyLabel if Self._uses_dummy_labels else Self._domain.Label
 
     var estimator: Self.E
 
     def __init__(out self, var estimator: Self.E):
-        comptime assert Self._domain.supported, (
-            "BinaryAdapter requires List[Int], List[Int64], List[Float32] or List[Float64] targets"
+        comptime assert Self._domain.supported or Self._uses_dummy_labels, (
+            "BinaryAdapter requires List[Int], List[Int64], List[Float32], List[Float64] or List[moxie.dummy.Label] targets"
         )
         comptime assert Self.E.Prediction == Self.E.Target, (
             "BinaryAdapter requires prediction and target types to match"
@@ -84,7 +86,10 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
                 raise Error("ValueError: expected binary codes 0/1 or -1/+1")
             signed = signed or code == -1
             zero = zero or code == 0
-            labels.append(Self._domain.from_array_label(code))
+            comptime if Self._uses_dummy_labels:
+                labels.append(rebind_var[Self._label](DummyLabel(Int(code))))
+            else:
+                labels.append(rebind_var[Self._label](Self._domain.from_array_label(code)))
         if signed and zero:
             raise Error("ValueError: expected binary codes 0/1 or -1/+1")
         return labels^
@@ -120,7 +125,14 @@ struct BinaryAdapter[E: ClassifierMixin & Copyable & Deinitable](
         var labels = rebind_var[List[Self._label]](self.estimator.predict(X))
         var result = Self.Prediction(nm.Shape(len(labels)))
         for i in range(len(labels)):
-            var code = Self._domain.as_float64(labels[i])
+            var code: Float64
+            comptime if Self._uses_dummy_labels:
+                ref label = rebind[DummyLabel](labels[i])
+                if label.kind != 0:
+                    raise Error("ValueError: component predicted a non-integer label")
+                code = Float64(label.integer)
+            else:
+                code = Self._domain.as_float64(rebind[Self._domain.Label](labels[i]))
             if code != -1 and code != 0 and code != 1:
                 raise Error("ValueError: component predicted a value outside the binary codes")
             result[nm.Item(i)] = code.cast[DType.int64]()

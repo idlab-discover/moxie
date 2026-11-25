@@ -296,6 +296,9 @@
         "moxie.calibration": {
           "file": "src/moxie/calibration.mojo"
         },
+        "moxie.calibration_serialization": {
+          "file": "src/moxie/calibration_serialization.mojo"
+        },
         "moxie._calibration_adapter": {
           "file": "src/moxie/_calibration_adapter.mojo"
         },

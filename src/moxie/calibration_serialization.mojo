@@ -1,0 +1,419 @@
+# SPDX-License-Identifier: BSD-3-Clause
+"""Experimental native persistence for calibration with dense LinearSVC."""
+
+from numojo import Item, Shape
+from std.math import isfinite
+from std.utils import Variant
+from ._calibration_algorithms import Array, _IsotonicCalibration, _SigmoidCalibration
+from ._calibration_cv import (
+    CalibratedClassifierCV,
+    _CalibratedClassifier,
+    _DefaultCalibrationEstimator,
+)
+from ._calibration_estimator import _adapt_linear_svc, validate_integral_labels
+from ._calibration_splits import CalibrationCV, CalibrationSplit
+from .isotonic_serialization import IsotonicRegressionSchema
+from .model_selection import KFold, LeaveOneOut, StratifiedKFold
+from .serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema
+from .svm.linear_serialization import LinearSVCSchema
+
+
+def _write_optional_int(mut writer: BinaryWriter, value: Optional[Int]):
+    writer.boolean(Bool(value))
+    if value:
+        writer.integer(value.or_else(0))
+
+
+def _read_optional_int(mut reader: BinaryReader[_]) raises -> Optional[Int]:
+    if reader.boolean():
+        return reader.integer()
+    return None
+
+
+def _write_indices(mut writer: BinaryWriter, indices: List[Int]):
+    writer.uint(UInt64(len(indices)))
+    for index in indices:
+        writer.integer(index)
+
+
+def _read_indices(mut reader: BinaryReader[_]) raises -> List[Int]:
+    var count = reader.count(max(0, reader.remaining() - 8) // 8)
+    var indices = List[Int](capacity=count)
+    for _ in range(count):
+        indices.append(reader.integer())
+    return indices^
+
+
+def _write_cv(mut writer: BinaryWriter, cv: CalibrationCV):
+    if cv.isa[type_of(None)]():
+        writer.uint(0)
+    elif cv.isa[Int]():
+        writer.uint(1)
+        writer.integer(cv[Int])
+    elif cv.isa[List[CalibrationSplit]]():
+        writer.uint(2)
+        ref splits = cv[List[CalibrationSplit]]
+        writer.uint(UInt64(len(splits)))
+        for split in splits:
+            _write_indices(writer, split.train)
+            _write_indices(writer, split.test)
+    elif cv.isa[KFold]():
+        writer.uint(3)
+        ref splitter = cv[KFold]
+        writer.integer(splitter.n_splits)
+        writer.boolean(splitter.shuffle)
+        _write_optional_int(writer, splitter.random_state)
+    elif cv.isa[StratifiedKFold]():
+        writer.uint(4)
+        ref splitter = cv[StratifiedKFold]
+        writer.integer(splitter.n_splits)
+        writer.boolean(splitter.shuffle)
+        _write_optional_int(writer, splitter.random_state)
+    else:
+        writer.uint(5)
+
+
+def _read_cv(mut reader: BinaryReader[_]) raises -> CalibrationCV:
+    var kind = reader.count(5)
+    if kind == 0:
+        return None
+    if kind == 1:
+        return reader.integer()
+    if kind == 2:
+        var count = reader.count(max(0, reader.remaining() - 8) // 16)
+        var splits = List[CalibrationSplit](capacity=count)
+        for _ in range(count):
+            splits.append(
+                CalibrationSplit(_read_indices(reader), _read_indices(reader))
+            )
+        return splits^
+    if kind == 5:
+        return LeaveOneOut()
+    var folds = reader.integer()
+    var shuffle = reader.boolean()
+    var seed = _read_optional_int(reader)
+    if kind == 3:
+        return KFold(folds, shuffle=shuffle, random_state=seed)
+    return StratifiedKFold(folds, shuffle=shuffle, random_state=seed)
+
+
+def _write_child(
+    mut writer: BinaryWriter,
+    mut archive: ModelArchive,
+    prefix: String,
+    var child: ModelArchive,
+) raises:
+    child.validate()
+    writer.string(child.type_id)
+    writer.integer(child.schema_version)
+    writer.bytes(Span(child.manifest))
+    writer.uint(UInt64(len(child.payloads)))
+    while len(child.payloads) > 0:
+        var payload = child.payloads.pop(0)
+        payload.name = prefix + payload.name
+        archive.payloads.append(payload^)
+
+
+def _read_child(
+    mut reader: BinaryReader[_],
+    archive: ModelArchive,
+    prefix: String,
+    mut array_index: Int,
+) raises -> ModelArchive:
+    var child = ModelArchive(reader.string(4096), reader.integer())
+    child.manifest.extend(reader.bytes(reader.remaining()))
+    var count = reader.count(len(archive.payloads) - array_index)
+    for _ in range(count):
+        var payload = archive.payloads[array_index].copy()
+        if not payload.name.startswith(prefix):
+            raise Error("ModelSchemaError: unexpected calibration child array")
+        var local_name = String(payload.name.removeprefix(prefix))
+        payload.name = local_name^
+        child.payloads.append(payload^)
+        array_index += 1
+    return child^
+
+
+def _write_classes(mut archive: ModelArchive, name: String, classes: Array) raises:
+    var values = List[Float64](capacity=classes.size)
+    for i in range(classes.size):
+        values.append(classes.item(i))
+    var shape: List[Int] = [len(values)]
+    archive.add_array[DType.float64](name, shape, values)
+
+
+def _read_classes(
+    archive: ModelArchive, name: String, mut array_index: Int
+) raises -> Array:
+    if array_index == len(archive.payloads):
+        raise Error("ModelSchemaError: missing calibration class array")
+    ref payload = archive.payloads[array_index]
+    if payload.name != name or len(payload.shape) != 1:
+        raise Error("ModelSchemaError: invalid calibration class array")
+    var values = payload.values[DType.float64]()
+    var classes = Array(Shape(len(values)))
+    for i in range(len(values)):
+        classes[Item(i)] = values[i]
+    array_index += 1
+    return classes^
+
+
+def _validate_classes(classes: Array) raises:
+    if classes.ndim != 1:
+        raise Error("ModelSchemaError: calibration classes must be a vector")
+    for i in range(classes.size):
+        if not isfinite(classes.item(i)):
+            raise Error("ModelSchemaError: calibration classes must be finite")
+        if i > 0 and classes.item(i) <= classes.item(i - 1):
+            raise Error(
+                "ModelSchemaError: calibration classes must be sorted and unique"
+            )
+    validate_integral_labels(classes)
+
+
+comptime _Pair = _CalibratedClassifier[_DefaultCalibrationEstimator]
+
+
+def _check_pair(pair: _Pair, classes: Array, features: Int) raises:
+    if pair.estimator.estimator().n_features_in_ != features:
+        raise Error("ModelSchemaError: calibration child feature count mismatch")
+    var child_classes = pair.estimator.class_labels()
+    _validate_classes(child_classes)
+    var positions = List[Int](capacity=child_classes.size)
+    var index = 0
+    for i in range(child_classes.size):
+        var label = child_classes.item(i)
+        while index < classes.size and classes.item(index) < label:
+            index += 1
+        if index == classes.size or classes.item(index) != label:
+            raise Error("ModelSchemaError: unknown calibration child class")
+        positions.append(index)
+    if pair.classes.ndim != 1 or pair.classes.size != classes.size:
+        raise Error("ModelSchemaError: calibration child classes mismatch")
+    for i in range(classes.size):
+        if pair.classes.item(i) != classes.item(i):
+            raise Error("ModelSchemaError: calibration child classes mismatch")
+    if pair.method == "temperature":
+        if (
+            child_classes.size != classes.size
+            or pair.temperature.n_classes_ != classes.size
+            or not isfinite(pair.temperature.beta_)
+            or pair.temperature.beta_ <= 0
+            or len(pair.class_indices) != 0
+            or len(pair.sigmoid) != 0
+            or len(pair.isotonic) != 0
+        ):
+            raise Error("ModelSchemaError: invalid temperature calibration state")
+        return
+
+    var count = 1 if child_classes.size == 2 else child_classes.size
+    if len(pair.class_indices) != count:
+        raise Error("ModelSchemaError: incorrect number of calibration columns")
+    for i in range(count):
+        var expected = 1 if classes.size == 2 else positions[i]
+        if pair.class_indices[i] != expected:
+            raise Error("ModelSchemaError: calibration column order mismatch")
+    if pair.method == "sigmoid":
+        if len(pair.sigmoid) != count or len(pair.isotonic) != 0:
+            raise Error("ModelSchemaError: incorrect number of sigmoid calibrators")
+        for sigmoid in pair.sigmoid:
+            if (
+                not sigmoid.fitted
+                or not isfinite(sigmoid.a_)
+                or not isfinite(sigmoid.b_)
+            ):
+                raise Error("ModelSchemaError: invalid sigmoid coefficients")
+    elif pair.method == "isotonic":
+        if len(pair.isotonic) != count or len(pair.sigmoid) != 0:
+            raise Error("ModelSchemaError: incorrect number of isotonic calibrators")
+        for isotonic in pair.isotonic:
+            ref model = isotonic._model
+            if (
+                not model.__sklearn_is_fitted__()
+                or not model.increasing_
+                or model.out_of_bounds != "clip"
+                or model._bounds_error
+                or isotonic.X_thresholds_.ndim != 1
+                or isotonic.y_thresholds_.ndim != 1
+                or len(model.X_thresholds_) != isotonic.X_thresholds_.size
+                or len(model.y_thresholds_) != isotonic.y_thresholds_.size
+            ):
+                raise Error("ModelSchemaError: invalid isotonic calibration state")
+            for i in range(len(model.X_thresholds_)):
+                var probability = model.y_thresholds_[i]
+                if (
+                    probability < 0
+                    or probability > 1
+                    or model.X_thresholds_[i] != isotonic.X_thresholds_.item(i)
+                    or probability != isotonic.y_thresholds_.item(i)
+                ):
+                    raise Error(
+                        "ModelSchemaError: invalid isotonic calibration thresholds"
+                    )
+    else:
+        raise Error("ModelSchemaError: unknown fitted calibration method")
+
+
+def _encode_estimator(adapter: _DefaultCalibrationEstimator) raises -> ModelArchive:
+    if not adapter._builtin_linear_svc_reader:
+        raise Error(
+            "ModelSchemaError: calibration requires the built-in LinearSVC adapter"
+        )
+    return LinearSVCSchema[].encode(adapter.estimator())
+
+
+def _write_pair(
+    mut writer: BinaryWriter,
+    mut archive: ModelArchive,
+    pair: _Pair,
+    prefix: String,
+) raises:
+    writer.string(pair.method)
+    _write_classes(archive, prefix + "classes_", pair.classes)
+    _write_child(
+        writer, archive, prefix + "estimator/", _encode_estimator(pair.estimator)
+    )
+    if pair.method == "temperature":
+        writer.scalar[DType.float64](pair.temperature.beta_)
+        writer.integer(pair.temperature.n_classes_)
+        return
+    _write_indices(writer, pair.class_indices)
+    if pair.method == "sigmoid":
+        for sigmoid in pair.sigmoid:
+            writer.scalar[DType.float64](sigmoid.a_)
+            writer.scalar[DType.float64](sigmoid.b_)
+    else:
+        for i in range(len(pair.isotonic)):
+            _write_child(
+                writer,
+                archive,
+                prefix + "isotonic/" + String(i) + "/",
+                IsotonicRegressionSchema[].encode(pair.isotonic[i]._model),
+            )
+
+
+def _read_pair(
+    mut reader: BinaryReader[_],
+    archive: ModelArchive,
+    prefix: String,
+    mut array_index: Int,
+) raises -> _Pair:
+    var method = reader.string(reader.remaining())
+    if method != "sigmoid" and method != "isotonic" and method != "temperature":
+        raise Error("ModelSchemaError: unknown fitted calibration method")
+    var classes = _read_classes(archive, prefix + "classes_", array_index)
+    var estimator = _adapt_linear_svc(
+        LinearSVCSchema[].decode(
+            _read_child(reader, archive, prefix + "estimator/", array_index)
+        )
+    )
+    var pair = _Pair(estimator^, classes^, method.copy())
+    if method == "temperature":
+        pair.temperature.beta_ = reader.scalar[DType.float64]()
+        pair.temperature.n_classes_ = reader.integer()
+        return pair^
+    pair.class_indices = _read_indices(reader)
+    if method == "sigmoid":
+        for _ in range(len(pair.class_indices)):
+            var sigmoid = _SigmoidCalibration()
+            sigmoid.a_ = reader.scalar[DType.float64]()
+            sigmoid.b_ = reader.scalar[DType.float64]()
+            sigmoid.fitted = True
+            pair.sigmoid.append(sigmoid^)
+    elif method == "isotonic":
+        for i in range(len(pair.class_indices)):
+            var isotonic = _IsotonicCalibration()
+            isotonic._model = IsotonicRegressionSchema[].decode(
+                _read_child(
+                    reader, archive, prefix + "isotonic/" + String(i) + "/", array_index
+                )
+            )
+            ref model = isotonic._model
+            isotonic.X_thresholds_ = Array(Shape(len(model.X_thresholds_)))
+            isotonic.y_thresholds_ = Array(Shape(len(model.y_thresholds_)))
+            for j in range(len(model.X_thresholds_)):
+                isotonic.X_thresholds_[Item(j)] = model.X_thresholds_[j]
+                isotonic.y_thresholds_[Item(j)] = model.y_thresholds_[j]
+            pair.isotonic.append(isotonic^)
+    return pair^
+
+
+struct CalibratedClassifierCVSchema(ModelSchema):
+    """Version 1 for the built-in dense LinearSVC calibration adapter."""
+
+    comptime Model = CalibratedClassifierCV[]
+    comptime TypeId = "moxie.calibration.CalibratedClassifierCV.LinearSVC"
+    comptime StateVersion = 1
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        _validate_classes(model.classes_)
+        var count = len(model.calibrated_classifiers_)
+        Self._check_state(model.n_features_in_, model.classes_.size, count)
+
+        var archive = ModelArchive(Self.TypeId, Self.StateVersion)
+        var writer = BinaryWriter()
+        writer.string(model.method)
+        _write_cv(writer, model.cv)
+        _write_optional_int(writer, model.n_jobs)
+        writer.boolean(model.ensemble.isa[Bool]())
+        if model.ensemble.isa[Bool]():
+            writer.boolean(model.ensemble[Bool])
+        else:
+            writer.string(model.ensemble[String])
+        writer.integer(model.n_features_in_)
+        writer.uint(UInt64(count))
+
+        _write_classes(archive, "classes_", model.classes_)
+        _write_child(writer, archive, "estimator/", _encode_estimator(model.estimator))
+        for i in range(count):
+            ref pair = model.calibrated_classifiers_[i]
+            _check_pair(pair, model.classes_, model.n_features_in_)
+            _write_pair(writer, archive, pair, "fold/" + String(i) + "/")
+        archive.manifest = writer^.finish()
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self.TypeId, Self.StateVersion)
+        archive.validate()
+        var array_index = 0
+        var classes = _read_classes(archive, "classes_", array_index)
+        _validate_classes(classes)
+        var reader = BinaryReader(Span(archive.manifest))
+        var method = reader.string(reader.remaining())
+        var cv = _read_cv(reader)
+        var n_jobs = _read_optional_int(reader)
+        var ensemble: Variant[Bool, String]
+        if reader.boolean():
+            ensemble = reader.boolean()
+        else:
+            ensemble = reader.string(reader.remaining())
+        var features = reader.integer()
+        var count = reader.count((len(archive.payloads) - array_index) // 3)
+        Self._check_state(features, classes.size, count)
+
+        var child = _read_child(reader, archive, "estimator/", array_index)
+        var estimator = _adapt_linear_svc(LinearSVCSchema[].decode(child))
+        var model = Self.Model(
+            estimator^, method=method^, cv=cv^, n_jobs=n_jobs, ensemble=ensemble^
+        )
+        for i in range(count):
+            var pair = _read_pair(
+                reader, archive, "fold/" + String(i) + "/", array_index
+            )
+            _check_pair(pair, classes, features)
+            model.calibrated_classifiers_.append(pair^)
+        reader.finish()
+        if array_index != len(archive.payloads):
+            raise Error("ModelSchemaError: unexpected calibration arrays")
+        model.classes_ = classes^
+        model.n_features_in_ = features
+        return model^
+
+    @staticmethod
+    def _check_state(features: Int, classes: Int, count: Int) raises:
+        if (count == 0 and (features != 0 or classes != 0)) or (
+            count > 0 and (features < 1 or classes < 2)
+        ):
+            raise Error("ModelSchemaError: invalid calibration fitted state")

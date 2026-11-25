@@ -1,5 +1,9 @@
-"""Dense multioutput ownership and layout helpers; no estimator engine."""
+"""Ownership, layout, and scheduling helpers for dense multioutput estimators."""
+from std.sys import num_logical_cores
+
+from max.algorithm import parallelize
 import numojo as nm
+
 from moxie.base import BaseEstimator, clone
 
 
@@ -17,6 +21,58 @@ def clone_outputs[E: BaseEstimator & Deinitable](estimator: E, count: Int) raise
     for _ in range(count):
         result.append(clone(estimator))
     return result^
+
+
+def output_workers(n_jobs: Optional[Int], outputs: Int) raises -> Int:
+    """Resolve joblib-style worker counts against native logical cores."""
+    var jobs = n_jobs.or_else(1)
+    if jobs == 0:
+        raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
+    if jobs < 0:
+        jobs = max(1, num_logical_cores() + 1 + jobs)
+    return min(outputs, jobs)
+
+
+def fit_outputs[E: Movable, F: def(mut E, Int) raises -> None](
+    mut models: List[E], fit_one: F, workers: Int,
+) raises:
+    """Fit disjoint models and report the first error in column order."""
+    if workers <= 1:
+        for column in range(len(models)):
+            fit_one(models[column], column)
+        return
+
+    var errors = List[Optional[Error]](length=len(models), fill=None)
+    var model_ptr = models.unsafe_ptr()
+    var error_ptr = errors.unsafe_ptr()
+
+    # MAX joins before either list can move. Each task has exclusive access
+    # to its own model and error slot, and shared inputs are borrowed.
+    def work(column: Int) {model_ptr, error_ptr, fit_one}:
+        try:
+            fit_one(model_ptr[unsafe_offset=column], column)
+        except error:
+            error_ptr[unsafe_offset=column] = error^
+
+    parallelize(work, len(models), workers)
+    for column in range(len(errors)):
+        if errors[column]:
+            raise errors[column].take()
+
+
+def partial_fit_outputs[
+    E: BaseEstimator & Deinitable, F: def(mut E, Int) raises -> None
+](
+    mut models: List[E], estimator: E, first_fit: Bool, outputs: Int,
+    fit_one: F, workers: Int,
+) raises:
+    """Publish first-batch models only after every component has fitted."""
+    if first_fit:
+        var fresh = clone_outputs(estimator, outputs)
+        fit_outputs(fresh, fit_one, workers)
+        models = fresh^
+    else:
+        fit_outputs(models, fit_one, workers)
 
 
 struct ChainOrder(Copyable, Movable):

@@ -270,7 +270,7 @@ def main() raises:
     var Y = targets[DType.float64]()
     var w = weights()
 
-    var regressor = MultiOutputRegressor(Ridge(0.5))
+    var regressor = MultiOutputRegressor(Ridge(0.5), n_jobs=2)
     with assert_raises(contains="NotFittedError"):
         _ = regressor.predict(X)
     var first = regressor.fit(X, Y).predict(X)
@@ -301,7 +301,7 @@ def main() raises:
     # Float64 wrapper weights are narrowed for Float32 components.
     var X32 = features[DType.float32]()
     var Y32 = targets[DType.float32]()
-    var narrow = MultiOutputRegressor[Ridge[DType.float32], DType.float32](Ridge[DType.float32](0.5))
+    var narrow = MultiOutputRegressor[Ridge[DType.float32], DType.float32](Ridge[DType.float32](0.5), n_jobs=2)
     parity("ComponentsRidge32Weighted", narrow.fit(X32, Y32, sample_weight=w).predict(X32))
     var chain32 = RegressorChain[Ridge[DType.float32], DType.float32](Ridge[DType.float32](0.5), order=List[Int]([2, 0, 1]))
     parity("ComponentsRegressorChain32Weighted", chain32.fit(X32, Y32, sample_weight=w).predict(X32))

@@ -29,10 +29,9 @@ original sample order.
   Float32 or Float64 parameter. Targets are numeric NDArray matrices; numeric
   classification labels retain their dtype. String/object labels are not yet
   supported and are not converted to floats.
-- Independent execution is serial. `n_jobs` follows joblib: `0` raises
-  `n_jobs == 0 in Parallel has no meaning`; every other value fits the
-  components one after another, which gives the same model as sklearn's
-  parallel fit. Sparse inputs remain deferred.
+- Independent fits use native CPU threads. The [API](api-surface.md)
+  describes worker counts, ordering and failure behavior. Sparse inputs
+  remain deferred.
 - Random chain order uses `random_order=True`, with an optional integer
   `random_state`. Mutable RNG objects and response-method preference lists
   are not supported.
@@ -72,10 +71,10 @@ reused layout helpers.
 
 ## Validation
 
-Moxie root `pixi run build` compiles the assembled package, contract tests, estimator tests,
-examples and two isolated consumers. `pixi run test` executes them and checks
-namespace conflicts, live-source provenance and missing required capabilities.
-`pixi run parity` compares predictions with the recorded local sklearn module,
+The [multioutput test guide](README.md) lists scoped contract and parity
+commands. The contract checks include isolated consumers, live-source
+provenance and missing required capabilities. The parity runner compares
+predictions with the recorded local sklearn module,
 including chains with two-fold out-of-fold responses. It also compares
 independent and chain probabilities, chain log probabilities and probability
 feature responses, seeded chain order, subset accuracy, weighted accuracy,

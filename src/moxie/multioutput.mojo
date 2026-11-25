@@ -11,7 +11,11 @@ from moxie.base import (BaseEstimator, SupervisedEstimator, Predictor, Probabili
 from moxie._labels import encode_column
 from moxie.dummy import Label
 from moxie._multioutput_contracts import MultiOutputClassifierAPI, MultiOutputRegressorAPI, MultiOutputProbability
-from moxie._multioutput import validate_targets, clone_outputs, target_column, stack_predictions, augment_features, ChainOrder, ChainResponses
+from moxie._multioutput import (
+    validate_targets, clone_outputs, target_column, stack_predictions,
+    augment_features, ChainOrder, ChainResponses, output_workers, fit_outputs,
+    partial_fit_outputs,
+)
 from moxie._random import RandomState, entropy_state
 from moxie.model_selection import IndexSplit, KFold, StratifiedKFold
 from moxie.model_selection._indices import IndexArray, SplitCursor
@@ -588,24 +592,26 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         _features(X)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() == 0:
-            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
+        var workers = output_workers(self.n_jobs, y.shape[1])
         var models = clone_outputs(self.estimator, y.shape[1])
-        for j in range(y.shape[1]):
+
+        def fit_one(mut model: Self.E, j: Int) raises {X, y, sample_weight}:
             var target = target_column(y, j)
             ref input = X
             if sample_weight:
                 comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
                     comptime if Self.E.SampleWeight == NDArray[DType.float32]:
                         var narrow = sample_weight.value().astype[DType.float32]()
-                        _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target), sample_weight=rebind[Self.E.SampleWeight](narrow))
+                        _ = model.fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target), sample_weight=rebind[Self.E.SampleWeight](narrow))
                     else:
                         comptime assert Self.E.SampleWeight == Self.SampleWeight, "component sample weights must be Float32 or Float64 NDArrays"
-                        _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target), sample_weight=rebind[Self.E.SampleWeight](sample_weight.value()))
+                        _ = model.fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target), sample_weight=rebind[Self.E.SampleWeight](sample_weight.value()))
                 else:
                     raise Error("ValueError: component does not support sample weights")
             else:
-                _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target))
+                _ = model.fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target))
+
+        fit_outputs(models, fit_one, workers)
         self.estimators_ = models^
         self.n_features_in_ = X.shape[1]
 
@@ -628,15 +634,18 @@ struct MultiOutputRegressor[E: SupervisedEstimator & Predictor & Deinitable, dty
         _features(X, self.n_features_in_)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() == 0:
-            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
-        if self.__sklearn_is_fitted__() and y.shape[1] != len(self.estimators_):
+        var workers = output_workers(self.n_jobs, y.shape[1])
+        var first_fit = not self.__sklearn_is_fitted__()
+        if not first_fit and y.shape[1] != len(self.estimators_):
             raise Error("ValueError: partial_fit output count differs from fit")
-        if not self.__sklearn_is_fitted__():
-            self.estimators_ = clone_outputs(self.estimator, y.shape[1])
-        for j in range(y.shape[1]):
+
+        def fit_one(mut model: Self.E, j: Int) raises {X, y}:
             var column = target_column(y, j)
-            _ = self.estimators_[j].partial_fit(rebind[Self.E.Input](X), rebind[Self.E.Target](column))
+            _ = model.partial_fit(rebind[Self.E.Input](X), rebind[Self.E.Target](column))
+
+        partial_fit_outputs(
+            self.estimators_, self.estimator, first_fit, y.shape[1], fit_one, workers,
+        )
         self.n_features_in_ = X.shape[1]
         return self
 
@@ -715,15 +724,21 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         _features(X)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() == 0:
-            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
+        var workers = output_workers(self.n_jobs, y.shape[1])
         var models = clone_outputs(self.estimator, y.shape[1])
-        var classes = List[NDArray[Self.label]]()
-        for j in range(y.shape[1]):
+        var class_slots = List[Optional[Self.Target]](length=y.shape[1], fill=None)
+        var class_ptr = class_slots.unsafe_ptr()
+
+        def fit_one(mut model: Self.E, j: Int) raises {X, y, sample_weight, class_ptr}:
             var target = target_column(y, j)
-            classes.append(_classes(target))
-            ref input = X
-            _fit_component(models[j], input, target, sample_weight)
+            # Each fit owns the class slot for its target column.
+            class_ptr[unsafe_offset=j] = _classes(target)
+            _fit_component(model, X, target, sample_weight)
+
+        fit_outputs(models, fit_one, workers)
+        var classes = List[Self.Target]()
+        for j in range(len(class_slots)):
+            classes.append(class_slots[j].take())
         self.estimators_ = models^
         self.classes_ = classes^
         self.n_features_in_ = X.shape[1]
@@ -763,23 +778,28 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         _features(X, self.n_features_in_)
         validate_targets(y, X.shape[0])
         _finite(y)
-        if self.n_jobs and self.n_jobs.value() == 0:
-            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
-        if self.__sklearn_is_fitted__() and y.shape[1] != len(self.estimators_):
+        var workers = output_workers(self.n_jobs, y.shape[1])
+        var first_fit = not self.__sklearn_is_fitted__()
+        if not first_fit and y.shape[1] != len(self.estimators_):
             raise Error("ValueError: partial_fit output count differs from fit")
         if classes and len(classes.value()) != y.shape[1]:
             raise Error("ValueError: supply one class vector per output")
-        if not self.__sklearn_is_fitted__() and not classes:
+        if first_fit and not classes:
             raise Error("ValueError: first partial_fit requires classes for every output")
-        if not self.__sklearn_is_fitted__():
-            self.estimators_ = clone_outputs(self.estimator, y.shape[1])
-        for j in range(y.shape[1]):
+
+        var values = List[Self.Target]()
+        if classes:
+            ref class_vectors = classes.value()
+            for j in range(y.shape[1]):
+                values.append(_classes(class_vectors[j]))
+
+        def fit_one(mut model: Self.E, j: Int) raises {X, y, classes}:
             var column = target_column(y, j)
             comptime if Self.E.Target == Self.Target:
                 var known: Optional[Self.Target] = None
                 if classes:
                     known = classes.value()[j].copy()
-                _ = self.estimators_[j].partial_fit(
+                _ = model.partial_fit(
                     rebind[Self.E.Input](X), rebind[Self.E.Target](column),
                     rebind[Optional[Self.E.Classes]](known),
                 )
@@ -791,14 +811,15 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
                 if classes:
                     known = _list_target[NativeLabel, Self.label](classes.value()[j])
                 var native_column = _list_target[NativeLabel, Self.label](column)
-                _ = self.estimators_[j].partial_fit(
+                _ = model.partial_fit(
                     rebind[Self.E.Input](X), rebind[Self.E.Target](native_column),
                     rebind[Optional[Self.E.Classes]](known),
                 )
+
+        partial_fit_outputs(
+            self.estimators_, self.estimator, first_fit, y.shape[1], fit_one, workers,
+        )
         if classes:
-            var values = List[Self.Target]()
-            for j in range(y.shape[1]):
-                values.append(_classes(classes.value()[j]))
             self.classes_ = values^
         self.n_features_in_ = X.shape[1]
         return self

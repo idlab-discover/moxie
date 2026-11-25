@@ -103,7 +103,7 @@ def main() raises:
     parity["ComponentsGaussianNBChainProba"](bayes_chain.predict_proba(X))
 
     var integer_targets = multiclass.astype[DType.int64]()
-    var list_bayes = MultiOutputClassifier(GaussianNB())
+    var list_bayes = MultiOutputClassifier(GaussianNB(), n_jobs=2)
     with assert_raises(contains="first partial_fit requires classes"):
         _ = list_bayes.partial_fit(X, integer_targets)
     _ = list_bayes.fit(X, integer_targets, sample_weight=weights)

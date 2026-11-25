@@ -200,11 +200,11 @@ def main() raises:
     var L = data[2].copy()
     var splits = folds(30)
 
-    var mor = MOR(Ridge(2.0))
+    var mor = MOR(Ridge(2.0), n_jobs=2)
     var mor_expected = List[Float64]()
     var rchain = RChain(Ridge(2.0), order=List[Int]([1, 0]))
     var rchain_expected = List[Float64]()
-    var moc = MOC(RidgeClassifier(2.0))
+    var moc = MOC(RidgeClassifier(2.0), n_jobs=2)
     var moc_expected = List[Float64]()
     var cchain = CChain(RidgeClassifier(2.0), order=List[Int]([1, 0]))
     var cchain_expected = List[Float64]()

@@ -109,7 +109,7 @@ def components(module, np):
     multiclass = np.column_stack([binary[:, 0], i % 2, i % 3]).astype(np.int64)
     w = (i % 4 + 1).astype(float)
     out = {}
-    regressor = module.MultiOutputRegressor(Ridge(alpha=0.5)).fit(X, Y)
+    regressor = module.MultiOutputRegressor(Ridge(alpha=0.5), n_jobs=2).fit(X, Y)
     out['ComponentsRidge'] = regressor.predict(X).ravel().tolist()
     out['ComponentsRidgeScore'] = [regressor.score(X, Y)]
     regressor.fit(X, Y, sample_weight=w)
@@ -117,7 +117,7 @@ def components(module, np):
     out['ComponentsRidgeWeightedScore'] = [regressor.score(X, Y, sample_weight=w)]
     out['ComponentsRidgeAlpha10'] = module.MultiOutputRegressor(Ridge(alpha=10.0)).fit(X, Y).predict(X).ravel().tolist()
     X32, Y32 = X.astype(np.float32), Y.astype(np.float32)
-    narrow = module.MultiOutputRegressor(Ridge(alpha=0.5)).fit(X32, Y32, sample_weight=w)
+    narrow = module.MultiOutputRegressor(Ridge(alpha=0.5), n_jobs=2).fit(X32, Y32, sample_weight=w)
     out['ComponentsRidge32Weighted'] = narrow.predict(X32).ravel().tolist()
     chain32 = module.RegressorChain(Ridge(alpha=0.5), order=[2, 0, 1]).fit(X32, Y32, sample_weight=w)
     out['ComponentsRegressorChain32Weighted'] = chain32.predict(X32).ravel().tolist()
@@ -250,8 +250,8 @@ def classifier_components(module, np):
             GaussianNB().set_fit_request(sample_weight=True), chain_method='predict_proba',
         ).fit(X, binary, sample_weight=weights)
     integer_targets = multiclass.astype(np.int64)
-    list_bayes = module.MultiOutputClassifier(GaussianNB()).fit(X, integer_targets, sample_weight=weights)
-    incremental = module.MultiOutputClassifier(GaussianNB())
+    list_bayes = module.MultiOutputClassifier(GaussianNB(), n_jobs=2).fit(X, integer_targets, sample_weight=weights)
+    incremental = module.MultiOutputClassifier(GaussianNB(), n_jobs=2)
     incremental.partial_fit(X[:6], integer_targets[:6], classes=list_bayes.classes_)
     incremental.partial_fit(X[6:], integer_targets[6:])
     list_chain = module.ClassifierChain(GaussianNB(), chain_method='predict_proba', cv=3).fit(

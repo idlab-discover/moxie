@@ -1395,6 +1395,62 @@ def _stratify(stratify: SplitLabels, n: Int) raises -> IndexArray:
     return stratify.stratify_codes()
 
 
+def _collection_size[dtype: DType](arrays: List[NDArray[dtype]]) raises -> Int:
+    if len(arrays) == 0:
+        raise Error("ValueError: train_test_split requires at least one array")
+    var n_samples = 0
+    for i in range(len(arrays)):
+        ref input = arrays[i]
+        if input.ndim != 1 and input.ndim != 2:
+            raise Error("ValueError: expected rank-one or rank-two dense inputs")
+        if i == 0:
+            n_samples = input.shape[0]
+        elif input.shape[0] != n_samples:
+            raise Error("ValueError: inconsistent sample counts")
+    return n_samples
+
+
+def _split_collection[dtype: DType](
+    arrays: List[NDArray[dtype]], n_samples: Int, mut rng: RandomState,
+    test_size: Optional[SplitSize], train_size: Optional[SplitSize],
+    shuffle: Bool, stratify: Optional[SplitLabels],
+) raises -> List[NDArray[dtype]]:
+    var codes: Optional[IndexArray] = None
+    if stratify:
+        codes = _stratify(stratify.value(), n_samples)
+    var pair = _train_test_indices(n_samples, rng, test_size, train_size, shuffle, codes)
+    var result = List[NDArray[dtype]](capacity=2 * len(arrays))
+    for i in range(len(arrays)):
+        result.append(_rows(arrays[i], pair.train))
+        result.append(_rows(arrays[i], pair.test))
+    return result^
+
+
+def train_test_split[dtype: DType](
+    arrays: List[NDArray[dtype]], mut rng: RandomState, *,
+    test_size: Optional[SplitSize] = None, train_size: Optional[SplitSize] = None,
+    shuffle: Bool = True, stratify: Optional[SplitLabels] = None,
+) raises -> List[NDArray[dtype]]:
+    """Split a collection of same-dtype arrays with a single set of indices."""
+    return _split_collection(
+        arrays, _collection_size(arrays), rng, test_size, train_size, shuffle, stratify,
+    )
+
+
+def train_test_split[dtype: DType](
+    arrays: List[NDArray[dtype]], *,
+    test_size: Optional[SplitSize] = None, train_size: Optional[SplitSize] = None,
+    random_state: Optional[Int] = None, shuffle: Bool = True,
+    stratify: Optional[SplitLabels] = None,
+) raises -> List[NDArray[dtype]]:
+    """Return owned train/test arrays interleaved in input order."""
+    var n_samples = _collection_size(arrays)
+    var rng = _seed(random_state, shuffle)
+    return _split_collection(
+        arrays, n_samples, rng, test_size, train_size, shuffle, stratify,
+    )
+
+
 def _row_strings(values: List[String], indices: IndexArray) raises -> List[String]:
     var result = List[String]()
     for i in range(indices.size):

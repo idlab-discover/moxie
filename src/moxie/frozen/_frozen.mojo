@@ -39,6 +39,83 @@ trait _FrozenIdentity(BaseEstimator):
         ...
 
 
+comptime _SliceBound[bound: Int] = (
+    2 if bound >= 2 else (1 if bound == -1 else (0 if bound < 0 else bound))
+)
+
+
+struct FrozenPipelineSlice[
+    Parent: PipelineSteps & Copyable & Deinitable,
+    start: Int,
+    stop: Int,
+](Sized):
+    """An immutable view of a contiguous range of frozen pipeline steps."""
+
+    comptime _size = Self.stop - Self.start if Self.stop > Self.start else 0
+    comptime Selected = Self.Parent if Self._size == 2 else Self.Parent.StepAt[Self.start]
+    comptime Input where conforms_to(Self.Selected, InputEstimator) = Self.Selected.Input
+    comptime Transformed where conforms_to(Self.Selected, TransformerMixin) = Self.Selected.Transformed
+    comptime Prediction where conforms_to(Self.Selected, Predictor) = Self.Selected.Prediction
+    comptime Probabilities where conforms_to(Self.Selected, ProbabilityPredictor) = Self.Selected.Probabilities
+
+    var _parent: Self.Parent
+
+    def __init__(out self, var parent: Self.Parent):
+        comptime assert 0 <= Self.start and Self.start <= 2, "invalid pipeline slice start"
+        comptime assert 0 <= Self.stop and Self.stop <= 2, "invalid pipeline slice stop"
+        self._parent = parent^
+
+    def __len__(self) -> Int:
+        return Self._size
+
+    def step[origin: ImmOrigin, //, index: Int](ref[origin] self) -> ref[self._parent] Self.Parent.StepAt[
+        Self.start + (index + Self._size if index < 0 else index)
+    ]:
+        """Borrow the selected step at a position relative to this slice."""
+        comptime position = index + Self._size if index < 0 else index
+        comptime assert 0 <= position and position < Self._size, "pipeline slice step index out of range"
+        return self._parent.step[Self.start + position]()
+
+    def named_step[origin: ImmOrigin, //, Step: BaseEstimator](
+        ref[origin] self, name: StringSpan,
+    ) raises -> ref[self._parent] Step:
+        """Borrow a step by its original name and concrete type."""
+        var index = self._parent._step_index(name)
+        if index < Self.start or index >= Self.stop:
+            raise Error(t"KeyError: no pipeline slice step named '{name}'")
+        return self._parent.named_step[Step](name)
+
+    def estimator[origin: ImmOrigin](ref[origin] self) -> ref[origin] Self.Selected where Self._size > 0:
+        """Borrow the estimator that executes this slice."""
+        comptime if Self._size == 2:
+            return rebind[ImmPointer[Self.Selected, origin]](Pointer(to=self._parent))[]
+        else:
+            return rebind[ImmPointer[Self.Selected, origin]](
+                Pointer(to=self._parent.step[Self.start]())
+            )[]
+
+    def __sklearn_is_fitted__(self) -> Bool:
+        comptime if Self._size > 0:
+            return self.estimator().__sklearn_is_fitted__()
+        else:
+            return True
+
+    def transform(
+        self, X: Self.Input,
+    ) raises -> Self.Transformed where Self._size > 0 and conforms_to(Self.Selected, TransformerMixin):
+        return self.estimator().transform(X)
+
+    def predict(
+        self, X: Self.Input,
+    ) raises -> Self.Prediction where Self._size > 0 and conforms_to(Self.Selected, Predictor):
+        return self.estimator().predict(X)
+
+    def predict_proba(
+        self, X: Self.Input,
+    ) raises -> Self.Probabilities where Self._size > 0 and conforms_to(Self.Selected, ProbabilityPredictor):
+        return self.estimator().predict_proba(X)
+
+
 @fieldwise_init
 struct FrozenParams[E: BaseEstimator & Deinitable](Copyable, Movable):
     """Only the estimator handle; deep traversal never exposes inner params."""
@@ -149,6 +226,17 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
         Self.E, PipelineSteps
     ):
         return self._estimator[]._step_index(name)
+
+    def slice[start: Int = 0, stop: Int = 2, stride: Int = 1](
+        self,
+    ) -> FrozenPipelineSlice[
+        Self, _SliceBound[start], _SliceBound[stop]
+    ] where conforms_to(Self.E, PipelineSteps):
+        """Share a read-only half-open range with Python-style bound clipping."""
+        comptime assert stride == 1, "pipeline slicing only supports a step of 1"
+        return FrozenPipelineSlice[
+            Self, _SliceBound[start], _SliceBound[stop]
+        ](self.copy())
 
     def named_transformers_[T: TransformerMixin & Copyable & Deinitable](
         self, name: String,

@@ -34,6 +34,8 @@ def test(run, executable):
         ('step_bounds', "pipeline step index out of range"),
         ('step_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
         ('named_step_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
+        ('slice_stride', "pipeline slicing only supports a step of 1"),
+        ('slice_mutation', "operand mutability 'False' doesn't match expected mutability 'True'"),
     ]:
         result = subprocess.run(
             ['mojo', 'build', '-I', str(DEPS), '-I', str(TESTS), '-I', str(EXAMPLES),

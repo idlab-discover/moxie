@@ -227,13 +227,49 @@ def frozen_pipeline_steps() raises:
     for value in predictions:
         print("composition_step_prediction", value)
 
+    var prefix_slice = nested.slice[stop=-1]()
+    var final_slice = cloned.slice[-1, 99]()
+    var full_slice = clone(frozen).slice[-99, 99]()
+    var empty_slice = frozen.slice[2, 0]()
+    assert_equal(len(prefix_slice), 1)
+    assert_equal(len(final_slice), 1)
+    assert_equal(len(full_slice), 2)
+    assert_equal(len(empty_slice), 0)
+    assert_true(empty_slice.__sklearn_is_fitted__())
+    assert_false(unfitted.slice[stop=1]().__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = unfitted.slice[stop=1]().transform(X)
+    assert_true(Pointer(to=prefix_slice.step[-1]()) == Pointer(to=prefix))
+    assert_true(Pointer(to=final_slice.named_step[LDA]("lineardiscriminantanalysis")) == Pointer(to=final_step))
+    assert_true(Pointer(to=full_slice.step[-1]()) == Pointer(to=final_step))
+    with assert_raises(contains="KeyError"):
+        _ = prefix_slice.named_step[LDA]("lineardiscriminantanalysis")
+    with assert_raises(contains="KeyError"):
+        _ = empty_slice.named_step[StandardScaler[]](prefix_name)
+    var sliced_scaled = prefix_slice.transform(X)
+    var sliced_predictions = final_slice.predict(sliced_scaled)
+    var sliced_probabilities = final_slice.predict_proba(sliced_scaled)
+    assert_same(sliced_scaled, scaled)
+    assert_equal(sliced_predictions, full_slice.predict(X))
+    assert_same(sliced_probabilities, full_slice.predict_proba(X))
+    _ = frozen.set_params(estimator=make_pipeline(StandardScaler(), LDA()))
+    assert_false(frozen.__sklearn_is_fitted__())
+    assert_equal(full_slice.predict(X), sliced_predictions)
+    print("composition_slice_lengths", len(prefix_slice), len(final_slice), len(full_slice), len(empty_slice))
+    for i in range(sliced_scaled.size):
+        print("composition_slice_scaled", sliced_scaled.item(i))
+    for value in sliced_predictions:
+        print("composition_slice_prediction", value)
+    for i in range(sliced_probabilities.size):
+        print("composition_slice_probability", sliced_probabilities.item(i))
+
     var transformers = make_pipeline(StandardScaler(), MinMaxScaler())
     _ = transformers.fit(X)
     var frozen_transformers = FrozenEstimator(transformers^)
     var first = frozen_transformers.step[-2]().transform(X)
     assert_same(
         frozen_transformers.step[1]().transform(first),
-        frozen_transformers.transform(X),
+        frozen_transformers.slice[]().transform(X),
     )
 
     var two_scalers = make_pipeline(StandardScaler(), StandardScaler())

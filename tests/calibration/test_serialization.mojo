@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-"""Fitted and unfitted native files for LinearSVC calibration."""
+"""Fitted and unfitted native files for LinearSVC and SVC calibration."""
 import numojo as nm
 from std.testing import assert_equal, assert_false, assert_raises, assert_true
 from std.utils import Variant
@@ -7,16 +7,20 @@ from moxie.base import clone
 from moxie.calibration import (
     CalibratedClassifierCV,
     CalibrationCV,
+    CalibrationEstimator,
     CalibrationSplit,
     ClassifierCalibrationAdapter,
     adapt_classifier,
 )
-from moxie.calibration_serialization import CalibratedClassifierCVSchema
+from moxie.calibration_serialization import (
+    CalibratedClassifierCVSchema,
+    CalibratedSVCClassifierCVSchema,
+)
 from moxie.model_selection import KFold, LeaveOneOut, StratifiedKFold
 from moxie.serialization import (
     ModelArchive, dumps, loads, load_model, save_model,
 )
-from moxie.svm import LinearSVC
+from moxie.svm import LinearSVC, SVC
 
 comptime Schema = CalibratedClassifierCVSchema
 comptime Dense = nm.NDArray[DType.float64]
@@ -27,8 +31,9 @@ def assert_bad(archive: ModelArchive, expected: String) raises:
         _ = Schema.decode(loads(dumps(archive)))
 
 
-def assert_equal_predictions(
-    original: Schema.Model, restored: Schema.Model, X: Dense, y: Dense
+def assert_equal_predictions[E: CalibrationEstimator](
+    original: CalibratedClassifierCV[E], restored: CalibratedClassifierCV[E],
+    X: Dense, y: Dense,
 ) raises:
     var expected = original.predict_proba(X)
     var actual = restored.predict_proba(X)
@@ -42,6 +47,47 @@ def assert_equal_predictions(
     for i in range(actual_labels.size):
         assert_equal(actual_labels.item(i), expected_labels.item(i))
     assert_equal(restored.score(X, y), original.score(X, y))
+
+
+def test_svc(X: Dense, y: Dense) raises:
+    comptime SVCSchema = CalibratedSVCClassifierCVSchema
+    var file = "builds/calibration-svc-model.moxie"
+    var model = CalibratedClassifierCV(
+        adapt_classifier(SVC(C=0.5, random_state=3)),
+        cv=3, method="temperature", ensemble=False,
+    )
+    save_model[SVCSchema](model, file)
+    var unfitted = load_model[SVCSchema](file)
+    assert_false(unfitted.__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = unfitted.predict(X)
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = load_model[Schema](file)
+
+    _ = model.fit(X, y)
+    _ = model.set_params(estimator=adapt_classifier(SVC(C=2.0, random_state=7)))
+    save_model[SVCSchema](model, file)
+    var restored = load_model[SVCSchema](file)
+    assert_equal(restored.estimator.estimator().C, 2.0)
+    assert_equal(restored.calibrated_classifiers_[0].estimator.estimator().C, 0.5)
+    assert_equal_predictions(model, restored, X, y)
+    assert_false(clone(restored).__sklearn_is_fitted__())
+
+    var bad = SVCSchema.encode(restored)
+    bad.payloads[len(bad.payloads) - 1].name = "fold/0/estimator/unknown"
+    with assert_raises(contains="ModelSchemaError"):
+        _ = SVCSchema.decode(loads(dumps(bad)))
+
+    _ = restored.fit(X, y)
+    _ = model.fit(X, y)
+    assert_equal(restored.calibrated_classifiers_[0].estimator.estimator().C, 2.0)
+    assert_equal_predictions(model, restored, X, y)
+
+    var ovo = CalibratedClassifierCV(
+        adapt_classifier(SVC(decision_function_shape="ovo")), cv=3,
+    )
+    with assert_raises(contains="multiclass SVC calibration requires ovr scores"):
+        _ = ovo.fit(X, y)
 
 
 def test_cv_configuration() raises:
@@ -81,6 +127,7 @@ def main() raises:
         X[nm.Item(i, 0)] = label + Float64(i % 5) / 7.0
         X[nm.Item(i, 1)] = Float64(i % 11) / 13.0
         y[nm.Item(i)] = label
+    test_svc(X, y)
     var file = "builds/calibration-test-model.moxie"
     var model = CalibratedClassifierCV(
         adapt_classifier(LinearSVC(C=0.5, random_state=0)),
@@ -151,4 +198,4 @@ def main() raises:
     assert_equal(len(restored.calibrated_classifiers_), 1)
     assert_equal_predictions(model, restored, X, y)
     assert_equal(load_model[Schema](file).calibrated_classifiers_[0].method, "isotonic")
-    print("PASS: calibrated LinearSVC native model files and malformed state")
+    print("PASS: calibrated LinearSVC and SVC native model files and malformed state")

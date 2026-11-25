@@ -75,7 +75,7 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
     var _estimator: ArcPointer[Self.E]
     var _read_classes: _ClassReader[Self.E]
     var _name: String
-    var _builtin_linear_svc_reader: Bool
+    var _builtin_reader: Bool
 
     def __init__(
         out self,
@@ -95,7 +95,7 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
         self._estimator = ArcPointer(estimator^)
         self._read_classes = read_classes
         self._name = name^
-        self._builtin_linear_svc_reader = False
+        self._builtin_reader = False
 
     def estimator(self) -> ref[self._estimator] Self.E:
         return self._estimator[]
@@ -121,7 +121,7 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
         var adapter = Self(
             clone(self._estimator[]), self._read_classes, self._name.copy()
         )
-        adapter._builtin_linear_svc_reader = self._builtin_linear_svc_reader
+        adapter._builtin_reader = self._builtin_reader
         return adapter^
 
     def __sklearn_is_fitted__(self) -> Bool:
@@ -241,5 +241,5 @@ def _adapt_linear_svc(
         return result^
 
     var adapter = ClassifierCalibrationAdapter(estimator^, classes, "LinearSVC")
-    adapter._builtin_linear_svc_reader = True
+    adapter._builtin_reader = True
     return adapter^

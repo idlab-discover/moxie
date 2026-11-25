@@ -1,10 +1,11 @@
 # Adapted from scikit-learn; SPDX-License-Identifier: BSD-3-Clause
 """Public native selector mixin backed by the family's single mapping engine."""
 import numojo as nm
+from moxie._feature_metadata import FeatureNamesOut
 from std.math import isfinite
 from ._selection import SelectionState, SupportResult
 
-trait SelectorMixin:
+trait SelectorMixin(FeatureNamesOut):
     """Implement dtype and _selection_state; opt into NaNs with _allows_nan.
 
     Fitting and estimator configuration belong to the implementing estimator.
@@ -29,7 +30,10 @@ trait SelectorMixin:
         validate_selector_input(X)
         return self._selection_state().inverse_transform(X)
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
+        return self._selection_state().get_feature_names_out(input_features)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         return self._selection_state().get_feature_names_out(input_features)
 
 

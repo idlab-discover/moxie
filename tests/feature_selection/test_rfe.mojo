@@ -1,4 +1,5 @@
 import numojo as nm
+from moxie._feature_metadata import FeatureNamesOut
 from std.testing import assert_equal, assert_true, assert_false, assert_raises, assert_almost_equal
 from std.math import nan, inf
 from moxie.base import clone, Predictor, SupervisedScorer, RegressorMixin, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction
@@ -81,7 +82,11 @@ def exercise[dtype: DType]() raises:
     selector.fit_named(X, y, [String("a"), String("b"), String("c"), String("d")])
     assert_equal(selector.n_features_(), 2)
     assert_equal(selector.n_features_in_(), 4)
+    comptime assert conforms_to(type_of(selector), FeatureNamesOut)
     assert_equal(selector.get_feature_names_out()[1], "b")
+    assert_equal(selector.get_feature_names_out(List[String]()), selector.get_feature_names_out())
+    with assert_raises(contains="length mismatch"):
+        _ = selector.get_feature_names_out(Optional[List[String]](List[String]()))
     assert_false(selector.estimator.__sklearn_is_fitted__())
     var ranks = selector.ranking_()
     assert_equal(ranks[0], 1)

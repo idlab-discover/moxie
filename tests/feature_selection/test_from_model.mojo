@@ -1,4 +1,5 @@
 import numojo as nm
+from moxie.compose import ColumnEntry, ColumnTransformer
 from std.math import inf, nan, isnan
 from std.testing import assert_equal, assert_true, assert_false, assert_raises, assert_almost_equal
 from moxie.base import clone
@@ -21,6 +22,16 @@ def check[dtype: DType]() raises:
         X.unsafe_set(i * 4 + i % 4, 2)
         y.unsafe_set(i, SIMD[dtype, 1](2 * beta[i % 4]))
     var model = Lasso[dtype](alpha=0.1, fit_intercept=False, tol=1e-7)
+    var branch = SelectFromModel(LassoImportance(model.copy()), threshold=ModelThreshold(1.0))
+    var composer = ColumnTransformer(
+        ColumnEntry[type_of(branch), dtype]("model", branch^, [2, 1, 0]),
+    )
+    assert_equal(composer.fit_transform(X, y.copy()).shape[1], 2)
+    assert_equal(composer.get_feature_names_out(), ["model__x1", "model__x0"])
+    assert_equal(
+        composer.get_feature_names_out(Optional[List[String]](["a", "b", "c", "d"])),
+        ["model__b", "model__a"],
+    )
     var selector = SelectFromModel(LassoImportance(model.copy()))
     with assert_raises():
         _ = selector.get_support()
@@ -41,6 +52,10 @@ def check[dtype: DType]() raises:
     _ = selector.set_params(threshold=ModelThreshold(String("1.1 * mean")))
     assert_equal(selector.get_support(True)[List[Int]].__len__(), 2)
     assert_equal(selector.get_feature_names_out()[1], "b")
+    assert_equal(selector.get_feature_names_out(List[String]()), ["a", "b"])
+    with assert_raises(contains="length mismatch"):
+        _ = selector.get_feature_names_out(Optional[List[String]](List[String]()))
+    var snapshot = selector.copy()
     var result = selector.transform(X)
     var inverse = selector.inverse_transform(result)
     assert_equal(result.shape[1], 2)
@@ -54,6 +69,7 @@ def check[dtype: DType]() raises:
     _ = selector.set_params(params)
     # Integer max_features was absent at fit, so its current value is used.
     assert_equal(selector.get_support(True)[List[Int]].__len__(), 1)
+    assert_equal(snapshot.get_feature_names_out(), ["a", "b"])
     assert_equal(selector.fit(X, y.copy()).max_features_(), 1)
     assert_equal(selector.estimator_().model.coef_.unsafe_get(0), saved.unsafe_get(0))
     var wrong = nm.zeros[dtype](nm.Shape(2))

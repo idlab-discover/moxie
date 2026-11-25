@@ -1,6 +1,7 @@
 # Adapted from scikit-learn; SPDX-License-Identifier: BSD-3-Clause
 """Dense population-variance selection, allowing missing values during fit."""
 import numojo as nm
+from moxie._feature_metadata import FeatureNamesOut
 from std.math import isnan, isfinite, nan, inf
 from moxie.base import FitTransformer
 from ._base import UnsupervisedSelector
@@ -20,7 +21,7 @@ def _validate[dtype: DType](X: nm.NDArray[dtype], allow_nan: Bool = True) raises
             if not isfinite(value) and not (allow_nan and isnan(value)):
                 raise Error("ValueError: X contains infinity or disallowed NaN")
 
-struct VarianceThreshold[dtype: DType = DType.float64](UnsupervisedSelector, FitTransformer):
+struct VarianceThreshold[dtype: DType = DType.float64](UnsupervisedSelector, FitTransformer, Copyable, FeatureNamesOut):
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = Self.Input
     comptime Transformed = Self.Input
@@ -109,7 +110,10 @@ struct VarianceThreshold[dtype: DType = DType.float64](UnsupervisedSelector, Fit
         _ = self.fit(X, y)
         return self.transform(X)
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
+        return self._selected().get_feature_names_out(input_features)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         return self._selected().get_feature_names_out(input_features)
 
     def variances_(self) raises -> nm.NDArray[DType.float64]:

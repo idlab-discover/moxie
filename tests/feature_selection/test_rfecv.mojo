@@ -1,5 +1,6 @@
 """RFECV lifecycle, score policies, owned paths and real-model contracts."""
 import numojo as nm
+from moxie._feature_metadata import FeatureNamesOut
 from std.math import isnan, nan
 from std.testing import assert_equal, assert_true, assert_false, assert_raises, assert_almost_equal
 from moxie.base import clone, Predictor, SupervisedScorer, ProbabilityPredictor
@@ -42,7 +43,11 @@ def exercise[dtype: DType]() raises:
     assert_equal(s.n_features_(), 1)
     assert_equal(s.n_features_in_(), 5)
     assert_equal(s.feature_names_in_(), names)
+    comptime assert conforms_to(type_of(s), FeatureNamesOut)
     assert_equal(s.get_feature_names_out()[0], "e")
+    assert_equal(s.get_feature_names_out(List[String]()), s.get_feature_names_out())
+    with assert_raises(contains="length mismatch"):
+        _ = s.get_feature_names_out(Optional[List[String]](List[String]()))
     assert_equal(s.score(X, y), Float64(7))
     assert_equal(s.estimator_().n_features(), 1)
     var results = s.cv_results_()

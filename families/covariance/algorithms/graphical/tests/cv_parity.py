@@ -13,6 +13,8 @@ rank-deficient empirical alpha-zero baselines (known inherited determinant
 rounding limitation). These are counted explicitly. Float32 assume_centered
 reference failures use Float64 oracle inputs rounded first to Float32. Single
 alpha grids bypass the reference's IndexError and compare fixed-alpha refits.
+Native serial and two-worker fits must match bit for bit, including nonfinite
+scores and the alpha-zero baseline.
 """
 from pathlib import Path
 import json
@@ -35,7 +37,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 def main(mode="cd"):
     warnings.simplefilter('ignore')
-    summary = dict(widened_lars_reference=0, cases=0, checks=0, worst_scaled_error=0.0, widened_reference=0, singleton_reference_bug=0, singular_baseline_columns=0)
+    summary = dict(widened_lars_reference=0, cases=0, checks=0, bitwise_checks=0, worst_scaled_error=0.0, widened_reference=0, singleton_reference_bug=0, singular_baseline_columns=0)
     cases = [
         ('default', 73, 4, 4, 4, 5, 100, False),
         ('refine', 113, 5, 5, 3, 4, 100, False),
@@ -62,7 +64,18 @@ def main(mode="cd"):
                                  str(len(alphas) if explicit else alphas), str(int(explicit)),
                                  *([io.real(a) for a in alphas] if explicit else []),
                                  str(refinements), str(folds), str(iterations), str(int(custom)), mode])
-                native = io.run(ROOT / 'builds/cv_parity_driver', OUT / f'{mode}-{name}-{dtype.__name__}-{seed}.txt', text)
+                driver = ROOT / 'builds/cv_parity_driver'
+                fixture = f'{mode}-{name}-{dtype.__name__}-{seed}'
+                serial = io.run(driver, OUT / f'{fixture}.txt', text)
+                native = io.run(driver, OUT / f'{fixture}-parallel.txt', text + ' 2')
+                assert native.keys() == serial.keys(), fixture
+                for key, value in native.items():
+                    if isinstance(value, Exception):
+                        assert str(value) == str(serial[key]), (fixture, key)
+                    else:
+                        np.testing.assert_array_equal(value.view(np.uint64), serial[key].view(np.uint64),
+                                                      err_msg=f'{fixture} {key}')
+                    summary['bitwise_checks'] += 1
                 summary['cases'] += 1
                 for centered in (False, True):
                     prefix = f'cv{int(centered)}'

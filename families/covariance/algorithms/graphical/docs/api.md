@@ -73,8 +73,12 @@ Native adaptations:
 - `cv` accepts `Optional[Int]`. For custom splitters/iterables, materialize
   `List[IndexSplit]` from native splitter cursors and call
   `model.fit(X, splits=splits)`. These indices are validated before use.
-- Execution is serial: `n_jobs=None` and `1` are supported; other values
-  raise `NotImplementedError`.
+- `n_jobs=None` or `1` runs fold paths serially. Positive values request up
+  to that many native MAX CPU workers, capped at the number of splits. Negative
+  values count back from the logical CPU count (`-1` uses all available
+  logical CPUs, subject to the split cap). `0` raises `ValueError`. Native workers
+  use threads. They preserve split order and the sequential warm starts within
+  each path. The empirical alpha-zero baseline and final refit run serially.
 - `verbose=True` prints refinement progress. Python warning objects and
   joblib timing/progress output are not reproduced.
 - Empty alpha lists and automatic grids with zero off-diagonal covariance

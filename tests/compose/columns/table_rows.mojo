@@ -5,7 +5,32 @@ from numojo import NDArrayStrides, Shape, zeros
 from std.testing import assert_equal, assert_false, assert_raises
 
 
+def check_numeric_input() raises:
+    var data = zeros[DType.float32](Shape(4, 3))
+    for i in range(data.size):
+        data.unsafe_set(i, Float32(i))
+    var view = data.view_with_layout(Shape(3, 2), NDArrayStrides(-3, -1), 11)
+    var table = ColumnTable(view, ["left", "right"])
+    var dense = table._numeric_input()
+    assert_equal(dense.strides[0], view.strides[0])
+    assert_equal(dense.strides[1], view.strides[1])
+    assert_equal(dense.offset, view.offset)
+    assert_equal(dense.unsafe_get(-6), Float32(5))
+
+    var flag = zeros[DType.bool](Shape(3))
+    flag.unsafe_set(1, True)
+    table.add_numeric("flag", flag, position=1)
+    var gathered = table._numeric_input()
+    for row in range(3):
+        assert_equal(gathered.unsafe_get(row * 3), Float32(11 - 3 * row))
+        assert_equal(gathered.unsafe_get(row * 3 + 1), Float32(1 if row == 1 else 0))
+        assert_equal(gathered.unsafe_get(row * 3 + 2), Float32(10 - 3 * row))
+    with assert_raises(contains="mixed ColumnTable"):
+        _ = table.values()
+
+
 def main() raises:
+    check_numeric_input()
     var data = zeros[DType.float32](Shape(4, 3))
     for i in range(data.size):
         data.unsafe_set(i, Float32(i))

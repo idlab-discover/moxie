@@ -42,6 +42,23 @@ def targets[dtype: DType](single: Bool) raises -> NDArray[dtype]:
     return y^
 
 
+def split_columns[dtype: DType](
+    x: NDArray[dtype], names: List[String],
+) raises -> ColumnTable[dtype]:
+    var rows = x.shape[0]
+    var base = zeros[dtype](Shape(rows, 1))
+    var first = zeros[DType.int64](Shape(rows))
+    var last = zeros[DType.float64](Shape(rows))
+    for row in range(rows):
+        first.unsafe_set(row, Int64(x.unsafe_get(row * 3)))
+        base.unsafe_set(row, x.unsafe_get(row * 3 + 1))
+        last.unsafe_set(row, Float64(x.unsafe_get(row * 3 + 2)))
+    var table = ColumnTable(base, [names[1].copy()])
+    table.add_numeric(names[0], first, position=0)
+    table.add_numeric(names[2], last)
+    return table^
+
+
 def same_array(actual: Matrix, expected: Matrix) raises:
     assert_equal(actual.ndim, expected.ndim)
     for axis in range(expected.ndim):
@@ -307,6 +324,10 @@ def named_pls[flavor: Int, dtype: DType](var model: _PLS[flavor, dtype], single:
     var positional = clone(model)
     var scores = model.fit_transform(table, y)
     var components = model.get_feature_names_out(names.copy())
+    var mixed = split_columns(x, names)
+    same_table_scores(model.fit_transform_table(mixed, y), scores, components)
+    same_array(model.transform(mixed), scores.x_scores)
+    same_array(model.predict(mixed), model.predict(x))
     same_table_scores(positional.fit_transform_table(x, y), scores, components)
     same_table_scores(model.fit_transform_table(table, y), scores, components)
     same_table_scores(model.transform_table(x, y), scores, components)
@@ -320,6 +341,7 @@ def named_pls[flavor: Int, dtype: DType](var model: _PLS[flavor, dtype], single:
     for i in range(6):
         weights.unsafe_set(i, Float64(i + 1))
     assert_equal(model.score(table, y, weights.copy()), model.score(x, y, weights^))
+    assert_equal(model.score(mixed, y), model.score(x, y))
     with assert_raises(contains="The feature names should match those that were passed during fit."):
         _ = model.predict(wrong)
     with assert_raises(contains="The feature names should match those that were passed during fit."):
@@ -349,7 +371,7 @@ def named_pls[flavor: Int, dtype: DType](var model: _PLS[flavor, dtype], single:
     assert_true(not clone(restored).feature_names_in_)
     emit_named_case(
         model.name(), restored.feature_names_in_.value(),
-        restored.transform_table(table, y),
+        restored.transform_table(mixed, y),
     )
 
     var snapshot = restored.copy()
@@ -376,6 +398,9 @@ def named_plssvd() raises:
     var positional = clone(model)
     var scores = model.fit_transform(table, y)
     var components = model.get_feature_names_out(names.copy())
+    var mixed = split_columns(x, names)
+    same_table_scores(model.fit_transform_table(mixed, y), scores, components)
+    same_array(model.transform(mixed), scores.x_scores)
     same_table_scores(positional.fit_transform_table(x, y), scores, components)
     same_table_scores(model.fit_transform_table(table, y), scores, components)
     same_table_scores(model.transform_table(x, y), scores, components)
@@ -385,10 +410,10 @@ def named_plssvd() raises:
     same_scores(scores, model.transform(x, y))
     with assert_raises(contains="The feature names should match those that were passed during fit."):
         _ = model.transform_table(wrong)
-    var mixed = table.copy()
-    mixed.add_strings("text", ["a", "b", "c", "d", "e", "f"])
-    with assert_raises(contains="mixed ColumnTable"):
-        _ = model.fit(mixed, y)
+    var text = mixed.copy()
+    text.add_strings("text", ["a", "b", "c", "d", "e", "f"])
+    with assert_raises(contains="column 'text' requires numeric storage"):
+        _ = model.fit(text, y)
     assert_equal(model.feature_names_in_.value(), names)
     var archive = Schema.encode(model)
     assert_equal(archive.schema_version, 2)
@@ -398,7 +423,7 @@ def named_plssvd() raises:
     assert_true(not clone(restored).feature_names_in_)
     emit_named_case(
         model.name(), restored.feature_names_in_.value(),
-        restored.transform_table(table, y),
+        restored.transform_table(mixed, y),
     )
     var invalid = archive.copy()
     # All three names occupy 12 bytes each, including the length prefix.

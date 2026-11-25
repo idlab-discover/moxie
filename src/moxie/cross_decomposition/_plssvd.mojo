@@ -175,10 +175,15 @@ struct PLSSVD[dtype: DType = DType.float64](
         ref[y_origin] y: Self.Target,
     ) raises -> ref[self] Self:
         """Fit a named numeric matrix and retain an owned list of its names."""
-        var names = X.schema().names.copy()
-        _ = self.fit(X.values(), y)
-        self.feature_names_in_ = names^
+        _ = self._fit_named(X, y)
         return self
+
+    def _fit_named(mut self, X: ColumnTable[Self.dtype], y: Self.Target) raises -> Self.Input:
+        var values = X._numeric_input()
+        var names = X.schema().names.copy()
+        _ = self.fit(values, y)
+        self.feature_names_in_ = names^
+        return values^
 
     def fit_inplace[origin: MutOrigin](
         ref[origin] self, mut X: Self.Input, mut y: Self.Target
@@ -231,8 +236,7 @@ struct PLSSVD[dtype: DType = DType.float64](
         return ColumnTable(self.transform(X), self.get_feature_names_out())
 
     def transform_table(self, X: ColumnTable[Self.dtype]) raises -> ColumnTable[DType.float64]:
-        self._check_named_input(X)
-        return self.transform_table(X.values())
+        return ColumnTable(self.transform(X), self.get_feature_names_out())
 
     def transform_table(self, X: Self.Input, y: Self.Target) raises -> PairedTableScores:
         """Return labeled X scores and dense Y scores."""
@@ -241,8 +245,7 @@ struct PLSSVD[dtype: DType = DType.float64](
     def transform_table(
         self, X: ColumnTable[Self.dtype], y: Self.Target
     ) raises -> PairedTableScores:
-        self._check_named_input(X)
-        return self.transform_table(X.values(), y)
+        return _as_table_scores(self.transform(X, y), self.get_feature_names_out())
 
     def fit_transform_table(mut self, X: Self.Input, y: Self.Target) raises -> PairedTableScores:
         """Fit both blocks and return labeled X scores and dense Y scores."""
@@ -255,13 +258,13 @@ struct PLSSVD[dtype: DType = DType.float64](
 
     def transform(self, X: ColumnTable[Self.dtype]) raises -> Self.Transformed:
         self._check_named_input(X)
-        return self.transform(X.values())
+        return self.transform(X._numeric_input())
 
     def transform(
         self, X: ColumnTable[Self.dtype], y: Self.Target
     ) raises -> Self.PairedTransform:
         self._check_named_input(X)
-        return self.transform(X.values(), y)
+        return self.transform(X._numeric_input(), y)
 
     def transform(self, X: Self.Input) raises -> Self.Transformed:
         """((X - x_mean) / x_std) @ x_weights_, shape (n, n_components)."""
@@ -289,8 +292,8 @@ struct PLSSVD[dtype: DType = DType.float64](
     def fit_transform(
         mut self, X: ColumnTable[Self.dtype], y: Self.Target
     ) raises -> Self.PairedTransform:
-        _ = self.fit(X, y)
-        return self.transform(X.values(), y)
+        var values = self._fit_named(X, y)
+        return self.transform(values, y)
 
     def fit_transform(mut self, X: Self.Input, y: Self.Target) raises -> Self.PairedTransform:
         """fit(X, y) followed by the paired transform(X, y)."""

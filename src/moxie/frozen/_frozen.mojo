@@ -30,6 +30,10 @@ from moxie.base import (
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._pipeline_contracts import PipelineSteps
 from moxie.compose._base import NamedColumnTransformers
+from moxie.metadata_routing import (
+    FitScoreMetadataRequest,
+    FitScoreMetadataRequestProvider,
+)
 from moxie.utils.validation import check_is_fitted
 from ._base import FrozenEstimatorAPI
 
@@ -134,6 +138,9 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     DensityMixin where conforms_to(E, DensityMixin),
     EstimatorTagsProvider where conforms_to(E, EstimatorTagsProvider),
     FeatureNamesOut where conforms_to(E, FeatureNamesOut),
+    FitScoreMetadataRequestProvider where conforms_to(
+        E, FitScoreMetadataRequestProvider
+    ),
     FrozenEstimatorAPI,
     _FrozenIdentity,
     IncrementalClassifier where conforms_to(E, IncrementalClassifier),
@@ -296,6 +303,12 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
         var tags = get_tags(self._estimator[])
         tags._skip_test = True
         return tags
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest where conforms_to(
+        Self.E, FitScoreMetadataRequestProvider
+    ):
+        """Return the child's fit and score sample-weight requests."""
+        return self._estimator[].get_metadata_routing()
 
     def get_classes(self) raises -> Self.Target where conforms_to(
         Self.E, NumericClassifierClasses

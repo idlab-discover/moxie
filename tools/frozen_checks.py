@@ -53,6 +53,7 @@ def parity(run):
     run(sys.executable, TESTS / 'compare_frozen_updates.py',
         '--sklearn-root', ROOT.parent / 'scikit-learn',
         '--native', ROOT / 'builds/tests/frozen/test_frozen_updates')
+    run(sys.executable, TESTS / 'compare_metadata_routing.py')
 
 
 def main(action):

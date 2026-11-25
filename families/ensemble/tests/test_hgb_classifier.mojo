@@ -1,3 +1,4 @@
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -188,6 +189,33 @@ def test_invalid_targets_parameters_and_holdout() raises:
         _ = model.fit(X, y, sample_weight=full[DType.float64](Shape(4), 0.0))
     assert_equal(model.n_iter_, 1)
     assert_equal(model.classes_.size, 4)
+
+
+def test_categorical_float32_with_strided_input() raises:
+    var storage = full[DType.float32](Shape(120, 2), 0)
+    var y = NDArray[DType.int64](Shape(120))
+    for i in range(120):
+        var category = i % 4
+        var value: Float32 = -80.5 if category == 1 else Float32(category)
+        if category == 3:
+            value = nan[DType.float32]()
+        storage.unsafe_set(2 * i + 1, value)
+        y.unsafe_set(i, Int64(1 if category == 1 or category == 3 else -1))
+    var X = storage.view_with_layout(Shape(120, 1), Strides(2, 1), 1)
+    var model = HistGradientBoostingClassifier[DType.float32, DType.int64](
+        categorical_features=List[Bool]([True]), max_iter=3,
+        min_samples_leaf=3, random_state=4,
+    )
+    _ = model.fit(X, y)
+    assert_equal(model.is_categorical_.value(), List[Bool]([True]))
+    assert_equal(model.score(X, y), 1.0)
+    var query = NDArray[DType.float32](Shape(2, 1))
+    query.unsafe_set(0, nan[DType.float32]())
+    query.unsafe_set(1, 7000.25)
+    var scores = model.decision_function(query)
+    assert_equal(scores.unsafe_get(0), scores.unsafe_get(1))
+    var stages = model.staged_decision_function(query)
+    assert_equal(stages[2].unsafe_get(1), scores.unsafe_get(1))
 
 
 def main() raises:

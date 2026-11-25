@@ -13,6 +13,7 @@ from moxie.tree._classes import DecisionTreeRegressor
 from .._base import EnsembleRegressor, StagedPredictor
 from .binning import _BinMapper
 from .common import (
+    HistGradientBoostingCategoricalFeatures, _CategoryEncoder, _categorical_mask,
     _EarlyStopping, _FitRandomState, _Interactions, _ValidationSize, _Values,
     _check_settings, _check_warm_start, _resume_history,
     _history, _interaction_groups, _should_stop, _take_rows, _uses_early_stopping,
@@ -35,7 +36,7 @@ struct HistGradientBoostingRegressorParams(Copyable, Movable):
     var l2_regularization: Float64
     var max_features: Float64
     var max_bins: Int
-    var categorical_features: Optional[String]
+    var categorical_features: HistGradientBoostingCategoricalFeatures
     var monotonic_cst: Optional[List[Int]]
     var interaction_cst: Optional[_Interactions]
     var warm_start: Bool
@@ -75,6 +76,7 @@ struct _FittedRegressor(Copyable, Movable):
     var trees: List[_RawTree]
     var n_features: Int
     var random: _FitRandomState
+    var encoder: _CategoryEncoder
 
 
 struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
@@ -112,7 +114,7 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         l2_regularization: Float64 = 0.0,
         max_features: Float64 = 1.0,
         max_bins: Int = 255,
-        var categorical_features: Optional[String] = String("from_dtype"),
+        var categorical_features: HistGradientBoostingCategoricalFeatures = String("from_dtype"),
         var monotonic_cst: Optional[List[Int]] = None,
         var interaction_cst: Optional[_Interactions] = None,
         warm_start: Bool = False,
@@ -183,7 +185,7 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         _check_settings(
             params.max_iter, params.max_depth, params.max_leaf_nodes, params.learning_rate,
             params.max_features, params.max_bins, params.n_iter_no_change, params.tol,
-            params.verbose, params.validation_fraction, params.categorical_features,
+            params.verbose, params.validation_fraction,
         )
         if params.quantile and not (0.0 <= params.quantile.value() <= 1.0):
             raise Error("ValueError: quantile must be in [0, 1]")
@@ -206,11 +208,14 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
                 X_val.take(), y_val.take(), sample_weight_val^
             )
 
+        var categorical = _categorical_mask(params.categorical_features, X.shape[1])
+        var encoder = _CategoryEncoder(X, categorical, params.max_bins)
         var resume = params.warm_start and Bool(self._model)
         var random: _FitRandomState
         if resume:
             ref prior = self._model.value()
             _check_warm_start(params.max_iter, len(prior.trees), X.shape[1], prior.n_features)
+            encoder.check_warm_start(prior.encoder)
             random = prior.random.copy()
         else:
             random = _FitRandomState.start(params.random_state)
@@ -234,16 +239,17 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
             )
             self._fit(
                 _take_rows(X, indices, count, n), _take_rows(y, indices, count, n),
-                train_weights, validation, loss^, early, random^, resume,
+                train_weights, validation, loss^, early, random^, resume, encoder^,
             )
         else:
-            self._fit(X, y, sample_weight, validation, loss^, early, random^, resume)
+            self._fit(X, y, sample_weight, validation, loss^, early, random^, resume, encoder^)
         return self
 
     def _fit(
-        mut self, X: Self.Input, y: Self.Target, weights: Optional[_Values],
+        mut self, X_input: Self.Input, y: Self.Target, weights: Optional[_Values],
         validation: Optional[_Validation[Self.feature_dtype]], var loss: _RegressionLoss,
         early: Bool, var random: _FitRandomState, resume: Bool,
+        var encoder: _CategoryEncoder,
     ) raises:
         ref params = self._params
         var baseline: Float64
@@ -258,12 +264,13 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
             validation_scores = _resume_history(self.validation_score_)
         else:
             baseline = loss.intercept(y, weights)
+        var X = encoder.transform(X_input)
         var n_features = X.shape[1]
-        var monotonic = params.monotonic_cst.value().copy() if params.monotonic_cst else List[Int](length=n_features, fill=0)
+        var monotonic = encoder.monotonic_constraints(params.monotonic_cst, n_features)
         var interactions = _interaction_groups(params.interaction_cst, n_features)
         var n_bins = params.max_bins + 1
         var mapper = _BinMapper(n_bins=n_bins, random_state=random.split_seed)
-        _ = mapper.fit(X, sample_weight=weights)
+        _ = mapper.fit(X, known_categories=encoder.known_categories(), sample_weight=weights)
         var binned = mapper.transform(X)
         var raw = Self._raw_predictions(X, baseline, trees)
         var raw_val = _Values(Shape(0))
@@ -271,12 +278,14 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         var score_validation = early and Bool(validation)
         if early and not resume:
             train_scores.append(-loss.mean_loss(y, raw, weights))
-        if score_validation:
+        if validation:
             ref val_data = validation.value()
-            binned_val = mapper.transform(val_data.X)
-            raw_val = Self._raw_predictions(val_data.X, baseline, trees)
-            if not resume:
-                validation_scores.append(-loss.mean_loss(val_data.y, raw_val, val_data.weights))
+            var X_val = encoder.transform(val_data.X)
+            if score_validation:
+                binned_val = mapper.transform(X_val)
+                raw_val = Self._raw_predictions(X_val, baseline, trees)
+                if not resume:
+                    validation_scores.append(-loss.mean_loss(val_data.y, raw_val, val_data.weights))
 
         var gradients = List[Float32]()
         var hessians = List[Float32]()
@@ -323,7 +332,8 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         self.do_early_stopping_ = early
         self.train_score_ = train_history^
         self.validation_score_ = validation_history^
-        self._model = _FittedRegressor(loss^, baseline, trees^, n_features, random^)
+        self.is_categorical_ = encoder.categorical_mask()
+        self._model = _FittedRegressor(loss^, baseline, trees^, n_features, random^, encoder^)
 
     def _check_predict(self, X: Self.Input) raises:
         if not self._model:
@@ -349,15 +359,16 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check_predict(X)
         ref model = self._model.value()
-        return Self._linked(model.loss, Self._raw_predictions(X, model.baseline, model.trees))
+        return Self._linked(model.loss, Self._raw_predictions(model.encoder.transform(X), model.baseline, model.trees))
 
     def staged_predict(self, X: Self.Input) raises -> Self.Stages:
         self._check_predict(X)
         ref model = self._model.value()
         var raw = full[DType.float64](Shape(X.shape[0]), model.baseline)
         var stages = Self.Stages(capacity=len(model.trees))
+        var encoded = model.encoder.transform(X)
         for tree in model.trees:
-            _add_prediction(raw, tree.predict(X))
+            _add_prediction(raw, tree.predict(encoded))
             stages.append(Self._linked(model.loss, raw))
         return stages^
 

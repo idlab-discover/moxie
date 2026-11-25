@@ -2,12 +2,16 @@
 # See families/ensemble/LICENSES/scikit-learn.txt.
 """Fit utilities for dense histogram boosting estimators."""
 
-from std.math import isfinite
+from std.builtin.sort import sort
+from std.math import isfinite, isnan, nan
 from std.utils import Variant
 
 from numojo import NDArray, Shape
 
+from moxie._categorical import NumericCategories
 from moxie._random import check_random_state
+
+from .binning import _Categories
 
 from .feature_sampling import _FeatureSampler
 
@@ -16,6 +20,142 @@ comptime _Values = NDArray[DType.float64]
 comptime _EarlyStopping = Variant[Bool, String]
 comptime _ValidationSize = Variant[Int, Float64]
 comptime _Interactions = Variant[String, List[List[Int]]]
+comptime HistGradientBoostingCategoricalFeatures = Variant[
+    NoneType, type_of(None), String, List[Bool], List[Int]
+]
+
+
+def _categorical_mask(
+    selection: HistGradientBoostingCategoricalFeatures, n_features: Int
+) raises -> List[Bool]:
+    if selection.isa[List[Bool]]():
+        ref mask = selection[List[Bool]]
+        if mask:
+            if len(mask) != n_features:
+                raise Error("ValueError: categorical mask must match feature count")
+            return mask.copy()
+
+    var mask = List[Bool](length=n_features, fill=False)
+    if selection.isa[List[Int]]():
+        for feature in selection[List[Int]]:
+            if not (0 <= feature < n_features):
+                raise Error("ValueError: categorical feature index out of range")
+            mask[feature] = True
+    elif selection.isa[String]() and selection[String] != "from_dtype":
+        raise Error("ValueError: categorical_features string must be from_dtype")
+    return mask^
+
+
+struct _CategoryEncoder(Copyable, Movable):
+    """Maps input columns to the reference's categorical-first layout."""
+
+    var _columns: List[Int]
+    var _domains: List[NumericCategories[DType.float64]]
+
+    def __init__[dtype: DType](
+        out self, X: NDArray[dtype], mask: List[Bool], max_bins: Int
+    ) raises:
+        self._columns = List[Int]()
+        self._domains = List[NumericCategories[DType.float64]]()
+        for feature in range(len(mask)):
+            if mask[feature]:
+                self._columns.append(feature)
+                self._domains.append(Self._fit_column(X, feature, max_bins))
+        if self._domains:
+            for feature in range(len(mask)):
+                if not mask[feature]:
+                    self._columns.append(feature)
+
+    @staticmethod
+    def _fit_column[dtype: DType](
+        X: NDArray[dtype], feature: Int, max_bins: Int
+    ) raises -> NumericCategories[DType.float64]:
+        var seen = Dict[Float64, Bool]()
+        var values = List[Float64]()
+        var offset = feature * X.strides[1]
+        for row in range(X.shape[0]):
+            var value = Float64(X.unsafe_get(row * X.strides[0] + offset))
+            if isnan(value):
+                continue
+            if not isfinite(value):
+                raise Error("ValueError: categorical features must be finite or NaN")
+            # Normalize signed zero before hashing.
+            if value == 0:
+                value = 0
+            if value not in seen:
+                if len(values) == max_bins:
+                    raise Error("ValueError: categorical cardinality exceeds max_bins")
+                seen[value] = True
+                values.append(value)
+        sort(Span(values))
+        var ordered = _Values(Shape(len(values)))
+        for i in range(len(values)):
+            ordered.unsafe_set(i, values[i])
+        return NumericCategories[DType.float64](ordered)
+
+    def transform[dtype: DType](self, X: NDArray[dtype]) raises -> NDArray[dtype]:
+        if not self._domains:
+            return X.view_with_layout(X.shape, X.strides, X.offset)
+        var encoded = NDArray[dtype](Shape(X.shape[0], X.shape[1]), order="F")
+        for col in range(len(self._columns)):
+            var input_offset = self._columns[col] * X.strides[1]
+            var output_offset = col * encoded.strides[1]
+            for row in range(X.shape[0]):
+                var value = X.unsafe_get(row * X.strides[0] + input_offset)
+                if col < len(self._domains):
+                    if not isfinite(value) and not isnan(value):
+                        raise Error("ValueError: categorical features must be finite or NaN")
+                    var index = self._domains[col].find(Float64(value))
+                    value = Scalar[dtype](index) if index >= 0 else nan[dtype]()
+                encoded.unsafe_set(output_offset + row, value)
+        return encoded^
+
+    def categorical_mask(self) -> Optional[List[Bool]]:
+        if not self._domains:
+            return None
+        var mask = List[Bool](length=len(self._columns), fill=False)
+        for col in range(len(self._domains)):
+            mask[self._columns[col]] = True
+        return mask^
+
+    def known_categories(self) -> Optional[_Categories]:
+        if not self._domains:
+            return None
+        var categories = _Categories(length=len(self._columns), fill=None)
+        for col in range(len(self._domains)):
+            var codes = List[Float64](capacity=self._domains[col].size())
+            for code in range(self._domains[col].size()):
+                codes.append(Float64(code))
+            categories[col] = codes^
+        return categories^
+
+    def monotonic_constraints(
+        self, constraints: Optional[List[Int]], n_features: Int
+    ) raises -> List[Int]:
+        if not constraints:
+            return List[Int](length=n_features, fill=0)
+        ref signs = constraints.value()
+        if len(signs) != n_features:
+            raise Error("ValueError: monotonic constraints must match feature count")
+        if not self._domains:
+            return signs.copy()
+        var remapped = List[Int](capacity=n_features)
+        for column in self._columns:
+            remapped.append(signs[column])
+        return remapped^
+
+    def check_warm_start(self, prior: Self) raises:
+        if self._columns != prior._columns or len(self._domains) != len(prior._domains):
+            raise Error("ValueError: warm start requires the fitted categorical columns")
+        for col in range(len(self._domains)):
+            ref current = self._domains[col]
+            ref fitted = prior._domains[col]
+            if current.size() != fitted.size():
+                raise Error("ValueError: warm start requires the fitted category domains")
+            for i in range(current.size()):
+                if current.get(i) != fitted.get(i):
+                    raise Error("ValueError: warm start requires the fitted category domains")
+
 
 
 def _uses_early_stopping(
@@ -39,7 +179,6 @@ def _check_settings(
     tol: Float64,
     verbose: Int,
     validation_fraction: Optional[_ValidationSize],
-    categorical_features: Optional[String],
 ) raises:
     if (
         max_iter < 1
@@ -66,11 +205,6 @@ def _check_settings(
                 raise Error("ValueError: validation row count must be positive")
         elif not (0.0 < size[Float64] < 1.0):
             raise Error("ValueError: validation fraction must be in (0, 1)")
-    if categorical_features and categorical_features.value() != "from_dtype":
-        raise Error(
-            "ValueError: categorical_features must be from_dtype or None on"
-            " numeric arrays"
-        )
 
 
 def _interaction_groups(

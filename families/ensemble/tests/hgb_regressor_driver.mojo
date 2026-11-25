@@ -24,7 +24,8 @@ def _run_case[origin: ImmOrigin](fields: List[StringSpan[origin]]) raises:
     var sampled = atol(String(fields[9])) != 0
     var seed = atol(String(fields[10]))
     var initial = atol(String(fields[11]))
-    var offset = 12
+    var categories = atol(String(fields[12]))
+    var offset = 13
 
     var X = _Values(Shape(rows, cols))
     var query = _Values(Shape(queries, cols))
@@ -45,6 +46,12 @@ def _run_case[origin: ImmOrigin](fields: List[StringSpan[origin]]) raises:
         tol=0.125,
     )
     var params = model.get_params()
+    if categories:
+        var indices = List[Int]()
+        for col in range(cols):
+            if categories & (1 << col):
+                indices.append(col)
+        params.categorical_features = indices^
     if mode != 4:
         params.early_stopping = Variant[Bool, String](mode != 0)
     if mode == 1:
@@ -87,6 +94,9 @@ def _run_case[origin: ImmOrigin](fields: List[StringSpan[origin]]) raises:
     print(model.n_iter_, model.n_features_in_, model.n_trees_per_iteration_,
         Int(model.do_early_stopping_), Int(Bool(model.is_categorical_)),
         model.train_score_.size, model.validation_score_.size)
+    if model.is_categorical_:
+        for selected in model.is_categorical_.value():
+            print(Int(selected))
     print(bitcast[DType.int64](model.score(X, y, weights)))
     for i in range(model.train_score_.size):
         print(bitcast[DType.int64](model.train_score_.unsafe_get(i)))

@@ -35,7 +35,8 @@ revision applies the mapping after encoding, so its keys are zero-based
 positions in sorted `classes_`. The balanced factors use row counts before any
 split and multiply any supplied training weights. Explicit validation weights
 are used as supplied. Binary fits support monotonic constraints by feature
-position. All fits support per-node feature subsampling and interaction constraints.
+position. All fits support per-node feature subsampling, interaction constraints,
+and [explicit categorical columns](hgb-categorical.md).
 
 Early stopping monitors negative log loss. The default `"auto"` activates it
 above 10,000 rows. With early stopping enabled, the default holdout is a seeded
@@ -47,8 +48,7 @@ intercept-only score and gains one entry per fitted iteration. A fresh fit with 
 `get_params()` returns a typed copy. Pass the edited record to `set_params()`
 before refitting. Configuration updates and failed fits preserve the current
 fitted model. `moxie.base.clone` makes an unfitted estimator. Learned counters
-start at zero, and `is_categorical_` is `None` for numerical arrays. Verbose fits
-emit native progress lines. Categorical preprocessing, feature-name metadata, and
+start at zero. Verbose fits emit native progress lines. Feature-name metadata and
 additional early-stopping scorers remain open.
 
 Set `warm_start=True`, increase `max_iter` through the parameter record, and

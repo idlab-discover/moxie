@@ -16,11 +16,14 @@ from .._base import DecisionEnsemble, ProbabilisticEnsemble, StagedPredictor
 from .._sampling import check_sample_weight, class_weight_factors
 from .binning import _BinMapper
 from .common import (
+    HistGradientBoostingCategoricalFeatures,
+    _CategoryEncoder,
     _EarlyStopping,
     _FitRandomState,
     _Interactions,
     _ValidationSize,
     _Values,
+    _categorical_mask,
     _check_settings,
     _check_warm_start,
     _history,
@@ -51,7 +54,7 @@ struct HistGradientBoostingClassifierParams(Copyable, Movable):
     var l2_regularization: Float64
     var max_features: Float64
     var max_bins: Int
-    var categorical_features: Optional[String]
+    var categorical_features: HistGradientBoostingCategoricalFeatures
     var monotonic_cst: Optional[List[Int]]
     var interaction_cst: Optional[_Interactions]
     var warm_start: Bool
@@ -79,6 +82,7 @@ struct _FittedClassifier(Copyable, Movable):
     var stages: List[List[_RawTree]]
     var n_features: Int
     var random: _FitRandomState
+    var encoder: _CategoryEncoder
 
 
 struct HistGradientBoostingClassifier[
@@ -133,7 +137,9 @@ struct HistGradientBoostingClassifier[
         l2_regularization: Float64 = 0.0,
         max_features: Float64 = 1.0,
         max_bins: Int = 255,
-        var categorical_features: Optional[String] = String("from_dtype"),
+        var categorical_features: HistGradientBoostingCategoricalFeatures = String(
+            "from_dtype"
+        ),
         var monotonic_cst: Optional[List[Int]] = None,
         var interaction_cst: Optional[_Interactions] = None,
         warm_start: Bool = False,
@@ -343,7 +349,6 @@ struct HistGradientBoostingClassifier[
             params.tol,
             params.verbose,
             params.validation_fraction,
-            params.categorical_features,
         )
         if params.loss != "log_loss":
             raise Error("ValueError: classifier loss must be log_loss")
@@ -438,6 +443,10 @@ struct HistGradientBoostingClassifier[
         var adjusted_weights = self._training_weights(index, sample_weight)
         ref weights = adjusted_weights if adjusted_weights else sample_weight
         var targets = index.inverse.astype[DType.float64]()
+        var categorical = _categorical_mask(
+            params.categorical_features, X.shape[1]
+        )
+        var encoder = _CategoryEncoder(X, categorical, params.max_bins)
         var resume = params.warm_start and Bool(self._model)
         var random: _FitRandomState
         if resume:
@@ -446,6 +455,7 @@ struct HistGradientBoostingClassifier[
                 params.max_iter, len(prior.stages), X.shape[1], prior.n_features
             )
             self._check_warm_start_classes(classes)
+            encoder.check_warm_start(prior.encoder)
             random = prior.random.copy()
         else:
             random = _FitRandomState.start(params.random_state)
@@ -492,6 +502,7 @@ struct HistGradientBoostingClassifier[
                 early,
                 random^,
                 resume,
+                encoder^,
             )
         else:
             self._fit(
@@ -503,6 +514,7 @@ struct HistGradientBoostingClassifier[
                 early,
                 random^,
                 resume,
+                encoder^,
             )
         self.classes_ = classes^
 
@@ -541,7 +553,7 @@ struct HistGradientBoostingClassifier[
 
     def _fit(
         mut self,
-        X: Self.Input,
+        X_input: Self.Input,
         y: _Values,
         weights: Optional[_Values],
         validation: Optional[_Validation[Self.feature_dtype]],
@@ -549,6 +561,7 @@ struct HistGradientBoostingClassifier[
         early: Bool,
         var random: _FitRandomState,
         resume: Bool,
+        var encoder: _CategoryEncoder,
     ) raises:
         ref params = self._params
         var baseline: _Values
@@ -563,34 +576,37 @@ struct HistGradientBoostingClassifier[
             validation_scores = _resume_history(self.validation_score_)
         else:
             baseline = loss.fit_intercept(y, weights)
+        var X = encoder.transform(X_input)
         var n_features = X.shape[1]
         var columns = loss.raw_columns()
         var rows = y.size
-        var monotonic = params.monotonic_cst.value().copy() if params.monotonic_cst else List[
-            Int
-        ](
-            length=n_features, fill=0
+        var monotonic = encoder.monotonic_constraints(
+            params.monotonic_cst, n_features
         )
         var interactions = _interaction_groups(
             params.interaction_cst, n_features
         )
         var n_bins = params.max_bins + 1
         var mapper = _BinMapper(n_bins=n_bins, random_state=random.split_seed)
-        _ = mapper.fit(X, sample_weight=weights)
+        _ = mapper.fit(
+            X, known_categories=encoder.known_categories(), sample_weight=weights
+        )
         var binned = mapper.transform(X)
         var raw = Self._raw_predictions(X, baseline, stages)
         var raw_val = _Values(Shape(0))
         var binned_val: Optional[NDArray[DType.uint8]] = None
         if early and not resume:
             train_scores.append(-loss.mean_loss(y, raw, weights))
-        if early and validation:
+        if validation:
             ref val_data = validation.value()
-            binned_val = mapper.transform(val_data.X)
-            raw_val = Self._raw_predictions(val_data.X, baseline, stages)
-            if not resume:
-                validation_scores.append(
-                    -loss.mean_loss(val_data.y, raw_val, val_data.weights)
-                )
+            var X_val = encoder.transform(val_data.X)
+            if early:
+                binned_val = mapper.transform(X_val)
+                raw_val = Self._raw_predictions(X_val, baseline, stages)
+                if not resume:
+                    validation_scores.append(
+                        -loss.mean_loss(val_data.y, raw_val, val_data.weights)
+                    )
 
         var gradients = List[Float32]()
         var hessians = List[Float32]()
@@ -656,8 +672,9 @@ struct HistGradientBoostingClassifier[
         self.do_early_stopping_ = early
         self.train_score_ = train_history^
         self.validation_score_ = validation_history^
+        self.is_categorical_ = encoder.categorical_mask()
         self._model = _FittedClassifier(
-            loss^, baseline^, stages^, n_features, random^
+            loss^, baseline^, stages^, n_features, random^, encoder^
         )
 
     def _check_predict(self, X: Self.Input) raises:
@@ -690,7 +707,9 @@ struct HistGradientBoostingClassifier[
     def _raw_predict(self, X: Self.Input) raises -> _Values:
         self._check_predict(X)
         ref model = self._model.value()
-        return Self._raw_predictions(X, model.baseline, model.stages)
+        return Self._raw_predictions(
+            model.encoder.transform(X), model.baseline, model.stages
+        )
 
     @staticmethod
     def _winning_class(raw: _Values, row: Int, columns: Int) -> Int:
@@ -754,8 +773,9 @@ struct HistGradientBoostingClassifier[
         ref model = self._model.value()
         var raw = Self._baseline_rows(model.baseline, X.shape[0])
         var results = List[Output](capacity=len(model.stages))
+        var encoded = model.encoder.transform(X)
         for stage in model.stages:
-            Self._apply_stage(raw, stage, X)
+            Self._apply_stage(raw, stage, encoded)
             results.append(convert(raw))
         return results^
 

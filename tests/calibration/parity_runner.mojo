@@ -3,6 +3,7 @@ from std.sys import argv
 from std.utils import Variant
 from std.math import isfinite
 import numojo as nm
+from moxie.base import clone
 from moxie.model_selection import KFold, StratifiedKFold
 from moxie.calibration import (
     CalibratedClassifierCV,
@@ -91,7 +92,11 @@ def compare_production[E: CalibrationEstimator, origin: ImmOrigin](
 ) raises:
     var use_auto = String(fields[7]) == "auto"
     var ensemble: Variant[Bool, String] = "auto"
-    if not use_auto:
+    if use_auto:
+        estimator = clone(estimator)
+        if not estimator.is_frozen() or not estimator.__sklearn_is_fitted__():
+            raise Error(context + ": clone must preserve the fitted frozen classifier")
+    else:
         ensemble = String(fields[7]) == "true"
     var model = CalibratedClassifierCV(
         estimator^, cv=3, method=String(fields[6]), ensemble=ensemble^
@@ -286,6 +291,35 @@ def main() raises:
                 adapt_classifier(FrozenEstimator(estimator^)),
                 x, y, w, q, expected, fields, context,
             )
+        elif kind.startswith("production_frozen_"):
+            var train_x = array(String(fields[10]))
+            var train_y = array(String(fields[11]))
+            var labels = List[Int](capacity=train_y.size)
+            for i in range(train_y.size):
+                labels.append(Int(train_y.item(i)))
+            if kind == "production_frozen_gaussian":
+                var estimator = GaussianNB()
+                _ = estimator.fit(train_x, labels)
+                compare_production(
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            elif kind == "production_frozen_lda":
+                var estimator = LinearDiscriminantAnalysis()
+                _ = estimator.fit(train_x, labels)
+                compare_production(
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            elif kind == "production_frozen_qda":
+                var estimator = QuadraticDiscriminantAnalysis()
+                _ = estimator.fit(train_x, labels)
+                compare_production(
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            else:
+                raise Error("unknown frozen production parity case")
         else:
             raise Error("unknown parity case")
         count += 1

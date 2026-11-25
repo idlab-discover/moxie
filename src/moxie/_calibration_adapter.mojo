@@ -38,6 +38,15 @@ def adapt_classifier(
 
 
 def adapt_classifier(
+    var estimator: FrozenEstimator[GaussianNB[]],
+) -> ClassifierCalibrationAdapter[FrozenEstimator[GaussianNB[]]]:
+    def classes(model: FrozenEstimator[GaussianNB[]]) raises -> Array:
+        return _numeric_classes(model.estimator().classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "GaussianNB")
+
+
+def adapt_classifier(
     var estimator: LinearDiscriminantAnalysis[],
 ) -> ClassifierCalibrationAdapter[LinearDiscriminantAnalysis[]]:
     def classes(model: LinearDiscriminantAnalysis[]) raises -> Array:
@@ -47,10 +56,28 @@ def adapt_classifier(
 
 
 def adapt_classifier(
+    var estimator: FrozenEstimator[LinearDiscriminantAnalysis[]],
+) -> ClassifierCalibrationAdapter[FrozenEstimator[LinearDiscriminantAnalysis[]]]:
+    def classes(model: FrozenEstimator[LinearDiscriminantAnalysis[]]) raises -> Array:
+        return _numeric_classes(model.estimator().classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "LinearDiscriminantAnalysis")
+
+
+def adapt_classifier(
     var estimator: QuadraticDiscriminantAnalysis[],
 ) -> ClassifierCalibrationAdapter[QuadraticDiscriminantAnalysis[]]:
     def classes(model: QuadraticDiscriminantAnalysis[]) raises -> Array:
         return _numeric_classes(model.classes_)
+
+    return ClassifierCalibrationAdapter(estimator^, classes, "QuadraticDiscriminantAnalysis")
+
+
+def adapt_classifier(
+    var estimator: FrozenEstimator[QuadraticDiscriminantAnalysis[]],
+) -> ClassifierCalibrationAdapter[FrozenEstimator[QuadraticDiscriminantAnalysis[]]]:
+    def classes(model: FrozenEstimator[QuadraticDiscriminantAnalysis[]]) raises -> Array:
+        return _numeric_classes(model.estimator().classes_)
 
     return ClassifierCalibrationAdapter(estimator^, classes, "QuadraticDiscriminantAnalysis")
 

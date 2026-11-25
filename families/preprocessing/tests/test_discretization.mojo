@@ -149,6 +149,43 @@ def test_random_state() raises:
     assert_equal(unseeded.n_bins_.size, 2)
 
 
+def test_fit_warning_lifecycle() raises:
+    var model = KBinsDiscretizer(5, encode="ordinal")
+    assert_equal(len(model.fit_warnings), 0)
+
+    var X = zeros[DType.float64](Shape(6, 2))
+    X.unsafe_set(10, 1)
+    _ = model.fit_transform(X)
+    assert_equal(len(model.fit_warnings), 2)
+    assert_equal(model.fit_warnings[0].category, "UserWarning")
+    assert_equal(
+        model.fit_warnings[0].message,
+        "Bins whose width are too small (i.e., <= 1e-8) in feature 0 are removed. Consider decreasing the number of bins.",
+    )
+    assert_equal(model.fit_warnings[1].category, "UserWarning")
+    assert_equal(
+        model.fit_warnings[1].message, "Feature 1 is constant and will be replaced with 0."
+    )
+    var fitted_copy = model.copy()
+    var fresh = clone(model)
+    assert_equal(len(fresh.fit_warnings), 0)
+
+    # The first column is constant, but a later feature fails before commit.
+    var too_few = zeros[DType.float64](Shape(2, 2))
+    too_few.unsafe_set(3, 1)
+    _ = model.set_params(strategy=String("kmeans"))
+    with assert_raises(contains="n_samples=2 should be >= n_clusters=5"):
+        _ = model.fit(too_few)
+    assert_equal(len(model.fit_warnings), 2)
+    assert_equal(model.fit_warnings[0].message, fitted_copy.fit_warnings[0].message)
+    assert_equal(model.fit_warnings[1].message, fitted_copy.fit_warnings[1].message)
+
+    _ = model.set_params(strategy=String("uniform"))
+    _ = model.fit(data(8, 2))
+    assert_equal(len(model.fit_warnings), 0)
+    assert_equal(len(fitted_copy.fit_warnings), 2)
+
+
 def test_sample_weight() raises:
     var X = data(10, 2)
     var w = zeros[DType.float64](Shape(10))
@@ -174,5 +211,6 @@ def main() raises:
     test_refit_and_failed_fit_keep_state()
     test_dtypes_and_constant_feature()
     test_random_state()
+    test_fit_warning_lifecycle()
     test_sample_weight()
-    print("PASS discretization contracts: params, clone, sparse default, validation, refit, dtypes, random_state, sample_weight")
+    print("PASS discretization contracts: params, clone, sparse default, validation, refit, dtypes, random_state, fit warnings, sample_weight")

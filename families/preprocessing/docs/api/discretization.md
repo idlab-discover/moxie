@@ -107,8 +107,12 @@ family's estimator when that exists.
 * `random_state` accepts an integer or None; a RandomState instance is the
   `fit(X, rng)` overload. Keyword `set_params(subsample=Optional[Int](None))`
   selects `subsample=None` (the outer Optional marks "given").
-* No warnings are emitted (constant features, removed bins): Moxie has no
-  warning channel; inspect `n_bins_`.
+* Read `fit_warnings: List[FitWarning]` after a dense fit. It records
+  `UserWarning` messages for constant features and bins removed for widths
+  <= 1e-8, in feature order. See the
+  [shared fit warning contract](../../../../docs/interfaces.md#fit-warnings)
+  for refit, copy and clone behavior. The nested scikit-learn KMeans
+  convergence warning is outside this record's current coverage.
 * NumPy's `argsort`/`argpartition` order equal values unspecified (and, for
   `argpartition`, CPU-dependently through x86-simd-sort). Weighted quantiles sort
   ties stably, which can change the cumulative-weight rounding; k-means relocation
@@ -129,9 +133,10 @@ subsample itself is never materialized. `transform` allocates only its result;
 
 ## Parity
 
-`tests/parity/test_discretization.py`, 1862 checks, all exact (rtol = atol = 0):
+`tests/parity/test_discretization.py` checks exact agreement (rtol = atol = 0):
 `n_bins_`, every `bin_edges_` array, transforms (including a negative-stride
-view), inverse transforms and feature names. Cases: five datasets (Gaussian,
+view), inverse transforms, feature names, and the category, text and order of
+the explicit discretizer warnings. Cases: five datasets (Gaussian,
 skewed with repeated integers, a large offset, constant columns, few distinct
 values), Float32 and Float64; uniform, k-means and all nine quantile methods;
 weighted quantile (both methods, zero and integer weights), weighted uniform

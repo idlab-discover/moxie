@@ -32,6 +32,7 @@ from moxie.preprocessing._special_math import pairwise_sum, pairwise_sum_in, sor
 from moxie.preprocessing._percentiles import (
     linspace_scalar, weighted_percentile_column, percentile_sorted, quantile_method_code,
 )
+from moxie.warnings import FitWarning
 
 
 comptime _OWNER = "KBinsDiscretizer"
@@ -246,6 +247,7 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
     output dtype; its default (the input dtype) is sklearn's `dtype=None`.
     `encode='onehot'`, sklearn's default, needs sparse output and raises at
     fit: select `'onehot-dense'` or `'ordinal'`.
+    `fit_warnings` records constant features and bins removed for narrow widths.
     """
     comptime Params = KBinsDiscretizerParams
     comptime Input = NDArray[Self.dtype]
@@ -262,6 +264,7 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
     var n_bins_: NDArray[DType.int64]
     var n_features_in_: Int
     var feature_names_in_: Optional[List[String]]
+    var fit_warnings: List[FitWarning]
     # True where sklearn's bin_edges_[j] is Float32 (Float32 input with uniform,
     # k-means or weighted quantile); inverse_transform then averages in Float32.
     var _float32_edges: List[Bool]
@@ -283,6 +286,7 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
         self.n_bins_ = vector[DType.int64](0)
         self.n_features_in_ = 0
         self.feature_names_in_ = None
+        self.fit_warnings = []
         self._float32_edges = List[Bool]()
 
     def __init__(out self, n_bins: List[Int], *, encode: String = "onehot", strategy: String = "quantile",
@@ -497,6 +501,7 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
         var edges_out = List[NDArray[DType.float64]]()
         var float32_edges = List[Bool]()
         var counts = vector[DType.int64](p)
+        var warnings = List[FitWarning]()
         for j in range(p):
             # Extremes, over nonzero-weight samples for the uniform/k-means strategies.
             var masked = weighted and not self.strategy == "quantile"
@@ -520,6 +525,10 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
                 seen = True
             var nb = n_bins[j]
             if col_min == col_max:
+                warnings.append(FitWarning(
+                    "UserWarning",
+                    String("Feature ", j, " is constant and will be replaced with 0."),
+                ))
                 # Constant feature: a single bin with edges [-inf, inf] (Float64).
                 var constant = vector[DType.float64](2)
                 constant.unsafe_set(0, -inf[DType.float64]())
@@ -569,6 +578,15 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
                             keep = (edges[k] - edges[k - 1]) > 1e-8
                     if keep:
                         kept.append(edges[k])
+                if len(kept) - 1 != nb:
+                    warnings.append(FitWarning(
+                        "UserWarning",
+                        String(
+                            "Bins whose width are too small (i.e., <= 1e-8) in feature ",
+                            j,
+                            " are removed. Consider decreasing the number of bins.",
+                        ),
+                    ))
                 edges = kept^
             var array = vector[DType.float64](len(edges))
             for k in range(len(edges)):
@@ -582,6 +600,7 @@ struct KBinsDiscretizer[dtype: DType = DType.float64, out_dtype: DType = dtype](
         self.n_bins_ = counts^
         self.n_features_in_ = p
         self.feature_names_in_ = None
+        self.fit_warnings = warnings^
 
     def fit[
         origin: MutOrigin,

@@ -102,7 +102,9 @@ def add_case(tag, X, Xt, *, nb=4, encode='ordinal', strategy='quantile', method=
                            dtype=out, subsample=subsample, random_state=seed)
     fit_X = X if layout != 'fortran' else np.asfortranarray(X)
     fit_X = fit_X[::-1] if layout == 'reversed' else fit_X
-    ref.fit(fit_X, sample_weight=None if weights is None else (weights if np.ndim(weights) == 0 else (weights[::-1] if layout == 'reversed' else weights)))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always', UserWarning)
+        ref.fit(fit_X, sample_weight=None if weights is None else (weights if np.ndim(weights) == 0 else (weights[::-1] if layout == 'reversed' else weights)))
     view = {'fortran': 'fortran(X)', 'reversed': 'reversed_rows(X)', None: 'X'}[layout]
     body = [f'var X = {d.input(X)}', f'var Xt = {d.input(Xt)}',
             f'var est = KBinsDiscretizer[{MOJO[dt]}, {MOJO[ot]}]({mojo_params(nb, encode, strategy, method, subsample, seed)})']
@@ -113,9 +115,18 @@ def add_case(tag, X, Xt, *, nb=4, encode='ordinal', strategy='quantile', method=
     else:
         W = d.input(np.asarray(weights[::-1] if layout == 'reversed' else weights, dtype=dt))
         body.append(f'est.fit({view}, sample_weight={W})')
-    body += ['emit_model("", est)', 'var T = est.transform(Xt)', 'emit("t", T)',
+    body += ['var categories = List[String]()', 'var messages = List[String]()',
+             'for warning in est.fit_warnings:',
+             '    categories.append(warning.category)', '    messages.append(warning.message)',
+             'emit_names("warning_categories", categories)', 'emit_names("warning_messages", messages)',
+             'emit_model("", est)', 'var T = est.transform(Xt)', 'emit("t", T)',
              'emit("inv", est.inverse_transform(T))', 'emit_names("names", est.get_feature_names_out())',
              'emit("tview", est.transform(reversed_rows(Xt)))']
+    # KBinsDiscretizer issues plain UserWarning. Its nested KMeans may issue
+    # ConvergenceWarning, which this comparison does not cover.
+    direct = [warning for warning in caught if warning.category is UserWarning]
+    expect(tag, 'warning_categories', [warning.category.__name__ for warning in direct], 'names')
+    expect(tag, 'warning_messages', [str(warning.message) for warning in direct], 'names')
     expect_model(tag, ref)
     T = ref.transform(Xt)
     expect(tag, 't', T, 'typed')

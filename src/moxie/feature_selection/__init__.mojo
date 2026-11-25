@@ -21,6 +21,7 @@ from ._sequential_adapter import DenseSupervisedCV, EstimatorCVScore
 from ._incremental_pca_importance import IncrementalPCAImportance, IncrementalPCAUpdateParams
 
 from ._tree_importance import DecisionTreeClassifierImportance
+from ._forest_importance import ForestImportance
 
 from ._linear_svc_importance import LinearSVCImportance
 from ._svc_importance import SVCImportance

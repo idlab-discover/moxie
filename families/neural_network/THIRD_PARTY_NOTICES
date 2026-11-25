@@ -1,5 +1,6 @@
-The dense MLP estimators and public APIs are adapted from scikit-learn at revision
-4358542a1bd39af2e7e1cbace8b9fed067473c5b.
+The dense MLP estimators, public APIs, and training-curves notebook configuration
+are adapted from scikit-learn at revision 4358542a1bd39af2e7e1cbace8b9fed067473c5b.
+The notebook reference is examples/neural_networks/plot_mlp_training_curves.py.
 
 BSD 3-Clause License
 

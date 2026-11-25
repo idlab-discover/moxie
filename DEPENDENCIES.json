@@ -113,6 +113,9 @@
         "moxie.covariance._state": {
           "file": "src/moxie/covariance/_state.mojo"
         },
+        "moxie.covariance._serialization": {
+          "file": "src/moxie/covariance/_serialization.mojo"
+        },
         "moxie.covariance._param_update": {
           "file": "src/moxie/covariance/_param_update.mojo"
         },
@@ -636,7 +639,11 @@
             "fast_mcd": "moxie.covariance._robust_covariance",
             "GraphicalLasso": "moxie.covariance._graph_lasso",
             "graphical_lasso": "moxie.covariance._graph_lasso",
-            "GraphicalLassoCV": "moxie.covariance._graph_lasso"
+            "GraphicalLassoCV": "moxie.covariance._graph_lasso",
+            "EmpiricalCovarianceSchema": "moxie.covariance._serialization",
+            "LedoitWolfSchema": "moxie.covariance._serialization",
+            "OASSchema": "moxie.covariance._serialization",
+            "ShrunkCovarianceSchema": "moxie.covariance._serialization"
           },
           "moxie._discriminant_analysis": {},
           "moxie._projection": {},

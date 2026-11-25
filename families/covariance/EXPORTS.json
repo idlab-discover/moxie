@@ -20,7 +20,11 @@
       "fast_mcd": "moxie.covariance._robust_covariance",
       "GraphicalLasso": "moxie.covariance._graph_lasso",
       "graphical_lasso": "moxie.covariance._graph_lasso",
-      "GraphicalLassoCV": "moxie.covariance._graph_lasso"
+      "GraphicalLassoCV": "moxie.covariance._graph_lasso",
+      "EmpiricalCovarianceSchema": "moxie.covariance._serialization",
+      "LedoitWolfSchema": "moxie.covariance._serialization",
+      "OASSchema": "moxie.covariance._serialization",
+      "ShrunkCovarianceSchema": "moxie.covariance._serialization"
     }
   }
 }

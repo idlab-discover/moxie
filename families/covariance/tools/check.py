@@ -5,6 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 MOXIE=ROOT.parents[1]
 ASSEMBLY=MOXIE/'shared/assembly'
 ALGORITHMS = ('empirical', 'shrinkage', 'robust', 'graphical')
+SCHEMAS = {'EmpiricalCovarianceSchema', 'ShrunkCovarianceSchema', 'LedoitWolfSchema', 'OASSchema'}
 CONSUMERS=[ROOT/'tests/consumers'/n for n in ('a','b')]
 def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
 def environment(c):
@@ -25,6 +26,12 @@ def assemble(c,lock=None):
 def compile_file(c,source,name):
     run('mojo','build','-O3','--fp-mode=contract=off','-I',c/'builds/deps','-I',ROOT/'examples','-I',ROOT/'tests/support',source,'-o',c/'builds'/name,c=c)
 
+def build_serialization():
+    compile_file(ROOT, ROOT/'tests/test_serialization.mojo', 'test_serialization')
+
+def test_serialization():
+    run(sys.executable, ROOT/'tests/serialization_parity.py')
+
 def build():
     assert run('mojo','--version',capture=True).stdout.startswith('Mojo 1.0.0 ')
     metadata=list(Path(sys.prefix,'conda-meta').glob('max-core-*.json'))
@@ -40,6 +47,7 @@ def build():
             compile_file(c,ROOT/'tests/test_public.mojo','test_public')
             compile_file(c,ROOT/'tests/test_params.mojo','test_params')
             compile_file(c,ROOT/'tests/test_fluent.mojo','test_fluent')
+            build_serialization()
             compile_file(c,ROOT/'tests/audit_driver.mojo','audit_driver')
             compile_file(c,ROOT/'tests/shrinkage_boundary_driver.mojo','shrinkage_boundary_driver')
             compile_file(c,ROOT/'tests/singular_driver.mojo','singular_driver')
@@ -50,13 +58,14 @@ def build():
                     compile_file(c,source,f'{algorithm}_{source.stem}')
         else: compile_file(c,c/'main.mojo','probe')
 
-def test():
+def test_manifest():
     reference = MOXIE.parent/'scikit-learn/sklearn/covariance/__init__.py'
     tree = ast.parse(reference.read_text())
     public = next(ast.literal_eval(node.value) for node in tree.body
                   if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == '__all__' for t in node.targets))
     exports = json.loads((ROOT/'EXPORTS.json').read_text())['packages']['moxie.covariance']
-    assert set(exports) == set(public) | {'CovarianceEstimator', 'RobustCovarianceDetector'}
+    assert set(exports) == set(public) | {'CovarianceEstimator', 'RobustCovarianceDetector'} | SCHEMAS
+    assert all(exports[name] == 'moxie.covariance._serialization' for name in SCHEMAS)
     assert all(exports[name] != 'moxie.covariance._api' for name in public)
     manifest = json.loads((MOXIE/'DEPENDENCIES.json').read_text())
     owner = next(p for p in manifest['projects'] if p['id'] == 'moxie')
@@ -68,8 +77,12 @@ def test():
             assert owner['modules'][module]['file'].startswith('src/moxie/covariance/')
     assert all((MOXIE/p['path']).resolve() != MOXIE.parent/'moxie-covariance'
                for p in manifest['projects'])
+
+def test():
+    test_manifest()
     run(ROOT/'builds/test_public')
     run(ROOT/'builds/test_fluent')
+    test_serialization()
     run(sys.executable, ROOT/'tests/test_diagnostics.py')
     run(sys.executable, ROOT/'tests/test_likelihood.py')
     run(sys.executable, ROOT/'tests/singular_boundaries.py')
@@ -114,6 +127,12 @@ def test():
     print('PASS: isolated assembly, missing sources, conflicting ownership/exports, unsupported capability checks')
 
 if __name__=='__main__':
+    if sys.argv[1] == 'serialization':
+        assemble(ROOT)
+        build_serialization()
+        test_manifest()
+        test_serialization()
+        sys.exit(0)
     if not sys.argv[1].endswith('-only'): build()
     if sys.argv[1] in ('test', 'test-only'): test()
     elif sys.argv[1]=='start': run(ROOT/'builds/ownership')

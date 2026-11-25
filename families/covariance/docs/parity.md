@@ -24,11 +24,40 @@ and weighted accuracy. GraphicalLasso and GraphicalLassoCV support coordinate
 descent and LARS, alpha zero, cost histories and convergence diagnostics. CV
 supports explicit grids and materialized custom splits with typed results.
 
+## Model files
+
+`EmpiricalCovarianceSchema`, `ShrunkCovarianceSchema`, `LedoitWolfSchema`, and
+`OASSchema` are exported from `moxie.covariance`. Pass the matching schema
+and dtype explicitly to the shared experimental model-file API:
+
+```mojo
+from moxie.covariance import LedoitWolf, LedoitWolfSchema
+from moxie.serialization import load_model, save_model
+
+var model = LedoitWolf[DType.float32]()
+_ = model.fit(X)
+save_model[LedoitWolfSchema[DType.float32]](model, "covariance.moxie")
+var restored = load_model[LedoitWolfSchema[DType.float32]]("covariance.moxie")
+var distances = restored.mahalanobis(X)
+```
+
+Files preserve fitted or unfitted state, constructor settings, optional
+stored precision, and the widened Float64 matrices used for inference.
+Post-fit parameter updates are saved separately from learned values. Loading
+never refits. The schemas reject inconsistent learned state, including partial
+first fits and feature-count mismatches after failed refits. Each schema
+defaults to Float64 and requires an exact estimator identity, schema version,
+and dtype match. See [native model files](../../../docs/serialization.md).
+
+Run `python families/covariance/tools/check.py serialization` in the locked
+Moxie environment for the focused build, malformed archive tests, and
+restored inference comparisons against pinned scikit-learn in both dtypes.
+
 ## Limits callers must retain
 
 - Dense Float32/Float64 only. Static array dtypes differ from option-dependent
   NumPy promotion. Python metadata routing, feature names, reflection and
-  bindings are unsupported. Covariance persistence is not implemented.
+  bindings are unsupported.
 - `fast_mcd` custom covariance callables and parallel GraphicalLassoCV are
   unsupported. Robust comparison suites normalize reference unstable tie
   ordering; the audit deliberately does not.

@@ -35,6 +35,9 @@
         "moxie.metrics._precision_recall": {
           "file": "src/moxie/metrics/_precision_recall.mojo"
         },
+        "moxie.metrics._regression": {
+          "file": "src/moxie/metrics/_regression.mojo"
+        },
         "moxie.metrics._report": {
           "file": "src/moxie/metrics/_report.mojo"
         },
@@ -627,12 +630,25 @@
             "classification_report": "moxie.metrics._report",
             "classification_report_dict": "moxie.metrics._report",
             "confusion_matrix": "moxie.metrics._confusion",
+            "explained_variance_score": "moxie.metrics._regression",
+            "explained_variance_score_raw": "moxie.metrics._regression",
             "f1_score": "moxie.metrics._precision_recall",
             "fbeta_score": "moxie.metrics._precision_recall",
             "hamming_loss": "moxie.metrics._classification",
+            "max_error": "moxie.metrics._regression",
+            "mean_absolute_error": "moxie.metrics._regression",
+            "mean_absolute_error_raw": "moxie.metrics._regression",
+            "mean_squared_error": "moxie.metrics._regression",
+            "mean_squared_error_raw": "moxie.metrics._regression",
+            "median_absolute_error": "moxie.metrics._regression",
+            "median_absolute_error_raw": "moxie.metrics._regression",
             "precision_recall_fscore_support": "moxie.metrics._precision_recall",
             "precision_score": "moxie.metrics._precision_recall",
+            "r2_score": "moxie.metrics._regression",
+            "r2_score_raw": "moxie.metrics._regression",
             "recall_score": "moxie.metrics._precision_recall",
+            "root_mean_squared_error": "moxie.metrics._regression",
+            "root_mean_squared_error_raw": "moxie.metrics._regression",
             "zero_one_loss": "moxie.metrics._classification"
           },
           "moxie.utils": {

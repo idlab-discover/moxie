@@ -37,8 +37,10 @@ not implemented. Estimator families document their own modules.
 `moxie.metrics`. The module exports agreement scores, confusion matrices,
 balanced accuracy, precision, recall, F1, F-beta, per-label
 precision/recall/F-score/support, and text and typed classification reports.
-These functions support sample weights.
-Scalar metrics can be called from a `moxie.model_selection.TypedScorer`.
+These functions support sample weights. [Dense regression metrics](metrics/regression.md)
+include R², explained variance, mean and median absolute error, mean squared
+error, root mean squared error, and maximum error. Scalar metrics can be called
+from a `moxie.model_selection.TypedScorer`.
 
 Estimator `score` methods provide accuracy for `ClassifierMixin`, R² for
 `RegressorMixin`, and estimator-specific scores for other families.
@@ -46,9 +48,8 @@ Estimator `score` methods provide accuracy for `ClassifierMixin`, R² for
 scorer structs. Families also retain their private metric helpers and
 `moxie.calibration.calibration_curve` remains in the calibration module.
 
-Additional classification metrics, regression, ranking and clustering
-metrics, pairwise kernels and distances, scorer factories and display
-objects remain open.
+Log loss and other classification metrics, ranking and clustering metrics,
+pairwise kernels and distances, scorer factories and display objects remain open.
 
 ## `sklearn.datasets`
 

@@ -1,4 +1,4 @@
-"""Check native dense classification scores against the pinned local sklearn build."""
+"""Check native dense metrics against the pinned local sklearn build."""
 import argparse
 from pathlib import Path
 import subprocess
@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REVISION = "4358542a1bd39af2e7e1cbace8b9fed067473c5b"
 
 
-def verify_oracle():
+def verify_oracle(*, regression=False):
     checkout = ROOT.parent / "scikit-learn"
     installed = Path(sklearn.__file__).resolve().parent
     paths = [
@@ -42,6 +42,17 @@ def verify_oracle():
         "model_selection/_split.py",
         "model_selection/_validation.py",
     ]
+    if regression:
+        paths = [
+            "metrics/_regression.py",
+            "metrics/_scorer.py",
+            "utils/_array_api.py",
+            "utils/stats.py",
+            "utils/validation.py",
+            "dummy.py",
+            "model_selection/_split.py",
+            "model_selection/_validation.py",
+        ]
     for path in paths:
         committed = subprocess.check_output(
             ["git", "-C", checkout, "show", f"{REVISION}:sklearn/{path}"]
@@ -522,13 +533,48 @@ def compare(actual, expected):
         )
 
 
+def check_regression(executable, scorer):
+    from regression_parity import regression_cases, regression_cv_scores, regression_errors
+
+    verify_oracle(regression=True)
+    expected, warnings = regression_cases()
+    actual = native_output(executable, warnings)
+    np.testing.assert_equal(set(actual), set(expected))
+    for name, values in expected.items():
+        # Native Float32 and mixed inputs reduce in Float64. Per-output order
+        # and shape are checked by both the native assertions and this comparison.
+        tolerance = 2e-6 if name.startswith(("float32_", "mixed_")) else 1e-14
+        np.testing.assert_allclose(
+            actual[name], values, atol=tolerance, rtol=tolerance, equal_nan=True, err_msg=name,
+        )
+    errors = regression_errors()
+    scores = regression_cv_scores()
+    compare(native_output(scorer), scores)
+    print(
+        f"Matched {sum(map(len, expected.values()))} regression metric values, "
+        f"{errors} error cases, {len(warnings)} warnings, "
+        f"and {sum(map(len, scores.values()))} weighted CV scores against sklearn {REVISION}"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("classification", type=Path)
-    parser.add_argument("scorer", type=Path)
-    parser.add_argument("precision_recall", type=Path)
+    parser.add_argument("classification", type=Path, nargs="?")
+    parser.add_argument("scorer", type=Path, nargs="?")
+    parser.add_argument("precision_recall", type=Path, nargs="?")
     parser.add_argument("classification_report", type=Path, nargs="?")
+    parser.add_argument("--regression", type=Path)
+    parser.add_argument("--regression-scorer", type=Path)
     args = parser.parse_args()
+    if args.regression is not None or args.regression_scorer is not None:
+        if args.regression is None or args.regression_scorer is None:
+            parser.error("--regression and --regression-scorer must be used together")
+        if args.classification is not None:
+            parser.error("select the regression or classification binaries for a scoped comparison")
+        check_regression(args.regression, args.regression_scorer)
+        return
+    if None in (args.classification, args.scorer, args.precision_recall):
+        parser.error("classification parity requires the classification, scorer and precision_recall binaries")
     verify_oracle()
     cases = classification_cases() | confusion_cases()
     compare(native_output(args.classification), cases)

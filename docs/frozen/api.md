@@ -220,10 +220,11 @@ frozen branches in `FeatureUnion` and `ColumnTransformer` (training statistics
 and `frozen__name` feature names, as in sklearn),
 `moxie.model_selection.cross_val_score` (each fold scores the frozen model, as
 in sklearn, because clone keeps it and fit is a no-op) and Float32 transforms. The notebook
-`notebooks/frozen/plot_frozen_examples.ipynb` replays the official example and
-compares a frozen classifier, `CalibratedClassifierCV` over a frozen calibration
-adapter and a frozen pipeline step with sklearn
-(`pixi run -e notebooks notebooks notebooks/frozen`).
+`notebooks/frozen/plot_frozen_examples.ipynb` compares a frozen dense
+`LogisticRegression`, calibration of its fitted state through a notebook-local
+adapter, and a pipeline with a frozen `StandardScaler` followed by logistic
+regression. Run it with
+`pixi run -e notebooks notebooks notebooks/frozen/plot_frozen_examples.ipynb`.
 
 Capability probes establish forwarding contracts, not numerical coverage of every
 wrapped estimator. Python object identity, arbitrary attribute/index forwarding,

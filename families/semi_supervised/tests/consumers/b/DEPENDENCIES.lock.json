@@ -39,7 +39,8 @@
         "src/moxie/frozen/_base.mojo": null,
         "src/moxie/_calibration_cv.mojo": null,
         "src/moxie/_calibration_display.mojo": null,
-        "src/moxie/_calibration_splits.mojo": null
+        "src/moxie/_calibration_splits.mojo": null,
+        "src/moxie/_isotonic_adapters.mojo": null
       },
       "id": "moxie",
       "modules": {
@@ -72,6 +73,9 @@
         },
         "moxie._calibration_splits": {
           "file": "src/moxie/_calibration_splits.mojo"
+        },
+        "moxie._isotonic_adapters": {
+          "file": "src/moxie/_isotonic_adapters.mojo"
         }
       },
       "path": "../../../../..",
@@ -783,6 +787,15 @@
         },
         "moxie.model_selection._indices": {
           "file": "src/moxie/model_selection/_indices.mojo"
+        },
+        "moxie.model_selection._candidates": {
+          "file": "src/moxie/model_selection/_candidates.mojo"
+        },
+        "moxie.model_selection._evaluation": {
+          "file": "src/moxie/model_selection/_evaluation.mojo"
+        },
+        "moxie.model_selection._results": {
+          "file": "src/moxie/model_selection/_results.mojo"
         }
       },
       "assets": {},
@@ -792,6 +805,7 @@
           "moxie": {},
           "moxie.model_selection": {
             "IndexArray": "moxie.model_selection._indices",
+            "IndexSplit": "moxie.model_selection._indices",
             "SplitCursor": "moxie.model_selection._indices"
           }
         }
@@ -817,10 +831,52 @@
           "moxie.model_selection": {
             "KFold": "moxie.model_selection._split",
             "LeaveOneOut": "moxie.model_selection._split",
-            "StratifiedKFold": "moxie.model_selection._split"
+            "StratifiedKFold": "moxie.model_selection._split",
+            "select_rows": "moxie.model_selection._split"
           }
         }
       },
+      "files": {},
+      "revision": "HEAD"
+    },
+    {
+      "id": "search",
+      "path": "../../../../model_selection/algorithms/search",
+      "modules": {
+        "moxie.model_selection._search_parameters": {
+          "file": "src/moxie/model_selection/_search_parameters.mojo"
+        },
+        "moxie.model_selection._search": {
+          "file": "src/moxie/model_selection/_search.mojo"
+        }
+      },
+      "assets": {
+        "licenses/model_selection-search-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.model_selection": {
+            "SearchAdapter": "moxie.model_selection._search",
+            "SearchScorer": "moxie.model_selection._search"
+          }
+        }
+      },
+      "files": {},
+      "revision": "HEAD"
+    },
+    {
+      "id": "validation",
+      "path": "../../../../model_selection/algorithms/validation",
+      "modules": {
+        "moxie.model_selection._validation": {
+          "file": "src/moxie/model_selection/_validation.mojo"
+        }
+      },
+      "assets": {
+        "licenses/model_selection-validation-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": null,
       "files": {},
       "revision": "HEAD"
     },

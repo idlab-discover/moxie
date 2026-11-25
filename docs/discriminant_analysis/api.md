@@ -59,6 +59,7 @@ and call `pipe.fit_transform(X, y.copy())` for training data or
 | `predict_proba(X)`, `predict_log_proba(X)` | yes | yes | `(n, n_classes)`; columns follow `classes_` |
 | `score(X, y, sample_weight=None)` | yes | yes | accuracy (`Float64`) |
 | `transform(X)`, `fit_transform(X, y)` | yes (not `lsqr`) | no | `(n, min(rank, n_components))` |
+| `transform_table(X)`, `fit_transform_table(X, y)` | yes (not `lsqr`) | no | `ColumnTable[dtype]` with component names |
 | `get_feature_names_out(input_features=None)` | yes | no | `lineardiscriminantanalysis0`, ... |
 | `get_n_features_in()` | yes | yes | `n_features_in_`; `NotFittedError` before fit |
 | `get_classes()` | integer labels | integer labels | owned `List[Int]` in fitted order, raises `NotFittedError` before fit |
@@ -108,7 +109,27 @@ The estimator stores an owned `Optional[List[String]]` in `feature_names_in_`.
 Named inference checks the fitted names and order when present. LDA also checks
 an explicit `input_features` against them. Numeric inference arrays are
 positional. Switching between named and positional inputs is silent. A positional refit, failed fit, or unfitted clone has
-`feature_names_in_ = None`. Projection returns an NDArray.
+`feature_names_in_ = None`.
+
+### Labeled projections
+
+Use `fit_transform_table(X, y)` and `transform_table(X)` to return a native
+`ColumnTable[dtype]` from LDA. Both methods accept a dense NDArray or a
+numeric `ColumnTable[dtype]` and preserve the projection's dtype and row order.
+The table uses positional rows and names its columns
+`lineardiscriminantanalysis0`, `lineardiscriminantanalysis1`, and so on.
+
+```mojo
+var training = lda.fit_transform_table(table, y.copy())
+var validation = lda.transform_table(X_query)
+var components = validation.schema().names
+```
+
+The explicit methods give labeled output a static Mojo return type.
+When an SVD projection has fewer directions than the configured component
+count, the table names only the columns present. A zero-width projection
+retains all rows and has an empty column schema. `get_feature_names_out()`
+reports the fitted component limit.
 
 ## Score sample-weight requests
 

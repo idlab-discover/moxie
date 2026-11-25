@@ -38,9 +38,11 @@ def check_named_input(da, runner):
             assert names.startswith('[') and names.endswith(']'), names
             _compare(da, routing, kind, dtype, names[1:-1].split(', '), values)
     assert seen == {
-        (kind, dtype) for kind in ['lda', 'qda', 'projection'] for dtype in ['float32', 'float64']
+        (kind, dtype)
+        for kind in ['lda', 'qda', 'projection', 'rank_reduced_projection']
+        for dtype in ['float32', 'float64']
     }, seen
-    print('Named-table and routed score parity PASS for LDA and QDA in Float32 and Float64')
+    print('Named-table, labeled projection and routed score parity PASS in Float32 and Float64')
 
 
 def _compare(da, routing, kind, dtype, names, values):
@@ -50,19 +52,32 @@ def _compare(da, routing, kind, dtype, names, values):
         columns=columns, dtype=dtype,
     )
     y = np.array([1, 1, 1, 1, 1, 2, 2, 2, 2])
+    if kind == 'rank_reduced_projection':
+        X = np.array(
+            [[-4, 0], [-2, 0], [-3, -1], [-3, 1],
+             [-1, 0], [1, 0], [0, -1], [0, 1],
+             [2, 0], [4, 0], [3, -1], [3, 1]], dtype=dtype,
+        )
+        y = np.repeat([0, 1, 2], 4)
     cls = da.QuadraticDiscriminantAnalysis if kind == 'qda' else da.LinearDiscriminantAnalysis
     model = cls().fit(X, y)
     # Float32 sklearn rounds intermediate values that Moxie computes in Float64.
     tol = 5e-4 if dtype == 'float32' else 1e-10
-    if kind == 'projection':
-        assert names == model.get_feature_names_out(columns).tolist()
-        expected = model.transform(X)[:, 0]
+    if kind in ('projection', 'rank_reduced_projection'):
+        expected = model.transform(X)
+        feature_names = model.get_feature_names_out().tolist()
+        assert names == feature_names[:expected.shape[1]]
+        if kind == 'rank_reduced_projection':
+            assert len(feature_names) == 2 and expected.shape == (12, 1)
+        else:
+            assert feature_names == model.get_feature_names_out(columns).tolist()
+            with np.testing.assert_raises_regex(ValueError, 'input_features is not equal'):
+                model.get_feature_names_out(columns[::-1])
+        expected = expected[:, 0]
         actual = np.array(ast.literal_eval(values[0]))
         # A discriminant direction is identifiable up to sign.
         actual *= np.sign(np.dot(actual, expected))
         np.testing.assert_allclose(actual, expected, atol=tol, rtol=tol)
-        with np.testing.assert_raises_regex(ValueError, 'input_features is not equal'):
-            model.get_feature_names_out(columns[::-1])
     else:
         assert names == model.feature_names_in_.tolist()
         assert ast.literal_eval(values[0]) == model.predict(X).tolist()

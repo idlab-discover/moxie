@@ -37,13 +37,20 @@ for dtype, tolerance in [(np.float32, 2e-6), (np.float64, 1e-12)]:
     io.close(expected["unweighted"], pipe.predict(X), 0, 0, "unweighted refit")
     nested = pipeline.Pipeline([
         ("copy", scalers.StandardScaler(with_mean=False, with_std=False)),
-        ("tail", pipe),
+        ("tail", pipeline.Pipeline([
+            ("scaler", scalers.StandardScaler()),
+            ("regressor", dummy.DummyRegressor()),
+        ])),
     ])
-    nested.fit(X, y, tail__model__sample_weight=weights[::-1])
+    nested.fit(X, y, tail__regressor__sample_weight=weights[::-1])
     io.close(expected["nested"], nested.predict(X), 0, 0, "nested weighted fit")
     for estimator in (nested, pipe):
-        key = "tail__model__sample_weight" if estimator is nested else "model__sample_weight"
+        key = "tail__regressor__sample_weight" if estimator is nested else "model__sample_weight"
         with np.testing.assert_raises(ValueError):
             estimator.fit(X, y, **{key: weights[:1]})
+    with np.testing.assert_raises(ValueError):
+        nested.fit(X, y, sample_weight=weights)
+    with np.testing.assert_raises(KeyError):
+        nested.fit(X, y, tail__model__sample_weight=weights)
 
-print("PASS: pinned sklearn weighted fit, unweighted refit, nested routing and invalid weights, Float32 and Float64")
+print("PASS: pinned sklearn named weighted fit, unweighted refit, nested routing and invalid inputs, Float32 and Float64")

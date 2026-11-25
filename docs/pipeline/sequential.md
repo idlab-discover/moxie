@@ -221,20 +221,30 @@ weights, conditional trait dispatch, and missing-score compilation failure.
 
 When the final estimator conforms to `WeightedSupervisedEstimator`, the
 pipeline also conforms to that trait and accepts
-`pipe.fit(X, y, sample_weight=weights)`. This keyword takes the final
-estimator's weight type and replaces sklearn's `stepname__sample_weight`
-spelling for the terminal step. Nested pipelines forward the same argument
-through their final estimators. The prefix fits with its ordinary inputs and
-target, and the final estimator validates the borrowed weights. Omit the
-keyword for unweighted fitting. The weighted overload is unavailable at
-compile time for other final estimators.
+`pipe.fit(X, y, sample_weight=weights)`. Nested pipelines forward the same
+argument through their final estimators. To use sklearn's step-qualified
+spelling, pass a typed dictionary in place of Python keyword expansion.
+
+```mojo
+_ = pipe.fit(X, y, fit_params={"regressor__sample_weight": weights.copy()})
+```
+
+The key uses the current terminal step name. If an outer pipeline names this
+pipeline `tail`, the key is `tail__regressor__sample_weight`. Both forms fit
+the prefix with its ordinary inputs and target and let the final estimator
+validate the borrowed weights. An empty `fit_params` dictionary or an ordinary
+`fit(X, y)` fits without weights. The dictionary overload checks the entire
+key set before fitting any step and raises `ValueError` for an unexpected
+key. Both overloads require a weighted final estimator. The dictionary also
+requires its weight type to be copyable and destructible.
 
 Float32 and Float64 tests use StandardScaler and DummyRegressor to compare
 direct and nested weighted fits and an unweighted refit against pinned
 scikit-learn. Predictions agree exactly on these fixtures. The unweighted
 scaler output is compared within `2e-6` for Float32 and `1e-12` for Float64 to
 allow rounding differences in standardization. Native tests also check
-generic trait dispatch, cloning, borrowed inputs, and invalid weights.
+generic trait dispatch, cloning, borrowed inputs, renamed nested steps, and
+validation of keys before any prefix is fitted.
 
 ## Probability prediction
 
@@ -529,9 +539,9 @@ API is **deferred** (absent from the typed API, so use fails at compile time):
 
 - `passthrough`/`None` steps;
 - constructor options `memory`, `verbose` and `transform_input`;
-- arbitrary fit parameter routing, metadata routing outside final supervised
-  scoring, callbacks,
-  `set_output` and `feature_names_in_`.
+- arbitrary fit parameters beyond terminal sample weights, metadata routing
+  outside final supervised scoring, callbacks, `set_output` and
+  `feature_names_in_`.
 
 [Dense FeatureUnion](feature-union.md) is implemented and can be a Pipeline
 prefix. Sparse execution remains deferred. This is not full sklearn parity.

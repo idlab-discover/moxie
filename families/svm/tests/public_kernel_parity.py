@@ -5,6 +5,7 @@ classes are executed from the pinned local checkout, with calls to LIBSVM
 redirected to the C++ oracle compiled from that same checkout.
 """
 from pathlib import Path
+import argparse
 import ast
 import importlib.util
 import json
@@ -91,7 +92,7 @@ def reference_classes():
     return classes
 
 
-def native(x, y, sw, query, kind, config, single=False, expect_error=False):
+def native(x, y, sw, query, kind, config, single=False, expect_error=False, round_trip=False):
     weights = config.get("class_weight")
     mode = "balanced" if weights == "balanced" else "explicit" if isinstance(weights, dict) else "none"
     gamma = config.get("gamma", "scale")
@@ -110,7 +111,10 @@ def native(x, y, sw, query, kind, config, single=False, expect_error=False):
             values.extend([label, weight])
     case = ROOT / "builds/public-kernel-case.txt"
     case.write_text(" ".join(map(str, values)) + "\n")
-    result = subprocess.run([str(ROOT / "builds/public_kernel_driver"), str(case)], text=True, capture_output=True, timeout=120)
+    command = [str(ROOT / "builds/public_kernel_driver"), str(case)]
+    if round_trip:
+        command.append(str(ROOT / "builds/public-kernel-model.moxie"))
+    result = subprocess.run(command, text=True, capture_output=True, timeout=120)
     if expect_error:
         assert result.returncode != 0 and "ValueError" in result.stdout + result.stderr, result.stdout + result.stderr
         return None
@@ -160,6 +164,9 @@ def compare(expected, got, query, kind, config):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--round-trip", action="store_true", help="compare restored native models")
+    round_trip = parser.parse_args().round_trip
     classes = reference_classes()
     rng = np.random.RandomState(194)
     results = []
@@ -194,7 +201,7 @@ def main():
                     warnings.simplefilter("ignore")
                     expected = classes[name](**config)
                     expected.fit(x, sample_weight=sw) if kind == 2 else expected.fit(x, y, sample_weight=sw)
-                    got = native(x, y, sw, query, kind, config, single)
+                    got = native(x, y, sw, query, kind, config, single, round_trip=round_trip)
                     compare(expected, got, query, kind, config)
                     if kind != 2:
                         np.testing.assert_allclose(got["score"], expected.score(x, y, sample_weight=sw), rtol=3e-5, atol=3e-6)
@@ -222,16 +229,20 @@ def main():
                 try:
                     expected.fit(x, sample_weight=sw) if kind == 2 else expected.fit(x, y, sample_weight=sw)
                 except ValueError:
-                    native(x, y, sw, query, kind, config, expect_error=True)
+                    native(x, y, sw, query, kind, config, expect_error=True, round_trip=round_trip)
                     results.append(dict(estimator=name, edge=edge, rejected=True))
                     continue
-                got = native(x, y, sw, query, kind, config)
+                got = native(x, y, sw, query, kind, config, round_trip=round_trip)
                 compare(expected, got, query, kind, config)
                 if kind != 2:
                     np.testing.assert_allclose(got["score"], expected.score(x, y, sample_weight=sw), rtol=3e-5, atol=3e-6)
                 results.append(dict(estimator=name, edge=edge, iterations_native=got["n_iter_"].tolist(), iterations_reference=np.atleast_1d(expected.n_iter_).tolist()))
-    (ROOT / "builds/public-kernel-parity.json").write_text(json.dumps(dict(revision=REVISION, cases=results), indent=2) + "\n")
-    print(f"PASS {len(results)} public kernel estimator comparisons against pinned sklearn wrappers and LIBSVM")
+    filename = "public-kernel-round-trip.json" if round_trip else "public-kernel-parity.json"
+    (ROOT / "builds" / filename).write_text(
+        json.dumps(dict(revision=REVISION, cases=results), indent=2) + "\n"
+    )
+    subject = "restored" if round_trip else "public"
+    print(f"PASS {len(results)} {subject} kernel estimator comparisons against pinned sklearn wrappers and LIBSVM")
 
 
 if __name__ == "__main__":

@@ -353,8 +353,12 @@ struct TargetEncoderSplits(Copyable, Sized):
         return folds^
 
 
-comptime TargetEncoderCV = Variant[Int, KFold, StratifiedKFold, TargetEncoderSplits]
-comptime _CVUpdate = Variant[type_of(None), Int, KFold, StratifiedKFold, TargetEncoderSplits]
+comptime TargetEncoderCV = Variant[
+    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None)
+]
+comptime _CVUpdate = Variant[
+    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), NoneType
+]
 
 
 def _test_fold_assignments(var cursor: KFold.Splits, n: Int) raises -> List[Int]:
@@ -458,11 +462,14 @@ struct TargetEncoder[
         *,
         target_type: Optional[String] = None,
         smooth: Optional[Optional[Float64]] = None,
-        cv: _CVUpdate = None,
+        cv: _CVUpdate = NoneType(),
         shuffle: Optional[Optional[Bool]] = None,
         random_state: Optional[Optional[Int]] = None,
     ) raises -> ref[self] Self:
-        """Outer None leaves a parameter unchanged; an inner None sets it to None."""
+        """Omit cv to keep it or pass None to select automatic five-fold CV.
+
+        For nested optionals, an outer None keeps the current configuration.
+        """
         if target_type:
             self.target_type = target_type.value()
         if smooth:
@@ -475,6 +482,8 @@ struct TargetEncoder[
             self.cv = TargetEncoderCV(cv[StratifiedKFold].copy())
         elif cv.isa[TargetEncoderSplits]():
             self.cv = TargetEncoderCV(cv[TargetEncoderSplits].copy())
+        elif cv.isa[type_of(None)]():
+            self.cv = TargetEncoderCV(None)
         if shuffle:
             self.shuffle = shuffle.value()
         if random_state:
@@ -501,7 +510,7 @@ struct TargetEncoder[
         if self.smooth and (isnan(self.smooth.value()) or self.smooth.value() < 0):
             raise Error("ValueError: The 'smooth' parameter of TargetEncoder must be a str among {'auto'} or a float in the range [0.0, inf). Got " + String(self.smooth.value()) + " instead.")
         if self.cv.isa[Int]() and self.cv[Int] < 2:
-            raise Error("ValueError: The 'cv' parameter of TargetEncoder must be an int in the range [2, inf), a supported splitter, or TargetEncoderSplits. Got " + String(self.cv[Int]) + " instead.")
+            raise Error("ValueError: The 'cv' parameter of TargetEncoder must be an int in the range [2, inf), a supported splitter, TargetEncoderSplits, or None. Got " + String(self.cv[Int]) + " instead.")
         if self.random_state and (self.random_state.value() < 0 or self.random_state.value() > 4294967295):
             raise Error("ValueError: The 'random_state' parameter of TargetEncoder must be an int in the range [0, 4294967295], an instance of 'numpy.random.mtrand.RandomState' or None or a str among {'deprecated'}. Got " + String(self.random_state.value()) + " instead.")
 
@@ -609,7 +618,9 @@ struct TargetEncoder[
             return self.cv[StratifiedKFold].n_splits
         if self.cv.isa[TargetEncoderSplits]():
             return len(self.cv[TargetEncoderSplits])
-        return self.cv[Int]
+        if self.cv.isa[Int]():
+            return self.cv[Int]
+        return 5
 
     def _shuffle(self) -> Bool:
         return self.shuffle.value() if self.shuffle else True
@@ -687,14 +698,14 @@ struct TargetEncoder[
                 return _test_fold_assignments(splitter.split(n, codes, rng[]), n)
         var labels = self._stratify_labels(y, n)
         if labels:
-            return stratified_kfold_test_folds(labels.value(), self.cv[Int], self._shuffle(), self.random_state)
-        return kfold_test_folds(n, self.cv[Int], self._shuffle(), self.random_state)
+            return stratified_kfold_test_folds(labels.value(), self._n_splits(), self._shuffle(), self.random_state)
+        return kfold_test_folds(n, self._n_splits(), self._shuffle(), self.random_state)
 
     def _folds(self, y: Self.Y.Labels, n: Int, mut random_state: RandomState) raises -> List[Int]:
         var labels = self._stratify_labels(y, n)
         if labels:
-            return stratified_kfold_test_folds(labels.value(), self.cv[Int], self._shuffle(), random_state)
-        return kfold_test_folds(n, self.cv[Int], self._shuffle(), random_state)
+            return stratified_kfold_test_folds(labels.value(), self._n_splits(), self._shuffle(), random_state)
+        return kfold_test_folds(n, self._n_splits(), self._shuffle(), random_state)
 
     def fit[
         origin: MutOrigin,
@@ -733,7 +744,7 @@ struct TargetEncoder[
     def fit_transform(mut self, X: Self.Input, y: Self.L) raises -> Self.Transformed:
         """Fit on all rows, then return the cross-fitted encoding of X.
 
-        With integer `cv`, folds shuffle with `random_state` (an integer
+        With integer or None `cv`, folds shuffle with `random_state` (an integer
         reseeds a fresh RandomState; None draws from the process default stream).
         Explicit split pairs are reused in the supplied order.
         """
@@ -746,10 +757,10 @@ struct TargetEncoder[
         """fit_transform shuffling folds with a caller-owned RandomState, advanced in place.
 
         The configured `random_state` is ignored, like passing a RandomState
-        instance as sklearn's `random_state`. Requires integer cv.
+        instance as sklearn's `random_state`. Requires integer or None cv.
         """
-        if not self.cv.isa[Int]():
-            raise Error("ValueError: caller-owned RandomState requires integer cv")
+        if not (self.cv.isa[Int]() or self.cv.isa[type_of(None)]()):
+            raise Error("ValueError: caller-owned RandomState requires integer cv or None")
         ref labels = rebind[Self.Y.Labels](y)
         var target = self._fit(X, labels)
         var folds = self._folds(labels, X[0].rows(), random_state)

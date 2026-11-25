@@ -1,7 +1,9 @@
 from std.memory import bitcast
 from std.sys import argv
 
+from moxie.ensemble._hist_gradient_boosting.binning import _BinMapper
 from moxie.ensemble._hist_gradient_boosting.grower import grow_tree
+from moxie.ensemble._hist_gradient_boosting.predictor import make_raw_tree
 from moxie.ensemble._hist_gradient_boosting.splitting import _SplitOptions
 from numojo import NDArray, Shape
 
@@ -129,6 +131,28 @@ def run_case(fields: List[Int]) raises:
     var predictions = grown.tree.predict(query)
     for i in range(predictions.size):
         print(bitcast[DType.int64](predictions.unsafe_get(i)))
+
+    # Deserialize the mapper's fitted metadata from the oracle fixture.
+    var mapper = _BinMapper(n_bins=n_bins)
+    mapper.n_bins_non_missing_ = counts^
+    mapper.is_categorical_ = categorical^
+    mapper.missing_values_bin_idx_ = UInt8(n_bins - 1)
+    for feature in range(n_features):
+        var count = Int(mapper.n_bins_non_missing_[feature])
+        if not mapper.is_categorical_[feature]:
+            count -= 1
+        var thresholds = List[Float64](capacity=count)
+        for _ in range(count):
+            thresholds.append(as_float64(fields[offset]))
+            offset += 1
+        mapper.bin_thresholds_.append(thresholds^)
+    var raw = NDArray[DType.float64](Shape(n_predict, n_features))
+    for i in range(raw.size):
+        raw.unsafe_set(i, as_float64(fields[offset]))
+        offset += 1
+    var raw_predictions = make_raw_tree(grown.tree, mapper).predict(raw)
+    for i in range(raw_predictions.size):
+        print(bitcast[DType.int64](raw_predictions.unsafe_get(i)))
 
 
 def main() raises:

@@ -4,9 +4,8 @@ Import `SimpleImputer`, `IntegerSimpleImputer`, `StringSimpleImputer`,
 `StringMissingIndicator`, and `MissingIndicator` from `moxie.impute` in the generated namespace. The family root and this algorithm
 both support `pixi run build`, `pixi run test`, and `pixi run parity` with the
 same verified family modules. The full assigned dense scope is **not complete**:
-non-string/heterogeneous categorical imputation and indicators remain
-implementation work. Dense integers and strings use the
-`IntegerSimpleImputer` and `StringSimpleImputer` specializations below.
+typed categorical imputation remains implementation work. Dense integers and
+strings use the `IntegerSimpleImputer` and `StringSimpleImputer` specializations below.
 
 `SimpleImputer[DType.float64]` (the default) and `[DType.float32]` accept NuMojo
 rank-2 arrays. Constructor keywords are `missing_values=MissingValue[dtype]()`,
@@ -72,6 +71,32 @@ Errors use Mojo Error with ValueError/NotFittedError prefixes. Python warnings,
 reflection, metadata routing, pandas and arbitrary heterogeneous Python objects
 remain binding concerns. This does not exclude native categorical imputation,
 which is still required unfinished work. See [family scope](../../../docs/scope.md).
+
+## Indicators for typed categorical columns
+
+`MissingIndicator` also accepts the `List[CategoricalColumn[Domain]]` returned
+by `ColumnTable.categorical_columns`. Select a single domain per call and pass
+columns in the same order at fit and transform. With named tables, resolve the
+same names in both schemas before selecting, since column positions can change.
+Use `fit_named(columns, names)` to record the selected names. The concrete
+overloads take no target and return a dense Boolean array. The associated types
+for generic estimator composition remain numeric.
+
+Missingness comes from the categorical storage tag. A finite `missing_values`
+marker raises for these overloads. Category dictionaries can differ between
+fit and transform, since the fitted state records only the feature layout.
+`features`, `sparse` and `error_on_new` have the same behavior as for numeric
+input.
+
+With the locked toolchain active, run the focused ColumnTable contract and
+comparison against pinned sklearn from the repository root:
+
+```sh
+mkdir -p builds/impute-categorical
+python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
+mojo build -O3 --fp-mode=contract=off -I builds/deps families/impute/algorithms/simple/tests/integration/categorical_indicator.mojo -o builds/impute-categorical/indicator
+python families/impute/algorithms/simple/tests/integration/categorical_indicator_parity.py builds/impute-categorical/indicator
+```
 
 ## Integer specialization
 
@@ -167,6 +192,19 @@ indicator columns. `shape` records `(rows, values.columns() + indicators.shape[1
 without indicators, the Boolean component has zero columns. No indicator is added
 for missingness first encountered during transform. Both components own their
 storage even with `copy=False`.
+
+`StringSimpleImputer(...).as_categorical()` creates an unfitted
+`CategoricalStringImputer` with the same configuration. Use it before an encoder
+in a [mixed column pipeline](../../../../../docs/compose/named-columns.md).
+It accepts equal-length lists of `CategoricalColumn[StringCategories]` as
+features and returns owned categorical columns in retained feature order.
+The output dictionaries are inferred from the imputed values for each call.
+The adapter takes an optional Float64 array target and ignores it.
+An all-missing training column dropped by the string imputer is reflected in
+the output width and feature names. The reference also emits a `UserWarning`.
+`add_indicator=True` raises at fit because this output type can only carry string
+categories. Use `StringSimpleImputer` with `StringMatrix` for separate Boolean
+indicators. The stage appears as `simpleimputer` in `make_pipeline`.
 
 `statistics_` is `List[Optional[String]]`, with None for an empty dropped feature;
 `n_features_in_`, `feature_names_in_`, feature naming, optional ignored `y`, cloning,

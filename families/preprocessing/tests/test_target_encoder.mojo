@@ -3,7 +3,7 @@ from numojo import NDArray, Shape, Item, zeros
 from std.math import isnan, abs
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
-from moxie.model_selection import IndexSplit, KFold, StratifiedKFold
+from moxie.model_selection import GroupKFold, IndexSplit, KFold, SplitLabels, StratifiedGroupKFold, StratifiedKFold
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import RandomState, seed_global_random_state
 from moxie.preprocessing import TargetEncoder, TargetEncoderSplits, TargetPreprocessor
@@ -347,6 +347,41 @@ def test_cv_none() raises:
     assert_same(fresh.fit_transform(X, y, state), expected)
 
 
+def test_grouped_cv() raises:
+    var X = table()
+    var y = target()
+    var groups = SplitLabels(ints([0, 1, 0, 2, 1, 3, 2, 4, 3, 4]))
+    var splitter = GroupKFold(3, shuffle=True, random_state=42)
+    var explicit = TargetEncoder(cv=TargetEncoderSplits(splitter.split(y.size, groups=groups)))
+    var expected = explicit.fit_transform(X, y)
+    var model = TargetEncoder(cv=splitter^)
+    _ = model.fit(X, y)
+    assert_same(model.transform(X), explicit.transform(X))
+    with assert_raises(contains="groups are required"):
+        _ = model.fit_transform(X, y)
+    with assert_raises(contains="matching length"):
+        _ = model.fit_transform(X, y, groups=SplitLabels(ints([0, 1])))
+    with assert_raises(contains="exceeds group count"):
+        _ = model.fit_transform(X, y, groups=SplitLabels(ints([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])))
+    assert_same(model.fit_transform(X, y, groups=groups), expected)
+
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_equal(fresh.get_params().cv[GroupKFold].random_state.value(), 42)
+    var names: List[String] = ["color", "size"]
+    assert_same(fresh.fit_transform_named(X, names, y, groups=groups), expected)
+    assert_true(fresh.get_feature_names_out() == names)
+    _ = fresh.set_params(cv=StratifiedGroupKFold(2))
+    with assert_raises(contains="Supported target types"):
+        _ = fresh.fit_transform(X, y, groups=groups)
+    assert_equal(fresh.get_params().cv[StratifiedGroupKFold].n_splits, 2)
+    _ = fresh.set_params(cv=2)
+    with assert_raises(contains="groups require"):
+        _ = fresh.fit_transform(X, y, groups=groups)
+    _ = fresh.set_params(model.get_params())
+    assert_same(fresh.fit_transform(X, y, groups=groups), expected)
+
+
 def main() raises:
     test_lifecycle()
     test_params()
@@ -355,4 +390,5 @@ def main() raises:
     test_cv_configuration()
     test_explicit_splits()
     test_cv_none()
+    test_grouped_cv()
     print("PASS target encoder lifecycle contracts")

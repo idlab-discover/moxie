@@ -5,6 +5,28 @@ from moxie._labels import StringTarget
 from moxie.feature_selection import f_classif, chi2, mutual_info_classif, mutual_info_regression, MutualInfoScorer, BuiltinScorer, SelectKBest, SelectionParameter, DiscreteFeatures
 
 
+def test_numeric_lists[dt: DType](
+    x: nm.NDArray[DType.float32], labels: List[Scalar[dt]],
+) raises:
+    var target = nm.array[dt](labels, [len(labels)])
+    for name in ["f_classif", "chi2", "f_regression", "r_regression"]:
+        var scorer = BuiltinScorer[DType.float32, dt, List[Scalar[dt]]](name)
+        var actual = scorer.score(x, labels.copy())
+        var expected = BuiltinScorer[DType.float32, dt](name).score(x, target.copy())
+        assert_equal(actual.scores.shape[0], expected.scores.shape[0])
+        for j in range(actual.scores.shape[0]):
+            assert_equal(actual.scores.item(j), expected.scores.item(j))
+        assert_equal(Bool(actual.pvalues), Bool(expected.pvalues))
+        if actual.pvalues:
+            for j in range(actual.scores.shape[0]):
+                assert_equal(actual.pvalues.value().item(j), expected.pvalues.value().item(j))
+    var scorer = BuiltinScorer[DType.float32, dt, List[Scalar[dt]]]()
+    with assert_raises(contains="requires y"):
+        _ = scorer.score(x, None)
+    with assert_raises(contains="inconsistent sample counts"):
+        _ = scorer.score(x, List[Scalar[dt]]())
+
+
 def main() raises:
     var x = nm.zeros[DType.float32](nm.Shape(12, 3))
     var y = nm.zeros[DType.float64](nm.Shape(12))
@@ -14,6 +36,16 @@ def main() raises:
         y.unsafe_set(i, Float64(i % 2))
         for j in range(3):
             x.unsafe_set(3 * i + j, Float32((i * i + i * j + j) % 7))
+    var labels32 = List[Float32]()
+    var labels64 = List[Float64]()
+    var labels_int = List[Int64]()
+    for i in range(12):
+        labels32.append(Float32(i % 2))
+        labels64.append(Float64(i % 2))
+        labels_int.append(Int64(i % 2))
+    test_numeric_lists[DType.float32](x, labels32)
+    test_numeric_lists[DType.float64](x, labels64)
+    test_numeric_lists[DType.int64](x, labels_int)
     var labels = StringTarget(words)
     var selector = SelectKBest(BuiltinScorer[DType.float32, target_type=StringTarget](), k=SelectionParameter(2))
     _ = selector.fit(x, labels.copy())

@@ -52,8 +52,23 @@ def main() raises:
     var before = model.predict(X)
     var plain = permutation_test_score[Adapter](model, X, y, Adapter(), Scorer(False), splits, None, None, n_permutations=7)
     emit("plain", plain)
+    var automatic = permutation_test_score[Adapter](model, X, y, Adapter(), n_permutations=7)
+    assert_equal(automatic.score, plain.score)
+    assert_equal(automatic.pvalue, plain.pvalue)
+    for i in range(7):
+        assert_equal(automatic.permutation_scores[Item(i)], plain.permutation_scores[Item(i)])
+    with assert_raises(contains="at least one split"):
+        _ = permutation_test_score[Adapter](model, X, y, Adapter(), cv=List[IndexSplit]())
+    with assert_raises(contains="intentional scoring failure"):
+        _ = permutation_test_score[Adapter](model, X, y, Adapter(), scoring=Scorer(True))
     var grouped = permutation_test_score[Adapter](model, X, y, Adapter(), Scorer(False), splits, None, None, groups=groups.copy(), n_permutations=7, random_state=42)
     emit("grouped", grouped)
+    var automatic_grouped = permutation_test_score[Adapter](
+        model, X, y, Adapter(), groups=groups.copy(), n_permutations=7, random_state=42,
+    )
+    assert_equal(automatic_grouped.pvalue, grouped.pvalue)
+    for i in range(7):
+        assert_equal(automatic_grouped.permutation_scores[Item(i)], grouped.permutation_scores[Item(i)])
     var weighted = permutation_test_score[Adapter](model, X, y, Adapter(), Scorer(False), splits, weights.copy(), None, n_permutations=7, random_state=42)
     emit("weighted", weighted)
     var both = permutation_test_score[Adapter](model, X, y, Adapter(), Scorer(False), splits, weights.copy(), weights.copy(), n_permutations=7, random_state=42)
@@ -82,6 +97,20 @@ def main() raises:
     var dynamic = permutation_test_score[StratifiedCV](model, X, class_y, Adapter(), Scorer(False), stratified, None, None, n_permutations=7)
     assert_equal(stratified.calls, 8)
     emit("stratified", dynamic)
+    var stratified_adapter = Adapter(stratified=True)
+    var regenerated = permutation_test_score[Adapter](model, X, class_y, stratified_adapter, n_permutations=7)
+    var frozen = permutation_test_score[Adapter](
+        model, X, class_y, stratified_adapter,
+        cv=stratified_adapter.default_cv(X, class_y), n_permutations=7,
+    )
+    assert_equal(regenerated.score, dynamic.score)
+    assert_equal(regenerated.pvalue, dynamic.pvalue)
+    var differs_from_frozen = False
+    for i in range(7):
+        assert_equal(regenerated.permutation_scores[Item(i)], dynamic.permutation_scores[Item(i)])
+        if regenerated.permutation_scores[Item(i)] != frozen.permutation_scores[Item(i)]:
+            differs_from_frozen = True
+    assert_true(differs_from_frozen)
     for count in List[Int]([0, -1]):
         with assert_raises():
             _ = permutation_test_score[Adapter](model, X, y, Adapter(), Scorer(False), splits, None, None, n_permutations=count)

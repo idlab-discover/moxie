@@ -419,9 +419,9 @@ struct _ColumnSource[dtype: DType, origin: ImmOrigin](Copyable, Movable):
         if self._array:
             return _select(self._array.value()[], indices, scalar)
         ref table = self._table.value()[]
-        if len(table._non_numeric) == 0:
+        if len(table._added_columns) == 0:
             return _select(table._data, indices, scalar)
-        return _select(table._data, table._numeric_indices(indices), scalar)
+        return table._select_numeric(indices, scalar)
 
     def categorical[Domain: CategoryDomain](
         self, indices: List[Int], scalar: Bool,

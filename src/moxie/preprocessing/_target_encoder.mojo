@@ -30,7 +30,7 @@ from moxie._categorical import CategoricalColumn
 from moxie._random import RandomState, check_random_state
 from moxie.base import FitTransformer
 from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
-from moxie.model_selection._split import KFold, StratifiedKFold
+from moxie.model_selection._split import GroupKFold, KFold, SplitLabels, StratifiedGroupKFold, StratifiedKFold
 from moxie.preprocessing._base import TargetPreprocessor
 from moxie.preprocessing._common import (
     matrix, vector, check_fitted, check_set_output, check_names_length, feature_names_in,
@@ -354,10 +354,10 @@ struct TargetEncoderSplits(Copyable, Sized):
 
 
 comptime TargetEncoderCV = Variant[
-    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None)
+    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), GroupKFold, StratifiedGroupKFold
 ]
 comptime _CVUpdate = Variant[
-    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), NoneType
+    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), NoneType, GroupKFold, StratifiedGroupKFold
 ]
 
 
@@ -484,6 +484,10 @@ struct TargetEncoder[
             self.cv = TargetEncoderCV(cv[TargetEncoderSplits].copy())
         elif cv.isa[type_of(None)]():
             self.cv = TargetEncoderCV(None)
+        elif cv.isa[GroupKFold]():
+            self.cv = TargetEncoderCV(cv[GroupKFold].copy())
+        elif cv.isa[StratifiedGroupKFold]():
+            self.cv = TargetEncoderCV(cv[StratifiedGroupKFold].copy())
         if shuffle:
             self.shuffle = shuffle.value()
         if random_state:
@@ -616,6 +620,10 @@ struct TargetEncoder[
             return self.cv[KFold].n_splits
         if self.cv.isa[StratifiedKFold]():
             return self.cv[StratifiedKFold].n_splits
+        if self.cv.isa[GroupKFold]():
+            return self.cv[GroupKFold].n_splits
+        if self.cv.isa[StratifiedGroupKFold]():
+            return self.cv[StratifiedGroupKFold].n_splits
         if self.cv.isa[TargetEncoderSplits]():
             return len(self.cv[TargetEncoderSplits])
         if self.cv.isa[Int]():
@@ -678,7 +686,29 @@ struct TargetEncoder[
                         out.unsafe_set(r * out_width + i * width + c, fold_means[n_splits - 1][c])
         return out^
 
-    def _folds(self, y: Self.Y.Labels, n: Int) raises -> List[Int]:
+    def _class_codes(self, y: Self.Y.Labels) raises -> IndexArray:
+        var kind = Self.Y.target_type(y)
+        if kind != "binary" and kind != "multiclass":
+            raise Error("ValueError: Supported target types are: ('binary', 'multiclass'). Got '" + kind + "' instead.")
+        var encoder = LabelEncoder[Self.Y]()
+        return encoder.fit_transform(y)
+
+    def _folds(self, y: Self.Y.Labels, n: Int, var groups: Optional[IndexArray]) raises -> List[Int]:
+        if self.cv.isa[GroupKFold]() or self.cv.isa[StratifiedGroupKFold]():
+            if not groups:
+                raise Error("ValueError: groups are required for grouped TargetEncoder cross-fitting")
+            if self.cv.isa[GroupKFold]():
+                ref splitter = self.cv[GroupKFold]
+                var seed = splitter.random_state if splitter.shuffle else Optional[Int](0)
+                with check_random_state(seed) as rng:
+                    return _test_fold_assignments(splitter.split(n, groups.value(), rng[]), n)
+            ref splitter = self.cv[StratifiedGroupKFold]
+            var codes = self._class_codes(y)
+            var seed = splitter.random_state if splitter.shuffle else Optional[Int](0)
+            with check_random_state(seed) as rng:
+                return _test_fold_assignments(splitter.split(n, rng[], codes^, groups^), n)
+        if groups:
+            raise Error("ValueError: groups require GroupKFold or StratifiedGroupKFold for TargetEncoder")
         if self.cv.isa[TargetEncoderSplits]():
             return self.cv[TargetEncoderSplits]._test_folds(n)
         if self.cv.isa[KFold]():
@@ -688,11 +718,7 @@ struct TargetEncoder[
                 return _test_fold_assignments(splitter.split(n, rng[]), n)
         if self.cv.isa[StratifiedKFold]():
             ref splitter = self.cv[StratifiedKFold]
-            var kind = Self.Y.target_type(y)
-            if kind != "binary" and kind != "multiclass":
-                raise Error("ValueError: Supported target types are: ('binary', 'multiclass'). Got '" + kind + "' instead.")
-            var encoder = LabelEncoder[Self.Y]()
-            var codes = encoder.fit_transform(y)
+            var codes = self._class_codes(y)
             var seed = splitter.random_state if splitter.shuffle else Optional[Int](0)
             with check_random_state(seed) as rng:
                 return _test_fold_assignments(splitter.split(n, codes, rng[]), n)
@@ -741,6 +767,19 @@ struct TargetEncoder[
             raise Error("ValueError: TargetEncoder requires y")
         return self.fit_transform(X, y.value())
 
+    def _fit_transform(
+        mut self, X: Self.Input, y: Self.L, *,
+        var groups: Optional[IndexArray] = None,
+        var names: Optional[List[String]] = None,
+    ) raises -> Self.Transformed:
+        if names:
+            check_names_length(names.value(), len(X))
+        ref labels = rebind[Self.Y.Labels](y)
+        var target = self._fit(X, labels)
+        self.feature_names_in_ = names^
+        var folds = self._folds(labels, X[0].rows(), groups^)
+        return self._cross_fit(X, target, folds)
+
     def fit_transform(mut self, X: Self.Input, y: Self.L) raises -> Self.Transformed:
         """Fit on all rows, then return the cross-fitted encoding of X.
 
@@ -748,10 +787,13 @@ struct TargetEncoder[
         reseeds a fresh RandomState; None draws from the process default stream).
         Explicit split pairs are reused in the supplied order.
         """
-        ref labels = rebind[Self.Y.Labels](y)
-        var target = self._fit(X, labels)
-        var folds = self._folds(labels, X[0].rows())
-        return self._cross_fit(X, target, folds)
+        return self._fit_transform(X, y)
+
+    def fit_transform(
+        mut self, X: Self.Input, y: Self.L, *, groups: SplitLabels
+    ) raises -> Self.Transformed:
+        """Cross-fit with the configured grouped splitter and row group labels."""
+        return self._fit_transform(X, y, groups=groups.group_codes())
 
     def fit_transform(mut self, X: Self.Input, y: Self.L, mut random_state: RandomState) raises -> NDArray[DType.float64]:
         """fit_transform shuffling folds with a caller-owned RandomState, advanced in place.
@@ -766,13 +808,16 @@ struct TargetEncoder[
         var folds = self._folds(labels, X[0].rows(), random_state)
         return self._cross_fit(X, target, folds)
 
-    def fit_transform_named(mut self, X: Self.Input, feature_names: List[String], y: Self.L) raises -> NDArray[DType.float64]:
-        check_names_length(feature_names, len(X))
-        ref labels = rebind[Self.Y.Labels](y)
-        var target = self._fit(X, labels)
-        self.feature_names_in_ = feature_names.copy()
-        var folds = self._folds(labels, X[0].rows())
-        return self._cross_fit(X, target, folds)
+    def fit_transform_named(
+        mut self, X: Self.Input, feature_names: List[String], y: Self.L
+    ) raises -> NDArray[DType.float64]:
+        return self._fit_transform(X, y, names=feature_names.copy())
+
+    def fit_transform_named(
+        mut self, X: Self.Input, feature_names: List[String], y: Self.L, *,
+        groups: SplitLabels,
+    ) raises -> NDArray[DType.float64]:
+        return self._fit_transform(X, y, groups=groups.group_codes(), names=feature_names.copy())
 
     # -- transformation -------------------------------------------------------
 

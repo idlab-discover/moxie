@@ -499,6 +499,32 @@ def categorical_wide_archive() raises:
     assert_equal(len(restored.category_count_), 512)
 
 
+def discrete_negative_prior_round_trip() raises:
+    comptime Schema = MultinomialNBSchema[]
+    var X = dense_from_lists([[2.0, 0.0], [0.0, 2.0]])
+    var y: List[Int] = [-2, 7]
+    var model = Schema.Model(class_prior=List[Float64]([1.5, -0.5]))
+    _ = model.fit(X, y)
+    assert_true(isnan(model.class_log_prior_.item(1)))
+    assert_equal(model.predict(X), List[Int]([7, 7]))
+
+    _ = model.set_params(class_prior=Optional[List[Float64]]([0.5, 0.5]))
+    var before = dumps(Schema.encode(model))
+    var restored = Schema.decode(loads(before))
+    assert_equal(dumps(Schema.encode(restored)), before)
+    assert_equal(restored.class_prior.value(), List[Float64]([0.5, 0.5]))
+    assert_true(isnan(restored.class_log_prior_.item(1)))
+    assert_equal(restored.predict(X), model.predict(X))
+    assert_true(isnan(restored.predict_proba(X).item(0, 0)))
+    _ = restored.partial_fit(X, y)
+    assert_false(isnan(restored.class_log_prior_.item(1)))
+    assert_equal(restored.class_count_.tolist(), List[Float64]([2.0, 2.0]))
+
+    restored.class_log_prior_[Item(1)] = Float64("inf")
+    with assert_raises(contains="invalid MultinomialNB log prior"):
+        _ = Schema.encode(restored)
+
+
 def main() raises:
     fitted_round_trip[IntListDomain, DType.float64](List[Int]([2, -1, 2, -1]))
     fitted_round_trip[StringDomain, DType.float32](StringTarget(["β", "a\0z", "β", "a\0z"]))
@@ -527,6 +553,7 @@ def main() raises:
         array[DType.float64]([2, -1, 2, -1], [4])
     )
     multinomial_file_and_validation()
+    discrete_negative_prior_round_trip()
     print("PASS: MultinomialNB serialization contracts")
     complement_round_trip[IntListDomain, DType.float64](List[Int]([2, -1, 2, -1]))
     complement_round_trip[StringDomain, DType.float32](StringTarget(["β", "a\0z", "β", "a\0z"]))

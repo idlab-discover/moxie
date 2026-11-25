@@ -24,7 +24,7 @@ silently densified. No estimator is wholly deferred and no default requires
 an explicit dense setting.
 
 Restrictions: single-output targets, finite nonnegative
-weights with positive finite total, finite nonnegative priors, and no Python
+weights with positive finite total, finite priors, and no Python
 reflection, pandas or metadata routing. Methods mutate in place and errors
 use Mojo Error. Probability results use Float64 NDArrays for NDArray inputs
 and nested Float64 Lists for List inputs. Training widens to Float64 and uses

@@ -427,6 +427,57 @@ def weighted_feature_contract[dtype: DType]() raises:
         assert_equal(model.kl_divergence_, fitted_kl)
 
 
+def weighted_correlation_contract[dtype: DType]() raises:
+    var X = points[dtype]()
+    # On weighted features 0 and 1, rows 0 and 1 descend and row 2 ascends.
+    X.unsafe_set(0, 1)
+    X.unsafe_set(3, 2)
+    X.unsafe_set(6, 1)
+    for row in range(3, 6):
+        X.unsafe_set(row * 3, 8)
+    var backing = zeros[dtype](Shape(5))
+    backing.unsafe_set(2, 3)
+    backing.unsafe_set(4, 1)
+    var weights = backing.view_with_layout(Shape(3), NDArrayStrides(-2), 4)
+    var options = TSNEMetricParams[dtype](w=weights.copy())
+    backing.unsafe_set(4, 0)
+    var distances = _squared_distances(X, "correlation", Optional(options.copy()))
+    assert_true(distances.unsafe_get(1) < Float32(1e-28))
+    assert_equal(distances.unsafe_get(2), Float32(4))
+    assert_equal(distances.unsafe_get(12), Float32(4))
+    assert_equal(distances.unsafe_get(14), Float32(0))
+
+    for method in ["exact", "barnes_hut"]:
+        var model = TSNE[dtype](
+            method=method, metric="correlation", metric_params=options.copy(),
+            init="random", perplexity=2, random_state=17, max_iter=260,
+        )
+        assert_equal(model.fit_transform(X).shape[0], 6)
+        var fitted_kl = model.kl_divergence_
+        var fresh = clone(model)
+        assert_false(fresh.__sklearn_is_fitted__())
+        _ = fresh.fit(X)
+        assert_equal(fresh.kl_divergence_, fitted_kl)
+        var params = model.get_params()
+        var bad_weights = zeros[dtype](Shape(2))
+        bad_weights.unsafe_set(0, 1)
+        params.metric_params = TSNEMetricParams[dtype](w=bad_weights^)
+        with assert_raises(contains="must match features"):
+            _ = model.set_params(params).fit(X)
+        params.metric_params = TSNEMetricParams[dtype](w=zeros[dtype](Shape(3)))
+        with assert_raises(contains="finite positive sum"):
+            _ = model.set_params(params).fit(X)
+        params.metric_params = TSNEMetricParams[dtype](w=options.w, p=2.0)
+        with assert_raises(contains="metric_params do not match"):
+            _ = model.set_params(params).fit(X)
+        var constant = X.copy()
+        constant.unsafe_set(0, 0)
+        params.metric_params = options.copy()
+        with assert_raises(contains="nonconstant rows"):
+            _ = model.set_params(params).fit(constant)
+        assert_equal(model.kl_divergence_, fitted_kl)
+
+
 def main() raises:
     for method in ["exact", "barnes_hut"]:
         repeat_and_clone[DType.float64](method)
@@ -442,6 +493,8 @@ def main() raises:
     weighted_ratio_contract[DType.float64]()
     weighted_feature_contract[DType.float32]()
     weighted_feature_contract[DType.float64]()
+    weighted_correlation_contract[DType.float32]()
+    weighted_correlation_contract[DType.float64]()
     explicit_configuration()
     fit_validation()
     barnes_hut_bounds()

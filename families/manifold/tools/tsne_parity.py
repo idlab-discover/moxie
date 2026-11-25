@@ -356,6 +356,34 @@ def weighted_distance_checks(reference, metrics):
                     model.set_params(method="barnes_hut").fit(data)
 
 
+def weighted_correlation_checks(reference):
+    rng = np.random.RandomState(64)
+    X = rng.normal(size=(36, 5))
+    initial = rng.normal(scale=0.1, size=(len(X), 2)).astype(np.float32)
+    for dtype in (np.float32, np.float64):
+        data = X.astype(dtype)
+        weights = np.array([0, 1.25, 2, 0.5, 3], dtype=dtype)
+        expected_distances = pairwise_distances(data, metric="correlation", w=weights)
+        values = native("distances", data.dtype, matrix("X", data), "correlation",
+                        matrix("weights", weights[None, :]))
+        squared = np.fromstring(values, sep="\n", dtype=np.float32).reshape(len(X), len(X))
+        np.testing.assert_array_equal(squared, (expected_distances ** 2).astype(np.float32))
+        for method in ("exact", "barnes_hut"):
+            model = reference.TSNE(
+                method=method, metric="correlation", metric_params={"w": weights},
+                init=initial.copy(), perplexity=4, max_iter=275, early_exaggeration=1,
+                learning_rate=0.5, min_grad_norm=0, random_state=0,
+            )
+            expected = model.fit_transform(data)
+            iteration, kl, rate, features, got = native_fit(
+                data, initial, metric="correlation", feature_weights=weights, method=method,
+                max_iter=275, lr=0.5,
+            )
+            assert (iteration, rate, features) == (model.n_iter_, model.learning_rate_, model.n_features_in_)
+            np.testing.assert_allclose(kl, model.kl_divergence_, atol=5e-6, rtol=0)
+            np.testing.assert_allclose(got, expected, atol=2e-5, rtol=0)
+
+
 def initialization_checks(reference):
     rng = np.random.RandomState(1)
     X = rng.standard_normal((25, 4))
@@ -493,6 +521,8 @@ def main():
     weighted_distance_checks(reference, ("chebyshev", "sqeuclidean"))
     print("PASS: 4 weighted Chebyshev/squared Euclidean distance matrices and 4 exact fits")
     print("PASS: sklearn Barnes–Hut rejects Chebyshev weights and warns before ignoring squared Euclidean weights")
+    weighted_correlation_checks(reference)
+    print("PASS: 2 weighted correlation distance matrices and 4 exact/Barnes–Hut fits")
     patience_check(reference)
     print("PASS: no-progress stopping against pinned sklearn gradient descent")
     draws, seeds = initialization_checks(reference)

@@ -95,6 +95,20 @@ Native Barnes–Hut rejects both weight options. Sklearn's neighbor path
 rejects Chebyshev weights, and its optimized squared Euclidean search
 warns and ignores weights.
 
+Both methods accept `metric="correlation"` with
+`TSNEMetricParams[dtype](w=weights)`. Pass one finite, nonnegative weight
+per feature with a finite positive sum. The distance uses weighted row
+means, covariance and norms in Float64. Zero-weight features are ignored.
+Rows that are constant on the contributing features raise `ValueError`
+because their correlation is undefined. Centering relative to a contributing
+feature keeps constant rows detectable despite rounding in the weighted sum.
+The family kernel normalizes the weights once and uses constant scratch
+space per pair. Barnes–Hut rounds selected distances to the input dtype
+before squaring, following the native dense neighbor query contract.
+The neighbors metric accepts weights only for Minkowski.
+Numax's `stats.correlation.cov` uses statically sized unweighted inputs, and
+its `linalg.blas.dot` requires static vector lengths.
+
 Both methods accept a native metric through
 `metric="callable", metric_params=TSNEMetricParams[dtype](distance=my_distance)`.
 The callback type is
@@ -181,6 +195,8 @@ Weighted Canberra and Bray–Curtis use the same checks on signed inputs
 with zero and fractional weights, and verify the Barnes–Hut rejections.
 Weighted Chebyshev and squared Euclidean use the same distance and fit
 checks and verify the reference's Barnes–Hut handling.
+Weighted correlation checks the squared distance matrices exactly and compares
+both methods' fitted coordinates and KL divergence at the same tolerances.
 SciPy, NumPy and scikit-learn are used in validation only.
 The estimator and perplexity oracle sources come from sklearn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.

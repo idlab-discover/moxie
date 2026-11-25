@@ -13,7 +13,7 @@ See [forests](docs/forests.md), [scope](docs/scope.md), and
 [node histograms](docs/hgb-histograms.md),
 [splitter](docs/hgb-splitting.md),
 [tree grower](docs/hgb-grower.md), and
-[regression losses](docs/hgb-losses.md) have focused contract and parity checks.
+[regression and classification losses](docs/hgb-losses.md) have focused contract and parity checks.
 
 Run from the Moxie root, using its locked toolchain:
 

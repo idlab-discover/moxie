@@ -55,10 +55,41 @@ gpr.set_params(optimizer=Optional[FminLBFGSB](None), n_targets=Optional[Int](Non
 
 Use `Optional[Kernel](None)` or `Optional[Int](None)` to clear `kernel` or
 `random_state`. The optimizer wrapper uses the estimator's native optimizer type.
-Unlike sklearn, both update forms validate configuration immediately and restore
-the previous configuration on failure. String-based nested updates such as
-`kernel__length_scale` remain unsupported; edit a kernel with `set_param` and
-pass the resulting kernel to `set_params`.
+Both update forms validate configuration immediately and restore the previous
+configuration on failure. To update a nested kernel directly, edit a kernel
+with `set_param` and pass the resulting kernel to `set_params`.
+
+## Cross-validation and search
+
+`GaussianProcessSearchAdapter` supplies five unshuffled folds and the estimator's
+R² score. Search candidate values are Float64. The adapter accepts scalar `alpha`
+and the numeric parameters of an explicitly supplied kernel, including nested
+names such as `kernel__k1__k2__length_scale`.
+
+```mojo
+from moxie.gaussian_process import GaussianProcessRegressor, GaussianProcessSearchAdapter
+from moxie.gaussian_process.kernels import ConstantKernel, RBF, WhiteKernel
+from moxie.model_selection import GridSearchCV
+
+comptime Adapter = GaussianProcessSearchAdapter[]
+var model = GaussianProcessRegressor(
+    ConstantKernel(1.0) * RBF(1.0) + WhiteKernel(0.01), optimizer=None,
+)
+var grid = Dict[String, List[Float64]]()
+grid["alpha"] = [0.001, 0.05]
+grid["kernel__k1__k2__length_scale"] = [0.2, 0.7, 1.4]
+var search = GridSearchCV[Adapter](model, grid, Adapter())
+_ = search.fit(X, y)
+var prediction = search.predict(Xt)
+```
+
+Use `GaussianProcessSearchAdapter[DType.float32]` for Float32 data. An optional
+second type parameter selects the estimator's optimizer type. Set
+`optimizer=None` when comparing fixed kernel values. With an optimizer enabled,
+candidate kernel values initialize the optimizer for each fold. To weight R²,
+pass a `List[Float64]` of sample weights as `score_metadata`. See the
+[noisy-data notebook](../../../notebooks/gaussian_process/plot_gpr_noisy.ipynb)
+for a cross-validation and search example.
 
 ## Behaviour (as sklearn)
 

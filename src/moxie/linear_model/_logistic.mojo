@@ -3,7 +3,6 @@
 """Dense binary and multinomial logistic regression."""
 
 from std.math import exp, inf, isfinite, log
-from mojo_optimize import LBFGSB, LBFGSBConfig
 from numojo import NDArray, Shape, full, zeros
 from moxie.base import WeightedSupervisedEstimator
 from moxie.linear_model._base import ProbabilisticLinearClassifier
@@ -13,6 +12,7 @@ from moxie.linear_model._linear_base import (
     linear_decision, public_prediction,
 )
 from moxie.linear_model._linear_loss import LogisticLoss, logistic_probability
+from moxie.linear_model._logistic_solver import LogisticSolution, logistic_lbfgs, logistic_newton
 from moxie.linear_model._ridge_labels import (
     ClassWeight, LabelEncoding, _label, accuracy, fit_labels,
 )
@@ -294,10 +294,10 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             ref seed = self.random_state.value()
             if seed < 0 or seed > 4294967295:
                 raise Error("ValueError: random_state must be in [0, 2**32 - 1]")
-        if self.solver != "lbfgs":
+        if self.solver != "lbfgs" and self.solver != "newton-cholesky":
             raise Error(String("NotImplementedError: LogisticRegression solver ", self.solver))
         if self.dual:
-            raise Error("ValueError: LogisticRegression lbfgs requires dual=False")
+            raise Error("ValueError: LogisticRegression requires dual=False for the selected solver")
         var ratio = self.l1_ratio.or_else(0)
         if not (ratio >= 0 and ratio <= 1):
             raise Error("ValueError: l1_ratio must lie in [0, 1]")
@@ -306,7 +306,7 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             if penalty == "l2" or (penalty == "deprecated" and ratio == 0):
                 return self.C
             if penalty != "deprecated" or self.C != inf[DType.float64]():
-                raise Error("ValueError: LogisticRegression lbfgs supports L2 or no penalty")
+                raise Error("ValueError: LogisticRegression supports L2 or no penalty for the selected solver")
         return inf[DType.float64]()
 
     def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
@@ -346,34 +346,39 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
                 for k in range(outputs):
                     initial.unsafe_set(intercept_start + k, Float64(_vector_entry(self.intercept_, k)))
 
+        var newton = self.solver == "newton-cholesky"
         var objective = LogisticLoss(
-            compact_matrix(X), targets^, weights^, outputs, l2, self.fit_intercept,
+            compact_matrix(X), targets^, weights^, outputs, l2, self.fit_intercept, newton and self.max_iter > 0,
         )
-        var optimizer = LBFGSB[DType.float64](size, LBFGSBConfig(
-            max_iterations=self.max_iter, function_tolerance=1.4210854715202004e-14,
-            projected_gradient_tolerance=self.tol, max_line_search_steps=50,
-        ))
-        var lower = full[DType.float64](Shape(size), -inf[DType.float64]())
-        var upper = full[DType.float64](Shape(size), inf[DType.float64]())
-        _ = optimizer.minimize(objective, initial, lower, upper)
-        if not optimizer.state.has_accepted:
-            raise Error(String("RuntimeError: LogisticRegression lbfgs failed: ", optimizer.message()))
+        var solution: LogisticSolution
+        if newton:
+            solution = logistic_newton(
+                objective, initial^, outputs, features, self.fit_intercept, l2, self.max_iter, self.tol,
+            )
+        else:
+            solution = logistic_lbfgs(objective, initial, self.max_iter, self.tol)
 
+        ref fitted = solution.coefficients
         var coef = zeros[Self.dtype](Shape(outputs, features))
         var intercept = zeros[Self.dtype](Shape(outputs))
-        for k in range(outputs):
-            for j in range(features):
-                coef.unsafe_set(k * features + j, optimizer.state.x.unsafe_get(j * outputs + k).cast[Self.dtype]())
+        for j in range(features):
+            var mean = Float64(0)
+            if newton and l2 == 0 and outputs > 1:
+                for k in range(outputs):
+                    mean += fitted.unsafe_get(j * outputs + k) / Float64(outputs)
+            for k in range(outputs):
+                var value = fitted.unsafe_get(j * outputs + k) - mean
+                coef.unsafe_set(k * features + j, value.cast[Self.dtype]())
         if self.fit_intercept:
             var mean = Float64(0)
             if outputs > 1:
                 for k in range(outputs):
-                    mean += optimizer.state.x.unsafe_get(intercept_start + k) / Float64(outputs)
+                    mean += fitted.unsafe_get(intercept_start + k) / Float64(outputs)
             for k in range(outputs):
-                var value = optimizer.state.x.unsafe_get(intercept_start + k) - mean
+                var value = fitted.unsafe_get(intercept_start + k) - mean
                 intercept.unsafe_set(k, value.cast[Self.dtype]())
 
-        var iterations = full[DType.int32](Shape(1), Int32(min(optimizer.state.iterations, self.max_iter)))
+        var iterations = full[DType.int32](Shape(1), Int32(solution.iterations))
         var labels = encoding.classes_array()
         check_finite(coef, "coef_", "LogisticRegression")
         check_finite(intercept, "intercept_", "LogisticRegression")

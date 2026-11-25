@@ -666,6 +666,9 @@
         "moxie.linear_model._linear_loss": {
           "file": "src/moxie/linear_model/_linear_loss.mojo"
         },
+        "moxie.linear_model._logistic_solver": {
+          "file": "src/moxie/linear_model/_logistic_solver.mojo"
+        },
         "moxie.linear_model._logistic": {
           "file": "src/moxie/linear_model/_logistic.mojo"
         },
@@ -682,6 +685,36 @@
           "moxie.linear_model": {}
         }
       }
+    },
+    {
+      "id": "linear-model-linalg",
+      "path": "../../../../../../.worktrees/mojo-linalg-linear_model",
+      "modules": {
+        "moxie._linear_linalg._determinant": {
+          "file": "src/mojo_linalg/_determinant.mojo"
+        },
+        "moxie._linear_linalg._spectral": {
+          "file": "src/mojo_linalg/_spectral.mojo"
+        },
+        "moxie._linear_linalg._storage": {
+          "file": "src/mojo_linalg/_storage.mojo"
+        },
+        "moxie._linear_linalg.indefinite": {
+          "file": "src/mojo_linalg/indefinite.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie._linear_linalg": {
+            "IndefiniteFactor": "moxie._linear_linalg.indefinite",
+            "symmetric_indefinite": "moxie._linear_linalg.indefinite"
+          }
+        }
+      },
+      "revision": "HEAD",
+      "files": {}
     },
     {
       "id": "mojo-optimize",

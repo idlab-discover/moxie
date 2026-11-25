@@ -491,6 +491,9 @@
         "moxie.linear_model._linear_loss": {
           "file": "src/moxie/linear_model/_linear_loss.mojo"
         },
+        "moxie.linear_model._logistic_solver": {
+          "file": "src/moxie/linear_model/_logistic_solver.mojo"
+        },
         "moxie.linear_model._logistic": {
           "file": "src/moxie/linear_model/_logistic.mojo"
         },

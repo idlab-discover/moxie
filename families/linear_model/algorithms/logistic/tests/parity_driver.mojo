@@ -13,9 +13,10 @@ def run[dtype: DType](fx: Fixture) raises:
         var weights = Dict[Int, Float64]()
         weights[-3] = 2.0
         class_weight = ClassWeight.explicit(weights^)
+    var solver = fx.text("solver") if fx.has("solver") else String("lbfgs")
     var model = LogisticRegression[dtype](
         C=C, class_weight=class_weight^, fit_intercept=fx.flag("intercept"),
-        max_iter=fx.integer("max_iter"), tol=fx.number("tol"), warm_start=fx.has("refit_C"),
+        solver=solver^, max_iter=fx.integer("max_iter"), tol=fx.number("tol"), warm_start=fx.has("refit_C"),
     )
     var X = fx.array[dtype]("X")
     var y = fx.array[DType.int64]("y")

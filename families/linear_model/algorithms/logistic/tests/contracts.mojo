@@ -95,13 +95,15 @@ def contract[dtype: DType]() raises:
     var ws = zero_weights.view_with_layout(Shape(6), Strides(-1), 5)
     for i in range(6):
         zero_weights.unsafe_set(i, Scalar[dtype](i + 1))
-    var strided = LogisticRegression[dtype]()
-    _ = strided.fit(Xs, ys, sample_weight=ws)
-    var contiguous = LogisticRegression[dtype]()
-    _ = contiguous.fit(X, y, sample_weight=zero_weights)
-    assert_true(abs(Float64(strided.coef_.unsafe_get(0) - contiguous.coef_.unsafe_get(0))) < 1e-6)
-    assert_equal(strided.predict(Xs).unsafe_get(0), 8)
-    assert_equal(zero_weights.unsafe_get(0), 1)
+    var solvers: List[String] = ["lbfgs", "newton-cholesky"]
+    for solver in solvers:
+        var strided = LogisticRegression[dtype](solver=solver.copy())
+        _ = strided.fit(Xs, ys, sample_weight=ws)
+        var contiguous = LogisticRegression[dtype](solver=solver.copy())
+        _ = contiguous.fit(X, y, sample_weight=zero_weights)
+        assert_true(abs(Float64(strided.coef_.unsafe_get(0) - contiguous.coef_.unsafe_get(0))) < 1e-6)
+        assert_equal(strided.predict(Xs).unsafe_get(0), 8)
+        assert_equal(zero_weights.unsafe_get(0), 1)
 
     var multiclass = y.copy()
     multiclass.unsafe_set(1, 23)

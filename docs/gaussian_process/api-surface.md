@@ -11,7 +11,7 @@ implementations and must not be used as evidence of parity.
 | GaussianProcessClassifier | Dense binary Laplace posterior, multiclass OvR/OvO, binary latent moments and LML gradients, optimization and restarts, binary and OvR probabilities, weighted accuracy, and clone | Structured/custom kernels, callable optimizers, training aliasing |
 | Standard kernels and operators | Dense covariance/gradients, theta/bounds, nested parameters, composition, metadata, precomputed PairwiseKernel and explicit-Y pairwise gradients | Native custom/structured kernels, callable PairwiseKernel |
 | Kernel base classes (`Kernel`, `KernelOperator`, `NormalizedKernelMixin`, `StationaryKernelMixin`, `GenericKernelMixin`) | `Kernel` is the type-erased value every kernel converts to; `k1()`/`k2()` replace `KernelOperator` attributes | No user-defined kernel extension point: the abstract base and mixins are not exported, so custom kernels cannot be written |
-| Per-hyperparameter properties | `hyperparameters()` returns every `Hyperparameter` in sklearn order | `hyperparameter_<name>` properties (e.g. `RBF().hyperparameter_length_scale`) are not provided; select by `.name` instead |
+| Per-hyperparameter properties | Named leaf methods such as `RBF().hyperparameter_length_scale()`; `hyperparameter(name)` supports composed names | Mojo methods for sklearn properties |
 | Python integration | Not implemented | Reflection, metadata routing, pandas feature names, pickling and Python bindings |
 
 See [regression details](regression/api.md) and

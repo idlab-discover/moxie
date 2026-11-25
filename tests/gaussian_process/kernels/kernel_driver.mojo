@@ -90,6 +90,9 @@ def catalog() raises -> List[Kernel]:
     ks.append(2.0 * Matern(0.6, Bounds(1e-2, 10.0), nu=1.5))
     ks.append(CompoundKernel([RBF(1.0), Matern(2.0, nu=2.5)]))
     ks.append(CompoundKernel([ConstantKernel(2.0), WhiteKernel(0.4), DotProduct(1.1)]))
+    ks.append(Exponentiation(RBF(0.7), 2))
+    ks.append(RBF(0.7) ** 2)
+    ks.append((RBF(0.7) + DotProduct(0.3)) ** 2)
     return ks^
 
 
@@ -143,13 +146,17 @@ def report(i: Int, k: Kernel, name: String, float32: Bool, X: Dense64, Y: Dense6
     emit_text(i, name, "stationary", String(k.is_stationary()))
     emit_text(i, name, "vector_input", String(k.requires_vector_input()))
     var names = String()
-    for spec in k.hyperparameters():
+    for listed in k.hyperparameters():
+        var spec = k.hyperparameter(listed.name)
+        emit(i, name, "raw_bounds:" + listed.name, spec.bounds)
         names += spec.name + ":" + String(spec.n_elements) + ":" + String(spec.fixed) + ";"
     emit_text(i, name, "hyperparameters", names)
     var keys = String()
     for key in k.get_params().keys():
         keys += key + ";"
     emit_text(i, name, "params", keys)
+    if k.name() == "Exponentiation":
+        emit_text(i, name, "exponent_param", String(k.get_params()["exponent"]))
     emit(i, name, "theta", k.theta())
     emit(i, name, "bounds", k.bounds())
     var Xk = X.copy()

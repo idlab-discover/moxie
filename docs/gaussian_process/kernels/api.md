@@ -29,7 +29,7 @@ See `examples/gaussian_process_kernels.mojo` (run by `pixi run test`).
 
 `Kernel` methods: `evaluate(X, Y=None, eval_gradient=False)`, `__call__(X, Y=None)`,
 `diag(X)`, `diag_of(X32)`, `theta()`, `set_theta(theta)`, `bounds()`, `n_dims()`,
-`hyperparameters()`, `clone_with_theta(theta)`, `get_params(deep)`,
+`hyperparameters()`, `hyperparameter(name)`, `clone_with_theta(theta)`, `get_params(deep)`,
 `set_params(params)`, `set_param(name, value)`, `is_stationary()`,
 `requires_vector_input()`, `name()`, `k1()`, `k2()`, `kernel()`, `exponent()`,
 `kernels()`, `==`, and `String(kernel)` (sklearn repr).
@@ -76,9 +76,13 @@ See `examples/gaussian_process_kernels.mojo` (run by `pixi run test`).
   sklearn's setter raises `AttributeError` (it references `self.k1`). Its
   `hyperparameters()` is empty, as in sklearn. CompoundKernel cannot be nested in
   operators (sklearn would fail on broadcasting).
-- `Exponentiation.exponent` is a Float64, so the repr always prints a float
-  exponent (`RBF(length_scale=1) ** 2.0`). sklearn prints the Python value
-  it was given, so `** 2` for an int exponent and `** 2.0` for a float one.
+- Use methods such as `RBF().hyperparameter_length_scale()` for sklearn's
+  named leaf properties. Use `kernel.hyperparameter("k1__length_scale")` for
+  a composed kernel, with the names reported by `hyperparameters()`. Unknown
+  names raise a Mojo `Error` with an `AttributeError` prefix.
+- `Exponentiation(kernel, exponent)` and `kernel ** exponent` accept `Int` or
+  `Float64` and preserve that distinction in the repr and parameter updates.
+  `kernel.exponent()` returns Float64, the type used for kernel arithmetic.
 - Kernels are not validated at construction (as in sklearn); invalid bounds text
   raises when bounds are used. Errors are Mojo `Error`s prefixed with the Python
   exception name.

@@ -10,7 +10,7 @@ from moxie.base import clone, BaseEstimator, ClassifierMixin
 from moxie._feature_metadata import InputFeatureCount
 from moxie.frozen import FrozenEstimator
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
-from moxie.preprocessing import StandardScaler
+from moxie.preprocessing import MinMaxScaler, StandardScaler
 from moxie.pipeline import Pipeline, FeatureUnion, make_pipeline, union_step
 from moxie.compose import ColumnTransformer, ColumnEntry
 from moxie.model_selection import (
@@ -182,6 +182,46 @@ def frozen_composition_width() raises:
     print("composition_width", pipeline_width, union_width)
 
 
+def frozen_pipeline_steps() raises:
+    var X = dataset(26, 0.0)
+    var y = labels(26)
+    var pipe = make_pipeline(StandardScaler(), LDA())
+    var unfitted = FrozenEstimator(clone(pipe))
+    assert_false(unfitted.step[0]().__sklearn_is_fitted__())
+    assert_false(unfitted.step[1]().__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = unfitted.step[1]().predict(X)
+
+    _ = pipe.fit(X, y)
+    var frozen = FrozenEstimator(pipe^)
+    _ = frozen.fit(dataset(26, 5.0), y)
+    var cloned = clone(frozen)
+    var nested = FrozenEstimator(cloned.copy())
+    assert_true(
+        Pointer(to=frozen.step[0]()) == Pointer(to=frozen.estimator().transformer)
+    )
+    assert_true(Pointer(to=frozen.step[0]()) == Pointer(to=cloned.step[-2]()))
+    assert_true(Pointer(to=frozen.step[1]()) == Pointer(to=nested.step[-1]()))
+
+    var scaled = cloned.step[0]().transform(X)
+    var predictions = nested.step[-1]().predict(scaled)
+    assert_equal(predictions, frozen.predict(X))
+    print("composition_step_shape", scaled.shape[0], scaled.shape[1])
+    for i in range(scaled.size):
+        print("composition_step_scaled", scaled.item(i))
+    for value in predictions:
+        print("composition_step_prediction", value)
+
+    var transformers = make_pipeline(StandardScaler(), MinMaxScaler())
+    _ = transformers.fit(X)
+    var frozen_transformers = FrozenEstimator(transformers^)
+    var first = frozen_transformers.step[-2]().transform(X)
+    assert_same(
+        frozen_transformers.step[1]().transform(first),
+        frozen_transformers.transform(X),
+    )
+
+
 def kfold_splits(n: Int) raises -> List[IndexSplit]:
     var cursor = KFold(n_splits=3).split(n)
     var splits = List[IndexSplit]()
@@ -313,6 +353,7 @@ def main() raises:
     frozen_pipeline_prefix()
     frozen_pipeline_final()
     frozen_composition_width()
+    frozen_pipeline_steps()
     frozen_cv_and_search()
     frozen_union_and_columns()
     frozen_float32()

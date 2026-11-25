@@ -104,7 +104,7 @@ remaining imports from tracking PR #10 part 5:
 | Owner | Remaining users |
 | --- | --- |
 | Cluster | K-means++ local-trial count. |
-| Linear model | Bayesian regression scores, logistic loss and gradient, and logistic probabilities. |
+| Linear model | Bayesian regression scores. |
 | Multioutput | Classifier-chain log probabilities. |
 | Neural network | RBM sigmoid and free energy. |
 | Preprocessing | Unused scaler `log` import. |

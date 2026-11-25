@@ -346,6 +346,16 @@
       "path": "../../../.worktrees/mojo-linalg-covariance"
     },
     {
+      "assets": {
+        "numax/core/libm.mojo": "numax/core/libm.mojo",
+        "licenses/numax.txt": "LICENSE"
+      },
+      "exports": null,
+      "id": "numax",
+      "modules": {},
+      "path": "../../../numax"
+    },
+    {
       "assets": {},
       "exports": {
         "schema": 1,

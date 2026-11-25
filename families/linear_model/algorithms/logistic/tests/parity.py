@@ -32,6 +32,7 @@ OPTIMIZE = "sklearn/utils/optimize.py"
 SVM_BASE = "sklearn/svm/_base.py"
 LIBLINEAR = "sklearn/svm/src/liblinear"
 LINEAR_BASE = "sklearn/linear_model/_base.py"
+EXTMATH = "sklearn/utils/extmath.py"
 SAG = "sklearn/linear_model/_sag.py"
 SAG_FAST = "sklearn/linear_model/_sag_fast.pyx.tp"
 DATASET = "sklearn/utils/_seq_dataset"
@@ -131,7 +132,7 @@ def oracle(*, coordinate=False):
         LOSS, LOGISTIC, NEWTON, OPTIMIZE, SVM_BASE, "sklearn/svm/_liblinear.pyx",
         f"{LIBLINEAR}/linear.cpp", f"{LIBLINEAR}/linear.h", f"{LIBLINEAR}/tron.cpp",
         f"{LIBLINEAR}/tron.h", "sklearn/svm/src/newrand/newrand.h",
-        LINEAR_BASE, SAG, SAG_FAST, f"{DATASET}.pxd.tp", f"{DATASET}.pyx.tp",
+        LINEAR_BASE, EXTMATH, SAG, SAG_FAST, f"{DATASET}.pxd.tp", f"{DATASET}.pyx.tp",
         "sklearn/_loss/_loss.pxd", "sklearn/utils/_random.pxd", "sklearn/utils/_typedefs.pxd",
     ])
     print(f"scikit-learn source SHA256 {hashes}, support wheel {support_version}")
@@ -170,6 +171,13 @@ def oracle(*, coordinate=False):
     assert estimator.NewtonCholeskySolver is newton.NewtonCholeskySolver
     pinned_code(estimator._logistic_regression_path, LOGISTIC)
     pinned_code(estimator.LogisticRegression.fit, LOGISTIC)
+    base = load_pinned(LINEAR_BASE)
+    estimator.LogisticRegression._predict_proba_lr = base.LinearClassifierMixin._predict_proba_lr
+    estimator.softmax = load_pinned(EXTMATH).softmax
+    pinned_code(estimator.LogisticRegression._predict_proba_lr, LINEAR_BASE)
+    pinned_code(estimator.softmax, EXTMATH)
+    pinned_code(estimator.LogisticRegression.predict_proba, LOGISTIC)
+    pinned_code(estimator.LogisticRegression.predict_log_proba, LOGISTIC)
     assert estimator.LinearModelLoss is loss.LinearModelLoss
     return estimator.LogisticRegression
 
@@ -508,6 +516,24 @@ def main():
         compare(model_type)
 
 
+def check_float64_inference(model_type, X, observed, ident):
+    model = model_type()
+    model.classes_ = observed["classes"].astype(np.int64)
+    model.coef_ = observed["coef"]
+    # A rounded sigmoid can lose relative precision when subtracted from one.
+    with patch.object(model, "decision_function", side_effect=lambda _: observed["decision"].copy()):
+        np.testing.assert_allclose(
+            observed["probability"], model.predict_proba(X),
+            rtol=2e-15, atol=2e-16, err_msg=f"{ident}/same-scores/probability",
+        )
+    # Use the same rounded probability to measure the error in log itself.
+    with patch.object(model, "predict_proba", return_value=observed["probability"]):
+        np.testing.assert_allclose(
+            observed["log_probability"], model.predict_log_proba(X),
+            rtol=2e-15, atol=2e-15, err_msg=f"{ident}/same-probabilities/log_probability",
+        )
+
+
 def compare(model_type):
     cases = [*fixtures(), *liblinear_fixtures(), *sag_fixtures(), *newton_cd_fixtures(), *newton_cd_gram_fixtures()]
     output = OUTPUT
@@ -548,6 +574,8 @@ def compare(model_type):
         solver = params.get("solver", "lbfgs")
         fit_counts[solver] = fit_counts.get(solver, 0) + 1
         assert "error" not in observed[ident], (ident, observed[ident])
+        if bits == 64:
+            check_float64_inference(model_type, arrays["Z"], observed[ident], ident)
         references = []
         try:
             expected = reference(model_type, params, arrays)

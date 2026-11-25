@@ -2,7 +2,8 @@
 # authors: scikit-learn developers. SPDX-License-Identifier: BSD-3-Clause
 """Dense binary and multinomial logistic regression."""
 
-from std.math import exp, inf, isfinite, log
+from std.math import inf, isfinite
+from numax.core.libm import exp, log
 from numojo import NDArray, Shape, full, zeros
 from moxie._random import check_random_state
 from moxie._feature_metadata import InputFeatureCount

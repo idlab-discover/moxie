@@ -24,8 +24,6 @@ EXISTING_IMPORTS = {
     "families/svm/shared/liblinear/src/moxie/svm/_liblinear.mojo": {"exp", "log"},
     "families/svm/shared/libsvm/src/moxie/svm/_libsvm.mojo": {"exp", "log"},
     "src/moxie/linear_model/_bayes.mojo": {"log"},
-    "src/moxie/linear_model/_linear_loss.mojo": {"exp"},
-    "src/moxie/linear_model/_logistic.mojo": {"exp", "log"},
     "src/moxie/multioutput.mojo": {"log"},
     "src/moxie/preprocessing/_scalers.mojo": {"log"},
 }

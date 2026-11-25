@@ -78,6 +78,9 @@ def test(run, executable):
         ('pipeline_log_probability', "'predict_log_proba'"),
         ('pipeline_probability', "'predict_proba'"),
         ('pipeline_training_only_transform', "'transform'"),
+        ('pipeline_slice_stride', 'pipeline slicing only supports a step of 1'),
+        ('pipeline_slice_empty_transform', "'transform'"),
+        ('pipeline_slice_lifetime', "use of uninitialized value 'pipe'"),
         ('pipeline_type_mismatch', 'pipeline intermediate types must match'),
         ('union_predict', "'predict'"), ('union_dtype', 'union input must be NDArray[dtype]'),
         ('union_missing_transform', 'TransformerMixin'),
@@ -96,7 +99,7 @@ def test(run, executable):
 
 def parity(run):
     for name in ('parity.py', 'union_parity.py', 'compose_parity.py',
-                 'supervised_training_transform_parity.py',
+                 'supervised_training_transform_parity.py', 'steps_parity.py',
                  'transforming_parity.py', 'embedding_parity.py', 'mixture_probability_parity.py',
                  'weighted_fit_parity.py',
                  'select_k_best_cv_parity.py'):

@@ -35,20 +35,34 @@ def main():
     assert scalers[0] is scalers.named_steps["standardscaler-1"]
     assert scalers[1] is scalers.named_steps["standardscaler-2"]
     both = scalers[-1].transform(scalers[0].transform(X))
+    prefix, tail, full, empty = pipe[:-1], pipe[-1:99], pipe[-99:99], pipe[2:0]
+    assert prefix[-1] is pipe[0]
+    assert tail.named_steps["dummyregressor"] is pipe[-1]
+    assert full[-1] is pipe[-1]
+    assert empty.__sklearn_is_fitted__()
     expected = {
         "supervised": [len(pipe), transformed[0, 0], pipe[-1].predict(transformed)[0]],
         "nested": [len(nested), len(nested[-1])],
-        "transformers": [len(scalers), both[0, 0]],
+        "slices": [
+            len(prefix), len(tail), len(full), len(empty),
+            prefix.transform(X)[0, 0], tail.predict(transformed)[0], full.predict(X)[0],
+        ],
+        "transformers": [len(scalers), both[0, 0], scalers[:].transform(X)[0, 0]],
     }
+    live_prefix = scalers[:1]
+    scalers.fit([[4.0], [6.0]])
+    expected["refit_slice"] = [live_prefix.transform(X)[0, 0]]
     output = subprocess.check_output(
         [ROOT / "builds/tests/pipeline/test_pipeline_steps"], text=True, cwd=ROOT
     )
     actual = {}
+    assert f"slice_feature {prefix.get_feature_names_out()[0]}" in output.splitlines()
     for line in output.splitlines():
         label, *values = line.split()
-        actual[label] = [float(value) for value in values]
+        if label != "slice_feature":
+            actual[label] = [float(value) for value in values]
     assert actual == expected, (actual, expected)
-    print("PASS: pipeline lengths and fitted child outputs match exactly.")
+    print("PASS: pipeline lengths, slices and fitted outputs match exactly.")
 
 
 if __name__ == "__main__":

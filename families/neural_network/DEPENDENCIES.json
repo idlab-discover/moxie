@@ -2,6 +2,53 @@
   "schema": 1,
   "projects": [
     {
+      "id": "model_selection",
+      "path": "../model_selection",
+      "modules": {
+        "moxie.model_selection._base": {
+          "file": "src/moxie/model_selection/_base.mojo"
+        },
+        "moxie.model_selection._indices": {
+          "file": "src/moxie/model_selection/_indices.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "IndexArray": "moxie.model_selection._indices",
+            "IndexSplit": "moxie.model_selection._indices"
+          }
+        }
+      }
+    },
+    {
+      "id": "splitters",
+      "path": "../model_selection/algorithms/splitters",
+      "modules": {
+        "moxie.model_selection._split": {
+          "file": "src/moxie/model_selection/_split.mojo"
+        }
+      },
+      "assets": {
+        "licenses/model_selection-splitters-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.model_selection": {
+            "ShuffleSplit": "moxie.model_selection._split",
+            "StratifiedShuffleSplit": "moxie.model_selection._split",
+            "SplitSize": "moxie.model_selection._split",
+            "select_rows": "moxie.model_selection._split"
+          }
+        }
+      }
+    },
+    {
       "id": "labels",
       "path": "../../shared/labels",
       "modules": {

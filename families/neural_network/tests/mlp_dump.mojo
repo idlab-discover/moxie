@@ -36,7 +36,14 @@ def emit_model[dtype: DType](
         print(warning.message.replace("\n", "\\n"))
 
 
-def run_cases[dtype: DType](warm_start: Bool) raises:
+def emit_validation(scores: Optional[List[Float64]], best: Optional[Float64]) raises:
+    ref curve = scores.value()
+    print(len(curve), best.value())
+    for value in curve:
+        print(value)
+
+
+def run_cases[dtype: DType](warm_start: Bool, early_stopping: Bool = False) raises:
     var X = zeros[dtype](Shape(8, 2))
     var weights = zeros[dtype](Shape(8))
     for row in range(8):
@@ -48,6 +55,8 @@ def run_cases[dtype: DType](warm_start: Bool) raises:
     comptime for i in range(3):
         comptime solver = solvers[i]
         comptime parameter_dtype = DType.float64 if solver == "lbfgs" else dtype
+        if early_stopping and solver == "lbfgs":
+            continue
         for weighted_case in range(2):
             var weighted = weighted_case == 1
             for classes in range(1, 4):
@@ -56,7 +65,11 @@ def run_cases[dtype: DType](warm_start: Bool) raises:
                     y.unsafe_set(row, Int64(3 * (row % classes) - 4))
                 var clf = MLPClassifier[dtype](
                     [4, 3], "tanh", solver=solver, alpha=0.03,
-                    batch_size=3, max_iter=6, random_state=42, tol=0.0, warm_start=warm_start,
+                    batch_size=3, max_iter=12 if early_stopping else 6, random_state=42,
+                    tol=0.01 if early_stopping else 0.0, warm_start=warm_start,
+                    early_stopping=early_stopping, validation_fraction=0.375,
+                    n_iter_no_change=2 if early_stopping else 10,
+                    learning_rate="adaptive" if early_stopping and weighted else "constant",
                 )
                 for step in range(3 if warm_start else 1):
                     if step == 1:
@@ -77,6 +90,8 @@ def run_cases[dtype: DType](warm_start: Bool) raises:
                     emit(clf.predict(X))
                     emit(clf.predict_proba(X))
                     emit(clf.predict_log_proba(X))
+                    if early_stopping:
+                        emit_validation(clf.validation_scores_(), clf.best_validation_score_())
                     comptime if solver == "lbfgs" and dtype == DType.float32:
                         emit(clf.predict_proba[DType.float64](X))
                         emit(clf.predict_log_proba[DType.float64](X))
@@ -91,7 +106,11 @@ def run_cases[dtype: DType](warm_start: Bool) raises:
                 var reg = MLPRegressor[dtype](
                     "poisson" if kind == 2 else "squared_error",
                     [4, 3], "tanh", solver=solver, alpha=0.03,
-                    batch_size=3, max_iter=6, random_state=42, tol=0.0, warm_start=warm_start,
+                    batch_size=3, max_iter=12 if early_stopping else 6, random_state=42,
+                    tol=0.01 if early_stopping else 0.0, warm_start=warm_start,
+                    early_stopping=early_stopping, validation_fraction=0.375,
+                    n_iter_no_change=2 if early_stopping else 10,
+                    learning_rate="adaptive" if early_stopping and weighted else "constant",
                 )
                 for step in range(3 if warm_start else 1):
                     if step == 1:
@@ -109,6 +128,8 @@ def run_cases[dtype: DType](warm_start: Bool) raises:
                         reg.intercepts_[parameter_dtype](), reg.fit_warnings,
                     )
                     emit(reg.predict(X))
+                    if early_stopping:
+                        emit_validation(reg.validation_scores_(), reg.best_validation_score_())
                     comptime if solver == "lbfgs" and dtype == DType.float32:
                         emit(reg.predict[DType.float64](X))
 
@@ -117,3 +138,5 @@ def main() raises:
     for warm_start in [False, True]:
         run_cases[DType.float32](warm_start)
         run_cases[DType.float64](warm_start)
+    run_cases[DType.float32](False, early_stopping=True)
+    run_cases[DType.float64](False, early_stopping=True)

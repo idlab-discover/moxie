@@ -6,9 +6,14 @@ from numojo import NDArray, Shape, zeros
 from std.math import isfinite, nan
 from moxie._random import RandomState
 from moxie.warnings import FitWarning
+from moxie.model_selection import (
+    IndexArray, IndexSplit, ShuffleSplit, SplitSize, StratifiedShuffleSplit, select_rows,
+)
 from ._mlp_engine import _validate_hidden_activation, _weight_sum, allocate, forward, initialize, pack, unpack
 from ._mlp_lbfgs import LBFGSOptions, LBFGSResult, _fit_lbfgs, fit_lbfgs
-from ._mlp_stochastic import OptimizerOptions, StochasticOptions, StochasticTrainer
+from ._mlp_stochastic import (
+    OptimizerOptions, StochasticOptions, StochasticReport, StochasticTrainer, ValidationSet,
+)
 from ._plumbing import LayerLayout, LayerTensors, validate_matrix
 
 
@@ -69,8 +74,6 @@ struct MLPParams(Copyable, Movable):
             raise Error("ValueError: batch_size and n_iter_no_change must be positive")
         if not (self.validation_fraction >= 0 and self.validation_fraction < 1):
             raise Error("ValueError: validation_fraction must be in [0, 1)")
-        if self.early_stopping and self.solver != "lbfgs":
-            raise Error("NotImplementedError: MLP validation-set early stopping is unfinished")
 
     def _seed(self) raises -> Int:
         if not self.random_state:
@@ -96,6 +99,8 @@ struct _MLPState[dtype: DType](Copyable, Movable):
         output_activation: String, loss: String, mut rng: RandomState,
         weights: Optional[ImmPointer[NDArray[Self.dtype], weight_origin]],
         previous: Optional[Self], incremental: Bool,
+        validation_score: ValidationSet[Self.dtype].Score,
+        stratify: Optional[IndexArray] = None,
     ) raises:
         params._validate()
         validate_matrix(X)
@@ -185,10 +190,33 @@ struct _MLPState[dtype: DType](Copyable, Movable):
             tol=params.tol, n_iter_no_change=params.n_iter_no_change, verbose=params.verbose,
             incremental=incremental,
         )
-        var report = trainer._train(
-            X, y, rng, params.activation, output_activation, loss, params.alpha,
-            options, weights,
-        )
+        var report: StochasticReport
+        if params.early_stopping:
+            var split = _validation_split(X.shape[0], params.validation_fraction, rng, stratify)
+            var train_X = select_rows(X, split.train)
+            var train_y = select_rows(y, split.train)
+            var train_weights: Optional[NDArray[Self.dtype]] = None
+            var validation_weights: Optional[NDArray[Self.dtype]] = None
+            if weights:
+                ref supplied = weights.value()[]
+                train_weights = select_rows(supplied, split.train)
+                validation_weights = select_rows(supplied, split.test)
+            var train_ptr: Optional[ImmPointer[NDArray[Self.dtype], origin_of(train_weights._value)]] = None
+            if train_weights:
+                train_ptr = Pointer(to=train_weights.value()).as_imm()
+            var validation = ValidationSet(
+                select_rows(X, split.test), select_rows(y, split.test),
+                validation_weights^, validation_score,
+            )
+            report = trainer._train(
+                train_X, train_y, rng, params.activation, output_activation, loss,
+                params.alpha, options, train_ptr, validation^,
+            )
+        else:
+            report = trainer._train(
+                X, y, rng, params.activation, output_activation, loss, params.alpha,
+                options, weights,
+            )
         self.n_iter = trainer.n_iter
         self.t = trainer.t
         self.loss = trainer.loss
@@ -206,8 +234,18 @@ struct _MLPState[dtype: DType](Copyable, Movable):
             ))
 
     def best_loss(self) -> Optional[Float64]:
-        if self._stochastic:
+        if self._stochastic and not self._stochastic.value().validation_scores:
             return self._stochastic.value().best_loss
+        return None
+
+    def validation_scores(self) -> Optional[List[Float64]]:
+        if self._stochastic:
+            return self._stochastic.value().validation_scores.copy()
+        return None
+
+    def best_validation_score(self) -> Optional[Float64]:
+        if self._stochastic:
+            return self._stochastic.value().best_validation_score
         return None
 
     def loss_curve(self) -> Optional[List[Float64]]:
@@ -256,6 +294,61 @@ struct _MLPState[dtype: DType](Copyable, Movable):
         if self._lbfgs:
             return self._predict_lbfgs(X, activation).astype[Self.dtype]()
         return forward(X, self._stochastic.value().parameters(), activation, self.out_activation)
+
+
+def _validation_split(
+    rows: Int, fraction: Float64, mut rng: RandomState, stratify: Optional[IndexArray],
+) raises -> IndexSplit:
+    var size = SplitSize(fraction)
+    var result: IndexSplit
+    if stratify:
+        var cursor = StratifiedShuffleSplit(1, test_size=size).split(rows, rng, y=stratify)
+        result = cursor.next().value().copy()
+    else:
+        var cursor = ShuffleSplit(1, test_size=size).split(rows, rng)
+        result = cursor.next().value().copy()
+    if result.test.size < 2:
+        raise Error("ValueError: validation set is too small; increase validation_fraction or dataset size")
+    return result^
+
+
+def _class_code[dtype: DType](activation: NDArray[dtype], row: Int, singleton: Bool) raises -> Int:
+    var width = activation.shape[1]
+    if width == 1:
+        return Int(not singleton and activation.unsafe_get(row) > 0.5)
+    var start = row * width
+    var code = 0
+    for column in range(1, width):
+        if activation.unsafe_get(start + column) > activation.unsafe_get(start + code):
+            code = column
+    return code
+
+
+def _classification_validation_score[dtype: DType, singleton: Bool](
+    y: NDArray[dtype], prediction: NDArray[dtype], weights: Optional[NDArray[dtype]],
+) raises -> Float64:
+    var weight_ptr: Optional[ImmPointer[NDArray[dtype], origin_of(weights._value)]] = None
+    if weights:
+        weight_ptr = Pointer(to=weights.value())
+    var rows = y.shape[0]
+    var width = y.shape[1]
+    var mass = _weight_sum(weight_ptr, rows)
+    var correct: Float64 = 0
+    for row in range(rows):
+        var code = _class_code(prediction, row, singleton)
+        var matches = code == Int(y.unsafe_get(row)) if width == 1 else y.unsafe_get(row * width + code) == 1
+        if matches:
+            correct += _sample_weight(weights, row)
+    return correct / mass
+
+
+def _regression_validation_score[dtype: DType](
+    y: NDArray[dtype], prediction: NDArray[dtype], weights: Optional[NDArray[dtype]],
+) raises -> Float64:
+    var weight_ptr: Optional[ImmPointer[NDArray[dtype], origin_of(weights._value)]] = None
+    if weights:
+        weight_ptr = Pointer(to=weights.value())
+    return _regression_score(y, _as_float64(prediction), weights, weight_ptr)
 
 
 def _as_float64[dtype: DType](data: NDArray[dtype]) raises -> NDArray[DType.float64]:

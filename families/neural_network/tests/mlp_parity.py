@@ -36,17 +36,25 @@ def load_reference():
     return module
 
 
-def fixtures(module, warm_start):
+def fixtures(module, warm_start, early_stopping):
     rows = np.arange(8)
     for dtype in (np.float32, np.float64):
         X = np.column_stack([(rows - 3) / 4, (rows**2 % 7 - 3) / 4]).astype(dtype)
         weights = ((rows % 3 + 1) / 2).astype(dtype)
         for solver in ("lbfgs", "sgd", "adam"):
+            if early_stopping and solver == "lbfgs":
+                continue
             params = dict(
                 hidden_layer_sizes=(4, 3), activation="tanh", solver=solver,
                 alpha=0.03, batch_size=3, max_iter=6, random_state=42, tol=0.0, warm_start=warm_start,
             )
             for weighted in (False, True):
+                if early_stopping:
+                    params.update(
+                        early_stopping=True, validation_fraction=0.375, max_iter=12,
+                        tol=0.01, n_iter_no_change=2,
+                        learning_rate="adaptive" if weighted else "constant",
+                    )
                 for classes in (1, 2, 3):
                     y = 3 * (rows % classes) - 4
                     yield module.MLPClassifier(**params), X, y[:, None], weights, weighted, True
@@ -58,8 +66,8 @@ def fixtures(module, warm_start):
                     yield module.MLPRegressor(loss=loss, **params), X, y, weights, weighted, False
 
 
-def fitted_snapshots(reference, *, warm_start=False):
-    for model, X, y, weights, weighted, classifier in fixtures(reference, warm_start):
+def fitted_snapshots(reference, *, warm_start=False, early_stopping=False):
+    for model, X, y, weights, weighted, classifier in fixtures(reference, warm_start, early_stopping):
         for step in range(3 if warm_start else 1):
             if step == 1:
                 model.set_params(alpha=0.06, learning_rate_init=0.02)
@@ -105,7 +113,7 @@ def compare(actual, snapshots, *, expect_end=True):
         assert next(actual).split() == [*map(str, metadata), model.out_activation_], context
         close(
             list(map(float, next(actual).split())),
-            np.array([model.loss_, getattr(model, "best_loss_", 0), model.score(X, y, sample_weight=weights)]),
+            np.array([model.loss_, getattr(model, "best_loss_", None) or 0, model.score(X, y, sample_weight=weights)]),
         )
         curve = np.array(getattr(model, "loss_curve_", []))
         assert int(next(actual)) == len(curve), context
@@ -130,6 +138,11 @@ def compare(actual, snapshots, *, expect_end=True):
                 stack(model.predict_log_proba(X), atol=prediction_tol)
             else:
                 stack(model.predict(X), atol=prediction_tol)
+        if model.early_stopping:
+            length, best = next(actual).split()
+            assert int(length) == len(model.validation_scores_), context
+            close(float(best), model.best_validation_score_)
+            close([float(next(actual)) for _ in range(int(length))], model.validation_scores_)
         if rng_draw is not None:
             assert int(next(actual)) == rng_draw, context
     if expect_end:
@@ -145,11 +158,20 @@ def main():
     reference = load_reference()
     for warm_start in (False, True):
         count, worst = compare(
-            actual, fitted_snapshots(reference, warm_start=warm_start), expect_end=warm_start,
+            actual, fitted_snapshots(reference, warm_start=warm_start), expect_end=False,
         )
         description = "warm-start sequence snapshots" if warm_start else "ordinary fits"
         print(f"PASS {count} public MLP {description} against pinned sklearn")
         print("Maximum absolute differences", {str(dtype): float(error) for dtype, error in worst.items()})
+
+    split_oracle = runpy.run_path(str(
+        FAMILY.parent / "model_selection/algorithms/splitters/tests/parity.py"
+    ))
+    namespace, _, _ = split_oracle["load_reference"]()
+    reference.train_test_split = namespace["train_test_split"]
+    count, worst = compare(actual, fitted_snapshots(reference, early_stopping=True))
+    print(f"PASS {count} public MLP validation-stopping fits against pinned sklearn")
+    print("Maximum absolute differences", {str(dtype): float(error) for dtype, error in worst.items()})
 
 
 if __name__ == "__main__":

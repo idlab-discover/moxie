@@ -12,6 +12,7 @@ from numojo import NDArray, Shape, arange
 from moxie._random import RandomState
 from moxie.neural_network._mlp_engine import (
     allocate,
+    forward,
     loss_gradient,
     validate_tensors,
 )
@@ -177,6 +178,18 @@ def _batch_rows[dtype: DType](
     return batch^
 
 
+@fieldwise_init
+struct ValidationSet[dtype: DType](Movable):
+    comptime Score = def(
+        NDArray[Self.dtype], NDArray[Self.dtype], Optional[NDArray[Self.dtype]],
+    ) thin raises -> Float64
+
+    var X: NDArray[Self.dtype]
+    var y: NDArray[Self.dtype]
+    var weights: Optional[NDArray[Self.dtype]]
+    var score: Self.Score
+
+
 struct StochasticTrainer[dtype: DType](Copyable, Movable):
     var _layout: LayerLayout
     var _params: LayerTensors[Self.dtype]
@@ -192,6 +205,9 @@ struct StochasticTrainer[dtype: DType](Copyable, Movable):
     var best_loss: Float64
     var loss_curve: List[Float64]
     var no_improvement_count: Int
+    var validation_scores: Optional[List[Float64]]
+    var best_validation_score: Optional[Float64]
+    var _best_params: Optional[LayerTensors[Self.dtype]]
 
     def __init__(
         out self, initial: LayerTensors[Self.dtype], options: OptimizerOptions = OptimizerOptions(),
@@ -214,6 +230,9 @@ struct StochasticTrainer[dtype: DType](Copyable, Movable):
         self.best_loss = inf[DType.float64]()
         self.loss_curve = []
         self.no_improvement_count = 0
+        self.validation_scores = None
+        self.best_validation_score = None
+        self._best_params = None
         self._check_finite_parameters()
 
     def parameters(self) -> ref[self._params] LayerTensors[Self.dtype]:
@@ -296,6 +315,7 @@ struct StochasticTrainer[dtype: DType](Copyable, Movable):
         hidden_activation: String, output_activation: String, loss: String,
         alpha: Float64, options: StochasticOptions,
         weights: Optional[ImmPointer[NDArray[Self.dtype], weight_origin]],
+        validation: Optional[ValidationSet[Self.dtype]] = None,
     ) raises -> StochasticReport:
         validate_matrix(X)
         validate_matrix(y)
@@ -318,6 +338,18 @@ struct StochasticTrainer[dtype: DType](Copyable, Movable):
             raise Error("ValueError: batch_size must be positive")
         var clipped = batch_size > n_samples
         batch_size = min(batch_size, n_samples)
+
+        if validation and not self.validation_scores:
+            self.validation_scores = List[Float64]()
+            self.best_validation_score = -inf[DType.float64]()
+            self._best_params = self._params.copy()
+            self.no_improvement_count = 0
+        elif not validation and self.validation_scores:
+            self.validation_scores = None
+            self.best_validation_score = None
+            self._best_params = None
+            self.best_loss = inf[DType.float64]()
+            self.no_improvement_count = 0
 
         var sample_order = arange[DType.int](n_samples)
         self.n_iter = 0
@@ -354,17 +386,41 @@ struct StochasticTrainer[dtype: DType](Copyable, Movable):
             self.loss_curve.append(self.loss)
             if options.verbose:
                 print("Iteration ", self.n_iter, ", loss = ", self.loss, sep="")
+            if validation:
+                ref held_out = validation.value()
+                var prediction = forward(
+                    held_out.X, self._params, hidden_activation, output_activation,
+                )
+                var score = held_out.score(held_out.y, prediction, held_out.weights)
+                self._record_validation(score, options)
+            else:
+                self._record_training_loss(options)
             stopped = self._epoch_ends(options)
             if stopped:
                 break
 
+        if self._best_params:
+            self._params = self._best_params.value().copy()
         self._check_finite_parameters()
         return StochasticReport(
             batch_size_clipped=clipped,
             iteration_limit=not stopped and not options.incremental,
         )
 
-    def _epoch_ends(mut self, options: StochasticOptions) -> Bool:
+    def _record_validation(mut self, score: Float64, options: StochasticOptions):
+        self.validation_scores.value().append(score)
+        if options.verbose:
+            print("Validation score: ", score, sep="")
+        var best = self.best_validation_score.value()
+        if score < best + options.tol:
+            self.no_improvement_count += 1
+        else:
+            self.no_improvement_count = 0
+        if score > best:
+            self.best_validation_score = score
+            self._best_params = self._params.copy()
+
+    def _record_training_loss(mut self, options: StochasticOptions):
         if self.loss > self.best_loss - options.tol:
             self.no_improvement_count += 1
         else:
@@ -372,6 +428,7 @@ struct StochasticTrainer[dtype: DType](Copyable, Movable):
         if self.loss < self.best_loss:
             self.best_loss = self.loss
 
+    def _epoch_ends(mut self, options: StochasticOptions) -> Bool:
         if self._options.solver == "sgd" and self._options.learning_rate == "invscaling":
             self.learning_rate = self._options.learning_rate_init / _pow(
                 Float64(self.t + 1), self._options.power_t,

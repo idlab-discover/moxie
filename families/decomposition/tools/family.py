@@ -175,13 +175,24 @@ def parity():
 
 
 def serialization_check():
+    drivers = {
+        "pca": "evaluate",
+        "incremental_pca": "driver",
+        "truncated_svd": "driver",
+        "factor_analysis": "driver",
+    }
+    names = selected() if os.environ.get("MOXIE_ESTIMATORS") else drivers
+    unsupported = set(names) - drivers.keys()
+    if unsupported:
+        raise SystemExit(f"no persistence schema for {sorted(unsupported)}")
     assemble()
     ownership()
     work = ROOT / "builds"
     run("mojo", "build", *FLAGS, ROOT / "tests/test_serialization.mojo",
         "-o", work / "serialization")
-    run(work / "serialization", work / "pca-round-trip.moxie")
-    for estimator, source in (("pca", "evaluate"), ("incremental_pca", "driver")):
+    run(work / "serialization", work / "decomposition-round-trip.moxie")
+    for estimator in names:
+        source = drivers[estimator]
         run("mojo", "build", *FLAGS, f"tests/{estimator}/{source}.mojo",
             "-o", work / f"{estimator}_{source}")
         run(sys.executable, ROOT / ESTIMATORS[estimator][2])

@@ -53,7 +53,8 @@ and threshold sparse coding 144. `pixi run parity` runs the current checks after
 building. See the individual guides for added cases, tolerances and coverage
 limits. Dictionary learning and SparsePCA remain unfinished.
 
-Runtime PCA and IncrementalPCA support fitted and unfitted native model files.
+Runtime PCA, IncrementalPCA, TruncatedSVD and FactorAnalysis support fitted and
+unfitted native model files.
 See [persistence](serialization.md) for the supported dtypes, schema selection,
 and IncrementalPCA resumption. The other decomposition estimators still need
 schemas.

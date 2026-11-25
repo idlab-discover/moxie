@@ -1,13 +1,15 @@
-"""Runtime PCA and IncrementalPCA persistence contracts."""
+"""Dense decomposition persistence contracts."""
 
-from std.math import isnan
+from std.math import isinf, isnan
 from std.sys import argv
 from std.testing import assert_equal, assert_raises, assert_true
 from numojo import NDArray, NDArrayStrides, Shape, zeros
 from moxie.base import clone
-from moxie.decomposition import PCA, IncrementalPCA
+from moxie.decomposition import FactorAnalysis, PCA, IncrementalPCA, TruncatedSVD
 from moxie.decomposition._pca import ComponentCount
-from moxie.decomposition_serialization import PCASchema, IncrementalPCASchema
+from moxie.decomposition_serialization import (
+    FactorAnalysisSchema, PCASchema, IncrementalPCASchema, TruncatedSVDSchema,
+)
 from moxie.serialization import dumps, loads, save_model, load_model
 
 
@@ -139,14 +141,134 @@ def test_incremental_pca[dtype: DType](path: String) raises:
     assert_equal(single_restored.n_samples_seen_, 5)
 
 
+def test_truncated_svd[dtype: DType](path: String) raises:
+    comptime Schema = TruncatedSVDSchema[dtype]
+    var X = training_data[dtype]()
+    var model = TruncatedSVD[dtype](2, algorithm="arpack", n_iter=4,
+        n_oversamples=3, power_iteration_normalizer="QR", random_state=7, tol=0.01)
+    save_model[Schema](model, path)
+    var unfitted = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(model)), dumps(Schema.encode(unfitted)))
+    with assert_raises(contains="NotFittedError: This TruncatedSVD"):
+        _ = unfitted.transform(X)
+    assert_equal(unfitted.algorithm, String("arpack"))
+    assert_equal(unfitted.n_iter, 4)
+    assert_equal(unfitted.n_oversamples, 3)
+    assert_equal(unfitted.power_iteration_normalizer, String("QR"))
+    assert_equal(unfitted.random_state.value(), 7)
+    assert_equal(unfitted.tol, 0.01)
+
+    _ = model.fit(X)
+    _ = model.set_params(n_components=1, algorithm="randomized")
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(model)), dumps(Schema.encode(restored)))
+    assert_equal(restored.n_components, 1)
+    assert_equal(restored.components_.value().shape[0], 2)
+    assert_equal(restored.algorithm, String("randomized"))
+    assert_equal(restored.get_feature_names_out(), model.get_feature_names_out())
+    assert_true(not clone(restored).__sklearn_is_fitted__())
+    var projected = model.transform(X)
+    same_array(projected, restored.transform(X))
+    same_array(model.inverse_transform(projected), restored.inverse_transform(projected))
+    model.components_.value().unsafe_set(0, 100)
+    same_array(projected, restored.transform(X))
+
+    var archive = Schema.encode(restored)
+    archive.schema_version = 2
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = Schema.decode(archive)
+    archive.schema_version = 1
+    archive.payloads[1].name = "foreign_array"
+    with assert_raises(contains="missing array singular_values_"):
+        _ = Schema.decode(archive)
+
+    var constant = TruncatedSVD[dtype](2, random_state=7)
+    _ = constant.fit(zeros[dtype](Shape(1, 3)))
+    var degenerate = Schema.decode(Schema.encode(constant))
+    assert_equal(degenerate.components_.value().shape[0], 1)
+    assert_true(isnan(degenerate.explained_variance_ratio_.value().unsafe_get(0)))
+
+
+def test_factor_analysis[dtype: DType](path: String) raises:
+    comptime Schema = FactorAnalysisSchema[dtype]
+    var X = training_data[dtype]()
+    var init = List[Float64](length=3, fill=1.25)
+    var model = FactorAnalysis[dtype](1, tol=0.001, max_iter=8, noise_variance_init=init^,
+        svd_method="lapack", iterated_power=2, rotation=String("varimax"), random_state=None)
+    save_model[Schema](model, path)
+    var unfitted = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(model)), dumps(Schema.encode(unfitted)))
+    with assert_raises(contains="NotFittedError: This FactorAnalysis"):
+        _ = unfitted.transform(X)
+    assert_equal(unfitted.noise_variance_init.value(), List[Float64](length=3, fill=1.25))
+    assert_equal(unfitted.svd_method, String("lapack"))
+    assert_equal(unfitted.iterated_power, 2)
+    assert_equal(unfitted.rotation.value(), String("varimax"))
+    assert_true(not unfitted.random_state)
+    assert_equal(unfitted.tol, 0.001)
+
+    _ = model.fit(X)
+    _ = model.set_params(copy=False, max_iter=1, n_components=Optional[Optional[Int]](Optional[Int](0)))
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_equal(dumps(Schema.encode(model)), dumps(Schema.encode(restored)))
+    assert_equal(restored.n_components.value(), 0)
+    assert_equal(restored.components_.value().shape[0], 1)
+    assert_equal(restored.max_iter, 1)
+    assert_true(not restored.copy)
+    assert_true(restored.n_iter_ > restored.max_iter)
+    assert_equal(restored.get_feature_names_out(), model.get_feature_names_out())
+    assert_true(not clone(restored).__sklearn_is_fitted__())
+    same_array(model.transform(X), restored.transform(X))
+    same_array(model.get_covariance(), restored.get_covariance())
+    same_array(model.get_precision(), restored.get_precision())
+    same_array(model.score_samples(X), restored.score_samples(X))
+    assert_equal(model.score(X), restored.score(X))
+
+    var archive = Schema.encode(restored)
+    archive.schema_version = 2
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = Schema.decode(archive)
+    archive.schema_version = 1
+    archive.payloads[0].shape = [3, 1]
+    with assert_raises(contains="invalid shape for components_"):
+        _ = Schema.decode(archive)
+    restored.noise_variance_.value().unsafe_set(0, 0)
+    with assert_raises(contains="invalid value in noise_variance_"):
+        _ = Schema.encode(restored)
+    restored.noise_variance_.value().unsafe_set(0, 1)
+    restored.loglike_.append(0)
+    with assert_raises(contains="invalid FactorAnalysis likelihood history length"):
+        _ = Schema.encode(restored)
+
+    var no_factors = FactorAnalysis[dtype](0)
+    _ = no_factors.fit(X)
+    var zero_rank = Schema.decode(Schema.encode(no_factors))
+    assert_equal(zero_rank.components_.value().shape[0], 0)
+    same_array(no_factors.score_samples(X), zero_rank.score_samples(X))
+    var singular = FactorAnalysis[dtype](1, svd_method="lapack", max_iter=1)
+    _ = singular.fit(zeros[dtype](Shape(3, 2)))
+    var degenerate = Schema.decode(Schema.encode(singular))
+    assert_true(isinf(degenerate.loglike_[0]) and degenerate.loglike_[0] > 0)
+
+
 def main() raises:
     var path = String(argv()[1])
     test_pca[DType.float32](path)
     test_pca[DType.float64](path)
     test_incremental_pca[DType.float32](path)
     test_incremental_pca[DType.float64](path)
+    test_truncated_svd[DType.float32](path)
+    test_truncated_svd[DType.float64](path)
+    test_factor_analysis[DType.float32](path)
+    test_factor_analysis[DType.float64](path)
     var model = PCA[DType.float32]()
     save_model[PCASchema[DType.float32]](model, path)
     with assert_raises(contains="projection dtype mismatch"):
         _ = load_model[PCASchema[DType.float64]](path)
-    print("PASS: runtime PCA and IncrementalPCA serialization contracts in Float32 and Float64")
+    var factor = FactorAnalysis[DType.float32]()
+    var archive = FactorAnalysisSchema[DType.float32].encode(factor)
+    with assert_raises(contains="projection dtype mismatch"):
+        _ = FactorAnalysisSchema[DType.float64].decode(archive)
+    print("PASS: PCA, IncrementalPCA, TruncatedSVD and FactorAnalysis serialization contracts in Float32 and Float64")

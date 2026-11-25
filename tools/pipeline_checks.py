@@ -77,6 +77,7 @@ def test(run, executable):
         ('pipeline_weighted_fit', "unexpected keyword argument 'sample_weight'"),
         ('pipeline_log_probability', "'predict_log_proba'"),
         ('pipeline_probability', "'predict_proba'"),
+        ('pipeline_training_only_transform', "'transform'"),
         ('pipeline_type_mismatch', 'pipeline intermediate types must match'),
         ('union_predict', "'predict'"), ('union_dtype', 'union input must be NDArray[dtype]'),
         ('union_missing_transform', 'TransformerMixin'),
@@ -95,6 +96,7 @@ def test(run, executable):
 
 def parity(run):
     for name in ('parity.py', 'union_parity.py', 'compose_parity.py',
+                 'supervised_training_transform_parity.py',
                  'transforming_parity.py', 'embedding_parity.py', 'mixture_probability_parity.py',
                  'weighted_fit_parity.py',
                  'select_k_best_cv_parity.py'):

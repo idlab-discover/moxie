@@ -1,6 +1,6 @@
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import SupervisedEstimator, UnsupervisedEstimator, TransformerMixin, FitTransformer, Predictor, clone
-from moxie.pipeline import Pipeline, PredictivePipeline
+from moxie.pipeline import Pipeline, PredictivePipeline, TransformingPipeline, make_pipeline
 
 
 struct Shift(SupervisedEstimator, Predictor, TransformerMixin, Copyable):
@@ -65,7 +65,10 @@ struct Shift(SupervisedEstimator, Predictor, TransformerMixin, Copyable):
         return self.transform(X)
 
 
-struct Fused(SupervisedEstimator, FitTransformer, Predictor, TransformerMixin):
+struct Fused[inference_transform: Bool = True](
+    SupervisedEstimator, FitTransformer, Predictor,
+    TransformerMixin where inference_transform,
+):
     comptime Input = Int
     comptime Target = Int
     comptime Transformed = Int
@@ -101,11 +104,11 @@ struct Fused(SupervisedEstimator, FitTransformer, Predictor, TransformerMixin):
     def fit_transform(mut self, X: Int, y: Optional[Int] = None) raises -> Int:
         self.calls += 1
         return X + y.value() + 100
-    def transform(self, X: Int) raises -> Int:
-        return X + 10
+    def transform(self, X: Int) raises -> Int where Self.inference_transform:
+        return self.predict(X)
 
     def predict(self, X: Int) raises -> Int:
-        return self.transform(X)
+        return X + 10
 
 
 struct Unsupervised(UnsupervisedEstimator, TransformerMixin):
@@ -209,8 +212,50 @@ def check_final_transformers() raises:
     assert_equal(fused.transform(1), 13)
 
 
+def fit_training[T: FitTransformer](
+    mut pipe: T, X: T.Input, y: Optional[T.Target],
+) raises -> T.Transformed:
+    return pipe.fit_transform(X, y)
+
+
+def check_training_only_final() raises:
+    var pipe = make_pipeline(Shift(), Fused[False]())
+    comptime Pipe = type_of(pipe)
+    comptime assert conforms_to(Pipe, FitTransformer)
+    comptime assert not conforms_to(Pipe, TransformerMixin)
+    comptime assert not conforms_to(Pipe, TransformingPipeline)
+    comptime assert not conforms_to(Pipeline[Shift, Recorder], FitTransformer)
+
+    with assert_raises(contains="NotFittedError"):
+        _ = pipe.predict(1)
+    with assert_raises(contains="supervised pipeline fit_transform requires y"):
+        _ = pipe.fit_transform(5)
+    assert_false(pipe.transformer.fitted)
+    assert_false(pipe.__sklearn_is_fitted__())
+    assert_equal(pipe.estimator.calls, 0)
+
+    var fitted = fit_training(pipe, 5, 7)
+    assert_true(pipe.__sklearn_is_fitted__())
+    assert_equal(pipe.estimator.calls, 1)
+    var predicted = pipe.predict(1)
+    var refitted = pipe.fit_transform(8, 3)
+    assert_equal(pipe.estimator.calls, 2)
+
+    var fresh = clone(pipe)
+    assert_false(fresh.__sklearn_is_fitted__())
+    var params = fresh.get_params()
+    params.transformer = 4
+    _ = fresh.set_params(params)
+    var nested = Pipeline(Shift(3), fresh^)
+    var nested_fitted = fit_training(nested, 5, 7)
+    assert_equal(nested.estimator.estimator.calls, 1)
+    assert_equal(pipe.transformer.offset, 2)
+    print("training_only", fitted, predicted, refitted, nested_fitted, nested.predict(1))
+
+
 def main() raises:
     check_final_transformers()
+    check_training_only_final()
     var pipe = Pipeline(Shift(), Recorder(), transformer_name="shift", estimator_name="record")
     comptime assert not conforms_to(type_of(pipe), Copyable)
     with assert_raises():

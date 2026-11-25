@@ -305,13 +305,15 @@ with the pinned factories.
 
 ## Supervised predictors with transforms
 
-When the final predictor implements `TransformerMixin`, `Pipeline`
-also implements `TransformingPipeline` and `FitTransformer`. The same
-pipeline can project and predict after fitting. During `fit_transform`
-each step uses its fused method when available and otherwise fits then
-transforms. Supervised pipelines require `y` for training. Omitting it
-from the shared `FitTransformer` signature raises `ValueError` before
-either step is fitted.
+`Pipeline` implements `FitTransformer` when the final predictor implements
+`FitTransformer` or `TransformerMixin`. Each step uses its fused method when
+available and otherwise fits then transforms. A training-only pipeline can
+serve as the final predictor of a nested pipeline and still supports
+`predict`. Inference-time `transform` and `TransformingPipeline` require
+`TransformerMixin` on the final predictor. A prefix always needs an
+inference-time transform. Supervised pipelines require `y` for training.
+Omitting it from the shared `FitTransformer` signature raises `ValueError`
+before either step is fitted.
 
 ```mojo
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
@@ -327,6 +329,9 @@ var predictions = pipe.predict(X_query)
 Availability can also depend on the estimator's configuration. LDA's
 `lsqr` solver raises on projection. The discriminant analysis parity suite
 checks training and held-out projections in both dense floating-point dtypes.
+The [training-only parity check](../../tests/pipeline/supervised_training_transform_parity.py)
+compares exact scalar outputs for fused dispatch, prediction, refits and nesting
+against the pinned scikit-learn pipeline.
 
 ## Transformer-only pipelines
 

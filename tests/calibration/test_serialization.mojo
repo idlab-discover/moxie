@@ -14,6 +14,7 @@ from moxie.calibration import (
 )
 from moxie.calibration_serialization import (
     CalibratedBernoulliNBClassifierCVSchema,
+    CalibratedCategoricalNBClassifierCVSchema,
     CalibratedClassifierCVSchema,
     CalibratedComplementNBClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
@@ -28,7 +29,7 @@ from moxie.discriminant_analysis import (
     QuadraticDiscriminantAnalysis,
 )
 from moxie.model_selection import KFold, LeaveOneOut, StratifiedKFold
-from moxie.naive_bayes import BernoulliNB, ComplementNB, GaussianNB, MultinomialNB
+from moxie.naive_bayes import BernoulliNB, CategoricalNB, ComplementNB, GaussianNB, MultinomialNB
 from moxie.serialization import (
     ModelArchive, ModelSchema, dumps, loads, load_model, save_model,
 )
@@ -373,6 +374,67 @@ def test_bernoulli(X: Dense, y: Dense) raises:
         _ = BernoulliSchema.encode(custom)
 
 
+def test_categorical(y: Dense) raises:
+    comptime CategoricalSchema = CalibratedCategoricalNBClassifierCVSchema
+    var X = Dense(nm.Shape(y.size, 2))
+    for i in range(y.size):
+        X[nm.Item(i, 0)] = y.item(i)
+        X[nm.Item(i, 1)] = Float64(i % 2)
+
+    var model = CalibratedClassifierCV(
+        adapt_classifier(CategoricalNB(
+            alpha=0.0, force_alpha=False, min_categories_values=List[Int]([4, 3]),
+        )),
+        cv=3, method="sigmoid", ensemble=True,
+    )
+    check_unfitted[CategoricalSchema](model, X)
+    _ = model.fit(X, y)
+    _ = model.set_params(
+        estimator=adapt_classifier(CategoricalNB(alpha=0.5, min_categories=5)),
+        method="temperature",
+    )
+    var file = "builds/calibration-categorical-model.moxie"
+    save_model[CategoricalSchema](model, file)
+    var restored = load_model[CategoricalSchema](file)
+    assert_equal(restored.estimator.estimator().min_categories.or_else(0), 5)
+    for fold in restored.calibrated_classifiers_:
+        ref fitted = fold.estimator.estimator()
+        assert_equal(fold.method, "sigmoid")
+        assert_equal(fitted.n_categories_.item(0), Int64(4))
+        assert_equal(fitted.n_categories_.item(1), Int64(3))
+        assert_equal(len(fitted.fit_warnings), 1)
+    assert_equal_predictions(model, restored, X, y)
+    assert_false(clone(restored).__sklearn_is_fitted__())
+
+    var archive = CategoricalSchema.encode(restored)
+    assert_equal(dumps(archive), dumps(CategoricalSchema.encode(model)))
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = CalibratedBernoulliNBClassifierCVSchema.decode(archive)
+    for ref payload in archive.payloads:
+        if payload.name == "fold/0/estimator/feature_log_prob_":
+            payload.name = "fold/0/estimator/unknown"
+    with assert_raises(contains="feature_log_prob_"):
+        _ = CategoricalSchema.decode(loads(dumps(archive)))
+
+    _ = restored.fit(X, y)
+    _ = model.fit(X, y)
+    assert_equal(restored.calibrated_classifiers_[0].method, "temperature")
+    assert_equal(
+        restored.calibrated_classifiers_[0].estimator.estimator().n_categories_.item(1),
+        Int64(5),
+    )
+    assert_equal_predictions(model, restored, X, y)
+
+    def read_classes(estimator: CategoricalNB[]) raises -> Dense:
+        return Dense(nm.Shape(0))
+
+    var custom = CalibratedClassifierCV(
+        ClassifierCalibrationAdapter(CategoricalNB(), read_classes, "CategoricalNB")
+    )
+    with assert_raises(contains="requires the built-in CategoricalNB adapter"):
+        _ = CategoricalSchema.encode(custom)
+
+
 def test_cv_configuration() raises:
     var splits: List[CalibrationSplit] = [
         CalibrationSplit([1, 3, 4], [0, 2]),
@@ -417,6 +479,7 @@ def main() raises:
     test_multinomial(X, y)
     test_complement(X, y)
     test_bernoulli(X, y)
+    test_categorical(y)
     var file = "builds/calibration-test-model.moxie"
     var model = CalibratedClassifierCV(
         adapt_classifier(LinearSVC(C=0.5, random_state=0)),

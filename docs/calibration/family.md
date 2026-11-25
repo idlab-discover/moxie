@@ -289,6 +289,7 @@ calibrator's base estimator. Each schema accepts fitted and unfitted models.
 | `adapt_classifier(MultinomialNB(...))` | `CalibratedMultinomialNBClassifierCVSchema` |
 | `adapt_classifier(ComplementNB(...))` | `CalibratedComplementNBClassifierCVSchema` |
 | `adapt_classifier(BernoulliNB(...))` | `CalibratedBernoulliNBClassifierCVSchema` |
+| `adapt_classifier(CategoricalNB(...))` | `CalibratedCategoricalNBClassifierCVSchema` |
 | `adapt_classifier(LinearDiscriminantAnalysis(...))` | `CalibratedLDAClassifierCVSchema` |
 | `adapt_classifier(QuadraticDiscriminantAnalysis(...))` | `CalibratedQDAClassifierCVSchema` |
 
@@ -311,8 +312,11 @@ fitted state without refitting. Parameters changed after fit apply to the next
 fit. Each schema requires the matching built-in adapter with its default
 feature dtype and label type because custom class readers have no
 representation in the file. The LDA and QDA schemas require
-`covariance_estimator=None`. See [native model files](../serialization.md) for
-format and load limits.
+`covariance_estimator=None`. For CategoricalNB, use `min_categories` for a
+scalar minimum and `min_categories_values=List[Int]([4, 3, 5])` for
+scikit-learn's per-feature minimum. Both settings are preserved in the
+archive. See [native model files](../serialization.md) for format and load
+limits.
 
 ## Limits and validation
 
@@ -334,10 +338,13 @@ materialized splits, missing classes, default minority-class splits, and
 explicit KFold and seeded shuffled KFold and StratifiedKFold. Production
 classifier cases load GaussianNB, LDA, QDA and LogisticRegression from the
 same revision and check binary and multiclass class order, predictions and
-probabilities. SVC, GaussianNB, MultinomialNB, ComplementNB, BernoulliNB, LDA
-and QDA cases exercise native round trips for all three calibration methods in
-ensemble and pooled modes. The weighted ComplementNB cases use `norm=True`.
+probabilities. SVC, GaussianNB, MultinomialNB, ComplementNB, BernoulliNB,
+CategoricalNB, LDA and QDA cases exercise native round trips for all three
+calibration methods in ensemble and pooled modes. The weighted ComplementNB
+cases use `norm=True`.
 The weighted BernoulliNB cases use a nondefault binarization threshold.
+The weighted CategoricalNB cases use per-feature category minima and query
+categories reserved by those minima that were absent during training.
 Restored probabilities match the original Mojo outputs exactly. Against
 scikit-learn, the allowed difference is `5e-6 * (1 + abs(expected))` for solver
 rounding. Default LinearSVC cases cover all three calibrators, weighted and

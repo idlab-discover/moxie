@@ -1,7 +1,7 @@
 """Use the public metrics through model_selection's cross-validation scorer seam."""
 from std.testing import assert_false
 
-from moxie.metrics import accuracy_score, balanced_accuracy_score
+from moxie.metrics import accuracy_score, balanced_accuracy_score, f1_score
 from moxie.model_selection import CVAdapter, ErrorPolicy, IndexArray, IndexSplit
 from moxie.model_selection import KFold, TypedScorer, cross_val_score, select_rows
 from moxie.naive_bayes import GaussianNB, NumericDomain
@@ -14,7 +14,7 @@ comptime Classifier = GaussianNB[NumericDomain[DType.int64]]
 
 @fieldwise_init
 struct AgreementScorer(TypedScorer):
-    var balanced: Bool
+    var metric: String
 
     comptime Estimator = Classifier
     comptime Input = Dense
@@ -25,8 +25,10 @@ struct AgreementScorer(TypedScorer):
         self, estimator: Classifier, X: Dense, y: Labels, metadata: Self.Metadata
     ) raises -> Float64:
         var prediction = estimator.predict(X)
-        if self.balanced:
+        if self.metric == "balanced_accuracy":
             return balanced_accuracy_score(y, prediction, sample_weight=metadata)
+        if self.metric == "f1":
+            return f1_score(y, prediction, sample_weight=metadata)
         return accuracy_score(y, prediction, sample_weight=metadata)
 
 
@@ -75,15 +77,22 @@ def main() raises:
         splits.append(split.value().copy())
 
     var scores = cross_val_score[Adapter](
-        model, X, y, Adapter(), AgreementScorer(balanced=False), splits, None, weights.view(),
+        model, X, y, Adapter(), AgreementScorer("accuracy"), splits, None, weights.view(),
         error_score=ErrorPolicy(True, 0),
     )
     assert_false(model.__sklearn_is_fitted__())
     print("cv", scores[Item(0)], scores[Item(1)], scores[Item(2)])
 
     var balanced_scores = cross_val_score[Adapter](
-        model, X, y, Adapter(), AgreementScorer(balanced=True), splits, None, weights^,
+        model, X, y, Adapter(), AgreementScorer("balanced_accuracy"), splits, None, weights.view(),
         error_score=ErrorPolicy(True, 0),
     )
     assert_false(model.__sklearn_is_fitted__())
     print("cv_balanced", balanced_scores[Item(0)], balanced_scores[Item(1)], balanced_scores[Item(2)])
+
+    var f1_scores = cross_val_score[Adapter](
+        model, X, y, Adapter(), AgreementScorer("f1"), splits, None, weights^,
+        error_score=ErrorPolicy(True, 0),
+    )
+    assert_false(model.__sklearn_is_fitted__())
+    print("cv_f1", f1_scores[Item(0)], f1_scores[Item(1)], f1_scores[Item(2)])

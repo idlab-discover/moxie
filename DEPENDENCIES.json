@@ -29,6 +29,9 @@
         "moxie.metrics._confusion": {
           "file": "src/moxie/metrics/_confusion.mojo"
         },
+        "moxie.metrics._precision_recall": {
+          "file": "src/moxie/metrics/_precision_recall.mojo"
+        },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
         },
@@ -597,10 +600,17 @@
             "QuadraticDiscriminantAnalysis": "moxie.discriminant_analysis"
           },
           "moxie.metrics": {
+            "AveragedClassificationScores": "moxie.metrics._precision_recall",
+            "ClassificationScores": "moxie.metrics._precision_recall",
             "accuracy_score": "moxie.metrics._classification",
             "balanced_accuracy_score": "moxie.metrics._confusion",
             "confusion_matrix": "moxie.metrics._confusion",
+            "f1_score": "moxie.metrics._precision_recall",
+            "fbeta_score": "moxie.metrics._precision_recall",
             "hamming_loss": "moxie.metrics._classification",
+            "precision_recall_fscore_support": "moxie.metrics._precision_recall",
+            "precision_score": "moxie.metrics._precision_recall",
+            "recall_score": "moxie.metrics._precision_recall",
             "zero_one_loss": "moxie.metrics._classification"
           },
           "moxie.utils": {

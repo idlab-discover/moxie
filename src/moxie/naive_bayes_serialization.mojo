@@ -2,15 +2,15 @@
 
 from std.math import isfinite, isnan
 from std.sys import size_of
-from numojo import NDArray, Item, array
+from numojo import NDArray, Item, Shape, array, zeros
 from moxie._dense import sum_axis2d
 from moxie._labels import StringTarget
 from moxie._naive_bayes_dense import ClassDomain, DenseMatrix
 from moxie.naive_bayes import (
-    BernoulliNB, ComplementNB, GaussianNB, IntListDomain, MultinomialNB,
+    BernoulliNB, CategoricalNB, ComplementNB, GaussianNB, IntListDomain, MultinomialNB,
     NumericDomain, StringDomain,
 )
-from moxie.serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
+from moxie.serialization import ArrayPayload, BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 from moxie.warnings import FitWarning
 
 
@@ -268,10 +268,10 @@ def _count_input_dtype_tag[dtype: DType]() -> UInt64:
         return UInt64(dtype_code[dtype]())
 
 
-def _write_count_config(
-    mut writer: BinaryWriter, mut archive: ModelArchive,
+def _write_discrete_config(
+    mut writer: BinaryWriter,
     alpha: Float64, force_alpha: Bool, fit_prior: Bool,
-    class_prior: Optional[List[Float64]], alpha_values: Optional[DenseMatrix],
+    class_prior: Optional[List[Float64]],
 ) raises:
     writer.scalar(alpha)
     writer.boolean(force_alpha)
@@ -282,6 +282,14 @@ def _write_count_config(
         writer.uint(UInt64(len(priors)))
         for prior in priors:
             writer.scalar(prior)
+
+
+def _write_count_config(
+    mut writer: BinaryWriter, mut archive: ModelArchive,
+    alpha: Float64, force_alpha: Bool, fit_prior: Bool,
+    class_prior: Optional[List[Float64]], alpha_values: Optional[DenseMatrix],
+) raises:
+    _write_discrete_config(writer, alpha, force_alpha, fit_prior, class_prior)
     writer.boolean(Bool(alpha_values))
     if alpha_values:
         ref values = alpha_values.value()
@@ -297,7 +305,7 @@ struct _CountConfig(Movable):
     var has_alpha_values: Bool
 
 
-def _read_count_config(mut reader: BinaryReader[_]) raises -> _CountConfig:
+def _read_discrete_config(mut reader: BinaryReader[_]) raises -> _CountConfig:
     var alpha = reader.scalar[DType.float64]()
     var force_alpha = reader.boolean()
     var fit_prior = reader.boolean()
@@ -308,7 +316,13 @@ def _read_count_config(mut reader: BinaryReader[_]) raises -> _CountConfig:
         for _ in range(count):
             priors.append(reader.scalar[DType.float64]())
         class_prior = priors^
-    return _CountConfig(alpha, force_alpha, fit_prior, class_prior^, reader.boolean())
+    return _CountConfig(alpha, force_alpha, fit_prior, class_prior^, False)
+
+
+def _read_count_config(mut reader: BinaryReader[_]) raises -> _CountConfig:
+    var config = _read_discrete_config(reader)
+    config.has_alpha_values = reader.boolean()
+    return config^
 
 
 def _read_count_alpha(archive: ModelArchive) raises -> DenseMatrix:
@@ -613,5 +627,170 @@ struct BernoulliNBSchema[
             model.n_features_in_ = features
             model.classes_ = classes^
             model._domain = domain^
+        reader.finish()
+        return model^
+
+
+def _check_categorical_statistics(
+    counts: DenseMatrix, log_probs: DenseMatrix, categories: Int64,
+) raises:
+    if categories < 1 or categories > Int64(counts.shape[1]):
+        raise Error("ModelSchemaError: invalid CategoricalNB category count")
+    for c in range(counts.shape[0]):
+        for k in range(counts.shape[1]):
+            var count = counts.item(c, k)
+            # Zero smoothing and overflow can produce nonfinite log probabilities.
+            if isnan(count) or count < 0 or log_probs.item(c, k) > 0:
+                raise Error("ModelSchemaError: invalid CategoricalNB feature statistics")
+
+
+struct CategoricalNBSchema[
+    D: ClassDomain = IntListDomain, dtype: DType = DType.float64
+](ModelSchema):
+    """Version 1 state for CategoricalNB with a built-in label domain."""
+
+    comptime Model = CategoricalNB[Self.D, Self.dtype]
+    comptime Estimator = "CategoricalNB"
+    comptime TypeId = "moxie.naive_bayes.CategoricalNB"
+    comptime StateVersion = 1
+
+    @staticmethod
+    def encode(model: Self.Model) raises -> ModelArchive:
+        var archive = ModelArchive(Self.TypeId, Self.StateVersion)
+        var writer = BinaryWriter()
+        writer.uint(_count_input_dtype_tag[Self.dtype]())
+        writer.uint(_domain_tag[Self.D]())
+        _write_discrete_config(
+            writer, model.alpha, model.force_alpha, model.fit_prior, model.class_prior,
+        )
+        writer.boolean(Bool(model.min_categories))
+        if model.min_categories:
+            writer.integer(model.min_categories.value())
+        writer.boolean(Bool(model.min_categories_values))
+        if model.min_categories_values:
+            ref minima = model.min_categories_values.value()
+            writer.uint(UInt64(len(minima)))
+            for minimum in minima:
+                writer.integer(minimum)
+
+        var fitted = model.__sklearn_is_fitted__()
+        writer.boolean(fitted)
+        var count = Self.D.check_target(model.classes_)
+        var features = model.n_features_in_
+        if fitted:
+            if not model._domain:
+                raise Error("ModelSchemaError: missing fitted CategoricalNB label domain")
+            _check_classes[Self.D](model.classes_, count, model._domain.value(), Self.Estimator)
+            if len(model.category_count_) != features or len(model.feature_log_prob_) != features:
+                raise Error("ModelSchemaError: invalid CategoricalNB number of feature tables")
+            writer.integer(features)
+            _write_classes[Self.D](writer, model.classes_, count)
+            _write_count_warning(writer, model.fit_warnings, Self.Estimator)
+            _write_array(archive, "class_count_", model.class_count_, [count])
+            _write_array(archive, "class_log_prior_", model.class_log_prior_, [count])
+            _write_array(archive, "n_categories_", model.n_categories_, [features])
+            _check_count_priors[Self.Estimator](model.class_count_, model.class_log_prior_)
+            # Pack ragged per-feature tables in feature and row-major order.
+            # A fixed payload count allows wide inputs within the archive limits.
+            var counts_writer = BinaryWriter()
+            var probabilities_writer = BinaryWriter()
+            var values = 0
+            for f in range(features):
+                ref counts = model.category_count_[f]
+                ref log_probs = model.feature_log_prob_[f]
+                if len(counts.shape) != 2 or counts.shape[0] != count or counts.shape != log_probs.shape:
+                    raise Error("ModelSchemaError: invalid CategoricalNB feature table shape")
+                var width = counts.shape[1]
+                writer.integer(width)
+                _check_categorical_statistics(counts, log_probs, model.n_categories_.item(f))
+                for c in range(count):
+                    for k in range(width):
+                        counts_writer.scalar(counts.item(c, k))
+                        probabilities_writer.scalar(log_probs.item(c, k))
+                values += counts.size
+            comptime code = dtype_code[DType.float64]()
+            archive.payloads.append(ArrayPayload("category_count_", code, [values], counts_writer^.finish()))
+            archive.payloads.append(ArrayPayload("feature_log_prob_", code, [values], probabilities_writer^.finish()))
+        elif (
+            features != 0 or count != 0 or model._domain or len(model.fit_warnings) != 0
+            or model.class_count_.shape.tolist() != [0] or model.class_log_prior_.shape.tolist() != [0]
+            or model.n_categories_.shape.tolist() != [0]
+            or len(model.category_count_) != 0 or len(model.feature_log_prob_) != 0
+        ):
+            raise Error("ModelSchemaError: unfitted CategoricalNB has learned state")
+        archive.manifest = writer^.finish()
+        return archive^
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Model:
+        archive.expect(Self.TypeId, Self.StateVersion)
+        archive.validate()
+        var reader = BinaryReader(Span(archive.manifest))
+        if reader.uint() != _count_input_dtype_tag[Self.dtype]():
+            raise Error("ModelSchemaError: CategoricalNB dtype mismatch")
+        if reader.uint() != _domain_tag[Self.D]():
+            raise Error("ModelSchemaError: CategoricalNB label domain mismatch")
+        var config = _read_discrete_config(reader)
+        var min_categories: Optional[Int] = None
+        if reader.boolean():
+            min_categories = reader.integer()
+        var min_categories_values: Optional[List[Int]] = None
+        if reader.boolean():
+            var length = reader.count(reader.remaining() // 8)
+            var minima = List[Int](capacity=length)
+            for _ in range(length):
+                minima.append(reader.integer())
+            min_categories_values = minima^
+        var model = Self.Model(
+            alpha=config.alpha, force_alpha=config.force_alpha, fit_prior=config.fit_prior,
+            class_prior=config.class_prior.copy(), min_categories=min_categories,
+            min_categories_values=min_categories_values^,
+        )
+        var fitted = reader.boolean()
+        if fitted:
+            if len(archive.payloads) != 5:
+                raise Error("ModelSchemaError: unexpected CategoricalNB arrays")
+            var features = reader.integer()
+            if features < 1 or features > reader.remaining() // 8:
+                raise Error("ModelSchemaError: invalid CategoricalNB feature count")
+            var classes = _read_classes[Self.D](reader)
+            var count = Self.D.check_target(classes)
+            var domain = Self.D.from_classes(classes)
+            _check_classes[Self.D](classes, count, domain, Self.Estimator)
+            model.fit_warnings = _read_count_warning(reader, Self.Estimator)
+            model.class_count_ = _read_array[DType.float64](archive, "class_count_", [count])
+            model.class_log_prior_ = _read_array[DType.float64](archive, "class_log_prior_", [count])
+            model.n_categories_ = _read_array[DType.int64](archive, "n_categories_", [features])
+            _check_count_priors[Self.Estimator](model.class_count_, model.class_log_prior_)
+            var counts_payload = archive.array("category_count_")
+            var probabilities_payload = archive.array("feature_log_prob_")
+            comptime code = dtype_code[DType.float64]()
+            if (
+                counts_payload.dtype != code or probabilities_payload.dtype != code
+                or len(counts_payload.shape) != 1 or counts_payload.shape != probabilities_payload.shape
+            ):
+                raise Error("ModelSchemaError: invalid packed CategoricalNB feature tables")
+            var counts_reader = BinaryReader(Span(counts_payload.data))
+            var probabilities_reader = BinaryReader(Span(probabilities_payload.data))
+            for f in range(features):
+                var width = reader.integer()
+                if width < 1 or width > counts_reader.remaining() // 8 // count:
+                    raise Error("ModelSchemaError: invalid CategoricalNB feature table width")
+                var counts = zeros[DType.float64](Shape(count, width))
+                var log_probs = zeros[DType.float64](Shape(count, width))
+                for c in range(count):
+                    for k in range(width):
+                        counts[Item(c, k)] = counts_reader.scalar[DType.float64]()
+                        log_probs[Item(c, k)] = probabilities_reader.scalar[DType.float64]()
+                _check_categorical_statistics(counts, log_probs, model.n_categories_.item(f))
+                model.category_count_.append(counts^)
+                model.feature_log_prob_.append(log_probs^)
+            counts_reader.finish()
+            probabilities_reader.finish()
+            model.n_features_in_ = features
+            model.classes_ = classes^
+            model._domain = domain^
+        elif len(archive.payloads) != 0:
+            raise Error("ModelSchemaError: unexpected CategoricalNB arrays")
         reader.finish()
         return model^

@@ -394,6 +394,29 @@ weighted counts, smoothing, predictions and incremental growth with the pinned
 scikit-learn checkout using the existing 1e-7 absolute/relative likelihood tolerance.
 Counts and category dimensions are also checked exactly in the native tests.
 
+### CategoricalNB native model files
+
+Use `CategoricalNBSchema[D, dtype]` from `moxie.naive_bayes_serialization` with
+the [experimental native archive API](../serialization.md). Choose the same
+built-in label domain and feature dtype used to instantiate the estimator.
+
+```mojo
+from moxie.naive_bayes_serialization import CategoricalNBSchema
+from moxie.serialization import load_model, save_model
+
+comptime Schema = CategoricalNBSchema[]
+save_model[Schema](model, "categorical.moxie")
+var restored = load_model[Schema]("categorical.moxie")
+```
+
+The schema supports fitted and unfitted models. It stores the scalar and
+vector minimum settings, the latest fit warning, and the full learned tables
+even when a later batch reports smaller `n_categories_` values. A fitted model
+can predict and continue weighted `partial_fit` immediately after loading.
+The categorical archive oracle can be run with
+`tests/naive_bayes/check_sklearn.py --round-trip-categorical --batch-size 12`
+using the pinned reference environment.
+
 
 ## Behavioral compatibility decisions
 

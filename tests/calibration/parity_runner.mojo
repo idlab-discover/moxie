@@ -22,9 +22,12 @@ from moxie._calibration_algorithms import (
 )
 from moxie.calibration_serialization import (
     CalibratedClassifierCVSchema,
+    CalibratedGaussianNBClassifierCVSchema,
+    CalibratedLDAClassifierCVSchema,
+    CalibratedQDAClassifierCVSchema,
     CalibratedSVCClassifierCVSchema,
 )
-from moxie.serialization import dumps, loads
+from moxie.serialization import ModelSchema, dumps, loads
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.frozen import FrozenEstimator
 from moxie.linear_model import LogisticRegression
@@ -111,6 +114,30 @@ def compare_production[E: CalibrationEstimator, origin: ImmOrigin](
     compare_estimator_result(model, q, expected, fields, context)
     if use_auto and len(model.calibrated_classifiers_) != 1:
         raise Error(context + ": frozen calibration must fit a single calibrator")
+
+
+def compare_serialized[
+    E: CalibrationEstimator, origin: ImmOrigin, //, Schema: ModelSchema
+](
+    var estimator: E,
+    x: Array,
+    y: Array,
+    w: Optional[Array],
+    q: Array,
+    expected: Array,
+    fields: List[StringSpan[origin]],
+    context: String,
+) raises where Schema.Model == CalibratedClassifierCV[E]:
+    var model = CalibratedClassifierCV(
+        estimator^, cv=3, method=String(fields[6]), ensemble=fields[7] == "true",
+    )
+    _ = model.fit(x, y, w)
+    var archive = Schema.encode(rebind[Schema.Model](model))
+    var restored = rebind_var[CalibratedClassifierCV[E]](
+        Schema.decode(loads(dumps(archive)))
+    )
+    compare_estimator_result(restored, q, expected, fields, context)
+    compare(restored.predict_proba(q), model.predict_proba(q), 0, context)
 
 
 def compare_float32[E: CalibrationEstimator, origin: ImmOrigin](
@@ -317,17 +344,17 @@ def main() raises:
             )
             compare_float32(model, x, y, w, q, expected, fields, context)
         elif kind == "production_gaussian":
-            compare_production(
+            compare_serialized[CalibratedGaussianNBClassifierCVSchema](
                 adapt_classifier(GaussianNB()),
                 x, y, w, q, expected, fields, context,
             )
         elif kind == "production_lda":
-            compare_production(
+            compare_serialized[CalibratedLDAClassifierCVSchema](
                 adapt_classifier(LinearDiscriminantAnalysis()),
                 x, y, w, q, expected, fields, context,
             )
         elif kind == "production_qda":
-            compare_production(
+            compare_serialized[CalibratedQDAClassifierCVSchema](
                 adapt_classifier(QuadraticDiscriminantAnalysis()),
                 x, y, w, q, expected, fields, context,
             )

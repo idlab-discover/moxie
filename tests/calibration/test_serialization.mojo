@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-"""Fitted and unfitted native files for LinearSVC and SVC calibration."""
+"""Fitted and unfitted native files for built-in calibration adapters."""
 import numojo as nm
 from std.testing import assert_equal, assert_false, assert_raises, assert_true
 from std.utils import Variant
@@ -14,11 +14,20 @@ from moxie.calibration import (
 )
 from moxie.calibration_serialization import (
     CalibratedClassifierCVSchema,
+    CalibratedGaussianNBClassifierCVSchema,
+    CalibratedLDAClassifierCVSchema,
+    CalibratedQDAClassifierCVSchema,
     CalibratedSVCClassifierCVSchema,
 )
+from moxie.discriminant_analysis import (
+    LinearDiscriminantAnalysis,
+    NoCovarianceEstimator,
+    QuadraticDiscriminantAnalysis,
+)
 from moxie.model_selection import KFold, LeaveOneOut, StratifiedKFold
+from moxie.naive_bayes import GaussianNB
 from moxie.serialization import (
-    ModelArchive, dumps, loads, load_model, save_model,
+    ModelArchive, ModelSchema, dumps, loads, load_model, save_model,
 )
 from moxie.svm import LinearSVC, SVC
 
@@ -90,6 +99,96 @@ def test_svc(X: Dense, y: Dense) raises:
         _ = ovo.fit(X, y)
 
 
+def check_unfitted[E: CalibrationEstimator, //, Schema: ModelSchema](
+    model: CalibratedClassifierCV[E], X: Dense,
+) raises where Schema.Model == CalibratedClassifierCV[E]:
+    var archive = Schema.encode(rebind[Schema.Model](model))
+    var restored = rebind_var[CalibratedClassifierCV[E]](
+        Schema.decode(loads(dumps(archive)))
+    )
+    assert_false(restored.__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = restored.predict(X)
+    assert_equal(dumps(Schema.encode(rebind[Schema.Model](restored))), dumps(archive))
+
+
+def test_discriminant_configuration(X: Dense) raises:
+    var lda = CalibratedClassifierCV(
+        adapt_classifier(LinearDiscriminantAnalysis(solver="lsqr", shrinkage="auto")),
+        method="temperature", cv=3,
+    )
+    check_unfitted[CalibratedLDAClassifierCVSchema](lda, X)
+    var qda = CalibratedClassifierCV(
+        adapt_classifier(QuadraticDiscriminantAnalysis(reg_param=0.25, store_covariance=True)),
+        method="isotonic", cv=3,
+    )
+    check_unfitted[CalibratedQDAClassifierCVSchema](qda, X)
+    var archive = CalibratedLDAClassifierCVSchema.encode(lda)
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = CalibratedQDAClassifierCVSchema.decode(loads(dumps(archive)))
+
+    var unsupported_lda = CalibratedClassifierCV(
+        adapt_classifier(
+            LinearDiscriminantAnalysis(covariance_estimator=NoCovarianceEstimator())
+        ),
+    )
+    with assert_raises(contains="requires covariance_estimator=None"):
+        _ = CalibratedLDAClassifierCVSchema.encode(unsupported_lda)
+
+    var unsupported_qda = CalibratedClassifierCV(
+        adapt_classifier(
+            QuadraticDiscriminantAnalysis(covariance_estimator=NoCovarianceEstimator())
+        ),
+    )
+    with assert_raises(contains="requires covariance_estimator=None"):
+        _ = CalibratedQDAClassifierCVSchema.encode(unsupported_qda)
+
+
+def test_gaussian(X: Dense, y: Dense) raises:
+    comptime GSchema = CalibratedGaussianNBClassifierCVSchema
+    var file = "builds/calibration-gaussian-model.moxie"
+    var priors: List[Float64] = [0.2, 0.3, 0.5]
+    var model = CalibratedClassifierCV(
+        adapt_classifier(GaussianNB(priors=priors^, var_smoothing=0.1)),
+        method="sigmoid", cv=3, ensemble=True,
+    )
+    check_unfitted[GSchema](model, X)
+    _ = model.fit(X, y)
+    _ = model.set_params(
+        estimator=adapt_classifier(GaussianNB(var_smoothing=0.01)),
+        method="temperature",
+    )
+    save_model[GSchema](model, file)
+    var restored = load_model[GSchema](file)
+    assert_equal(restored.estimator.estimator().var_smoothing, 0.01)
+    assert_equal(restored.calibrated_classifiers_[0].estimator.estimator().var_smoothing, 0.1)
+    assert_equal(restored.calibrated_classifiers_[0].method, "sigmoid")
+    assert_equal_predictions(model, restored, X, y)
+    assert_false(clone(restored).__sklearn_is_fitted__())
+
+    var malformed = GSchema.encode(restored)
+    for ref payload in malformed.payloads:
+        if payload.name == "fold/0/estimator/theta_":
+            payload.name = "fold/0/estimator/unknown"
+    with assert_raises(contains="theta_"):
+        _ = GSchema.decode(loads(dumps(malformed)))
+
+    _ = restored.fit(X, y)
+    _ = model.fit(X, y)
+    assert_equal(restored.calibrated_classifiers_[0].estimator.estimator().var_smoothing, 0.01)
+    assert_equal(restored.calibrated_classifiers_[0].method, "temperature")
+    assert_equal_predictions(model, restored, X, y)
+
+    def read_classes(model: GaussianNB[]) raises -> Dense:
+        return Dense(nm.Shape(0))
+
+    var custom = CalibratedClassifierCV(
+        ClassifierCalibrationAdapter(GaussianNB(), read_classes, "GaussianNB")
+    )
+    with assert_raises(contains="requires the built-in GaussianNB adapter"):
+        _ = GSchema.encode(custom)
+
+
 def test_cv_configuration() raises:
     var splits: List[CalibrationSplit] = [
         CalibrationSplit([1, 3, 4], [0, 2]),
@@ -128,6 +227,8 @@ def main() raises:
         X[nm.Item(i, 1)] = Float64(i % 11) / 13.0
         y[nm.Item(i)] = label
     test_svc(X, y)
+    test_discriminant_configuration(X)
+    test_gaussian(X, y)
     var file = "builds/calibration-test-model.moxie"
     var model = CalibratedClassifierCV(
         adapt_classifier(LinearSVC(C=0.5, random_state=0)),
@@ -198,4 +299,4 @@ def main() raises:
     assert_equal(len(restored.calibrated_classifiers_), 1)
     assert_equal_predictions(model, restored, X, y)
     assert_equal(load_model[Schema](file).calibrated_classifiers_[0].method, "isotonic")
-    print("PASS: calibrated LinearSVC and SVC native model files and malformed state")
+    print("PASS: built-in calibration adapter model files and malformed state")

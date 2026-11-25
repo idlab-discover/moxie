@@ -5,12 +5,12 @@ Arrays travel as `.npy` files: inputs shared from Python are read from
 sets both. Reading and writing go through NumPy via Python interop, like
 NuMojo's own `load`/`save`; estimators never see Python objects.
 """
+from std.memory import unsafe_memcpy
 from std.os import getenv
 from std.python import Python, PythonObject
 
 from numojo import NDArray
 from numojo.core.layout import NDArrayShape
-from numojo.routines.creation import array
 
 
 def exchange_path(name: String, variable: String = "MOXIE_NB_IN") raises -> String:
@@ -40,14 +40,21 @@ def load[dtype: DType = DType.float64](name: String) raises -> NDArray[dtype]:
     var data = np.ascontiguousarray(
         np.load(exchange_path(name)), dtype=_dtype_name[dtype]()
     )
-    var result = array[dtype](data=data)
-    # NuMojo's array(data=...) drops every unit dimension ((500, 1) becomes
-    # (500,)); restore NumPy's shape so one-column matrices stay rank 2.
+    return _copy_contiguous[dtype](data)
+
+
+def _copy_contiguous[dtype: DType](data: PythonObject) raises -> NDArray[dtype]:
+    # Borrow the NumPy owner through the copy. NuMojo's Python constructor
+    # drops unit axes, so allocate with the original shape before copying.
     var shape = List[Int]()
     for i in range(Int(py=data.ndim)):
         shape.append(Int(py=data.shape[i]))
-    if len(shape) != result.ndim:
-        return result.reshape(NDArrayShape(shape))
+    var result = NDArray[dtype](NDArrayShape(shape))
+    if result.size != 0:
+        var source = data.__array_interface__["data"][0].unsafe_get_as_pointer[
+            dtype
+        ]()
+        unsafe_memcpy(dest=result.unsafe_ptr(), src=source, count=result.size)
     return result^
 
 

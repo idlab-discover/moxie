@@ -32,9 +32,12 @@
 - Array-API (non-NumPy namespace/device) dispatch of the `svd` solver: not applicable to
   native Mojo arrays.
 - Native numeric `ColumnTable` inputs preserve fitted `feature_names_in_` on direct
-  estimator calls. See [API](api.md#named-dense-inputs).
-- LDA and QDA expose typed score-weight requests. Parent-side routing,
-  pandas integration, pickling and `set_output` remain open.
+  estimator calls. LDA also returns native tables from its
+  [labeled projection methods](api.md#labeled-projections).
+- LDA and QDA expose typed score-weight requests. The two-stage supervised
+  [Pipeline score overload](../pipeline/sequential.md#scoring) routes those weights.
+  Broader parent-side routing, pandas integration, pickling and `set_output`
+  remain open.
 - Inherited restrictions: mojo-linalg factorizations are scalar Float64 kernels
   (see performance.md); no GPU path.
 

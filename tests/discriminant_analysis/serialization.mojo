@@ -94,6 +94,10 @@ def unfitted_and_zero_width() raises:
     assert_true(Bool(restored.covariance_))
     assert_equal(restored.scalings_.value().shape.tolist(), [2, 0])
     assert_equal(restored.transform(X).shape.tolist(), [9, 0])
+    var projected = restored.transform_table(X)
+    assert_equal(projected.values().shape.tolist(), [9, 0])
+    assert_equal(projected.rows(), 9)
+    assert_equal(len(projected.schema().names), 0)
     assert_equal(restored.predict(X), labels)
 
 
@@ -404,13 +408,20 @@ def named_lda[dtype: DType](emit_parity: Bool) raises:
     var model = Schema.Model()
     with assert_raises(contains="NotFittedError"):
         _ = model.predict(table)
+    with assert_raises(contains="NotFittedError"):
+        _ = model.transform_table(table)
     with assert_raises(contains="requires y"):
-        _ = model.fit_transform(table)
-    var projection = model.fit_transform(table, y.copy())
-    assert_equal(projection.tolist(), model.transform(X).tolist())
-    assert_equal(model.transform(table).tolist(), projection.tolist())
+        _ = model.fit_transform_table(table)
+    var projection = model.fit_transform_table(table, y.copy())
+    var components: List[String] = ["lineardiscriminantanalysis0"]
+    assert_equal(projection.schema().names, components)
+    assert_equal(projection.schema().dtypes, [String(dtype)])
+    assert_equal(projection.values().shape.tolist(), [9, 1])
+    assert_equal(projection.values().tolist(), model.transform(X).tolist())
+    assert_equal(model.transform_table(table).values().tolist(), projection.values().tolist())
+    assert_equal(model.transform_table(X).schema().names, components)
     with assert_raises(contains="feature names should match"):
-        _ = model.transform(reversed_table)
+        _ = model.transform_table(reversed_table)
     assert_equal(model.feature_names_in_.value(), names)
     assert_false(Bool(clone(model).feature_names_in_))
     assert_equal(model.get_feature_names_out(names.copy()), model.get_feature_names_out())
@@ -425,7 +436,7 @@ def named_lda[dtype: DType](emit_parity: Bool) raises:
     var restored = named_archive_round_trip[Schema](model, Schema.Model(), 3)
     assert_equal(restored.feature_names_in_.value(), names)
     check_unset_request(restored)
-    assert_equal(restored.transform(table).tolist(), projection.tolist())
+    assert_equal(restored.transform(table).tolist(), projection.values().tolist())
     with assert_raises(contains="feature names should match"):
         _ = restored.predict(reversed_table)
     var duplicates: List[String] = ["mass", "mass"]
@@ -446,8 +457,8 @@ def named_lda[dtype: DType](emit_parity: Bool) raises:
     if emit_parity:
         print("lda|", String(dtype), "|", names, "|", model.predict(table),
               "|", model.predict_proba(table).tolist(), "|", routed_score, sep="")
-        print("projection|", String(dtype), "|", model.get_feature_names_out(),
-              "|", projection.tolist(), sep="")
+        print("projection|", String(dtype), "|", projection.schema().names,
+              "|", projection.values().tolist(), sep="")
 
     var unnormalized: List[Float64] = [1.0, 3.0]
     model.priors = unnormalized^
@@ -464,6 +475,30 @@ def named_lda[dtype: DType](emit_parity: Bool) raises:
         _ = model.fit(table, List[Int]())
     assert_false(Bool(model.feature_names_in_))
     assert_false(model.__sklearn_is_fitted__())
+
+
+def rank_reduced_projection[dtype: DType](emit_parity: Bool) raises:
+    comptime Model = LinearDiscriminantAnalysisSchema[dtype].Model
+    var X = matrix[dtype](12, 2, [
+        -4.0, 0, -2, 0, -3, -1, -3, 1,
+        -1, 0, 1, 0, 0, -1, 0, 1,
+        2, 0, 4, 0, 3, -1, 3, 1,
+    ])
+    var y: List[Int] = [0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2]
+    var model = Model(n_components=2)
+    var projected = model.fit_transform_table(X, y.copy())
+    assert_equal(len(model.get_feature_names_out()), 2)
+    assert_equal(projected.schema().names, [String("lineardiscriminantanalysis0")])
+    assert_equal(projected.values().shape.tolist(), [12, 1])
+    assert_equal(projected.values().tolist(), model.transform(X).tolist())
+    assert_false(Bool(model.feature_names_in_))
+    if emit_parity:
+        print("rank_reduced_projection|", String(dtype), "|", projected.schema().names,
+              "|", projected.values().tolist(), sep="")
+    var lsqr = Model(solver="lsqr")
+    with assert_raises(contains="NotImplementedError"):
+        _ = lsqr.fit_transform_table(X, y.copy())
+    assert_true(lsqr.__sklearn_is_fitted__())
 
 
 def named_qda[dtype: DType](emit_parity: Bool) raises:
@@ -553,6 +588,8 @@ def main() raises:
     var emit_parity = len(argv()) > 1 and argv()[1] == "--named-parity"
     named_lda[DType.float32](emit_parity)
     named_lda[DType.float64](emit_parity)
+    rank_reduced_projection[DType.float32](emit_parity)
+    rank_reduced_projection[DType.float64](emit_parity)
     named_qda[DType.float32](emit_parity)
     named_qda[DType.float64](emit_parity)
     print("PASS: discriminant named input and archive contracts")

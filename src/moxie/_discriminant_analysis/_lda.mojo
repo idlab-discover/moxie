@@ -836,6 +836,30 @@ struct LinearDiscriminantAnalysis[
         _ = self.fit(X, y.value())
         return self.transform(X.values())
 
+    def transform_table(self, X: NDArray[Self.dtype]) raises -> ColumnTable[Self.dtype]:
+        """Project X and label the resulting component columns."""
+        return Self._projection_table(self.transform(X))
+
+    def transform_table(self, X: ColumnTable[Self.dtype]) raises -> ColumnTable[Self.dtype]:
+        """Validate the input column names, then return a labeled projection."""
+        return Self._projection_table(self.transform(X))
+
+    def fit_transform_table(
+        mut self, X: NDArray[Self.dtype], y: Optional[List[Self.L]] = None
+    ) raises -> ColumnTable[Self.dtype]:
+        """Fit and return a labeled projection of the training data."""
+        return Self._projection_table(self.fit_transform(X, y))
+
+    def fit_transform_table(
+        mut self, X: ColumnTable[Self.dtype], y: Optional[List[Self.L]] = None
+    ) raises -> ColumnTable[Self.dtype]:
+        """Fit with named input and return a labeled projection of the training data."""
+        return Self._projection_table(self.fit_transform(X, y))
+
+    @staticmethod
+    def _projection_table(projection: NDArray[Self.dtype]) raises -> ColumnTable[Self.dtype]:
+        return ColumnTable(projection, Self._component_names(projection.shape[1]))
+
     def get_feature_names_out(
         self, input_features: Optional[List[String]] = None
     ) raises -> List[String]:
@@ -853,7 +877,11 @@ struct LinearDiscriminantAnalysis[
                 String("ValueError: input_features should have length equal to number of features (")
                 + String(self.n_features_in_, "), got ", len(input_features.value()))
             )
-        var names = List[String](capacity=self._max_components)
-        for i in range(self._max_components):
+        return Self._component_names(self._max_components)
+
+    @staticmethod
+    def _component_names(width: Int) -> List[String]:
+        var names = List[String](capacity=width)
+        for i in range(width):
             names.append(String("lineardiscriminantanalysis", i))
         return names^

@@ -12,6 +12,8 @@ import sklearn
 ROOT = Path(__file__).resolve().parents[3]
 parser = argparse.ArgumentParser()
 parser.add_argument('--deps', type=Path, default=ROOT/'builds/deps')
+parser.add_argument('--round-trip-multinomial', action='store_true',
+                    help='compare the MultinomialNB cases after native archive round trips')
 args = parser.parse_args()
 DEPS = args.deps.resolve()
 REFERENCE=ROOT.parent/'scikit-learn'
@@ -38,6 +40,8 @@ lines=['''import numojo as nm
 from std.math import isnan, isfinite
 from std.testing import assert_true, assert_equal
 from moxie._nb_counts import MultinomialNB, ComplementNB
+from moxie.naive_bayes_serialization import MultinomialNBSchema
+from moxie.serialization import dumps, loads
 
 @no_inline
 def close(a: Float64, b: Float64) raises:
@@ -71,6 +75,20 @@ for model in ('MultinomialNB', 'ComplementNB'):
      for dtype in ('float32', 'float64'):
       cases.append((model, 7, 5, 3, np.array([0., .2, 1e-12, 2., .7]),
                     norm, force, layout, incremental, dtype))
+if args.round_trip_multinomial:
+    cases = [case for case in cases if case[0] == 'MultinomialNB']
+    lines[0] += '''
+@no_inline
+def round_trip[dtype: DType](model: MultinomialNB[dtype=dtype]) raises -> MultinomialNB[dtype=dtype]:
+    comptime Schema = MultinomialNBSchema[dtype=dtype]
+    var data = dumps(Schema.encode(model))
+    var restored = Schema.decode(loads(data))
+    assert_equal(dumps(Schema.encode(restored)), data)
+    return restored^
+'''
+    restore = ['    model = round_trip(model)']
+else:
+    restore = []
 with warnings.catch_warnings(),np.errstate(all='ignore'):
  warnings.simplefilter('ignore')
  for index,(model,n,f,c,alpha,norm,force,layout,incremental,dtype) in enumerate(cases):
@@ -113,12 +131,17 @@ with warnings.catch_warnings(),np.errstate(all='ignore'):
     if 'class_prior' in kwargs:
         body.append('    var prior: List[Float64] = '+literal(kwargs['class_prior']))
         args.append('class_prior=prior^')
-    body.append(f'    var model = {model}('+', '.join(args)+')')
+    model_type = f'{model}[dtype=DType.{dtype}]' if restore else model
+    body.append(f'    var model = {model_type}('+', '.join(args)+')')
+    body.extend(restore)
     if incremental:
         body.append(f'    var classes: List[Int] = {literal(np.arange(c)*7-3)}')
-        body.append('    model.partial_fit(X, y, classes.copy(), sample_weight=weights.copy())')
-        body.append('    model.partial_fit(X, y, sample_weight=weights.copy())')
-    else: body.append('    model.fit(X, y, sample_weight=weights.copy())')
+        body.append('    _ = model.partial_fit(X, y, classes.copy(), sample_weight=weights.copy())')
+        body.extend(restore)
+        body.append('    _ = model.partial_fit(X, y, sample_weight=weights.copy())')
+    else: body.append('    _ = model.fit(X, y, sample_weight=weights.copy())')
+    body.extend(restore)
+    body.append(f'    assert_equal(model.classes_, List[Int]({literal(oracle.classes_)}))')
     for k,v in enumerate(oracle.class_count_): body.append(f'    close(model.class_count_.item({k}), {literal(v)})')
     for k,v in enumerate(oracle.class_log_prior_): body.append(f'    close(model.class_log_prior_.item({k}), {literal(v)})')
     for field in ['feature_count_','feature_log_prob_']:
@@ -136,7 +159,7 @@ with warnings.catch_warnings(),np.errstate(all='ignore'):
     lines.append('\n'.join(body))
 # Keep generated sources away from stale standalone moxie.mojoc packages.
 # Bounded batches also avoid one large optimized compilation for every fixture.
-output_dir = ROOT/'builds/naive-bayes-counts-parity'
+output_dir = ROOT/'builds'/('naive-bayes-multinomial-round-trip' if restore else 'naive-bayes-counts-parity')
 output_dir.mkdir(parents=True, exist_ok=True)
 for start in range(0, len(cases), 12):
     stop = min(start + 12, len(cases))

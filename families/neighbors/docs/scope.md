@@ -9,8 +9,8 @@ Nearest/radius queries and supervised prediction support Float32/Float64 dense
 features, precomputed distances, rank-one/two numeric targets, ordered classes,
 uniform/distance/native callable weighting, native callable distance metrics on
 brute, auto and BallTree queries, LOF and supervised estimators, self exclusion, duplicates and empty
-neighborhoods. LOF provides training factors, contamination thresholds and gated
-novelty inference. KDE provides six metric kernels (Euclidean probability normalization), weighted fitting, numeric
+neighborhoods. LOF provides training factors, contamination thresholds, fit warning
+records and gated novelty inference. KDE provides six metric kernels (Euclidean probability normalization), weighted fitting, numeric
 and rule-based bandwidth, summed log likelihood and seeded and default-stream Gaussian/tophat sampling.
 All engines are pure Mojo on accepted NuMojo arrays. KDTree and BallTree support
 explicit selection and eligible auto queries; see [KDTree](kdtree.md) and
@@ -22,7 +22,7 @@ self-query standardized-Euclidean variance inference, arbitrary positive Minkows
 powers through native Float64 power, and default-stream KDE sampling. Capability
 traits and native API adaptations are documented in [estimators.md](estimators.md).
 This does not claim exhaustive sklearn parity: Python reflection/metadata routing,
-warning emission and the documented numerical-domain restrictions remain outside
+radius prediction warning emission and the documented numerical-domain restrictions remain outside
 the supported native interface. `n_jobs` remains a serial scheduling hint.
 
 Deferred by the retained dense-only contract: sparse

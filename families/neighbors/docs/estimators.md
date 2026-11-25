@@ -177,8 +177,14 @@ and gives `offset_=-1.5`; a value in (0,0.5] uses the linear percentile.
 `predict` require `novelty=True`. Novelty queries include training matches when
 explicitly supplied, preserving the distinction from training factors. Scores
 retain feature dtype; ±1 predictions are floating arrays, a native label-type
-adaptation. Warning emission is not implemented; callable metrics use the same backend
-selection and configuration rules as NearestNeighbors.
+adaptation. Read `fit_warnings: List[FitWarning]` after `fit` or `fit_predict`.
+It records scikit-learn's `UserWarning` for a requested neighbor count above
+the sample count and for extreme training factors caused by duplicates in
+outlier detection mode. Successful fits replace the list. Failed fits preserve
+it, and an unfitted clone starts with an empty list. Read these diagnostics on
+the estimator under the shared [fit warning contract](../../../docs/interfaces.md#fit-warnings).
+Callable metrics use the same backend selection and configuration rules as
+NearestNeighbors.
 
 ## KernelDensity
 

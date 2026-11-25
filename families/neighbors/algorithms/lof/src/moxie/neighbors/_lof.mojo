@@ -1,7 +1,8 @@
 """Dense Local Outlier Factor using exact streaming neighbor queries."""
 import numojo as nm
-from std.math import max, isfinite, floor
+from std.math import max, isfinite, isnan, floor
 from moxie.base import BaseEstimator
+from moxie.warnings import FitWarning
 from moxie.neighbors._base import NoveltyDetector
 from moxie.neighbors._unsupervised import NearestNeighbors, NeighborParams
 from moxie.neighbors._distance import Metric
@@ -32,6 +33,7 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
     var _k_distance: nm.NDArray[Self.dtype]
     var effective_metric_: String
     var effective_metric_params_: Self.M
+    var fit_warnings: List[FitWarning]
 
     def __init__(out self, n_neighbors: Int = 20, *, algorithm: String = "auto",
                  leaf_size: Int = 30, metric: String = "minkowski", p: Float64 = 2,
@@ -50,6 +52,7 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
         self.offset_ = -1.5
         self.effective_metric_ = self._query.effective_metric_
         self.effective_metric_params_ = self._query.effective_metric_params_.copy()
+        self.fit_warnings = []
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self._query.get_params(), self.contamination, self.novelty)
@@ -108,13 +111,25 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
             output.unsafe_set(i,-total/Scalar[Self.dtype](result.k))
         return output^
 
+    @staticmethod
+    def _duplicate_warning(scores: Self.Input) -> Bool:
+        var extreme_score = False
+        for i in range(scores.size):
+            var score = scores.unsafe_get(i)
+            # The reference uses np.min, which propagates NaN.
+            if isnan(score):
+                return False
+            extreme_score |= score < -1e7
+        return extreme_score
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: nm.NDArray[Self.dtype], y: Optional[nm.NDArray[Self.dtype]] = None) raises -> ref[self] Self:
         if self.contamination:
             var c = self.contamination.value()
             if not isfinite(c) or c <= 0 or c > 0.5: raise Error("ValueError: contamination must be in (0, 0.5]")
         var query = self._query.__sklearn_clone__()
         query.fit(X)
-        var k = min(query.get_params().n_neighbors,X.shape[0]-1)
+        var requested = query.get_params().n_neighbors
+        var k = min(requested,X.shape[0]-1)
         var neighbors = query.kneighbors(None,k)
         var kth = nm.zeros[Self.dtype](nm.Shape(X.shape[0]))
         for i in range(X.shape[0]): kth.unsafe_set(i,neighbors.distances.value().unsafe_get(i*k+k-1))
@@ -138,6 +153,18 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
             var a = Float64(scores.unsafe_get(order[lo]))
             var b = Float64(scores.unsafe_get(order[hi]))
             offset = a+(b-a)*(rank-Float64(lo))
+        var warnings = List[FitWarning]()
+        if requested > X.shape[0]:
+            warnings.append(FitWarning("UserWarning", String(
+                "n_neighbors (", requested, ") is greater than the total number of samples (",
+                X.shape[0], "). n_neighbors will be set to (n_samples - 1) for estimation.",
+            )))
+        if not self.novelty and Self._duplicate_warning(scores):
+            warnings.append(FitWarning(
+                "UserWarning",
+                "Duplicate values are leading to incorrect results. "
+                "Increase the number of neighbors for more accurate results.",
+            ))
         self._query = query^
         self.n_neighbors_ = k
         self.n_features_in_ = X.shape[1]
@@ -148,6 +175,7 @@ struct LocalOutlierFactor[dtype: DType = DType.float64, M: DenseMetric & Deinita
         self.offset_ = offset
         self.effective_metric_ = self._query.effective_metric_
         self.effective_metric_params_ = self._query.effective_metric_params_.copy()
+        self.fit_warnings = warnings^
         return self
 
     def kneighbors(self, X: Optional[nm.NDArray[Self.dtype]] = None,

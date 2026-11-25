@@ -45,16 +45,16 @@ for dtype, dim, seed, weighted, bandwidth in itertools.product(
     rows = [line.split() for line in raw.splitlines()]
     samples = np.array([float(row[1]) for row in rows if row[0] == 'S']).reshape(7, dim)
     subsequent = np.array([float(row[1]) for row in rows if row[0] == 'N']).reshape(3, dim)
-    # Native pow and MT19937 Gaussian math have bounded rounding differences.
+    # Allow for gamma, Gaussian draws and squared-norm reduction rounding.
     # Scale by bandwidth so translated centers cannot hide radial errors.
     for actual, reference in [(samples, expected), (subsequent, following)]:
         error = float(np.max(np.abs(actual - reference)))
         maximum = max(maximum, error)
-        np.testing.assert_allclose(actual, reference, rtol=0, atol=2e-9 * bandwidth + 2e-14)
+        np.testing.assert_allclose(actual, reference, rtol=0, atol=2e-13 * bandwidth + 2e-14)
     np.testing.assert_equal([float(row[1]) for row in rows if row[0] == 'U'], [next_uniform])
     centers = x[[1, 3]] if weighted else x
     nearest = np.linalg.norm(samples[:, None, :] - centers, axis=2).min(axis=1)
-    assert np.all(nearest <= bandwidth * (1 + 2e-9))
+    assert np.all(nearest <= bandwidth * (1 + 2e-13))
     count += 1
 print(f'PASS {count} tophat sampling configurations: dtypes, dimensions 1–1000, seeds, '
       f'zero/nonuniform weights, bandwidths, continued RNG state; maximum absolute error {maximum:.3g}')

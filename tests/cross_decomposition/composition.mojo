@@ -116,6 +116,15 @@ def canonical_regressors() raises:
     assert_equal(can_pipe.get_feature_names_out()[1], "plscanonical1")
     assert_equal(cca_pipe.get_feature_names_out()[0], "cca0")
 
+    _ = cca_pipe.estimator.set_params(max_iter=1)
+    _ = cca_pipe.fit(x, y)
+    assert_equal(len(cca_pipe.estimator.fit_warnings), 1)
+    assert_equal(cca_pipe.estimator.fit_warnings[0].category, "ConvergenceWarning")
+    assert_equal(
+        cca_pipe.estimator.fit_warnings[0].message,
+        "Maximum number of iterations reached",
+    )
+
 
 def aliased_pipeline_names() raises:
     var distinct = make_pipeline(PLSRegression(1), CCA(1))

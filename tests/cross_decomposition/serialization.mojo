@@ -165,6 +165,9 @@ def constant_residual() raises:
     var restored = load_model[PLSRegressionSchema[]](path)
     assert_equal(len(restored.diagnostics_), 1)
     assert_equal(restored.diagnostics_, model.diagnostics_)
+    assert_equal(len(restored.fit_warnings), 1)
+    assert_equal(restored.fit_warnings[0].category, "UserWarning")
+    assert_equal(restored.fit_warnings[0].message, "y residual is constant at iteration 0")
     assert_equal(len(restored.n_iter_), 0)
     same_array(restored.predict(x), model.predict(x))
 

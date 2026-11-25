@@ -33,10 +33,18 @@ n_features_in_`, training scores `x_scores_, y_scores_`.
 | `transform(X, y, copy=False)`, `predict(X, copy=False)` | `transform_inplace`, `predict_inplace` |
 | `transform(X, y)` tuple / `inverse_transform(X, y)` tuple | `PairedScores` record (`x_scores`, `y_scores` fields hold X and y blocks) |
 | `get_params()` dict | `PLSParams` record; keyword `set_params(...)` overload; `algorithm` other than 'nipals' rejected for PLSRegression/CCA |
-| Python warnings | `diagnostics_: List[String]` ("ConvergenceWarning: Maximum number of iterations reached", "UserWarning: y residual is constant at iteration k") |
+| Python warnings | `fit_warnings: List[FitWarning]` records the category and message in fit order. The legacy `diagnostics_` list formats each record as `category: message`. |
 | `_x_scores` private on PLSCanonical/CCA | exposed as `x_scores_`/`y_scores_` on all three |
 | float64 outputs for float32 input | same: inputs `NDArray[dtype]`, outputs Float64; inference centers/scales in input dtype like NumPy's in-place ops |
 | `get_feature_names_out(input_features=None)` | returns `List[String]` (`plsregression0`, ...); supplied names are length-checked only (no `feature_names_in_`). `FeatureNamesOut` and `InputFeatureCount` (`get_n_features_in()`) are declared, so pipelines report names and input width |
+
+Read `model.fit_warnings` after fitting, including on a fitted Pipeline step.
+NIPALS records `ConvergenceWarning` with message
+`Maximum number of iterations reached` for a component that reaches the cap,
+and `UserWarning` with message `y residual is constant at iteration k` when
+extraction stops on a constant target residual. Each successful fit replaces
+the list. Failed fits preserve it, and unfitted clones start with an empty list.
+See the shared [fit warning contract](../../interfaces.md#fit-warnings).
 
 Numerical failures that make SciPy raise (NaN reaching an SVD after a zero
 deflation denominator) raise `LinAlgError: ...` here; NaN in inputs is

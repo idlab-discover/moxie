@@ -81,26 +81,33 @@ estimator. The default `List[Int]` label type works with the multiclass
 Weighted scoring rejects NaN, infinity, all-zero weights and weights whose sum
 is zero, as in scikit-learn. Signed weights with a nonzero sum are accepted.
 
-## Native LDA persistence
+## Native model persistence
 
 Use the experimental [Moxie archive format](../serialization.md) to save fitted
-or unfitted LDA models and restore them without training data.
+or unfitted LDA and QDA models and restore them without training data.
 
 ```mojo
-from moxie.discriminant_analysis_serialization import LinearDiscriminantAnalysisSchema
+from moxie.discriminant_analysis_serialization import (
+    LinearDiscriminantAnalysisSchema,
+    QuadraticDiscriminantAnalysisSchema,
+)
 from moxie.serialization import load_model, save_model
 
 save_model[LinearDiscriminantAnalysisSchema[]](lda, "lda.moxie")
-var restored = load_model[LinearDiscriminantAnalysisSchema[]]("lda.moxie")
+var restored_lda = load_model[LinearDiscriminantAnalysisSchema[]]("lda.moxie")
+save_model[QuadraticDiscriminantAnalysisSchema[]](qda, "qda.moxie")
+var restored_qda = load_model[QuadraticDiscriminantAnalysisSchema[]]("qda.moxie")
 ```
 
 Choose the same dtype and label type when saving and loading, for example
 `LinearDiscriminantAnalysisSchema[DType.float32, String]`. Version 1 supports
 `Int` and `String` labels and the default `NoCovarianceEstimator` type,
-including all three solvers and built-in shrinkage choices. The archive saves
-current configuration separately from fitted state, so a solver or component
-change made after fitting preserves the fitted projection on load. Loading
-validates array shapes, class order and the fitted solver's required fields.
+including both dtypes, every solver and built-in shrinkage choices. The archive
+saves current configuration separately from learned state. A post-fit setting
+change preserves LDA's fitted projection state and QDA's fitted class factors
+on load. QDA archives preserve optional fitted covariances independently of the
+current `store_covariance` setting. Loading validates array shapes, class order
+and the required learned fields.
 
 ## Cross-validation and shrinkage search
 

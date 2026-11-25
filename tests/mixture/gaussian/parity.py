@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 REFERENCE = Path(os.environ.get('MOXIE_WORKSPACE', ROOT.parent)) / 'scikit-learn'
 REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 RUNNER = ROOT / 'builds/tests/mixture/gaussian/parity_runner'
+ROUNDTRIP = os.environ.get('MOXIE_GAUSSIAN_ROUNDTRIP') == '1'
 WORK = ROOT / 'builds/mixture/gaussian/parity'
 import shutil
 shutil.rmtree(WORK, ignore_errors=True)
@@ -82,7 +83,10 @@ def run_native(case_id, dtype, params, arrays):
     source = WORK / f'{case_id}.case'
     target = WORK / f'{case_id}.out'
     write_case(source, dtype, params, arrays)
-    subprocess.run([str(RUNNER), str(source), str(target)], check=True)
+    command = [str(RUNNER), str(source), str(target)]
+    if ROUNDTRIP:
+        command.append('--roundtrip')
+    subprocess.run(command, check=True)
     result = {}
     for line in target.read_text().splitlines():
         parts = line.split(' ')
@@ -267,7 +271,8 @@ def main():
             case_number += 1
             params = dict(n_components=2, covariance_type=kind, reg_covar=0.0, random_state=0)
             counts[compare(f'c{case_number}_collapsed_{kind}_{np.dtype(dtype).name}', dtype, params, collapsed, collapsed)] += 1
-    report = {'revision': REVISION, 'runner': str(RUNNER), 'runner_sha256': hashlib.sha256(RUNNER.read_bytes()).hexdigest(),
+    report = {'revision': REVISION, 'archive_roundtrip': ROUNDTRIP,
+              'runner': str(RUNNER), 'runner_sha256': hashlib.sha256(RUNNER.read_bytes()).hexdigest(),
               'assembly': json.loads((ROOT / 'builds/deps/ASSEMBLY.json').read_text())['modules'], 'counts': counts, 'diverged': records,
               'tolerances': {'float64': tolerances('_blobs_', np.float64), 'float32': tolerances('_blobs_', np.float32),
                              'float64_tiny_ill': tolerances('_tiny_', np.float64),

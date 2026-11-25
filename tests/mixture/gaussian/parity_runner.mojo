@@ -12,6 +12,8 @@ from numojo import NDArray, Shape, zeros
 from std.sys import argv
 from std.memory import bitcast
 from moxie.mixture import GaussianMixture
+from moxie.mixture_serialization import GaussianMixtureSchema
+from moxie.serialization import dumps, loads
 
 
 def to_bits(value: Float64) -> String:
@@ -97,7 +99,7 @@ def emit_scalar(mut buffer: String, name: String, value: Float64):
     buffer += name + " 1 " + to_bits(value) + "\n"
 
 
-def run[dtype: DType](spec: Case) raises -> String:
+def run[dtype: DType](spec: Case, roundtrip: Bool) raises -> String:
     var X = spec.array[dtype]("X")
     var T = spec.array[dtype]("T")
     var weights_init = Optional[NDArray[dtype]](None)
@@ -128,6 +130,9 @@ def run[dtype: DType](spec: Case) raises -> String:
     var labels = zeros[DType.int64](Shape(0))
     for fit in range(n_fits):
         labels = model.fit_predict(X)
+        if roundtrip:
+            comptime Schema = GaussianMixtureSchema[dtype]
+            model = Schema.decode(loads(dumps(Schema.encode(model))))
         emit_scalar(out, "fit_lower_bound_" + String(fit), model.lower_bound_)
     var label_values = zeros[DType.float64](Shape(labels.size))
     for i in range(labels.size):
@@ -172,12 +177,13 @@ def main() raises:
     with open(args[1], "r") as f:
         text = f.read()
     var spec = Case(text)
+    var roundtrip = len(args) == 4 and args[3] == "--roundtrip"
     var result: String
     try:
         if spec.get("dtype", "f64") == "f32":
-            result = run[DType.float32](spec)
+            result = run[DType.float32](spec, roundtrip)
         else:
-            result = run[DType.float64](spec)
+            result = run[DType.float64](spec, roundtrip)
     except error:
         result = "error " + String(error) + "\n"
     with open(args[2], "w") as f:

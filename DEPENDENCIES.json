@@ -485,6 +485,9 @@
         "moxie.mixture._scalar_math": {
           "file": "src/moxie/mixture/_scalar_math.mojo"
         },
+        "moxie.mixture_serialization": {
+          "file": "src/moxie/mixture_serialization.mojo"
+        },
         "moxie.linear_model._base": {
           "file": "src/moxie/linear_model/_base.mojo"
         },

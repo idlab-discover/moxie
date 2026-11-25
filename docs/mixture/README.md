@@ -29,6 +29,26 @@ types remain available as estimator associated types, including `Samples`.
 Caller-owned streams use `moxie._random.RandomState` with `fit_with_rng`,
 `fit_predict_with_rng` and `sample_with_rng`.
 
+## GaussianMixture persistence
+
+```mojo
+from moxie.mixture_serialization import GaussianMixtureSchema
+from moxie.serialization import save_model, load_model
+
+comptime Schema = GaussianMixtureSchema[DType.float64]
+save_model[Schema](gaussian, "gaussian.moxie")
+var restored = load_model[Schema]("gaussian.moxie")
+```
+
+The [experimental native archive](../serialization.md) stores fitted or
+unfitted Float32 and Float64 models. Loading requires the matching schema dtype
+and reconstructs independent arrays without refitting. The archive preserves
+constructor settings separately from learned state, including pending parameter
+updates after fit, all five learned arrays and the convergence history and
+warning. Configuration arrays preserve logical values in C order. Fit still
+validates their suitability for the training data. Caller-owned RNG streams
+remain with the caller.
+
 ## Validation
 
 From Moxie, run `pixi run mixture-build`, `pixi run mixture-test`, and
@@ -36,6 +56,12 @@ From Moxie, run `pixi run mixture-build`, `pixi run mixture-test`, and
 sources and checks. Compiler flags are `-O3 --fp-mode=contract=off`; the lock
 retains Mojo 1.0.0 and MAX 26.5.0. Python, NumPy, SciPy and sklearn are validation
 and tooling dependencies only.
+
+For Gaussian archive parity, set `MOXIE_GAUSSIAN_ROUNDTRIP=1` and run
+`pixi run python tests/mixture/gaussian/parity.py` after building. The native
+runner saves and restores each successful fit in memory before inference or a
+subsequent warm start. The family test also exercises file round trips and
+invalid archives.
 
 Tests cover the original family contracts and both child suites, concrete public
 imports with generic fluent dispatch, independent fitted copies, two isolated

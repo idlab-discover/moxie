@@ -247,6 +247,8 @@ struct GaussianMixture[dtype: DType = DType.float64](MixtureDensity, Information
     var n_features_in_: Int
     var convergence_warning_: String
     var _fitted: Bool
+    # The fitted layout survives edits to the constructor configuration.
+    var _fitted_covariance_type: String
 
     def __init__(
         out self,
@@ -293,6 +295,7 @@ struct GaussianMixture[dtype: DType = DType.float64](MixtureDensity, Information
         self.n_features_in_ = 0
         self.convergence_warning_ = String("")
         self._fitted = False
+        self._fitted_covariance_type = ""
 
     # ----- configuration -----
     def get_params(self, deep: Bool = True) raises -> Self.Params:
@@ -469,6 +472,7 @@ struct GaussianMixture[dtype: DType = DType.float64](MixtureDensity, Information
         self.lower_bounds_ = result.lower_bounds.copy()
         self.n_features_in_ = n_features
         self.convergence_warning_ = result.warning
+        self._fitted_covariance_type = self.covariance_type
         self._fitted = True
         return result.labels.copy()
 

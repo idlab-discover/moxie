@@ -48,7 +48,7 @@ def check_pipeline(solver: String) raises:
     assert_equal(fresh.estimator.solver, solver)
 
 
-def check_liblinear_pipeline() raises:
+def check_binary_pipeline(solver: String, expected_probability: Float64, expected_score: Float64) raises:
     var X = zeros[DType.float64](Shape(8, 2))
     var y = zeros[DType.int64](Shape(8))
     for i in range(8):
@@ -57,16 +57,17 @@ def check_liblinear_pipeline() raises:
         y.unsafe_set(i, Int64(i % 2))
     var model = make_pipeline(
         StandardScaler(),
-        LogisticRegression(solver="liblinear", C=2.0, l1_ratio=1.0, random_state=42, tol=1e-9),
+        LogisticRegression(solver=solver.copy(), C=2.0, l1_ratio=1.0, random_state=42, tol=1e-9),
     )
     var probability = model.fit(X, y).predict_proba(X)
     assert_equal(model.score(X, y), 0.5)
     assert_equal(probability.shape[1], 2)
-    assert_almost_equal(probability.unsafe_get(0), 0.6012536814646721, atol=2e-7)
-    assert_almost_equal(model.decision_function(X).unsafe_get(0), -0.410691522876241, atol=2e-7)
+    assert_almost_equal(probability.unsafe_get(0), expected_probability, atol=2e-7)
+    assert_almost_equal(model.decision_function(X).unsafe_get(0), expected_score, atol=2e-7)
     var fresh = clone(model)
     assert_false(fresh.__sklearn_is_fitted__())
     assert_equal(fresh.estimator.get_params().l1_ratio.value(), 1.0)
+    assert_equal(fresh.estimator.solver, solver)
 
 
 def main() raises:
@@ -75,5 +76,6 @@ def main() raises:
     check_pipeline("newton-cg")
     check_pipeline("sag")
     check_pipeline("saga")
-    check_liblinear_pipeline()
-    print("PASS: six dense LogisticRegression solvers through StandardScaler pipeline")
+    check_binary_pipeline("liblinear", 0.6012536814646721, -0.410691522876241)
+    check_binary_pipeline("newton-cd", 0.6013460108157476, -0.4110766483882662)
+    print("PASS: seven dense LogisticRegression solvers through StandardScaler pipeline")

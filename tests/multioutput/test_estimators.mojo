@@ -238,8 +238,15 @@ def main() raises:
     print("PARITY RegressorChain", b.unsafe_get(0), b.unsafe_get(1), b.unsafe_get(2), b.unsafe_get(3), b.unsafe_get(4), b.unsafe_get(5))
     print("PARITY MultiOutputClassifier", c.unsafe_get(0), c.unsafe_get(1), c.unsafe_get(2), c.unsafe_get(3), c.unsafe_get(4), c.unsafe_get(5))
     print("PARITY ClassifierChain", d.unsafe_get(0), d.unsafe_get(1), d.unsafe_get(2), d.unsafe_get(3), d.unsafe_get(4), d.unsafe_get(5))
-    var cv_reg = RegressorChain(Nearest[DType.float64](), order=List[Int]([1, 0]))
+    var cv_reg = RegressorChain(Nearest[DType.float64](), order=List[Int]([1, 0]), cv=5)
     _ = cv_reg.fit(X, y, cv=TwoFold[DType.float64]())
+    assert_equal(cv_reg.get_params().cv[Int], 5)
+    var narrow_targets = y.astype[DType.int32]()
+    var narrow_chain = RegressorChain[Nearest[DType.int32], DType.float64, DType.int32](Nearest[DType.int32]())
+    assert_equal(narrow_chain.fit(X, narrow_targets).predict(X).shape[1], 2)
+    with assert_raises(contains="native chain CV targets"):
+        _ = narrow_chain.fit(X, narrow_targets, cv=2)
+    assert_equal(narrow_chain.predict(X).shape[1], 2)
     # One output never requests CV responses, so rejection must come from the wrapper.
     var single_target = nm.zeros[DType.float64](Shape(4, 1))
     var invalid_response = RegressorChain(Nearest[DType.float64](), chain_method="predict_proba")

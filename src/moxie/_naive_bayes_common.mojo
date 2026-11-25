@@ -3,10 +3,29 @@ from std.math import isfinite
 import numojo as nm
 from numax.core.libm import exp as _libm_exp, log as _libm_log
 from moxie.base import IncrementalClassifier, LogProbabilityPredictor
+from moxie.metadata_routing import (
+    FitScoreMetadataRequest, FitScoreMetadataRequestProvider, SampleWeightRequest,
+)
 from moxie.warnings import FitWarning
 
 trait NaiveBayesClassifier(IncrementalClassifier, LogProbabilityPredictor):
     pass
+
+
+trait NaiveBayesMetadataRequestProvider(FitScoreMetadataRequestProvider):
+    """Expose the incremental sample-weight request to a typed parent."""
+
+    def get_partial_fit_request(self) -> SampleWeightRequest:
+        ...
+
+
+struct _NaiveBayesMetadata(Copyable, Movable):
+    var fit_score: FitScoreMetadataRequest
+    var partial_fit: SampleWeightRequest
+
+    def __init__(out self):
+        self.fit_score = FitScoreMetadataRequest(SampleWeightRequest(), SampleWeightRequest())
+        self.partial_fit = SampleWeightRequest()
 
 
 comptime _Matrix = List[List[Float64]]

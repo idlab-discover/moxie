@@ -1,5 +1,5 @@
 """Public dense Naive Bayes estimators owned by Moxie."""
-from moxie._naive_bayes_common import NaiveBayesClassifier
+from moxie._naive_bayes_common import NaiveBayesClassifier, NaiveBayesMetadataRequestProvider
 from moxie._nb_categorical import (
     CategoricalNB,
     CategoricalNBParams,

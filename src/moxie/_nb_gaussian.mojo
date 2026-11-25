@@ -2,6 +2,8 @@
 import numojo as nm
 from numojo import NDArray, Shape, Item
 from std.math import isfinite
+from moxie.metadata_routing import FitScoreMetadataRequest, SampleWeightRequest, SampleWeightUpdate
+from moxie._naive_bayes_common import NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata
 from moxie._naive_bayes_common import _scalar_weights
 from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
@@ -100,7 +102,7 @@ struct GaussianNBParams(Copyable, Movable):
 
 
 struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
-    Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier
+    Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier, NaiveBayesMetadataRequestProvider
 ):
     """Gaussian classifier; the compile-time domain selects the target type."""
     comptime Array = NDArray[Self.dtype]
@@ -123,6 +125,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
     var epsilon_: Self.ScalarType
     var n_features_in_: Int
     var _domain: Optional[Self.D]
+    var _metadata: _NaiveBayesMetadata
 
     def __init__(out self, *, var priors: Optional[List[Float64]] = None,
                  var_smoothing: Float64 = 1e-9) raises:
@@ -137,6 +140,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         self.epsilon_ = 0
         self.n_features_in_ = 0
         self._domain = None
+        self._metadata = _NaiveBayesMetadata()
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.priors.copy(), self.var_smoothing)
@@ -166,8 +170,41 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
             self.var_smoothing = var_smoothing.value()
         return self
 
+
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.fit_score.fit.set(sample_weight)
+        return self
+
+    def set_partial_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.partial_fit.set(sample_weight)
+        return self
+
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.fit_score.score.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        return self._metadata.fit_score.copy()
+
+    def get_partial_fit_request(self) -> SampleWeightRequest:
+        return self._metadata.partial_fit.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(priors=self.priors.copy(), var_smoothing=self.var_smoothing)
+        var cloned = Self(priors=self.priors.copy(), var_smoothing=self.var_smoothing)
+        cloned._metadata = self._metadata.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self.n_features_in_ > 0

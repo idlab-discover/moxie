@@ -3,6 +3,8 @@ import numojo as nm
 from moxie.warnings import FitWarning
 from moxie._naive_bayes_dense import ClassDomain, _prepare
 from moxie._dense import sum_axis2d
+from moxie.metadata_routing import FitScoreMetadataRequest, SampleWeightRequest, SampleWeightUpdate
+from moxie._naive_bayes_common import NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata
 from moxie._naive_bayes_common import _alpha, _log
 from moxie._naive_bayes_dense import (
     DenseMatrix, BatchContract, CountStatistics, CountUpdater,
@@ -97,7 +99,9 @@ struct MultinomialNBParams(Copyable, Movable):
     var class_prior: Optional[List[Float64]]
 
 
-struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier):
+struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
+    Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier, NaiveBayesMetadataRequestProvider
+):
     """Dense MultinomialNB with weighted counts and incremental fitting."""
 
     comptime Params = MultinomialNBParams
@@ -115,6 +119,7 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
     var class_prior: Optional[List[Float64]]
     var classes_: Self.Target
     var _domain: Optional[Self.D]
+    var _metadata: _NaiveBayesMetadata
     var class_count_: DenseMatrix
     var class_log_prior_: DenseMatrix
     var fit_warnings: List[FitWarning]
@@ -138,6 +143,7 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self.class_prior = class_prior^
         self.classes_ = Self.D.empty_target()
         self._domain = None
+        self._metadata = _NaiveBayesMetadata()
         self.class_count_ = nm.zeros[DType.float64](nm.Shape(0))
         self.fit_warnings = []
         self.class_log_prior_ = nm.zeros[DType.float64](nm.Shape(0))
@@ -192,14 +198,47 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
             self.class_prior = class_prior.value().copy()
         return self
 
+
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.fit_score.fit.set(sample_weight)
+        return self
+
+    def set_partial_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.partial_fit.set(sample_weight)
+        return self
+
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.fit_score.score.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        return self._metadata.fit_score.copy()
+
+    def get_partial_fit_request(self) -> SampleWeightRequest:
+        return self._metadata.partial_fit.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(
+        var cloned = Self(
             alpha=self.alpha,
             alpha_values=self.alpha_values.copy(),
             force_alpha=self.force_alpha,
             fit_prior=self.fit_prior,
             class_prior=self.class_prior.copy(),
         )
+        cloned._metadata = self._metadata.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self.n_features_in_ > 0
@@ -500,7 +539,9 @@ struct ComplementNBParams(Copyable, Movable):
     var norm: Bool
 
 
-struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier):
+struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
+    Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier, NaiveBayesMetadataRequestProvider
+):
     """Dense ComplementNB with weighted counts and incremental fitting."""
 
     comptime Params = ComplementNBParams
@@ -519,6 +560,7 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
     var norm: Bool
     var classes_: Self.Target
     var _domain: Optional[Self.D]
+    var _metadata: _NaiveBayesMetadata
     var class_count_: DenseMatrix
     var class_log_prior_: DenseMatrix
     var fit_warnings: List[FitWarning]
@@ -545,6 +587,7 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
         self.norm = norm
         self.classes_ = Self.D.empty_target()
         self._domain = None
+        self._metadata = _NaiveBayesMetadata()
         self.class_count_ = nm.zeros[DType.float64](nm.Shape(0))
         self.fit_warnings = []
         self.class_log_prior_ = nm.zeros[DType.float64](nm.Shape(0))
@@ -605,8 +648,39 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
             self.norm = norm.value()
         return self
 
+
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.fit_score.fit.set(sample_weight)
+        return self
+
+    def set_partial_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.partial_fit.set(sample_weight)
+        return self
+
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.fit_score.score.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        return self._metadata.fit_score.copy()
+
+    def get_partial_fit_request(self) -> SampleWeightRequest:
+        return self._metadata.partial_fit.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(
+        var cloned = Self(
             alpha=self.alpha,
             alpha_values=self.alpha_values.copy(),
             force_alpha=self.force_alpha,
@@ -614,6 +688,8 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
             class_prior=self.class_prior.copy(),
             norm=self.norm,
         )
+        cloned._metadata = self._metadata.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self.n_features_in_ > 0

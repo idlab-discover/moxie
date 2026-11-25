@@ -3,6 +3,8 @@ import numojo as nm
 from moxie.warnings import FitWarning
 from numojo import NDArray, Shape, Item
 from moxie._dense import sum_axis2d
+from moxie.metadata_routing import FitScoreMetadataRequest, SampleWeightRequest, SampleWeightUpdate
+from moxie._naive_bayes_common import NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata
 from moxie._naive_bayes_common import _alpha_fit_warnings, _scalar_weights
 from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
@@ -53,7 +55,9 @@ def _validate_categories[dtype: DType](X: NDArray[dtype], expected: Int = 0) rai
                 raise Error("ValueError: converted categories must be nonnegative representable integers")
 
 
-struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier):
+struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
+    Copyable, WeightedSupervisedEstimator, NaiveBayesClassifier, NaiveBayesMetadataRequestProvider
+):
     """Dense CategoricalNB with weighted counts and incremental fitting."""
 
     comptime Params = CategoricalNBParams
@@ -72,6 +76,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
     var min_categories_values: Optional[List[Int]]
     var classes_: Self.Target
     var _domain: Optional[Self.D]
+    var _metadata: _NaiveBayesMetadata
     var class_count_: DenseMatrix
     var class_log_prior_: DenseMatrix
     var fit_warnings: List[FitWarning]
@@ -98,6 +103,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self.min_categories_values = min_categories_values^
         self.classes_ = Self.D.empty_target()
         self._domain = None
+        self._metadata = _NaiveBayesMetadata()
         self.class_count_ = nm.zeros[DType.float64](Shape(0))
         self.fit_warnings = []
         self.class_log_prior_ = nm.zeros[DType.float64](Shape(0))
@@ -158,8 +164,39 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
             self.min_categories_values = min_categories_values.value().copy()
         return self
 
+
+    def set_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.fit_score.fit.set(sample_weight)
+        return self
+
+    def set_partial_fit_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.partial_fit.set(sample_weight)
+        return self
+
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        self._metadata.fit_score.score.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        return self._metadata.fit_score.copy()
+
+    def get_partial_fit_request(self) -> SampleWeightRequest:
+        return self._metadata.partial_fit.copy()
+
     def __sklearn_clone__(self) raises -> Self:
-        return Self(
+        var cloned = Self(
             alpha=self.alpha,
             force_alpha=self.force_alpha,
             fit_prior=self.fit_prior,
@@ -167,6 +204,8 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
             min_categories=self.min_categories,
             min_categories_values=self.min_categories_values.copy(),
         )
+        cloned._metadata = self._metadata.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self.n_features_in_ > 0

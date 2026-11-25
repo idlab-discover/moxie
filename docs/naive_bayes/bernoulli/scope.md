@@ -24,12 +24,13 @@ save_model[BernoulliNBSchema[]](model, "bernoulli.moxie")
 var restored = load_model[BernoulliNBSchema[]]("bernoulli.moxie")
 ```
 
-The experimental version 1 schema covers fitted and unfitted models. Choose
+The experimental schema covers fitted and unfitted models. Choose
 the same built-in label domain and declared input dtype when saving and loading.
 The file stores constructor configuration, including the optional threshold
 and scalar or per-feature smoothing, separately from learned arrays and the
-most recent fit warning. Vector smoothing is saved in logical order and loaded
-into owned contiguous storage. Signed counts and nonfinite feature log
+most recent fit warning. It also preserves configured
+[sample-weight requests](../family.md#sample-weight-requests). Vector smoothing
+is saved in logical order and loaded into owned contiguous storage. Signed counts and nonfinite feature log
 probabilities from raw, unbinarized inputs are preserved. A fitted restore can
 predict and resume weighted `partial_fit` without passing `classes` again.
 

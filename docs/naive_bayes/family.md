@@ -302,6 +302,51 @@ to the same estimator, following the [shared native contract](../interfaces.md).
   data while preserving its fitted state.
   See [the calibration contract](../calibration/family.md#classifier-adapter).
 
+## Sample-weight requests
+
+Each classifier provides fluent `set_fit_request`, `set_partial_fit_request`,
+and `set_score_request` methods. Their optional `sample_weight` keyword uses
+the [shared request states](../interfaces.md#sample-weight-requests). The
+requests start unset (`None`). Use `True` to request the standard key,
+`False` to decline it, or a string to request an alias. Omitting the keyword
+keeps the current request. Explicit weights on direct calls remain valid in
+every request state.
+
+```mojo
+var model = GaussianNB()
+_ = model.set_fit_request(sample_weight="training_weight").set_partial_fit_request(
+    sample_weight=True,
+).set_score_request(sample_weight=False)
+var fit_and_score = model.get_metadata_routing()
+var incremental = model.get_partial_fit_request()
+```
+
+The accessors return independently owned snapshots, including before fit.
+Generic callers use `FitScoreMetadataRequestProvider` from
+`moxie.metadata_routing` for fit and score and `NaiveBayesMetadataRequestProvider`
+from `moxie.naive_bayes` to also read the incremental request. A parent owns
+incoming key validation and uses `request.route(metadata)` to resolve weights.
+Native calls pass the `classes` argument to `partial_fit` explicitly.
+Compositions need their own metadata forwarding support.
+
+Fit, incremental updates, fitted copies and unfitted clones retain the
+request settings. Native archives with configured requests use state version
+2 and append fit, score and incremental requests to the existing manifest.
+The schema reads version 1 with unset requests and continues writing the
+original version 1 bytes when all requests are unset.
+
+After assembling the current dependencies, build the focused request contract
+and run the comparison in the pinned reference environment.
+
+```sh
+mojo build -O1 --fp-mode=contract=off -I builds/deps \
+  tests/naive_bayes/test_metadata_requests.mojo -o builds/nb-metadata-requests
+python tests/naive_bayes/check_metadata_requests.py builds/nb-metadata-requests
+```
+
+The comparison checks routed fit and update counts and scores with routed and
+explicit weights for all five classifiers.
+
 ## Supported scope and numerical behavior
 
 This is a dense implementation of all five algorithms, not completion of the
@@ -310,8 +355,7 @@ matrices and multioutput targets. CategoricalNB accepts only scalar `alpha`,
 as in the reference (its `_parameter_constraints` reject array-like alpha).
 All five classifiers support numeric NDArray and string target domains, and
 boolean, integer and Float32/Float64 dense feature arrays.
-Feature names, Python adapters and dynamic metadata routing remain outside the
-shared native contract.
+Named features and Python adapters remain outside the native contract.
 
 Weights must be finite, nonnegative, and have positive finite total weight in
 each batch. Negative weights raise even where sklearn accepts them. All-zero

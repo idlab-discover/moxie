@@ -25,7 +25,7 @@ REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 FILES = ['sklearn/discriminant_analysis.py', 'sklearn/covariance/_empirical_covariance.py',
          'sklearn/covariance/_shrunk_covariance.py', 'sklearn/preprocessing/_data.py',
          'sklearn/utils/_array_api.py', 'sklearn/utils/extmath.py', 'sklearn/linear_model/_base.py',
-         'sklearn/base.py', 'sklearn/tests/test_discriminant_analysis.py']
+         'sklearn/base.py', 'sklearn/tests/test_discriminant_analysis.py', 'sklearn/pipeline.py']
 
 
 def _module(name, relative):
@@ -60,6 +60,7 @@ def load():
     shrunk = _module('sklearn.covariance._da_pinned_shrunk', 'sklearn/covariance/_shrunk_covariance.py')
     shrunk.empirical_covariance = empirical.empirical_covariance
     data = _module('sklearn.preprocessing._da_pinned_data', 'sklearn/preprocessing/_data.py')
+    pipeline = _module('sklearn._da_pinned_pipeline', 'sklearn/pipeline.py')
     da = _module('sklearn._da_pinned_discriminant_analysis', 'sklearn/discriminant_analysis.py')
     da.empirical_covariance = empirical.empirical_covariance
     da.shrunk_covariance = shrunk.shrunk_covariance
@@ -77,5 +78,5 @@ def load():
     sklearn.base.ClassifierMixin.score = score
     for cls in [da.LinearDiscriminantAnalysis, da.QuadraticDiscriminantAnalysis]:
         assert cls.fit.__wrapped__.__code__.co_filename == str(SOURCE / FILES[0])
-    return dict(da=da, empirical=empirical, shrunk=shrunk, data=data,
+    return dict(da=da, empirical=empirical, shrunk=shrunk, data=data, pipeline=pipeline,
                 hashes={f: hashlib.sha256((SOURCE / f).read_bytes()).hexdigest() for f in FILES})

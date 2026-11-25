@@ -44,6 +44,13 @@ store_covariance=False, tol=1e-4, covariance_estimator=None)`
 
 ## Methods
 
+For a scaled projection, use
+`make_pipeline(StandardScaler(), LinearDiscriminantAnalysis(n_components=2))`
+and call `pipe.fit_transform(X, y.copy())` for training data or
+`pipe.transform(X_query)` for held-out data. The same fitted pipeline exposes
+`predict` and forwards `n_features_in_()` from the scaler. See
+[supervised pipeline transforms](../pipeline/sequential.md#supervised-predictors-with-transforms).
+
 | Method | LDA | QDA | Result |
 | --- | --- | --- | --- |
 | `fit(X, y)` | yes | yes | mutates in place, returns a mutable borrow of self |

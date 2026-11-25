@@ -2,19 +2,18 @@
 
 Every composed result is checked exactly against the same steps run by hand, so
 the composition adds no behavior of its own (sklearn's Pipeline/CV contract).
-Scenarios: make_pipeline(StandardScaler(), LinearDiscriminantAnalysis(...))
-(plot_classifier_comparison, plot_nca_dim_reduction), LDA as a supervised
+Scenarios include a scale-then-LDA classifier and projector, LDA as a supervised
 reduction before QDA, a cloned pipeline with a typed nested set_params, and
-5-fold cross_val_score with the estimator's own accuracy `score`. All solvers
-are deterministic, so comparisons are exact.
+5-fold cross_val_score with the estimator's own accuracy `score`.
 """
 from numojo import NDArray, Shape, zeros
 from std.math import sin, cos
+from std.sys import argv
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
-from moxie.base import clone
+from moxie.base import FitTransformer, clone
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.preprocessing import StandardScaler
-from moxie.pipeline import Pipeline, make_pipeline
+from moxie.pipeline import Pipeline, TransformingPipeline, make_pipeline
 from moxie.model_selection import IndexArray, IndexSplit, KFold, cross_val_score
 from moxie.model_selection._evaluation import TypedScorer
 from moxie.model_selection._validation import CVAdapter
@@ -24,15 +23,16 @@ comptime Dense = NDArray[DType.float64]
 comptime LDA = LinearDiscriminantAnalysis[DType.float64, Int]
 
 
-def blobs[dtype: DType](n: Int, p: Int) raises -> NDArray[dtype]:
+def blobs[dtype: DType](n: Int, p: Int, offset: Int = 0) raises -> NDArray[dtype]:
     """Three shifted, unevenly scaled classes (label i % 3) with deterministic noise."""
     var x = zeros[dtype](Shape(n, p))
-    for i in range(n):
+    for row in range(n):
+        var i = row + offset
         var c = i % 3
         for j in range(p):
             var noise = sin(Float64(i * 31 + j * 17) * 12.9898) + 0.5 * cos(Float64(i * 7 + j) * 3.1)
             var v = Float64(c) * Float64(j % 2 + 1) * 1.5 + noise * Float64(j + 1) + 10.0 * Float64(j)
-            x.unsafe_set(i * p + j, Scalar[dtype](v))
+            x.unsafe_set(row * p + j, Scalar[dtype](v))
     return x^
 
 
@@ -83,6 +83,56 @@ def scaled_lda[dtype: DType]() raises:
     assert_equal(len(names), 2)
     assert_equal(names[0], "lineardiscriminantanalysis0")
     assert_equal(names[1], "lineardiscriminantanalysis1")
+
+
+def fit_projection[P: FitTransformer](mut pipe: P, X: P.Input, y: Optional[P.Target]) raises -> P.Transformed:
+    return pipe.fit_transform(X, y)
+
+
+def project[P: TransformingPipeline](pipe: P, X: P.Input) raises -> P.Transformed:
+    return pipe.transform(X)
+
+
+def scaled_lda_projection[dtype: DType](emit: Bool) raises:
+    var x = blobs[dtype](45, 4)
+    var query = blobs[dtype](7, 4, offset=45)
+    var y = labels(45)
+    var pipe = make_pipeline(
+        StandardScaler[dtype](),
+        LinearDiscriminantAnalysis[dtype, Int](n_components=2),
+    )
+    with assert_raises(contains="NotFittedError"):
+        _ = pipe.transform(query)
+    with assert_raises(contains="requires y"):
+        _ = pipe.fit_transform(x)
+    assert_false(pipe.transformer.__sklearn_is_fitted__())
+    var transformed = fit_projection(pipe, x, Optional(y.copy()))
+    var projected = project(pipe, query)
+    assert_equal(transformed.shape[0], 45)
+    assert_equal(transformed.shape[1], 2)
+    assert_equal(projected.shape[0], 7)
+    assert_equal(projected.shape[1], 2)
+    assert_equal(pipe.n_features_in_(), 4)
+    var scaler = StandardScaler[dtype]()
+    var scaled = scaler.fit_transform(x)
+    var lda = LinearDiscriminantAnalysis[dtype, Int](n_components=2)
+    same(transformed, lda.fit_transform(scaled, y.copy()))
+    var scaled_query = scaler.transform(query)
+    same(projected, lda.transform(scaled_query))
+    same_labels(pipe.predict(query), lda.predict(scaled_query))
+
+    var fresh = clone(pipe)
+    _ = fresh.fit(x, y)
+    same(project(fresh, query), projected)
+    if emit:
+        for row in range(transformed.shape[0]):
+            print("projection", String(dtype), "train", transformed.unsafe_get(2 * row), transformed.unsafe_get(2 * row + 1))
+        for row in range(projected.shape[0]):
+            print("projection", String(dtype), "query", projected.unsafe_get(2 * row), projected.unsafe_get(2 * row + 1))
+
+    var lsqr = make_pipeline(StandardScaler[dtype](), LinearDiscriminantAnalysis[dtype, Int](solver="lsqr"))
+    with assert_raises(contains="NotImplementedError"):
+        _ = lsqr.fit_transform(x, y.copy())
 
 
 def lda_then_qda[dtype: DType]() raises:
@@ -196,10 +246,20 @@ def cross_validation() raises:
 
 
 def main() raises:
+    comptime assert not conforms_to(
+        Pipeline[StandardScaler[], QuadraticDiscriminantAnalysis[]], TransformingPipeline,
+    )
+    comptime assert not conforms_to(
+        Pipeline[StandardScaler[], QuadraticDiscriminantAnalysis[]], FitTransformer,
+    )
     scaled_lda[DType.float64]()
     scaled_lda[DType.float32]()
+    var args = argv()
+    var emit = len(args) == 2 and args[1] == "--projection-parity"
+    scaled_lda_projection[DType.float64](emit)
+    scaled_lda_projection[DType.float32](emit)
     lda_then_qda[DType.float64]()
     lda_then_qda[DType.float32]()
     cloned_pipeline()
     cross_validation()
-    print("PASS: discriminant analysis composition (pipeline, clone, cross_val_score)")
+    print("PASS: discriminant analysis composition (pipeline prediction and projection, clone, cross_val_score)")

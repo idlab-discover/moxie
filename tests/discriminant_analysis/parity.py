@@ -193,6 +193,41 @@ def toy():
     return X, y, y3, X1, X6, y6, y7, X7, X2, y4
 
 
+def check_pipeline_projection():
+    """Compare both projection calls with one consistent sign per LDA axis."""
+    binary = ROOT / 'builds/tests/discriminant_analysis/composition'
+    output = subprocess.check_output([str(binary), '--projection-parity'], text=True)
+    projections = {}
+    for line in output.splitlines():
+        if line.startswith('projection '):
+            _, dtype, split, *values = line.split()
+            projections.setdefault((dtype, split), []).append([float(v) for v in values])
+    assert set(projections) == {(dtype, split) for dtype in ('float32', 'float64')
+                               for split in ('train', 'query')}
+
+    # Mirror the deterministic fixture in composition.mojo.
+    i, j = np.ogrid[:52, :4]
+    X = ((i % 3) * (j % 2 + 1) * 1.5 + j * 10.0
+         + (np.sin((i * 31 + j * 17) * 12.9898) + 0.5 * np.cos((i * 7 + j) * 3.1)) * (j + 1))
+    y = np.arange(45) % 3
+    errors = {}
+    # sklearn's Float32 scaler and SVD round earlier than the native solver.
+    for dtype, tolerance in [(np.float64, 1e-10), (np.float32, 2e-5)]:
+        features = X.astype(dtype)
+        pipe = ORACLE['pipeline'].make_pipeline(ORACLE['data'].StandardScaler(),
+                                                DA.LinearDiscriminantAnalysis(n_components=2))
+        train = pipe.fit_transform(features[:45], y)
+        query = pipe.transform(features[45:])
+        actual_train = np.asarray(projections[dtype.__name__, 'train'])
+        signs = np.where(np.sum(actual_train * train, axis=0) < 0, -1, 1)
+        for split, expected in [('train', train), ('query', query)]:
+            actual = np.asarray(projections[dtype.__name__, split]) * signs
+            np.testing.assert_allclose(actual, expected, atol=tolerance, rtol=tolerance,
+                                       err_msg=f'{dtype.__name__} {split} projection')
+            errors[f'{dtype.__name__}/{split}'] = float(np.max(np.abs(actual - expected)))
+    print(f'PASS: pinned sklearn scaler → LDA projection, four comparisons (max errors {errors})')
+
+
 def main():
     X, y, y3, X1, X6, y6, y7, X7, X2, y4 = toy()
     grid = [('svd', None), ('lsqr', None), ('eigen', None), ('lsqr', 'auto'), ('lsqr', 0),
@@ -314,6 +349,7 @@ def main():
     if result.returncode != 0:
         print(result.stderr[-4000:], file=sys.stderr)
         raise SystemExit(f'parity failed ({out / "result.txt"})')
+    check_pipeline_projection()
 
 
 if __name__ == '__main__':

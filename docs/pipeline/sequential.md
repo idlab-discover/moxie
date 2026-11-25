@@ -269,6 +269,31 @@ inner names. `memory`, `transform_input` and `verbose` are not accepted
 because Pipeline does not implement them. Four naming cases compare exactly
 with the pinned factories.
 
+## Supervised predictors with transforms
+
+When the final predictor implements `TransformerMixin`, `Pipeline`
+also implements `TransformingPipeline` and `FitTransformer`. The same
+pipeline can project and predict after fitting. During `fit_transform`
+each step uses its fused method when available and otherwise fits then
+transforms. Supervised pipelines require `y` for training. Omitting it
+from the shared `FitTransformer` signature raises `ValueError` before
+either step is fitted.
+
+```mojo
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
+
+var pipe = make_pipeline(StandardScaler(), LinearDiscriminantAnalysis(n_components=2))
+var training_projection = pipe.fit_transform(X, y.copy())
+var query_projection = pipe.transform(X_query)
+var predictions = pipe.predict(X_query)
+```
+
+Availability can also depend on the estimator's configuration. LDA's
+`lsqr` solver raises on projection. The discriminant analysis parity suite
+checks training and held-out projections in both dense floating-point dtypes.
+
 ## Transformer-only pipelines
 
 `TransformerPipeline(first, last)` is a concrete implementation of the
@@ -303,9 +328,10 @@ scikit-learn implementation.
 
 ## Current boundary
 
-This implementation exposes fit, final-step weighted fit, predict, conditional score, per-sample scores,
-decision and probability methods, feature names, input feature counts,
-configuration, cloning and the two factories. The following sklearn Pipeline
+This implementation exposes fit, final-step weighted fit, predict, conditional
+transforms and score, per-sample scores, decision and probability methods,
+feature names, input feature counts, configuration, cloning and the two
+factories. The following sklearn Pipeline
 API is **deferred** (absent from the typed API, so use fails at compile time):
 
 - unsupervised-final pipelines and `fit_predict` (e.g. a clusterer final step);

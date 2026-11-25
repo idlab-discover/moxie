@@ -3,10 +3,11 @@ from moxie.base import SupervisedEstimator, UnsupervisedEstimator, TransformerMi
 from moxie.pipeline import Pipeline, PredictivePipeline
 
 
-struct Shift(SupervisedEstimator, TransformerMixin):
+struct Shift(SupervisedEstimator, Predictor, TransformerMixin):
     comptime Input = Int
     comptime Target = Int
     comptime Transformed = Int
+    comptime Prediction = Int
     comptime Params = Int
     var offset: Int
     var fitted: Bool
@@ -60,11 +61,15 @@ struct Shift(SupervisedEstimator, TransformerMixin):
             raise Error("NotFittedError: Shift")
         return X + self.offset
 
+    def predict(self, X: Int) raises -> Int:
+        return self.transform(X)
 
-struct Fused(SupervisedEstimator, FitTransformer, TransformerMixin):
+
+struct Fused(SupervisedEstimator, FitTransformer, Predictor, TransformerMixin):
     comptime Input = Int
     comptime Target = Int
     comptime Transformed = Int
+    comptime Prediction = Int
     comptime Params = Int
     var calls: Int
     def __init__(out self):
@@ -98,6 +103,9 @@ struct Fused(SupervisedEstimator, FitTransformer, TransformerMixin):
         return X + y.value() + 100
     def transform(self, X: Int) raises -> Int:
         return X + 10
+
+    def predict(self, X: Int) raises -> Int:
+        return self.transform(X)
 
 
 struct Unsupervised(UnsupervisedEstimator, TransformerMixin):
@@ -188,7 +196,21 @@ def through_trait[P: PredictivePipeline](pipeline: P, X: P.Input) raises -> P.Pr
     return pipeline.predict(X)
 
 
+def check_final_transformers() raises:
+    var fallback = Pipeline(Shift(2), Shift(3))
+    assert_equal(fallback.fit_transform(5, 7), 10)
+    assert_equal(fallback.estimator.seen, 7)
+    assert_equal(fallback.estimator.seen_y, 7)
+    assert_equal(fallback.transform(1), 6)
+
+    var fused = Pipeline(Shift(), Fused())
+    assert_equal(fused.fit_transform(5, 7), 114)
+    assert_equal(fused.estimator.calls, 1)
+    assert_equal(fused.transform(1), 13)
+
+
 def main() raises:
+    check_final_transformers()
     var pipe = Pipeline(Shift(), Recorder(), transformer_name="shift", estimator_name="record")
     with assert_raises():
         _ = pipe.predict(1)

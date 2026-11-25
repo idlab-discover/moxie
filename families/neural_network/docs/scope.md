@@ -7,10 +7,10 @@ explicitly raises because sklearn promotes its input to Float64 and the native
 learned-state transition remains unfinished. See the [RBM scope](../algorithms/rbm/docs/scope.md).
 
 The private MLP engine handles parameters, forward propagation, weighted batch
-losses, backpropagation and full-batch L-BFGS training. Both public MLP
-estimators are raising declarations. SGD, Adam, early stopping, warm starts
-and trainable MLP wrappers remain open. See the
-[engine scope](../shared/mlp_engine/docs/scope.md).
+losses, backpropagation, full-batch L-BFGS and minibatch SGD and Adam. Both
+public MLP estimators are raising declarations. Validation-set early stopping
+and public warm-start, incremental and supervised estimator contracts remain
+open. See the [engine scope](../shared/mlp_engine/docs/scope.md).
 
 Dense finite rank-2 inputs, both dtypes and arbitrary valid strides use NuMojo
 storage and Moxie RNG. Sparse inputs, implicit densification, Python reflection,
@@ -25,7 +25,8 @@ fit/refit/transform/score/Gibbs cases, three Float64 incremental cases, RBM
 lifecycle sequences in both dtypes (partial_fit/Gibbs after fit, a shared
 explicit RNG context, verbose output text, n_iter=0, set_params refit, strided
 input), RBM pipeline/union/clone composition, 32 MLP initialization/packing
-cases, 40 dense MLP forward/gradient fixtures, and full-batch L-BFGS fixtures.
+cases, 40 dense MLP forward/gradient fixtures, and L-BFGS and stochastic
+training fixtures.
 It also checks core ownership,
 licenses and an isolated public consumer. Tolerances are Float32 3e-5 and Float64 2e-12 for RBM;
 MLP parameters use relative 1e-14 and absolute 1e-15. These account for scalar

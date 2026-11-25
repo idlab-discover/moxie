@@ -2782,6 +2782,9 @@
         },
         "moxie.neural_network._mlp_lbfgs": {
           "file": "src/moxie/neural_network/_mlp_lbfgs.mojo"
+        },
+        "moxie.neural_network._mlp_stochastic": {
+          "file": "src/moxie/neural_network/_mlp_stochastic.mojo"
         }
       },
       "assets": {

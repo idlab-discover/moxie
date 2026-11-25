@@ -1,4 +1,4 @@
-"""Compare frozen composition widths and indexed steps with pinned sklearn."""
+"""Compare frozen composition widths, indexed steps and slices with pinned sklearn."""
 
 from pathlib import Path
 import subprocess
@@ -74,6 +74,30 @@ def main():
     np.testing.assert_array_equal(predictions, expected_predictions)
     print(f"Frozen pipeline steps matched sklearn with max transform error "
           f"{abs(scaled - expected_scaled).max():.3g} and {predictions.size} exact predictions")
+
+    prefix_slice, final_slice = FrozenEstimator(frozen_pipe)[:-1], clone(frozen_pipe)[-1:99]
+    full_slice, empty_slice = frozen_pipe[-99:99], frozen_pipe[2:0]
+    assert prefix_slice[-1] is named_prefix
+    assert final_slice["lineardiscriminantanalysis"] is named_final
+    assert full_slice[-1] is named_final
+    assert empty_slice.__sklearn_is_fitted__()
+    with np.testing.assert_raises(KeyError):
+        prefix_slice["lineardiscriminantanalysis"]
+    with np.testing.assert_raises(ValueError):
+        frozen_pipe[::2]
+    [slice_lengths] = values("composition_slice_lengths", np.int64)
+    np.testing.assert_array_equal(slice_lengths, list(map(len, (prefix_slice, final_slice, full_slice, empty_slice))))
+    sliced_scaled = values("composition_slice_scaled", np.float64).reshape(shape)
+    np.testing.assert_allclose(sliced_scaled, prefix_slice.transform(X), rtol=0, atol=1e-14)
+    sliced_predictions = values("composition_slice_prediction", np.int64).ravel()
+    np.testing.assert_array_equal(sliced_predictions, final_slice.predict(prefix_slice.transform(X)))
+    np.testing.assert_array_equal(sliced_predictions, full_slice.predict(X))
+    expected_probabilities = full_slice.predict_proba(X)
+    sliced_probabilities = values("composition_slice_probability", np.float64).reshape(expected_probabilities.shape)
+    np.testing.assert_allclose(sliced_probabilities, expected_probabilities, rtol=0, atol=1e-12)
+    print(f"Frozen pipeline slices matched {sliced_scaled.size} transformed values "
+          f"within 1e-14, {sliced_predictions.size} exact predictions and "
+          f"{sliced_probabilities.size} probabilities within 1e-12")
 
     columns = ColumnTransformer(
         [("scale", StandardScaler(), [0]), ("empty", StandardScaler(), [])],

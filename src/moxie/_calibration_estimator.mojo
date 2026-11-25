@@ -2,6 +2,8 @@
 """Contract and generic bridge for dense classifiers used by calibration."""
 import numojo as nm
 from std.memory import ArcPointer
+from std.math import isfinite
+from ._classifier_targets import NumericListTarget
 from ._calibration_algorithms import Array, vector
 from ._calibration_display import CalibrationDisplayEstimator
 from .base import (
@@ -49,8 +51,12 @@ comptime MAX_INTEGRAL_LABEL = 9007199254740991
 
 def validate_integral_labels(y: Array) raises:
     for i in range(y.size):
-        var label = y.item(i)
-        if abs(label) > Float64(MAX_INTEGRAL_LABEL) or label != Float64(Int(label)):
+        var label = y[nm.Item(i)]
+        if (
+            not isfinite(label)
+            or abs(label) > Float64(MAX_INTEGRAL_LABEL)
+            or label != Float64(Int(label))
+        ):
             raise Error(
                 "ValueError: classification requires integral numeric"
                 " labels"
@@ -71,6 +77,7 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
     Copies share a read-only estimator snapshot. Mutations replace the snapshot.
     """
     comptime Params = Self.E.Params
+    comptime _domain = NumericListTarget[Self.E.Target]
 
     var _estimator: ArcPointer[Self.E]
     var _read_classes: _ClassReader[Self.E]
@@ -85,10 +92,9 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
     ):
         comptime assert Self.E.Input == Array, "Calibration requires Float64 features"
         comptime assert (
-            Self.E.Target == List[Int]
-            or Self.E.Target == List[Float64]
+            Self._domain.supported
             or Self.E.Target == nm.NDArray[DType.int64]
-        ), "Calibration requires List[Int], List[Float64] or Int64 array targets"
+        ), "Calibration requires a numeric List or Int64 array target"
         comptime assert conforms_to(Self.E, DecisionFunction) or conforms_to(
             Self.E, ProbabilityPredictor
         ), "Calibration requires decision_function or predict_proba"
@@ -136,27 +142,26 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
         comptime if conforms_to(Self.E, FrozenEstimatorAPI):
             check_is_fitted(self._estimator[])
         else:
-            vector(y)
+            if y.ndim != 1 or y.size == 0:
+                raise Error("ValueError: expected a nonempty one-dimensional array")
             validate_integral_labels(y)
             var estimator = self._copy_for_update()
-            comptime if Self.E.Target == List[Int]:
-                var labels = List[Int](capacity=y.size)
+            comptime if Self._domain.supported:
+                var labels = List[Self._domain.Label](capacity=y.size)
                 for i in range(y.size):
-                    labels.append(Int(y.item(i)))
-                Self._fit_target(
-                    estimator, X, rebind[Self.E.Target](labels), sample_weight
-                )
-            elif Self.E.Target == List[Float64]:
-                var labels = List[Float64](capacity=y.size)
-                for i in range(y.size):
-                    labels.append(y.item(i))
+                    var value = y[nm.Item(i)]
+                    var label = Self._domain.from_array_label(value)
+                    comptime if Self._domain.dtype == DType.float32:
+                        if Self._domain.as_float64(label) != value:
+                            raise Error("ValueError: label cannot be represented exactly as Float32")
+                    labels.append(label)
                 Self._fit_target(
                     estimator, X, rebind[Self.E.Target](labels), sample_weight
                 )
             else:
                 var labels = nm.NDArray[DType.int64](y.shape)
                 for i in range(y.size):
-                    labels[nm.Item(i)] = y.item(i).cast[DType.int64]()
+                    labels[nm.Item(i)] = y[nm.Item(i)].cast[DType.int64]()
                 Self._fit_target(
                     estimator, X, rebind[Self.E.Target](labels), sample_weight
                 )
@@ -230,13 +235,17 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
         return self._name.copy()
 
 
-def _adapt_linear_svc(
-    var estimator: LinearSVC[],
-) -> ClassifierCalibrationAdapter[LinearSVC[]]:
-    def classes(model: LinearSVC[]) raises -> Array:
+def _adapt_linear_svc[Label: Copyable & Comparable & Deinitable](
+    var estimator: LinearSVC[Label],
+) -> ClassifierCalibrationAdapter[LinearSVC[Label]]:
+    comptime Domain = NumericListTarget[List[Label]]
+
+    def classes(model: LinearSVC[Label]) raises -> Array:
         var result = Array(nm.Shape(len(model.classes_)))
         for i in range(result.size):
-            result[nm.Item(i)] = model.classes_[i]
+            result[nm.Item(i)] = Domain.as_float64(
+                rebind[Domain.Label](model.classes_[i])
+            )
         validate_integral_labels(result)
         return result^
 

@@ -1,7 +1,8 @@
-from std.testing import assert_equal, assert_true, assert_raises
+from std.testing import assert_equal, assert_false, assert_true, assert_raises
 import numojo as nm
-from moxie.calibration import CalibratedClassifierCV, calibration_curve
+from moxie.calibration import CalibratedClassifierCV, adapt_classifier, calibration_curve
 from moxie.base import clone
+from moxie.svm import LinearSVC
 from moxie.calibration import CalibrationCV
 from moxie._calibration_cv import _clip_rounding
 from std.utils import Variant
@@ -21,7 +22,34 @@ def array(values: List[Float64]) raises -> Array:
     return result^
 
 
+def check_float32_list_targets() raises:
+    var X = array([-2.0, -1.0, 1.0, 2.0]).reshape(nm.Shape(4, 1))
+    var backing = array([16777218.0, 0.5, 16777218.0, 0.5, 16777216.0, 0.5, 16777216.0])
+    var y = backing.view_with_layout(nm.Shape(4), nm.NDArrayStrides(-2), 6)
+    var model = adapt_classifier(LinearSVC[Float32](dual=False, random_state=0))
+    with assert_raises(contains="NotFittedError"):
+        _ = model.class_labels()
+
+    model.fit(X, y)
+    assert_equal(model.class_labels().item(0), 16777216.0)
+    assert_equal(model.class_labels().item(1), 16777218.0)
+    var snapshot = model.copy()
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_equal(fresh.get_params().random_state, 0)
+
+    y[nm.Item(1)] = 16777217.0
+    with assert_raises(contains="cannot be represented exactly as Float32"):
+        model.fit(X, y)
+    assert_equal(model.class_labels().item(0), 16777216.0)
+    var replacement = array([-7.0, -7.0, 4.0, 4.0])
+    model.fit(X, replacement)
+    assert_equal(model.class_labels().item(0), -7.0)
+    assert_equal(snapshot.class_labels().item(0), 16777216.0)
+
+
 def main() raises:
+    check_float32_list_targets()
     var x = array([5.0, -4.0, 1.0])
     var y = array([1.0, -1.0, -1.0])
     var sigmoid = _SigmoidCalibration()

@@ -269,6 +269,9 @@
         "moxie._classifier_binary_adapter": {
           "file": "src/moxie/_classifier_binary_adapter.mojo"
         },
+        "moxie._classifier_targets": {
+          "file": "src/moxie/_classifier_targets.mojo"
+        },
         "moxie._multiclass_binary": {
           "file": "src/moxie/_multiclass_binary.mojo"
         },

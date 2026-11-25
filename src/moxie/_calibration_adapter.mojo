@@ -191,9 +191,9 @@ def adapt_classifier(
     return ClassifierCalibrationAdapter(estimator^, classes, "LogisticRegression")
 
 
-def adapt_classifier(
-    var estimator: LinearSVC[],
-) -> ClassifierCalibrationAdapter[LinearSVC[]]:
+def adapt_classifier[Label: Copyable & Comparable & Deinitable](
+    var estimator: LinearSVC[Label],
+) -> ClassifierCalibrationAdapter[LinearSVC[Label]]:
     return _adapt_linear_svc(estimator^)
 
 

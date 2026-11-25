@@ -1,13 +1,16 @@
 """Dense logistic differential checks against the pinned sklearn estimator and loss."""
 from contextlib import redirect_stdout
+from importlib.util import module_from_spec, spec_from_file_location
 from io import StringIO
 from pathlib import Path
 import runpy
 import subprocess
 import sys
+from sysconfig import get_config_var
 from unittest.mock import patch
 import warnings
 
+from Cython import Tempita
 import numpy as np
 from scipy.linalg import LinAlgWarning
 from sklearn import __version__ as support_version
@@ -27,7 +30,66 @@ NEWTON = "sklearn/linear_model/_glm/_newton_solver.py"
 OPTIMIZE = "sklearn/utils/optimize.py"
 SVM_BASE = "sklearn/svm/_base.py"
 LIBLINEAR = "sklearn/svm/src/liblinear"
+LINEAR_BASE = "sklearn/linear_model/_base.py"
+SAG = "sklearn/linear_model/_sag.py"
+SAG_FAST = "sklearn/linear_model/_sag_fast.pyx.tp"
+DATASET = "sklearn/utils/_seq_dataset"
 OUTPUT = FAMILY / "builds/logistic"
+
+
+def pinned_sag():
+    """Compile the pinned stochastic engine and its dataset sampler."""
+    folder = OUTPUT / "sag_reference"
+    templates = {
+        SAG_FAST: "pinned_sag_fast.pyx",
+        f"{DATASET}.pyx.tp": f"{DATASET}.pyx",
+        f"{DATASET}.pxd.tp": f"{DATASET}.pxd",
+    }
+    for source, destination in templates.items():
+        path = folder / destination
+        path.parent.mkdir(parents=True, exist_ok=True)
+        rendered = Tempita.Template((REFERENCE / source).read_text()).substitute()
+        if not path.exists() or path.read_text() != rendered:
+            path.write_text(rendered)
+
+    setup = folder / "setup.py"
+    setup.write_text(
+        "from setuptools import setup, Extension\n"
+        "from Cython.Build import cythonize\n"
+        "from numpy import get_include\n"
+        "setup(ext_modules=cythonize([\n"
+        f"    Extension('sklearn.utils._seq_dataset', ['{DATASET}.pyx'], "
+        "include_dirs=[get_include()], extra_compile_args=['-ffp-contract=off']),\n"
+        "    Extension('pinned_sag_fast', ['pinned_sag_fast.pyx'], "
+        "include_dirs=[get_include()], extra_compile_args=['-ffp-contract=off']),\n"
+        f"], include_path=['.', {str(REFERENCE)!r}], build_dir='cython'))\n"
+    )
+    with (folder / "compile.log").open("w") as log:
+        subprocess.run(
+            [sys.executable, setup.name, "build_ext", "--build-lib", "extensions"],
+            cwd=folder, stdout=log, stderr=subprocess.STDOUT, check=True,
+        )
+
+    def load_extension(name):
+        library = folder / "extensions" / (name.replace(".", "/") + get_config_var("EXT_SUFFIX"))
+        spec = spec_from_file_location(name, library)
+        module = module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    base = load_pinned(LINEAR_BASE)
+    dataset = load_extension("sklearn.utils._seq_dataset")
+    with patch.dict(sys.modules, {"sklearn.utils._seq_dataset": dataset}):
+        native = load_extension("pinned_sag_fast")
+    base.ArrayDataset32 = dataset.ArrayDataset32
+    base.ArrayDataset64 = dataset.ArrayDataset64
+    sag = load_pinned(SAG)
+    sag.make_dataset = base.make_dataset
+    sag.sag32 = native.sag32
+    sag.sag64 = native.sag64
+    pinned_code(sag.sag_solver, SAG)
+    pinned_code(sag.make_dataset, LINEAR_BASE)
+    return sag.sag_solver
 
 
 def pinned_liblinear():
@@ -68,6 +130,8 @@ def oracle():
         LOSS, LOGISTIC, NEWTON, OPTIMIZE, SVM_BASE, "sklearn/svm/_liblinear.pyx",
         f"{LIBLINEAR}/linear.cpp", f"{LIBLINEAR}/linear.h", f"{LIBLINEAR}/tron.cpp",
         f"{LIBLINEAR}/tron.h", "sklearn/svm/src/newrand/newrand.h",
+        LINEAR_BASE, SAG, SAG_FAST, f"{DATASET}.pxd.tp", f"{DATASET}.pyx.tp",
+        "sklearn/_loss/_loss.pxd", "sklearn/utils/_random.pxd", "sklearn/utils/_typedefs.pxd",
     ])
     print(f"scikit-learn source SHA256 {hashes}, support wheel {support_version}")
     # These symbols let the module import with the locked 1.9.1 support wheel.
@@ -83,6 +147,7 @@ def oracle():
     newton = load_pinned(NEWTON, register=True)
     optimize = load_pinned(OPTIMIZE, register=True)
     estimator = load_pinned(LOGISTIC)
+    estimator.sag_solver = pinned_sag()
     estimator._fit_liblinear = load_pinned(SVM_BASE)._fit_liblinear
     pinned_code(estimator._fit_liblinear, SVM_BASE)
     pinned_code(loss.LinearModelLoss.loss_gradient, LOSS)
@@ -242,6 +307,69 @@ def liblinear_fixtures():
             yield f"{bits}-liblinear-invalid-{scenario}", bits, base | params | {"invalid": 1}, data
 
 
+def sag_fixtures():
+    rng = np.random.default_rng(731)
+    for bits, dtype in [(32, np.float32), (64, np.float64)]:
+        for classes in (2, 3):
+            X, encoded = make_classification(
+                n_samples=73, n_features=7, n_informative=4, n_redundant=0,
+                n_classes=classes, class_sep=0.85, random_state=313,
+            )
+            X = X.astype(dtype)
+            Z = rng.normal(size=(11, X.shape[1])).astype(dtype)
+            y = np.array([-3, 8, 23])[encoded]
+            sw = rng.uniform(0.25, 2, size=len(X)).astype(dtype)
+            sw[:2] = [0, -0.2]
+            arrays = {"X": X, "y": y, "Z": Z}
+            base = {
+                "C": 0.14, "tol": 2e-6, "max_iter": 2000,
+                "intercept": 1, "weight": "none", "unpenalized": 0, "seed": 42,
+            }
+            for solver, mode, options in [
+                ("sag", "l2", {}), ("saga", "l2", {}),
+                ("saga", "l1", {"ratio": 1.0}), ("saga", "elasticnet", {"ratio": 0.55}),
+            ]:
+                for scenario, params, data in [
+                    ("fit", {}, arrays),
+                    ("signed", {"weight": "explicit", "intercept": 0}, arrays | {"sw": sw}),
+                    ("balanced", {"weight": "balanced"}, arrays | {"sw": sw}),
+                    ("warm-refit", {"max_iter": 3, "refit_C": 0.4, "exact_iterations": 1}, arrays),
+                    ("zero-iter", {"max_iter": 0}, arrays),
+                    ("one-iter", {"max_iter": 1, "seed": 19}, arrays),
+                ]:
+                    yield f"{bits}-{classes}-{solver}-{mode}-{scenario}", bits, (
+                        base | {"solver": solver} | options | params
+                    ), data
+            for solver in ("sag", "saga"):
+                for scenario, params in [
+                    ("no-penalty", {"penalty": "None"}),
+                    ("infinite-C", {"unpenalized": 1, "ratio": 0.55}),
+                ]:
+                    yield f"{bits}-{classes}-{solver}-{scenario}", bits, (
+                        base | {"solver": solver, "max_iter": 15, "exact_iterations": 1} | params
+                    ), arrays
+                zero_features = arrays | {"X": np.zeros_like(X)}
+                yield f"{bits}-{classes}-{solver}-intercept-only", bits, (
+                    base | {"solver": solver, "exact_iterations": 1}
+                ), zero_features
+                yield f"{bits}-{classes}-{solver}-zero-step-budget", bits, (
+                    base | {"solver": solver, "max_iter": 0, "intercept": 0, "unpenalized": 1}
+                ), zero_features
+            yield f"{bits}-{classes}-saga-explicit-elasticnet", bits, (
+                base | {"solver": "saga", "penalty": "elasticnet", "ratio": 0.55}
+            ), arrays
+        for scenario, params in [
+            ("sag-l1", {"solver": "sag", "ratio": 1.0}),
+            ("sag-elasticnet", {"solver": "sag", "ratio": 0.55}),
+            ("saga-dual", {"solver": "saga", "dual": 1}),
+        ]:
+            yield f"{bits}-invalid-{scenario}", bits, base | params | {"invalid": 1}, arrays
+        for solver in ("sag", "saga"):
+            yield f"{bits}-{solver}-invalid-step", bits, (
+                base | {"solver": solver, "intercept": 0, "unpenalized": 1, "invalid": 1}
+            ), arrays | {"X": np.zeros_like(X)}
+
+
 def reference(model_type, params, arrays):
     verbose = 2 if params.get("backtracking") or params.get("cg_negative_curvature") else 0
     model = model_type(
@@ -292,7 +420,7 @@ def main():
 
 
 def compare(model_type):
-    cases = [*fixtures(), *liblinear_fixtures()]
+    cases = [*fixtures(), *liblinear_fixtures(), *sag_fixtures()]
     output = OUTPUT
     fixture = output / "fixtures.txt"
     fixture.write_text("\n".join(case_line(*case) for case in cases) + "\n")
@@ -347,6 +475,7 @@ def compare(model_type):
             references.append(("widened", widened_result))
         exact_iterations = (
             params["max_iter"] <= 1 or params.get("backtracking") or params.get("exact_iterations")
+            or (bits == 64 and solver in {"sag", "saga"})
         )
         for kind, result in references:
             # Float32 CG can drift along the unpenalized shared class offset.
@@ -370,6 +499,16 @@ def compare(model_type):
                     atol = 1e-7
                 elif solver == "liblinear":
                     atol = 5e-6 if key in {"decision", "log_probability"} else 2e-6
+                elif solver in {"sag", "saga"}:
+                    if bits == 64:
+                        atol = 3e-9 if key == "log_probability" else 5e-10
+                    elif kind == "native-dtype":
+                        atol = 2e-5 if key in {"decision", "log_probability"} else 5e-6
+                    else:
+                        atol = 3e-6
+                    if key == "coef" and "-l1-fit" in ident:
+                        np.testing.assert_array_equal(actual == 0, wanted == 0, err_msg=ident)
+                        assert (actual == 0).any() and (actual != 0).any(), ident
                 elif bits == 32 and kind == "native-dtype":
                     atol = 3e-3 if key in {"decision", "log_probability"} else 9e-4
                 else:
@@ -380,7 +519,7 @@ def compare(model_type):
                     wanted = wanted.astype(np.float64)
                     wanted -= wanted.mean(axis=axis, keepdims=True)
                 error = close(actual, wanted, 0, atol, f"{ident}/{kind}/{key}")
-                group = f"{bits}/liblinear/{key}" if solver == "liblinear" else f"{bits}/{kind}/{key}"
+                group = f"{bits}/{solver}/{kind}/{key}" if solver in {"liblinear", "sag", "saga"} else f"{bits}/{kind}/{key}"
                 maxima[group] = max(maxima.get(group, 0), error)
     print(f"PASS: {len(cases) - invalid} pinned dense logistic fits {fit_counts} and {invalid} input rejections."
           f" {widened_only} fits used only the widened oracle."

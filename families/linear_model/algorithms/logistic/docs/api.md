@@ -4,11 +4,13 @@ Import `LogisticRegression`, `LogisticRegressionParams` and `ClassWeight`
 from `moxie.linear_model`. The dense `lbfgs`, `newton-cg` and
 `newton-cholesky` solvers fit binary and multinomial problems with an L2
 penalty or an unpenalized objective. The defaults are `solver="lbfgs"` and
-L2. For these three solvers, set `C` to infinity or pass `None` as the
-penalty to remove regularization. For binary classification, `solver="liblinear"`
+L2. Dense `sag` and `saga` also support both class modes. Use
+`solver="saga", l1_ratio=1.0` for L1 or `0 < l1_ratio < 1` for elastic
+net. Set `C` to infinity or pass `None` as the penalty to remove
+regularization for any of these five solvers. For binary classification, `solver="liblinear"`
 supports primal L2, dual L2 and primal L1 with finite `C` and positive
-`tol`. Select L1 with `l1_ratio=1.0`. Additional solvers and elastic-net
-fitting are open work.
+`tol`. Select L1 with `l1_ratio=1.0`. The Newton coordinate-descent
+solvers and LogisticRegressionCV remain open.
 
 ```mojo
 from moxie.linear_model import ClassWeight, LogisticRegression
@@ -105,6 +107,31 @@ can drift along this direction. Moxie's Float64 arithmetic keeps a centered
 cold start close to centered, so raw coefficients and decision values may
 differ by that common offset.
 
+SAG and SAGA sample rows with replacement and update the average of the
+gradients for rows seen so far. SAGA adds a correction for the current
+gradient and soft-thresholds the feature coefficients for L1 and elastic net.
+The step size uses the maximum squared row norm and divides the penalty
+strength by the row count. Each sample gradient uses its effective weight
+directly, including zero and signed weights. The intercept is unpenalized.
+The solver uses Moxie's dense `row_squared_norms` and NuMojo's vector
+maximum for the step size. Numax's dot requires compile-time dimensions,
+and independent Numax activations and NDArray products would require
+separating row prediction, gradient memory updates and the proximal step.
+The solver reuses the logistic row projection and shifted exponentials,
+then applies each update immediately in the dense coefficient layout.
+It keeps one gradient value per sample and output, plus coefficient-sized
+gradient sums and convergence state.
+
+An integer `random_state` repeats the pinned sampler's row sequence on
+every fit. `None` draws a seed from Moxie's process-wide stream. Warm starts
+reuse coefficients and intercepts and rebuild the gradient memory. As in
+scikit-learn, convergence compares feature coefficients after each epoch
+and `max_iter=0` returns the initialization with `n_iter_=[1]`. Moxie
+applies the dense updates eagerly in Float64, so low-bit differences and
+iteration counts can vary from sklearn's delayed updates. The row-norm
+vector retains the feature dtype. An unusable step size or nonfinite
+iterate raises a Mojo `Error` with a `ValueError` prefix.
+
 LIBLINEAR uses the existing `moxie.svm._liblinear` engine. Class weights are
 applied once to sample weights, and the engine drops nonpositive effective
 weights before optimization. At least one positive effective weight is
@@ -113,7 +140,7 @@ all its samples. The engine minimizes the sum of weighted logistic losses
 scaled by `C`, plus the L1 norm or half the squared L2 norm. When
 `fit_intercept=True`, the regularizer includes the synthetic bias
 coefficient and `intercept_scaling` sets its feature value.
-An integer `random_state` resets the shared MT19937 stream for each fit. With
+An integer `random_state` starts a fresh MT19937 stream for each fit. With
 `None`, the solver draws its seed from Moxie's process-wide stream.
 
 For Float32 input, the wrapper widens the logical matrix to Float64 before
@@ -143,11 +170,12 @@ python tools/linear_model_checks.py logistic-composition
 
 The first command assembles the family namespace and builds both the native
 contracts and the differential driver. The second executes the estimator and
-linear-loss Python sources, the Newton-CG optimizer, the LIBLINEAR wrapper
-and the LIBLINEAR C++ sources at scikit-learn revision
-`4358542a1bd39af2e7e1cbace8b9fed067473c5b`, using the locked support wheel,
-SciPy and the SVM owner's C++ oracle adapter. The last compiles the
-StandardScaler pipeline through the integrated namespace and checks class
+linear-loss Python sources, the Newton-CG optimizer, the LIBLINEAR wrapper,
+the LIBLINEAR C++ sources, the SAG/SAGA Cython engine and its dataset
+sampler at scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
+It uses the locked support wheel, SciPy and the SVM owner's C++ oracle
+adapter. The last command compiles the StandardScaler pipeline through the
+integrated namespace and checks class
 order, decision scores, probabilities, accuracy, nested clone and nested
 parameter updates.
 
@@ -167,9 +195,22 @@ native typed results against the Float64 reference with absolute bounds of
 decisions and log probabilities. These bounds account for rounding back to
 Float32 and accumulation differences.
 
-The Float64 and widened Float32 oracles use absolute bounds of 2e-6 for
-coefficients, intercepts and probabilities and 5e-6 for decision and
-log-probability values. The Float32 sklearn objective rounds intermediate
+The SAG/SAGA cases cover fixed-seed short budgets, convergence, warm refits,
+L1 zeros, elastic net, both forms of disabling the penalty, and sample and
+class weighting. Float64 fits compare iteration counts exactly and use an
+absolute bound of `5e-10` for coefficients, intercepts, probabilities and
+decisions. The log-probability bound is `3e-9` to account
+for differences in logarithm evaluation. Native Float32 uses bounds of
+`5e-6` for fitted arrays and probabilities and `2e-5` for decisions and
+log probabilities, allowing for rounding during gradient accumulation and
+convergence. Widened Float32 uses `3e-6` across those outputs to account
+for rounding public arrays back to Float32. Native contracts also cover
+seed changes, strided input, zero weights, clone and fit failure after a
+successful fit.
+
+For L-BFGS and the Newton solvers, the Float64 and widened Float32 oracles use
+absolute bounds of 2e-6 for coefficients, intercepts and probabilities and
+5e-6 for decision and log-probability values. The Float32 sklearn objective rounds intermediate
 values in the feature dtype and can stop earlier due to its rounded loss.
 Its bounds are 9e-4 and 3e-3 respectively. For unpenalized multinomial
 Newton-CG, the Float32 reference comparison uses class-centered coefficients

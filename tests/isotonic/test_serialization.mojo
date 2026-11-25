@@ -69,6 +69,15 @@ def round_trips[dtype: DType]() raises:
     var constant_values: List[Scalar[dtype]] = [0.5, 0.5]
     assert_equal(constant.predict(outside), constant_values)
 
+    var tied_x: List[Scalar[dtype]] = [0, 0, 0, 0]
+    var varied_y: List[Scalar[dtype]] = [1, 2, 3, 4]
+    _ = model.set_params(increasing=Increasing(String("auto"))).fit(tied_x, varied_y)
+    assert_equal(len(model.fit_warnings), 2)
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_equal(len(restored.fit_warnings), 0)
+    assert_equal(restored.predict(tied_x), model.predict(tied_x))
+
 
 def invalid_archives() raises:
     comptime Schema = IsotonicRegressionSchema[]

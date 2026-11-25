@@ -54,7 +54,7 @@ configuration backed by an estimator-owned entropy stream. All five estimators
 also offer `fit_with_random_state` with a mutable shared `RandomState`, consuming
 one native seed per fitting call. Integer seeds reset on each fit.
 
-Sparse matrices, Python bindings, metadata routing, reflection, and persistence
+Sparse matrices, Python bindings, metadata routing, and reflection
 remain outside the accepted dense implementation scope. This native API does not
 claim Python estimator-check compatibility.
 
@@ -67,3 +67,47 @@ positive-weight row of an entire classification class raises a clear error.
 The pinned reference can retain an incompatible public class list when a
 multiclass fit loses a whole class; reproducing that inconsistent model state is
 not supported. Positive class weights and partial row masking remain supported.
+
+## Native model files
+
+Use the experimental [model-file API](../../../../../docs/serialization.md)
+with `moxie.svm.kernel_serialization`. The schemas are `SVCSchema[Label]`,
+`NuSVCSchema[Label]`, `SVRSchema`, `NuSVRSchema`, and
+`OneClassSVMSchema`. Match the classifier schema's label type to the
+estimator. Supported archive labels are String, Int, Int32, Int64, Float32,
+and Float64. Use `SVCSchema[]` or `NuSVCSchema[]` for default Float64 labels.
+
+```mojo
+from moxie.serialization import load_model, save_model
+from moxie.svm import SVC
+from moxie.svm.kernel_serialization import SVCSchema
+
+var model = SVC[String](kernel="rbf", probability=True, random_state=12)
+_ = model.fit(X, y)
+save_model[SVCSchema[String]](model, "classifier.moxie")
+var restored = load_model[SVCSchema[String]]("classifier.moxie")
+var probabilities = restored.predict_proba(X_query)
+```
+
+Fitted and unfitted archives preserve current constructor parameters and the
+estimator-owned random stream. Fitted models restore the resolved kernel,
+learned state, and probability calibration without refitting. The loader
+rebuilds the public copies of engine arrays from canonical fitted state.
+Changes to those copies are local to the in-memory estimator.
+
+The archive contains the retained training snapshot, including the Gram
+matrix for a precomputed fit. Query columns for a precomputed fit follow
+the original training order. For callable kernels, supply the same native
+`KernelProvider` again when predicting. The archive stores its fitted
+training data, while the caller supplies the provider implementation.
+
+After assembling the live SVM dependencies, compile and run
+`families/svm/tests/test_kernel_serialization.mojo` against
+`families/svm/builds/deps`, using `families/svm` as the working directory
+when running the binary. Compile `families/svm/tests/public_kernel_driver.mojo`
+to `families/svm/builds/public_kernel_driver` with
+`--fp-mode=contract=off`, then run
+`python families/svm/tests/public_kernel_parity.py --round-trip` with the
+pinned sklearn oracle environment. It compares the loaded estimators'
+public arrays and outputs with exact metadata and label checks and
+Float64 tolerances of `rtol=3e-5` and `atol=3e-6` for solver results.

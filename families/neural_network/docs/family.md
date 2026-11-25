@@ -1,6 +1,6 @@
 # neural_network family interfaces
 
-This family owns the implemented RBM subset, private MLP parameter helpers and
+This family owns the dense RBM and MLP estimators, their private engines and
 capability contracts. See [current scope](scope.md).
 It uses scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 Read [the shared contract](interfaces.md) for typed parameter records,

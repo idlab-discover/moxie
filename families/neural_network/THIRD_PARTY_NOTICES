@@ -1,4 +1,4 @@
-The public API declarations are adapted from scikit-learn at revision
+The dense MLP estimators and public APIs are adapted from scikit-learn at revision
 4358542a1bd39af2e7e1cbace8b9fed067473c5b.
 
 BSD 3-Clause License

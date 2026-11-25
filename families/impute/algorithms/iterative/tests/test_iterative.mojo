@@ -43,8 +43,38 @@ def check_integer_input() raises:
     assert_equal(fresh.get_feature_names_out(), default_names)
 
 
+def check_posterior() raises:
+    var X = nm.zeros[DType.float64](nm.Shape(5, 2))
+    for i in range(5):
+        X.unsafe_set(2 * i, Float64(i))
+        X.unsafe_set(2 * i + 1, Float64(i % 2))
+    X.unsafe_set(3, Float64("nan"))
+    var model = IterativeImputer(
+        sample_posterior=True, random_state=42, max_iter=3, tol=1e6,
+    )
+    with assert_raises():
+        _ = model.transform(X)
+    var fitted = model.fit_transform(X)
+    assert_equal(model.n_iter_, 3)
+    assert_equal(len(model.imputation_sequence_), 6)
+    var first = model.transform(X)
+    assert_true(fitted.unsafe_get(3) != first.unsafe_get(3))
+    var copied = model.copy()
+    var second = model.transform(X)
+    assert_true(first.unsafe_get(3) != second.unsafe_get(3))
+    assert_equal(second.unsafe_get(3), copied.transform(X).unsafe_get(3))
+    with assert_raises():
+        _ = model.transform(nm.zeros[DType.float64](nm.Shape(4, 3)))
+    assert_equal(model.transform(X).unsafe_get(3), copied.transform(X).unsafe_get(3))
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_equal(fresh.fit_transform(X).unsafe_get(3), fitted.unsafe_get(3))
+    assert_equal(fresh.transform(X).unsafe_get(3), first.unsafe_get(3))
+
+
 def main() raises:
     check_integer_input()
+    check_posterior()
     var missing = Float64("nan")
     var X = nm.zeros[DType.float64](nm.Shape(4, 2))
     for i in range(4):
@@ -129,7 +159,4 @@ def main() raises:
     var invalid_seed = IterativeImputer(random_state=-1)
     with assert_raises():
         _ = invalid_seed.fit(X)
-    var unsupported = IterativeImputer(sample_posterior=True)
-    with assert_raises():
-        _ = unsupported.fit(X)
     print("PASS: iterative imputer lifecycle, floating and integer layouts, and named metadata")

@@ -21,7 +21,7 @@ struct LBFGSOptions(ImplicitlyCopyable, Movable):
 
 
 @fieldwise_init
-struct LBFGSResult(Movable):
+struct LBFGSResult(Copyable, Movable):
     var params: LayerTensors[DType.float64]
     var loss: Float64
     var n_iter: Int

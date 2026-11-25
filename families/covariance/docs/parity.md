@@ -23,6 +23,8 @@ reweighting; EllipticEnvelope adds fit_predict, signed labels, decision values
 and weighted accuracy. GraphicalLasso and GraphicalLassoCV support coordinate
 descent and LARS, alpha zero, cost histories and convergence diagnostics. CV
 supports explicit grids and materialized custom splits with typed results.
+Fold paths support native parallel workers. CD and LARS parity fixtures verify
+bitwise agreement between serial and two-worker fits.
 
 ## Model files
 
@@ -73,9 +75,9 @@ restored inference comparisons against pinned scikit-learn in both dtypes.
 - Dense Float32/Float64 only. Static array dtypes differ from option-dependent
   NumPy promotion. Python metadata routing, feature names, reflection and
   bindings are unsupported.
-- `fast_mcd` custom covariance callables and parallel GraphicalLassoCV are
-  unsupported. Robust comparison suites normalize reference unstable tie
-  ordering; the audit deliberately does not.
+- `fast_mcd` custom covariance callables are unsupported. Robust comparison
+  suites normalize reference unstable tie ordering; the audit deliberately
+  does not.
 - Diagnostics are `Category: message` stderr lines, not Python warning objects.
   Python warning filters, stack locations and warning-as-error are unavailable.
   Graphical verbose iterations use stdout; CV refinement uses stderr. CV

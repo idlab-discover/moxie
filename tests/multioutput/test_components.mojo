@@ -6,8 +6,8 @@ from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
 from moxie.ensemble import RandomForestClassifier
 from moxie.linear_model import LogisticRegression, Ridge, RidgeClassifier
-from moxie.model_selection import KFold, StratifiedKFold
-from moxie.multioutput import MultiOutputRegressor, MultiOutputClassifier, RegressorChain, ClassifierChain
+from moxie.model_selection import IndexSplit, KFold, StratifiedKFold
+from moxie.multioutput import ChainFolds, ChainSplitter, MultiOutputRegressor, MultiOutputClassifier, RegressorChain, ClassifierChain
 
 
 comptime ROWS = 12
@@ -98,6 +98,59 @@ def logistic_components() raises:
     parity("ComponentsLogisticChainCVProba", chain.predict_proba(X))
 
 
+@fieldwise_init
+struct PerLinkKFold[label: DType](ChainSplitter):
+    comptime Input = NDArray[DType.float64]
+    comptime Target = NDArray[Self.label]
+    comptime Splits = KFold.Splits
+
+    var seed: Int
+    var threshold: Float64
+
+    def split(self, X: Self.Input, y: Self.Target) raises -> Self.Splits:
+        if self.seed < 0:
+            raise Error("ValueError: invalid splitter seed")
+        if y.ndim != 1 or X.shape[1] >= FEATURES + 2:
+            raise Error("ValueError: expected a target column before the final link")
+        var folds = 2 if Float64(y.unsafe_get(0)) > self.threshold else 3
+        return KFold(folds, shuffle=True, random_state=self.seed + X.shape[1]).split(X.shape[0])
+
+
+def custom_chain_cv() raises:
+    var X = features[DType.float64]()
+    var Y = targets[DType.float64]()
+    var order = List[Int]([2, 0, 1])
+    var regressor = RegressorChain(Ridge(0.5), order=order^, cv=PerLinkKFold[DType.float64](7, -6.0))
+    var prediction = regressor.fit(X, Y).predict(X)
+    parity("ComponentsRegressorChainCustomCV", prediction)
+    var params = regressor.get_params()
+    assert_equal(params.cv.seed, 7)
+    params.cv.seed = -1
+    _ = regressor.set_params(params)
+    with assert_raises(contains="invalid splitter seed"):
+        _ = regressor.fit(X, Y)
+    assert_same(regressor.predict(X), prediction)
+    params.cv.seed = 7
+    _ = regressor.set_params(params)
+    var regressor_clone = clone(regressor)
+    assert_false(regressor_clone.__sklearn_is_fitted__())
+    assert_same(regressor_clone.fit(X, Y).predict(X), prediction)
+
+    var binary = labels[DType.int64](False)
+    for i in range(ROWS):
+        binary.unsafe_set(i * 3, Int64(1 if i < 4 or i == 7 else 0))
+    var classifier = ClassifierChain(
+        LogisticRegression(tol=1e-10, max_iter=1000), chain_method="predict_proba",
+        cv=PerLinkKFold[DType.int64](7, 0.5),
+    )
+    var proba = classifier.fit(X, binary).predict_proba(X)
+    parity("ComponentsLogisticChainCustomCVProba", proba)
+    parity("ComponentsLogisticChainCustomCVLabels", classifier.predict(X))
+    var override = classifier.fit(X, binary, cv=3).predict_proba(X)
+    assert_true(abs(override.unsafe_get(1) - proba.unsafe_get(1)) > 1e-5)
+    assert_same(classifier.fit(X, binary).predict_proba(X), proba)
+
+
 def chain_cv() raises:
     var X = features[DType.float64]()
     var Y = targets[DType.float64]()
@@ -122,6 +175,28 @@ def chain_cv() raises:
     assert_same(regressor.fit(X, Y).predict(X), kfold_prediction)
     parity("ComponentsRegressorChainCVWeighted", regressor.fit(X, Y, sample_weight=weights()).predict(X))
 
+    var shuffled = KFold(3, shuffle=True, random_state=7)
+    var cursor = shuffled.split(ROWS)
+    var reordered = List[IndexSplit]()
+    for _ in range(3):
+        var split = cursor.next()
+        reordered.insert(0, split.take())
+    var fixed_regressor = RegressorChain(Ridge(0.5), order=order.copy(), cv=ChainFolds(reordered))
+    var fixed_prediction = fixed_regressor.fit(X, Y).predict(X)
+    parity("ComponentsRegressorChainFixedCV", fixed_prediction)
+    assert_same(fixed_prediction, regressor.fit(X, Y, cv=shuffled.copy()).predict(X))
+    assert_true(abs(fixed_prediction.unsafe_get(0) - kfold_prediction.unsafe_get(0)) > 1e-4)
+
+    # A snapshot remains valid when the caller edits the source folds.
+    reordered[0].test.unsafe_set(0, -1)
+    with assert_raises(contains="sample index out of bounds"):
+        _ = fixed_regressor.fit(X, Y, cv=ChainFolds(reordered))
+    reordered[0].test.unsafe_set(0, reordered[0].test.unsafe_get(1))
+    with assert_raises(contains="test indices to partition samples"):
+        _ = fixed_regressor.fit(X, Y, cv=ChainFolds(reordered))
+    assert_same(fixed_regressor.predict(X), fixed_prediction)
+    assert_same(fixed_regressor.fit(X, Y).predict(X), fixed_prediction)
+
     var binary = labels[DType.int64](False)
     for i in range(ROWS):
         binary.unsafe_set(i * 3, Int64(1 if i < 4 or i == 7 else 0))
@@ -129,6 +204,16 @@ def chain_cv() raises:
     var label_chain = ClassifierChain(RidgeClassifier(), order=classifier_order.copy(), cv=3)
     parity("ComponentsClassifierChainIntegerCVLabels", label_chain.fit(X, binary).predict(X))
     var classifier = ClassifierChain(RidgeClassifier(), order=classifier_order^, chain_method="decision_function", cv=3)
+    var fixed_params = classifier.get_params()
+    fixed_params.cv = ChainFolds(shuffled.split(ROWS))
+    var fixed_classifier = clone(classifier)
+    _ = fixed_classifier.set_params(fixed_params)
+    var cloned_fixed = clone(fixed_classifier)
+    assert_false(cloned_fixed.__sklearn_is_fitted__())
+    assert_true(cloned_fixed.get_params().cv.isa[ChainFolds]())
+    var fixed_decision = cloned_fixed.fit(X, binary).decision_function(X)
+    parity("ComponentsDecisionChainFixedCV", fixed_decision)
+    assert_same(fixed_decision, fixed_classifier.fit(X, binary, cv=shuffled^).decision_function(X))
     var kfold_decision = classifier.fit(X, binary, cv=KFold(3)).decision_function(X)
     parity("ComponentsDecisionChainKFold", kfold_decision)
     var integer_decision = classifier.fit(X, binary).decision_function(X)
@@ -284,5 +369,6 @@ def main() raises:
     for i in range(ROWS * 3):
         assert_true(chained.unsafe_get(i) >= 0 and chained.unsafe_get(i) <= 1)
     chain_cv()
+    custom_chain_cv()
     logistic_components()
     print("PASS: production linear models and RandomForestClassifier components")

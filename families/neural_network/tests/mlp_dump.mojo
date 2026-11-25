@@ -60,10 +60,7 @@ def run_cases[dtype: DType](warm_start: Bool) raises:
                 )
                 for step in range(3 if warm_start else 1):
                     if step == 1:
-                        var params = clf.get_params()
-                        params.alpha = 0.06
-                        params.learning_rate_init = 0.02
-                        _ = clf.set_params(params)
+                        _ = clf.set_params(alpha=0.06, learning_rate_init=0.02)
                     if weighted:
                         _ = clf.fit(X, y, sample_weight=weights)
                     else:
@@ -98,10 +95,7 @@ def run_cases[dtype: DType](warm_start: Bool) raises:
                 )
                 for step in range(3 if warm_start else 1):
                     if step == 1:
-                        var params = reg.get_params()
-                        params.alpha = 0.06
-                        params.learning_rate_init = 0.02
-                        _ = reg.set_params(params)
+                        _ = reg.set_params(alpha=0.06, learning_rate_init=0.02)
                     if weighted:
                         _ = reg.fit(X, y, sample_weight=weights)
                     else:

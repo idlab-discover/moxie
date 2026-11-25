@@ -60,8 +60,13 @@ def projection_classifier[dtype: DType]() raises:
     _ = fresh.fit(x, y)
     same(fresh.predict(held_out), pipe.predict(held_out))
     var params = pipe.get_params()
+    params.transformer.n_components = 41
+    _ = pipe.set_params(params).fit(x, y)
+    assert_equal(len(pipe.transformer.fit_warnings), 1)
+    assert_equal(pipe.transformer.fit_warnings[0].category, "DataDimensionalityWarning")
     params.transformer.n_components = 6
     _ = pipe.set_params(params).fit(x, y)
+    assert_equal(len(pipe.transformer.fit_warnings), 0)
     assert_equal(pipe.transformer.n_components_, 6)
     assert_equal(fresh.transformer.n_components_, 12)
     _ = projection.set_params(params.transformer)

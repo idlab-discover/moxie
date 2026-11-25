@@ -12,6 +12,7 @@ from moxie.base import (
     UnsupervisedEstimator,
 )
 from moxie.utils.validation import check_is_fitted
+from moxie.warnings import FitWarning
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from numojo import NDArray
 from ._projection.matrix import ProjectionMatrix, project, project_dense, validate_dense
@@ -117,6 +118,20 @@ def _dimensions(
         if count <= 0:
             raise Error("ValueError: n_components must be strictly positive")
     return count
+
+
+def _dimension_warnings(count: Int, cols: Int) -> List[FitWarning]:
+    var warnings = List[FitWarning]()
+    if count > cols:
+        warnings.append(
+            FitWarning(
+                category="DataDimensionalityWarning",
+                message="The number of components is higher than the number of"
+                + String(t" features: n_features < n_components ({cols} < {count}).")
+                + "The dimensionality of the problem will not be reduced.",
+            )
+        )
+    return warnings^
 
 
 def _density(density: ProjectionDensity, cols: Int) raises -> Float64:
@@ -247,6 +262,7 @@ struct GaussianRandomProjection[dtype: DType = DType.float64](
     var n_features_in_: Int
     var components_: Self.Matrix
     var inverse_components_: Optional[Self.Matrix]
+    var fit_warnings: List[FitWarning]
     var _fitted: Bool
 
     def __init__(
@@ -265,6 +281,7 @@ struct GaussianRandomProjection[dtype: DType = DType.float64](
         self.n_features_in_ = 0
         self.components_ = Self.Matrix()
         self.inverse_components_ = None
+        self.fit_warnings = []
         self._fitted = False
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
@@ -362,6 +379,7 @@ struct GaussianRandomProjection[dtype: DType = DType.float64](
         self.inverse_components_ = inverse^
         self.n_components_ = count
         self.n_features_in_ = cols
+        self.fit_warnings = _dimension_warnings(count, cols)
         self._fitted = True
 
     def transform(self, X: Self.Input) raises -> Self.Transformed:
@@ -466,6 +484,7 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
     var n_features_in_: Int
     var components_: Self.Matrix
     var inverse_components_: Optional[Self.Matrix]
+    var fit_warnings: List[FitWarning]
     var _fitted: Bool
     var density_: Float64
 
@@ -489,6 +508,7 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
         self.n_features_in_ = 0
         self.components_ = Self.Matrix()
         self.inverse_components_ = None
+        self.fit_warnings = []
         self._fitted = False
         self.density_ = 0
 
@@ -600,6 +620,7 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
         self.inverse_components_ = inverse^
         self.n_components_ = count
         self.n_features_in_ = cols
+        self.fit_warnings = _dimension_warnings(count, cols)
         self._fitted = True
         self.density_ = density
 

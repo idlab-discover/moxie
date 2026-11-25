@@ -1,6 +1,7 @@
 """Public imports, fluent contracts, storage and shared stream integration."""
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone, UnsupervisedEstimator, TransformerMixin
+from moxie.warnings import FitWarning
 from moxie.random_projection import (
     GaussianRandomProjection, SparseRandomProjection, johnson_lindenstrauss_min_dim,
     ProjectionMatrix, GaussianRandomProjectionParams, SparseRandomProjectionParams,
@@ -46,6 +47,7 @@ def exercise[dtype: DType]() raises:
     var csr = X.to_csr()
     var dense = dense_of(X)
     var gaussian = GaussianRandomProjection[dtype](2, random_state=42)
+    assert_equal(len(gaussian.fit_warnings), 0)
     # The trait path is NDArray; ProjectionMatrix/CSR overloads are retained.
     var Y_dense = chain(gaussian, gaussian.get_params(), dense)
     var Y = gaussian.transform(X)
@@ -58,6 +60,7 @@ def exercise[dtype: DType]() raises:
     _ = gaussian.set_params(compute_inverse_components=True).fit(csr)
     same(inverse, gaussian.inverse_transform(Y))
     var sparse = SparseRandomProjection[dtype](2, density=0.5, random_state=42)
+    assert_equal(len(sparse.fit_warnings), 0)
     var S_dense = chain(sparse, sparse.get_params(), dense)
     var S = sparse.fit(csr).transform(csr)
     assert_true(S.is_sparse)
@@ -97,6 +100,32 @@ def exercise[dtype: DType]() raises:
     var sp: SparseRandomProjectionParams = sparse.get_params()
     assert_equal(gp.n_components[Int], 2)
     assert_equal(sp.density[Float64], 0.5)
+
+    var expanded = ComponentCount(Int(5))
+    _ = gaussian.set_params(n_components=expanded).fit(dense)
+    _ = gaussian.fit(dense)
+    assert_equal(len(gaussian.fit_warnings), 1)
+    var warning: FitWarning = gaussian.fit_warnings[0].copy()
+    assert_equal(warning.category, "DataDimensionalityWarning")
+    var gaussian_copy = gaussian.copy()
+    gaussian_copy.fit_warnings[0].message = "edited"
+    assert_equal(gaussian.fit_warnings[0].message, warning.message)
+    assert_equal(len(clone(gaussian).fit_warnings), 0)
+    _ = gaussian.set_params(n_components=ComponentCount(String("auto")))
+    with assert_raises():
+        _ = gaussian.fit(dense)
+    assert_equal(len(gaussian.fit_warnings), 1)
+    assert_equal(gaussian.n_components_, 5)
+    _ = gaussian.set_params(n_components=ComponentCount(Int(4))).fit(dense)
+    assert_equal(len(gaussian.fit_warnings), 0)
+
+    _ = sparse.set_params(n_components=expanded).fit(csr)
+    assert_equal(len(sparse.fit_warnings), 1)
+    assert_equal(sparse.fit_warnings[0].category, warning.category)
+    assert_equal(sparse.fit_warnings[0].message, warning.message)
+    assert_equal(len(clone(sparse).fit_warnings), 0)
+    _ = sparse.set_params(n_components=ComponentCount(Int(4))).fit(dense)
+    assert_equal(len(sparse.fit_warnings), 0)
 
 
 def streams() raises:
@@ -143,4 +172,4 @@ def main() raises:
     exercise[DType.float32]()
     exercise[DType.float64]()
     streams()
-    print("PASS: public projection imports, dtypes, storage, fluent calls and shared streams")
+    print("PASS: public projection imports, dtypes, storage, fluent calls, streams and warning lifecycle")

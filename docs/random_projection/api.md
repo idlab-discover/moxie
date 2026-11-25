@@ -66,6 +66,13 @@ shared `FeatureNamesOut` and `InputFeatureCount` traits. `inverse_components_` i
 requested during the last successful fit. Inference and feature-name queries
 raise `NotFittedError` before fit.
 
+Explicit expansion (`n_components > n_features`) succeeds and records one
+`DataDimensionalityWarning` with scikit-learn's message in `model.fit_warnings`.
+Equal dimensions and reductions leave the list empty. An out-of-bounds
+automatic dimension raises. In a pipeline, read the warning from
+`pipe.transformer.fit_warnings`. See the
+[shared warning contract](../interfaces.md#fit-warnings).
+
 `get_params(deep=True)` returns a typed `GaussianRandomProjectionParams` or
 `SparseRandomProjectionParams` record with constructor configuration only.
 `set_params(params)` and named partial updates are supported. Parameter changes
@@ -101,6 +108,8 @@ without fitting or drawing from the RNG. It also preserves the current
 constructor settings, including changes made since fit. The archive uses
 Moxie's [experimental native model format](../serialization.md). Python pickle
 files and RNG stream snapshots are outside this format.
+Fit warnings are transient diagnostics. Loaded models start with an empty
+`fit_warnings` list.
 
 ## Matrix representation and dtypes
 
@@ -188,16 +197,16 @@ uses the documented number of output features.
 
 ## Explicit native limits
 
-- Inputs support Float32/Float64 NDArray and family-local dense/CSR storage. CSC/COO adapters,
-  integer-array conversion, dataframe feature metadata, Python bindings,
-  arbitrary NumPy broadcasting, and dynamic metadata routing are not included.
+- Inputs support Float32/Float64 NDArray and family-local dense/CSR storage.
+  CSC/COO adapters, nested-list inputs, and integer-array conversion are outside
+  this API. The [shared native limits](../interfaces.md#explicit-mojo-differences)
+  cover pandas `set_output`, metadata routing, sklearn tags, and Python bindings.
+  Projections also omit dataframe `feature_names_in_` and arbitrary NumPy broadcasting.
 - Generic composition uses NDArray. The `ProjectionMatrix` overloads are
   available on concrete projection estimators.
 - Sparse projection supports at most `2**32-1` input features. Matrix sizes and
   JL bounds that exceed native integer limits raise clear errors.
-- Python's dimensionality warning for explicit expansion is not emitted;
-  expansion itself is supported. Nonfinite inputs/parameters and nonfinite
-  computed results are rejected.
+- Nonfinite inputs/parameters and nonfinite computed results are rejected.
 - Fits commit learned state atomically; a failed refit preserves the previous
   state. Successful refits clear an old inverse cache when caching is disabled.
 - CSR structural ordering is not an API guarantee. For example, SciPy sorts
@@ -243,7 +252,8 @@ use `3e-13 * (1 + abs(expected))`; transform/inverse cases use `3e-10`. Float32
 uses `2e-6` for matrices and `3e-5` for transforms/inverses to allow single-precision
 reductions and SVD rounding. Shapes and output storage are exact; Float64 sparse
 CSR indices and row pointers are also checked exactly. Dense fixtures also compare
-NDArray transforms and inverses exactly with the legacy dense path.
+NDArray transforms and inverses exactly with the family-local dense matrix path.
+Fit fixtures compare warning counts, categories, and messages exactly.
 The [digits notebook](../../notebooks/random_projection/plot_johnson_lindenstrauss_bound.ipynb)
 compares pipeline accuracy, predictions, and decision values with scikit-learn.
 

@@ -4,8 +4,7 @@ Each composed result is checked against the same steps fitted by hand, so the
 composition adds no behavior of its own (sklearn's Pipeline/CV/search contract).
 LIBSVM fitting is deterministic without probability, so the comparisons are exact.
 """
-import numojo as nm
-from numojo import NDArray, Shape, Item
+from numojo import Shape, Item
 from std.testing import assert_equal, assert_raises, assert_true
 from moxie.base import clone
 from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OneVsRestClassifier
@@ -13,13 +12,9 @@ from moxie.svm import SVC, SVR
 from moxie.preprocessing import StandardScaler
 from moxie.pipeline import make_pipeline
 from moxie.model_selection import (
-    GridSearchCV, IndexArray, IndexSplit, SearchAdapter, SearchScorer, StratifiedKFold,
-    cross_val_score,
+    GridSearchCV, IndexArray, IndexSplit, cross_val_score, select_rows,
 )
-from moxie.model_selection._split import _rows
-
-comptime Dense = NDArray[DType.float64]
-comptime Labels = List[Float64]
+from model_selection_adapter import Dense, Labels, SVCSearch, stratified
 
 
 def dataset() raises -> Tuple[Dense, Labels]:
@@ -34,27 +29,6 @@ def dataset() raises -> Tuple[Dense, Labels]:
     return (X^, y^)
 
 
-def take(y: Labels, rows: IndexArray) raises -> Labels:
-    var out = Labels()
-    for i in range(rows.size):
-        out.append(y[Int(rows.item(i))])
-    return out^
-
-
-def stratified(y: Labels) raises -> List[IndexSplit]:
-    var codes = IndexArray(Shape(len(y)))
-    for i in range(len(y)):
-        codes[Item(i)] = Int64(y[i])
-    var cursor = StratifiedKFold(3).split(len(y), codes^)
-    var out = List[IndexSplit]()
-    while True:
-        var pair = cursor.next()
-        if not pair:
-            break
-        out.append(pair.value().copy())
-    return out^
-
-
 def assert_same(a: Labels, b: Labels) raises:
     assert_equal(len(a), len(b))
     for i in range(len(a)):
@@ -65,63 +39,6 @@ def assert_same(a: Dense, b: Dense) raises:
     assert_equal(a.size, b.size)
     for i in range(a.size):
         assert_equal(a.item(i), b.item(i))
-
-
-struct Accuracy(SearchScorer):
-    comptime Estimator = SVC[]
-    comptime Input = Dense
-    comptime Target = Labels
-    comptime Metadata = NoneType
-
-    def __init__(out self):
-        pass
-
-    def __init__(out self, *, copy: Self):
-        pass
-
-    def score(self, estimator: SVC[], X: Dense, y: Labels, metadata: NoneType) raises -> Float64:
-        return estimator.score(X, y)
-
-
-struct CSearch(SearchAdapter):
-    """Tunes C; sklearn's GridSearchCV(SVC(), {"C": [...]})."""
-    comptime Scorer = Accuracy
-    comptime Value = Float64
-
-    def __init__(out self):
-        pass
-
-    def __init__(out self, *, copy: Self):
-        pass
-
-    def n_samples(self, X: Dense, y: Labels) raises -> Int:
-        return len(y)
-
-    def input_rows(self, X: Dense, rows: IndexArray, train: IndexArray) raises -> Dense:
-        return _rows(X, rows)
-
-    def target_rows(self, y: Labels, rows: IndexArray) raises -> Labels:
-        return take(y, rows)
-
-    def metadata_rows(self, metadata: NoneType, rows: IndexArray) raises -> NoneType:
-        return None
-
-    def fit(self, mut estimator: SVC[], X: Dense, y: Labels, metadata: NoneType) raises:
-        _ = estimator.fit(X, y)
-
-    def configure(self, mut estimator: SVC[], params: Dict[String, Float64]) raises:
-        var config = estimator.get_params()
-        for key in params.keys():
-            if key != "C":
-                raise Error("ValueError: Invalid parameter " + key)
-            config.C = params[key]
-        _ = estimator.set_params(config)
-
-    def default_scorer(self) raises -> Accuracy:
-        return Accuracy()
-
-    def default_cv(self, X: Dense, y: Labels) raises -> List[IndexSplit]:
-        return stratified(y)
 
 
 def check_multiclass(X: Dense, y: Labels) raises:
@@ -169,8 +86,8 @@ def check_multiclass(X: Dense, y: Labels) raises:
     var rows = IndexArray(Shape(7))
     for i in range(rows.size):
         rows[Item(i)] = Int64(i * 5)
-    var queries = _rows(X, rows)
-    var query_kernel = _rows(train_kernel, rows)
+    var queries = select_rows(X, rows)
+    var query_kernel = select_rows(train_kernel, rows)
     var expected = ovo.predict(queries)
     var actual = precomputed.predict(query_kernel)
     assert_equal(actual.shape, expected.shape)
@@ -224,20 +141,20 @@ def main() raises:
     assert_same(rpipe.predict(X), rmanual.predict(Xs))
 
     # cross_val_score clones the SVC per stratified fold; scores equal manual fits.
-    var splits = stratified(y)
+    var splits = stratified(y, 3)
     var template = SVC(C=0.5, kernel="linear")
     var scores = cross_val_score_svc(template, X, y, splits)
     assert_equal(scores.size, 3)
     for k in range(3):
         var fold = clone(template)
-        _ = fold.fit(_rows(X, splits[k].train), take(y, splits[k].train))
-        assert_equal(scores.item(k), fold.score(_rows(X, splits[k].test), take(y, splits[k].test)))
+        _ = fold.fit(select_rows(X, splits[k].train), select_rows(y, splits[k].train))
+        assert_equal(scores.item(k), fold.score(select_rows(X, splits[k].test), select_rows(y, splits[k].test)))
 
     # GridSearchCV over C refits the best configuration on all rows.
     var cs: List[Float64] = [0.01, 1.0, 100.0]
     var grid = Dict[String, List[Float64]]()
     grid["C"] = cs.copy()
-    var search = GridSearchCV[CSearch](SVC(), grid, CSearch(), cv=stratified(y))
+    var search = GridSearchCV[SVCSearch[]](SVC(), grid, SVCSearch[](), cv=stratified(y, 3))
     _ = search.fit(X, y, None, None)
     var means = search.cv_results_().mean_test_score.copy()
     var best = 0
@@ -251,8 +168,62 @@ def main() raises:
     var refit = SVC(C=cs[best])
     _ = refit.fit(X, y)
     assert_same(search.best_estimator_().predict(X), refit.predict(X))
+    check_pipeline_search(X, y)
     print("PASS: SVM multiclass, clone, Pipeline, cross_val_score and GridSearchCV composition")
 
 
 def cross_val_score_svc(template: SVC[], X: Dense, y: Labels, splits: List[IndexSplit]) raises -> Dense:
-    return cross_val_score[CSearch](template, X, y, CSearch(), Accuracy(), splits, None, None)
+    var adapter = SVCSearch[]()
+    return cross_val_score[SVCSearch[]](template, X, y, adapter, adapter.default_scorer(), splits, None, None)
+
+
+def check_pipeline_search(X: Dense, y: Labels) raises:
+    comptime Search = SVCSearch[True]
+    var adapter = Search()
+    var template = make_pipeline(StandardScaler(), SVC(C=2.0, gamma=0.2))
+    var invalid = Dict[String, Float64]()
+    invalid["gamma"] = 1.0
+    with assert_raises(contains="Invalid parameter gamma"):
+        adapter.configure(template, invalid)
+
+    var folds = stratified(y)
+    var scores = cross_val_score[Search](
+        template, X, y, adapter, adapter.default_scorer(), folds, None, None,
+    )
+    assert_equal(scores.size, 5)
+    for i in range(len(folds)):
+        ref train = folds[i].train
+        ref test = folds[i].test
+        var scaler = StandardScaler()
+        var X_train = select_rows(X, train)
+        var train_scaled = scaler.fit(X_train).transform(X_train)
+        var model = SVC(C=2.0, gamma=0.2)
+        _ = model.fit(train_scaled, select_rows(y, train))
+        var test_scaled = scaler.transform(select_rows(X, test))
+        assert_equal(scores.item(i), model.score(test_scaled, select_rows(y, test)))
+
+    var grid = Dict[String, List[Float64]]()
+    grid["svc__C"] = [0.1, 2.0]
+    grid["svc__gamma"] = [0.2, 1.0]
+    var search = GridSearchCV[Search](template, grid, adapter)
+    _ = search.fit(X, y)
+    assert_equal(search.n_splits_(), 5)
+    assert_true(not template.__sklearn_is_fitted__())
+    var results = search.cv_results_()
+    assert_equal(len(results.params), 4)
+    var best = 0
+    for i in range(len(results.params)):
+        var candidate = results.params[i].copy()
+        var pipe = make_pipeline(StandardScaler(), SVC(C=candidate["svc__C"], gamma=candidate["svc__gamma"]))
+        var expected = cross_val_score[Search](
+            pipe, X, y, adapter, adapter.default_scorer(), folds, None, None,
+        )
+        for fold in range(len(folds)):
+            assert_equal(results.scores.test_scores.item(i, fold, 0), expected.item(fold))
+        if results.mean_test_score.item(i, 0) > results.mean_test_score.item(best, 0):
+            best = i
+    assert_equal(search.best_index_(), best)
+    var best_params = results.params[best].copy()
+    var refit = make_pipeline(StandardScaler(), SVC(C=best_params["svc__C"], gamma=best_params["svc__gamma"]))
+    _ = refit.fit(X, y)
+    assert_same(search.predict(X), refit.predict(X))

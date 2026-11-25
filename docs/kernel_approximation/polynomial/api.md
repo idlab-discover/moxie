@@ -18,11 +18,12 @@ builds, per sample and degree, the signed count sketch of
 transforms and keeps the real part. Output is **Float64 for both input dtypes**
 (sklearn's `count_sketches` buffer is float64), shape `(n_samples, n_components)`.
 
+`fit` and `fit_transform` use the process-wide stream for `random_state=None`.
+Integer seeds restart per fit. For a caller-owned stream, use `fit_with_rng`
+or `fit_transform_with_rng` with a mutable `RandomState`.
+
 Language adaptations (tested in `tests/kernel_approximation/polynomial/contracts.mojo`):
 
-- `random_state=None` requires `fit_with_rng(X, context)` with a mutable
-  shared `RandomState` (for example `moxie._random.entropy_state()`); integer
-  seeds rebuild the stream on each `fit`.
 - Negative `coef0` is accepted by `fit` (as in sklearn), but `transform`
   raises `ValueError`: sklearn evaluates `np.sqrt(coef0) = NaN` and returns an
   all-NaN matrix. Parity asserts exactly this correspondence.

@@ -22,8 +22,7 @@ def contracts[dtype: DType]() raises:
     assert_equal(defaults.get_params().n_components, 100)
     assert_equal(defaults.get_params().gamma, 1.0)
     assert_equal(defaults.get_params().coef0, 0.0)
-    with assert_raises(contains="random_state=None"):
-        defaults.fit(x)
+    assert_true(defaults.fit(x).__sklearn_is_fitted__())
     with assert_raises(contains="NotFittedError"):
         _ = model.transform(x)
     with assert_raises(contains="NotFittedError"):

@@ -1,7 +1,7 @@
 # Dense-only Fourier scope
 
 Supported public exports: `RBFSampler`, `SkewedChi2Sampler`. Dense float32/float64
-NuMojo matrices, seeded and explicit mutable-context fit/fit_transform,
+NuMojo matrices, default, seeded and explicit mutable-context fit/fit_transform,
 transform, clone, typed parameters, and native feature names are implemented.
 RBF includes numeric gamma (including zero) and `scale`; skewed supports any
 finite skewedness with the strict transform domain. Tests cover singleton and
@@ -16,9 +16,5 @@ Under the [dense-only scope](../README.md), sparse matrices are unavailable type
 there is no implicit densification. Foundation sparse storage is deferred and
 is absent from the assembled namespace. Neither estimator requires a sparse
 setting by default. All five estimators share `moxie.kernel_approximation`.
-
-Default random_state=None requires an application-owned context passed to
-fit_with_rng; ordinary fit rejects a missing context. This is the foundation's
-explicit adaptation of NumPy's global singleton, not a sparse exclusion.
 
 Required checks: `pixi run build`, `pixi run test`, `pixi run parity`.

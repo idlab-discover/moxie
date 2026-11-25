@@ -31,8 +31,9 @@ Language adaptations (tested in `tests/kernel_approximation/nystroem/contracts.m
 - `precomputed` requires `k == n_samples` (sklearn's shape error otherwise).
 - sklearn's `n_components > n_samples` warning is recorded in `fit_warnings`
   (a native `List[String]`, not an sklearn attribute).
-- `random_state=None` requires `fit_with_rng(X, context)` with a mutable
-  `RandomState`.
+- With `random_state=None`, fitting draws the basis indices from the process-wide
+  stream. Use `fit_with_rng` or `fit_transform_with_rng` with a mutable
+  `RandomState` for a caller-owned stream.
 - `n_jobs=None` or `1` evaluates sequentially; positive values cap MAX CPU
   workers, and negative values use `max(1, logical_cores + 1 + n_jobs)`.
   Workers are capped by row count. Zero raises. Independent row blocks use

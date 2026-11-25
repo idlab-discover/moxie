@@ -24,16 +24,13 @@ variance/scaling rounding when fitted with float32). Before fitting, these array
 and the count is zero; transform and names raise `NotFittedError`-prefixed errors.
 No prediction, scoring, inverse, partial-fit or sample-weight interface is exposed.
 
-Integer seeds rebuild the shared legacy `RandomState` on each fit. The native
-adaptation for mutable RandomState and default None is explicit borrowing:
-`fit_with_rng(X, context)` / `fit_transform_with_rng(X, context)`, where context
-is a `mut RandomState`. Initialize a single application context with
-`moxie._random.entropy_state()` for None semantics and share it across consumers.
-Calling ordinary fit with None raises a descriptive error. The explicit-context
-methods use the supplied stream instead of the integer configuration. They
-consume the same sequence as sklearn; no context is retained or copied by the
-estimator. For an independent mutable-stream clone, clone the estimator and
-explicitly call `context.copy()`; neither copied object advances the original.
+Integer seeds rebuild the legacy `RandomState` on each fit. The default
+`random_state=None` advances Moxie's process-wide stream. To use a
+caller-owned `mut RandomState`, pass it to `fit_with_rng(X, context)` or
+`fit_transform_with_rng(X, context)`. These methods use that stream in place
+of the configured seed and consume the same sequence as sklearn. The estimator
+borrows the context for the duration of the call. For an independent stream,
+clone the estimator and explicitly copy the context with `context.copy()`.
 
 `moxie.base.clone(model)` copies constructor configuration into an unfitted
 estimator. `get_params()` returns an independent typed record (`Model.Params`).

@@ -137,7 +137,21 @@ struct _FilterState[dt: DType](Copyable, Movable):
         selected.commit(policy.select(result), self.names)
         return selected^
 
-struct SelectKBest[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](UnsupervisedSelector, FitTransformer):
+    def feature_names_out(
+        self,
+        policy: UnivariatePolicy[Self.dt],
+        input_features: Optional[List[String]],
+    ) raises -> List[String]:
+        if input_features:
+            ref names = input_features.value()
+            if len(names) != self.selection.n_features():
+                raise Error("ValueError: input feature names length mismatch")
+            return self.selected(policy).get_feature_names_out(names)
+        return self.selected(policy).get_feature_names_out()
+
+struct SelectKBest[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](
+    UnsupervisedSelector, FitTransformer, Copyable, FeatureNamesOut,
+):
     comptime Input = nm.NDArray[Self.S.dtype]
     comptime Target = Self.S.Target
     comptime Transformed = Self.Input
@@ -180,8 +194,11 @@ struct SelectKBest[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float6
         _ = self.fit(X, y)
         return self.transform(X)
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
         return self._state.selected(self._policy()).get_feature_names_out(input_features)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
+        return self._state.feature_names_out(self._policy(), input_features)
 
     def scores_(self) raises -> nm.NDArray[Self.S.score_dtype]:
         self._state.selection.check()
@@ -273,12 +290,7 @@ struct SelectPercentile[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.f
         return self._state.selected(self._policy()).get_feature_names_out(input_features)
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
-        if input_features:
-            ref names = input_features.value()
-            if len(names) != self.n_features_in_():
-                raise Error("ValueError: input feature names length mismatch")
-            return self.get_feature_names_out(names)
-        return self.get_feature_names_out(List[String]())
+        return self._state.feature_names_out(self._policy(), input_features)
 
     def scores_(self) raises -> nm.NDArray[Self.S.score_dtype]:
         self._state.selection.check()
@@ -321,7 +333,9 @@ struct SelectPercentile[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.f
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.selection.is_fitted()
 
-struct SelectFpr[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](UnsupervisedSelector, FitTransformer):
+struct SelectFpr[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](
+    UnsupervisedSelector, FitTransformer, Copyable, FeatureNamesOut,
+):
     comptime Input = nm.NDArray[Self.S.dtype]
     comptime Target = Self.S.Target
     comptime Transformed = Self.Input
@@ -364,8 +378,11 @@ struct SelectFpr[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]
         _ = self.fit(X, y)
         return self.transform(X)
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
         return self._state.selected(self._policy()).get_feature_names_out(input_features)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
+        return self._state.feature_names_out(self._policy(), input_features)
 
     def scores_(self) raises -> nm.NDArray[Self.S.score_dtype]:
         self._state.selection.check()
@@ -408,7 +425,9 @@ struct SelectFpr[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.selection.is_fitted()
 
-struct SelectFdr[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](UnsupervisedSelector, FitTransformer):
+struct SelectFdr[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](
+    UnsupervisedSelector, FitTransformer, Copyable, FeatureNamesOut,
+):
     comptime Input = nm.NDArray[Self.S.dtype]
     comptime Target = Self.S.Target
     comptime Transformed = Self.Input
@@ -451,8 +470,11 @@ struct SelectFdr[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]
         _ = self.fit(X, y)
         return self.transform(X)
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
         return self._state.selected(self._policy()).get_feature_names_out(input_features)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
+        return self._state.feature_names_out(self._policy(), input_features)
 
     def scores_(self) raises -> nm.NDArray[Self.S.score_dtype]:
         self._state.selection.check()
@@ -495,7 +517,9 @@ struct SelectFdr[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.selection.is_fitted()
 
-struct SelectFwe[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](UnsupervisedSelector, FitTransformer):
+struct SelectFwe[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](
+    UnsupervisedSelector, FitTransformer, Copyable, FeatureNamesOut,
+):
     comptime Input = nm.NDArray[Self.S.dtype]
     comptime Target = Self.S.Target
     comptime Transformed = Self.Input
@@ -538,8 +562,11 @@ struct SelectFwe[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]
         _ = self.fit(X, y)
         return self.transform(X)
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
         return self._state.selected(self._policy()).get_feature_names_out(input_features)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
+        return self._state.feature_names_out(self._policy(), input_features)
 
     def scores_(self) raises -> nm.NDArray[Self.S.score_dtype]:
         self._state.selection.check()
@@ -582,7 +609,9 @@ struct SelectFwe[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.selection.is_fitted()
 
-struct GenericUnivariateSelect[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](UnsupervisedSelector, FitTransformer):
+struct GenericUnivariateSelect[S: ConfiguredScorer & Deinitable = BuiltinScorer[DType.float64]](
+    UnsupervisedSelector, FitTransformer, Copyable, FeatureNamesOut,
+):
     comptime Input = nm.NDArray[Self.S.dtype]
     comptime Target = Self.S.Target
     comptime Transformed = Self.Input
@@ -627,8 +656,11 @@ struct GenericUnivariateSelect[S: ConfiguredScorer & Deinitable = BuiltinScorer[
         _ = self.fit(X, y)
         return self.transform(X)
 
-    def get_feature_names_out(self, input_features: List[String] = List[String]()) raises -> List[String]:
+    def get_feature_names_out(self, input_features: List[String]) raises -> List[String]:
         return self._state.selected(self._policy()).get_feature_names_out(input_features)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
+        return self._state.feature_names_out(self._policy(), input_features)
 
     def scores_(self) raises -> nm.NDArray[Self.S.score_dtype]:
         self._state.selection.check()

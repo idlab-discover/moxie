@@ -2,8 +2,9 @@
 
 `SelectFromModel` fits a cloned estimator or reads a prefitted one, then selects
 features by their importances. It delegates optimization to the wrapped model.
-The family supplies adapters for the live dense Lasso, ElasticNet,
-DecisionTreeClassifier and IncrementalPCA implementations. Both Float32 and Float64 are supported.
+The family supplies adapters for the live dense Lasso, ElasticNet, Ridge,
+LinearSVC, DecisionTreeClassifier and IncrementalPCA implementations.
+Both Float32 and Float64 features are supported.
 
 ```mojo
 from moxie.linear_model import Lasso
@@ -33,7 +34,8 @@ original order. Features equal to the threshold are retained.
 
 Thresholds accept `ModelThreshold(Float64(...))`, `"mean"`, `"median"`, and
 scaled strings such as `"1.25*mean"`, wrapped as above. The default is `1e-5`
-for Lasso and ElasticNet whose `l1_ratio` is close to one, otherwise the mean.
+for Lasso, ElasticNet whose `l1_ratio` is close to one, and LinearSVC with
+`penalty="l1"`. Other supplied models use the mean.
 Vector importances use absolute values. Matrix coefficients use column norms:
 nonzero integer orders and positive/negative infinity are supported. NaNs and
 infinities in importances follow the reference aggregation/mask behavior.

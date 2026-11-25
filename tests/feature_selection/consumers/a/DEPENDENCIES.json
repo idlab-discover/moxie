@@ -2,6 +2,77 @@
   "overrides": [],
   "projects": [
     {
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {},
+          "moxie.svm": {
+            "SupportVectorClassifier": "moxie.svm._base",
+            "ProbabilisticSVC": "moxie.svm._base",
+            "SupportVectorRegressor": "moxie.svm._base",
+            "OneClassSupportVector": "moxie.svm._base"
+          }
+        }
+      },
+      "id": "svm-scaffold",
+      "modules": {
+        "moxie.svm._base": {
+          "file": "src/moxie/svm/_base.mojo"
+        },
+        "moxie.svm._contracts": {
+          "file": "src/moxie/svm/_contracts.mojo"
+        }
+      },
+      "path": "../../../../families/svm"
+    },
+    {
+      "assets": {
+        "licenses/svm-liblinear/LIBLINEAR.txt": "LICENSES/LIBLINEAR.txt",
+        "licenses/svm-liblinear/scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie.svm": {}
+        },
+        "schema": 1
+      },
+      "id": "svm-liblinear",
+      "modules": {
+        "moxie.svm._liblinear": {
+          "file": "src/moxie/svm/_liblinear.mojo"
+        }
+      },
+      "path": "../../../../families/svm/shared/liblinear"
+    },
+    {
+      "assets": {
+        "licenses/svm-linear/scikit-learn.txt": "SCIKIT_LEARN_LICENSE"
+      },
+      "exports": {
+        "packages": {
+          "moxie.svm": {
+            "ClassWeight": "moxie.svm._linear",
+            "Dual": "moxie.svm._linear",
+            "LinearSVC": "moxie.svm._linear",
+            "LinearSVR": "moxie.svm._linear",
+            "l1_min_c": "moxie.svm._bounds"
+          }
+        },
+        "schema": 1
+      },
+      "id": "svm-linear",
+      "modules": {
+        "moxie.svm._bounds": {
+          "file": "src/moxie/svm/_bounds.mojo"
+        },
+        "moxie.svm._linear": {
+          "file": "src/moxie/svm/_linear.mojo"
+        }
+      },
+      "path": "../../../../families/svm/algorithms/linear"
+    },
+    {
       "assets": {
         "licenses/feature-selection-scikit-learn.txt": "LICENSES/feature-selection-scikit-learn.txt"
       },
@@ -28,6 +99,7 @@
             "BuiltinScorer": "moxie.feature_selection._univariate_selection",
             "ConfiguredScorer": "moxie.feature_selection._univariate_selection",
             "DecisionTreeClassifierImportance": "moxie.feature_selection._tree_importance",
+            "LinearSVCImportance": "moxie.feature_selection._linear_svc_importance",
             "DenseSupervisedCV": "moxie.feature_selection._sequential_adapter",
             "DiscreteFeatures": "moxie.feature_selection._mutual_info",
             "ElasticNetImportance": "moxie.feature_selection._linear_model_importance",
@@ -165,6 +237,9 @@
         },
         "moxie.feature_selection._sequential_adapter": {
           "file": "src/moxie/feature_selection/_sequential_adapter.mojo"
+        },
+        "moxie.feature_selection._linear_svc_importance": {
+          "file": "src/moxie/feature_selection/_linear_svc_importance.mojo"
         },
         "moxie.feature_selection._tree_importance": {
           "file": "src/moxie/feature_selection/_tree_importance.mojo"

@@ -12,6 +12,7 @@ from std.utils import Variant
 from moxie.base import UnsupervisedEstimator
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import RandomState
+from moxie.warnings import FitWarning
 from ._base import InvertibleDecomposition
 from ._contracts import validate_matrix
 from ._matrix import libm_log as log
@@ -486,6 +487,42 @@ struct NMFConfig(Copyable, Movable):
         return self.n_components[Int]
 
 
+comptime _NMF_MU_NNDSVD_MESSAGE = (
+    "The multiplicative update ('mu') solver cannot update "
+    "zeros present in the initialization, and so leads to "
+    "poorer results when used jointly with init='nndsvd'. "
+    "You may try init='nndsvda' or init='nndsvdar' instead."
+)
+comptime _NMF_IGNORED_FACTORS_MESSAGE = (
+    "When init!='custom', provided W or H are ignored. Set "
+    " init='custom' to use them as initialization."
+)
+
+
+def _nmf_convergence_message(iterations: Int) -> String:
+    return ("Maximum number of iterations " + String(iterations)
+        + " reached. Increase it to improve convergence.")
+
+
+def _append_initialization_warning(
+    mut warnings: List[FitWarning], init: Optional[String],
+    has_w: Bool, has_h: Bool, update_h: Bool,
+):
+    if not update_h:
+        if has_w:
+            warnings.append(FitWarning("RuntimeWarning",
+                "When update_H=False, the provided initial W is not used."))
+    elif init.or_else("") != "custom" and (has_w or has_h):
+        warnings.append(FitWarning("RuntimeWarning", _NMF_IGNORED_FACTORS_MESSAGE))
+
+
+def _append_convergence_warning(
+    mut warnings: List[FitWarning], iterations: Int, max_iter: Int, tol: Float64,
+):
+    if iterations == max_iter and tol > 0:
+        warnings.append(FitWarning("ConvergenceWarning", _nmf_convergence_message(iterations)))
+
+
 def _check_w_h[dtype: DType](config: NMFConfig, X: NDArray[dtype], W: Optional[NDArray[dtype]], H: Optional[NDArray[dtype]], update_H: Bool, mut k: Int, solver: String) raises -> Tuple[NDArray[dtype], NDArray[dtype]]:
     """sklearn _BaseNMF._check_w_h. `k` is the resolved component count (-1 = auto)."""
     var n = X.shape[0]
@@ -562,6 +599,7 @@ struct NMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEs
     var reconstruction_err_: Float64
     var n_iter_: Int
     var n_features_in_: Int
+    var fit_warnings: List[FitWarning]
 
     def __init__(
         out self, n_components: NMFComponents = String("auto"), *, init: Optional[String] = None,
@@ -587,6 +625,7 @@ struct NMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEs
         self.reconstruction_err_ = 0
         self.n_iter_ = 0
         self.n_features_in_ = 0
+        self.fit_warnings = []
 
     def _config(self) -> NMFConfig:
         return NMFConfig(self.n_components.copy(), self.init, self.beta_loss.copy(), self.tol, self.max_iter,
@@ -661,8 +700,15 @@ struct NMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEs
                 update_H, self.shuffle, self.random_state)
         else:
             n_iter = fit_multiplicative_update(x, w, h, beta, self.max_iter, self.tol, regs[0], regs[1], regs[2], regs[3], update_H)
-        # sklearn warns (ConvergenceWarning) when n_iter == max_iter and tol > 0.
         return (w^, h^, n_iter)
+
+    def _fit_warnings(self, has_w: Bool, has_h: Bool, update_h: Bool, iterations: Int) -> List[FitWarning]:
+        var warnings: List[FitWarning] = []
+        if self.solver == "mu" and self.init.or_else("") == "nndsvd":
+            warnings.append(FitWarning("UserWarning", _NMF_MU_NNDSVD_MESSAGE))
+        _append_initialization_warning(warnings, self.init, has_w, has_h, update_h)
+        _append_convergence_warning(warnings, iterations, self.max_iter, self.tol)
+        return warnings^
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
         _ = self.fit_transform(X)
@@ -680,6 +726,7 @@ struct NMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEs
         self.components_ = result[1].copy()
         self.n_iter_ = result[2]
         self.n_features_in_ = X.shape[1]
+        self.fit_warnings = self._fit_warnings(Bool(W), Bool(H), True, self.n_iter_)
         return result[0].copy()
 
     def _check(self) raises:
@@ -721,12 +768,21 @@ struct NMF[dtype: DType = DType.float64](InvertibleDecomposition, UnsupervisedEs
         raise Error("NotImplementedError: Python metadata routing is not available")
 
 
-@fieldwise_init
 struct NMFResult[dtype: DType](Movable):
-    """Return record of non_negative_factorization: (W, H, n_iter)."""
+    """Factors, iteration count and ordered warnings from non_negative_factorization."""
     var W: NDArray[Self.dtype]
     var H: NDArray[Self.dtype]
     var n_iter: Int
+    var fit_warnings: List[FitWarning]
+
+    def __init__(
+        out self, var W: NDArray[Self.dtype], var H: NDArray[Self.dtype], n_iter: Int,
+        var fit_warnings: List[FitWarning] = [],
+    ):
+        self.W = W^
+        self.H = H^
+        self.n_iter = n_iter
+        self.fit_warnings = fit_warnings^
 
 
 def non_negative_factorization[dtype: DType](
@@ -740,7 +796,8 @@ def non_negative_factorization[dtype: DType](
     var model = NMF[dtype](n_components, init=init, solver=solver, beta_loss=beta_loss, tol=tol, max_iter=max_iter,
         random_state=random_state, alpha_W=alpha_W, alpha_H=alpha_H, l1_ratio=l1_ratio, verbose=verbose, shuffle=shuffle)
     var result = model._fit_transform(X, W, H, update_H)
-    return NMFResult[dtype](result[0].copy(), result[1].copy(), result[2])
+    return NMFResult[dtype](result[0].copy(), result[1].copy(), result[2],
+        model._fit_warnings(Bool(W), Bool(H), update_H, result[2]))
 
 
 @fieldwise_init
@@ -802,6 +859,7 @@ struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
     var n_iter_: Int
     var n_steps_: Int
     var n_features_in_: Int
+    var fit_warnings: List[FitWarning]
     var _components_numerator: Optional[NDArray[Self.dtype]]
     var _components_denominator: Optional[NDArray[Self.dtype]]
     var _k: Int
@@ -841,6 +899,7 @@ struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
         self.n_iter_ = 0
         self.n_steps_ = 0
         self.n_features_in_ = 0
+        self.fit_warnings = []
         self._components_numerator = None
         self._components_denominator = None
         self._k = 0
@@ -1058,6 +1117,10 @@ struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
         self.n_iter_ = (n_steps + steps_per_iter - 1) // steps_per_iter
         self.n_steps_ = n_steps
         self.n_features_in_ = x.shape[1]
+        var warnings: List[FitWarning] = []
+        _append_initialization_warning(warnings, self.init, Bool(W), Bool(H), True)
+        _append_convergence_warning(warnings, self.n_iter_, self.max_iter, self.tol)
+        self.fit_warnings = warnings^
         return w^
 
     def partial_fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
@@ -1068,6 +1131,7 @@ struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
         """One online step on X; the first call initializes components from X."""
         var x = contiguous(X)
         var h: NDArray[Self.dtype]
+        var warnings: List[FitWarning] = []
         if not self.components_:
             # sklearn's partial_fit rejects negative data (through the initialization)
             # but, unlike fit, not zeros under beta_loss <= 0: pass a positive beta.
@@ -1075,6 +1139,7 @@ struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
             _ = self._check_params(x)
             var k = self._k
             var factors = _check_w_h(self._config(), x, W, H, True, k, "mu")
+            _append_initialization_warning(warnings, self.init, Bool(W), Bool(H), True)
             self._k = k
             h = factors[1].copy()
             self._components_numerator = h.copy()
@@ -1095,6 +1160,7 @@ struct MiniBatchNMF[dtype: DType = DType.float64](InvertibleDecomposition, Unsup
         self.n_components_ = h.shape[0]
         self.components_ = h^
         self.n_steps_ += 1
+        self.fit_warnings = warnings^
         return self
 
     def _check(self) raises:

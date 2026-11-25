@@ -15,7 +15,8 @@ from .decomposition._lda import LatentDirichletAllocation, LatentDirichletAlloca
 from .decomposition._sparse_coding import SparseCoder
 from .decomposition._nmf import (
     AlphaH, BetaLoss, MiniBatchNMF, MiniBatchNMFParams, NMF, NMFComponents,
-    NMFConfig, NMFParams, _gamma,
+    NMFConfig, NMFParams, _gamma, _nmf_convergence_message,
+    _NMF_MU_NNDSVD_MESSAGE, _NMF_IGNORED_FACTORS_MESSAGE,
 )
 from .serialization import ArrayPayload, BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 from ._random import RandomState
@@ -981,15 +982,48 @@ struct _NMFState(Movable):
         return [self.dimensions.rank, self.dimensions.features]
 
 
+def _nmf_warning_flags(warnings: List[FitWarning], state: _NMFState, *, online: Bool) raises -> UInt64:
+    var flags: UInt64 = 0
+    for warning in warnings:
+        var flag: UInt64
+        if not online and warning.category == "UserWarning" and warning.message == _NMF_MU_NNDSVD_MESSAGE:
+            flag = 1
+        elif warning.category == "RuntimeWarning" and warning.message == _NMF_IGNORED_FACTORS_MESSAGE:
+            flag = 2
+        elif (state.iterations > 0 and warning.category == "ConvergenceWarning"
+            and warning.message == _nmf_convergence_message(state.iterations)):
+            flag = 4
+        else:
+            raise Error("ModelSchemaError: invalid NMF fit warnings")
+        if not state.dimensions.fitted or flag <= flags:
+            raise Error("ModelSchemaError: invalid NMF fit warnings")
+        flags |= flag
+    return flags
+
+
+def _read_nmf_warnings(flags: UInt64, state: _NMFState, *, online: Bool) raises -> List[FitWarning]:
+    if (flags > 7 or (flags and not state.dimensions.fitted)
+        or (online and (flags & 1)) or ((flags & 4) and state.iterations == 0)):
+        raise Error("ModelSchemaError: invalid NMF fit warnings")
+    var warnings: List[FitWarning] = []
+    if flags & 1:
+        warnings.append(FitWarning("UserWarning", _NMF_MU_NNDSVD_MESSAGE))
+    if flags & 2:
+        warnings.append(FitWarning("RuntimeWarning", _NMF_IGNORED_FACTORS_MESSAGE))
+    if flags & 4:
+        warnings.append(FitWarning("ConvergenceWarning", _nmf_convergence_message(state.iterations)))
+    return warnings^
+
+
 struct NMFSchema[dtype: DType = DType.float64](ModelSchema):
-    """Version 1 of dense NMF configuration and learned state."""
+    """Dense NMF configuration, learned state and fit warnings."""
 
     comptime Model = NMF[Self.dtype]
     comptime _type_id = "moxie.decomposition.NMF"
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
-        var archive = ModelArchive(Self._type_id, 1)
+        var archive = ModelArchive(Self._type_id, 2)
         var writer = BinaryWriter()
         writer.uint(UInt64(dtype_code[Self.dtype]()))
         _write_nmf_config(writer, model.get_params().config)
@@ -999,6 +1033,7 @@ struct NMFSchema[dtype: DType = DType.float64](ModelSchema):
             model.n_features_in_, model.n_components_), model.n_iter_, model.reconstruction_err_)
         state.validate(online=False)
         state.write(writer)
+        writer.uint(_nmf_warning_flags(model.fit_warnings, state, online=False))
         archive.manifest = writer^.finish()
         _write_array(archive, "components_", model.components_, state.dimensions.fitted,
             state.shape(), nonnegative=True)
@@ -1006,12 +1041,13 @@ struct NMFSchema[dtype: DType = DType.float64](ModelSchema):
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self._type_id, 1)
+        archive.expect(Self._type_id, 1 if archive.schema_version == 1 else 2)
         archive.validate()
         var reader = BinaryReader(archive.manifest)
         _check_dtype[Self.dtype](reader)
         var params = NMFParams(_read_nmf_config(reader), reader.string(), reader.boolean())
         var state = _NMFState.read(reader)
+        var flags = reader.uint() if archive.schema_version == 2 else UInt64(0)
         reader.finish()
         state.validate(online=False)
         _check_arrays(archive, state.dimensions.fitted, 1)
@@ -1023,6 +1059,7 @@ struct NMFSchema[dtype: DType = DType.float64](ModelSchema):
         model.reconstruction_err_ = state.error
         model.components_ = _read_array[Self.dtype](archive, "components_",
             state.dimensions.fitted, state.shape(), nonnegative=True)
+        model.fit_warnings = _read_nmf_warnings(flags, state, online=False)
         return model^
 
 
@@ -1039,14 +1076,14 @@ def _check_minibatch_nmf_state[dtype: DType](model: MiniBatchNMF[dtype], fitted:
 
 
 struct MiniBatchNMFSchema[dtype: DType = DType.float64](ModelSchema):
-    """Version 1 of dense MiniBatchNMF, including the online accumulators."""
+    """Dense MiniBatchNMF state, including online accumulators and fit warnings."""
 
     comptime Model = MiniBatchNMF[Self.dtype]
     comptime _type_id = "moxie.decomposition.MiniBatchNMF"
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
-        var archive = ModelArchive(Self._type_id, 1)
+        var archive = ModelArchive(Self._type_id, 2)
         var writer = BinaryWriter()
         writer.uint(UInt64(dtype_code[Self.dtype]()))
         _write_nmf_config(writer, model.get_params().config)
@@ -1069,6 +1106,7 @@ struct MiniBatchNMFSchema[dtype: DType = DType.float64](ModelSchema):
             writer.scalar(model._gamma)
             writer.scalar(model._rho)
             writer.integer(model._transform_max_iter)
+        writer.uint(_nmf_warning_flags(model.fit_warnings, state, online=True))
         archive.manifest = writer^.finish()
         var shape = state.shape()
         _write_array(archive, "components_", model.components_, fitted, shape, nonnegative=True)
@@ -1080,7 +1118,7 @@ struct MiniBatchNMFSchema[dtype: DType = DType.float64](ModelSchema):
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self._type_id, 1)
+        archive.expect(Self._type_id, 1 if archive.schema_version == 1 else 2)
         archive.validate()
         var reader = BinaryReader(archive.manifest)
         _check_dtype[Self.dtype](reader)
@@ -1100,6 +1138,7 @@ struct MiniBatchNMFSchema[dtype: DType = DType.float64](ModelSchema):
             model._gamma = reader.scalar[DType.float64]()
             model._rho = reader.scalar[DType.float64]()
             model._transform_max_iter = reader.integer()
+        var flags = reader.uint() if archive.schema_version == 2 else UInt64(0)
         reader.finish()
 
         model.n_features_in_ = state.dimensions.features
@@ -1114,6 +1153,7 @@ struct MiniBatchNMFSchema[dtype: DType = DType.float64](ModelSchema):
             fitted, shape, nonnegative=True)
         model._components_denominator = _read_array[Self.dtype](archive, "_components_denominator",
             fitted, shape, nonnegative=True)
+        model.fit_warnings = _read_nmf_warnings(flags, state, online=True)
         return model^
 
 

@@ -37,8 +37,8 @@ subset (NMF omits `verbose`; MiniBatchNMF covers `n_components`, `init`,
 accepted. sklearn's `fit(X, W=..., H=...)` keyword form is
 `fit_transform(X, W, H)` here. As in sklearn, the first `partial_fit` does not
 reject zeros under `beta_loss <= 0`; `fit` does.
-`non_negative_factorization` returns an `NMFResult` record `(W, H, n_iter)`
-and supports `update_H=False`.
+`non_negative_factorization` returns the factors and iteration count as
+`NMFResult.W`, `H` and `n_iter`. It supports `update_H=False`.
 
 Reference behaviors reproduced: per-call re-seeding from `random_state` for
 initialization, NNDSVD SVD and coordinate-descent shuffles; data-shape scaled
@@ -46,12 +46,28 @@ L1/L2 regularization; float32-eps guards in the divergences; the error check
 every 10 MU iterations; mini-batch EWA cost / no-improvement / H-change
 convergence and in-place W row updates; and, for KL with a fixed H
 (`transform`, `update_H=False`), the reference's cached H row sums that its
-in-place `denominator += l1_reg_W` grows each iteration. Not reproduced:
-warnings (check `n_iter_ == max_iter`), `verbose` printing, sparse input.
+in-place `denominator += l1_reg_W` grows each iteration. The native API accepts
+`verbose` as a configuration value only. See the
+[family scope](scope.md) for unsupported inputs and Python-specific features.
+
+## Fit warnings
+
+Read `fit_warnings` after `fit`, `fit_transform` or `partial_fit`, or on
+the functional result. Each record carries the scikit-learn category and
+message. Diagnostics cover MU with explicit `nndsvd` in NMF, ignored initial
+factors, and iteration limits. As in scikit-learn, a fit reports a convergence
+warning when its counted iterations equal `max_iter` and `tol > 0`. In
+MiniBatchNMF this can happen when stopping partway through the final epoch.
+
+Each successful fit or partial fit replaces the records. Clones start with an
+empty list. The read-only `transform` preserves fit diagnostics. To inspect
+warnings from a fixed-H solve, call
+`non_negative_factorization(..., update_H=False)` with the fitted factors and
+equivalent settings and read the result's `fit_warnings`.
 
 ## Validation
 
-`pixi run parity` runs 156 cases against the pinned source; its Cython kernel
+`tests/nmf/parity.py` runs 168 cases against the pinned source; its Cython kernel
 `_cdnmf_fast.pyx` is compiled from the pinned file for the comparison.
 Coverage: tall/wide/square shapes with exact zeros, all inits, cd with
 shuffle and L1/L2 mixes, truncated `max_iter`, MU with Frobenius, KL,
@@ -60,4 +76,5 @@ MiniBatchNMF with several batch sizes, KL/IS, fresh restarts, regularization
 and partial_fit, in Float64 and Float32. W, H, transforms and errors are
 compared directly with tolerance 1e-7 (Float64) and 3e-3 (Float32), scaled by
 the data magnitude; Float64 iteration/step counts must match exactly, Float32
-may differ by up to 10 (rounding-level stopping decisions).
+may differ by up to 10 (rounding-level stopping decisions). Warning categories,
+messages and order must match exactly in both dtypes.

@@ -1,9 +1,9 @@
 # Adapted from scikit-learn; SPDX-License-Identifier: BSD-3-Clause
 """Serial typed grid/random search, shared candidate evaluation and refitting."""
-from moxie.base import SupervisedEstimator, SupervisedScorer, ClassifierMixin, RegressorMixin, BaseEstimator, InputEstimator, clone, Predictor, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, TransformerMixin, InverseTransformer, SampleScorer, WeightedSupervisedEstimator
+from moxie.base import SupervisedEstimator, SupervisedScorer, UnsupervisedScorer, ClassifierMixin, RegressorMixin, BaseEstimator, InputEstimator, clone, Predictor, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, TransformerMixin, InverseTransformer, SampleScorer, WeightedSupervisedEstimator
 from moxie.model_selection._base import SearchEstimator
 from moxie.model_selection._evaluation import EstimatorScore, TypedScorer, ParameterAdapter
-from moxie.model_selection._validation import DefaultCVAdapter, _cross_validate
+from moxie.model_selection._validation import DefaultCVAdapter, DenseUnsupervisedAdapter, _cross_validate
 from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
 from moxie.model_selection._split import KFold, SplitLabels, check_cv, select_rows
 from moxie.model_selection._results import ScoreTable, FitStatus, ErrorPolicy, RefitSelector, validate_refit_index, require_refit
@@ -26,9 +26,55 @@ trait SearchAdapter(DefaultCVAdapter, ParameterAdapter, Copyable, Deinitable):
     pass
 
 
-comptime _ParameterApplier[E: SupervisedScorer, V: Copyable & Deinitable] = def(
+comptime _ParameterApplier[E: BaseEstimator, V: Copyable & Deinitable] = def(
     mut E, Dict[String, V]
 ) thin raises
+
+
+struct DenseUnsupervisedSearchAdapter[
+    E: UnsupervisedScorer & Deinitable,
+    dtype: DType = DType.float64,
+    V: Copyable & Deinitable = Float64,
+](SearchAdapter):
+    """Search ordinary dense sample rows with an estimator-specific parameter applier."""
+
+    comptime _CV = DenseUnsupervisedAdapter[Self.E, Self.dtype]
+    comptime Scorer = Self._CV.Scorer
+    comptime Value = Self.V
+    comptime X = NDArray[Self.dtype]
+
+    var _cv: Self._CV
+    var _apply_params: _ParameterApplier[Self.E, Self.V]
+
+    def __init__(
+        out self, apply_params: _ParameterApplier[Self.E, Self.V], *, n_splits: Int = 5,
+    ):
+        self._cv = Self._CV(n_splits)
+        self._apply_params = apply_params
+
+    def configure(self, mut estimator: Self.E, params: Dict[String, Self.V]) raises:
+        self._apply_params(estimator, params)
+
+    def n_samples(self, X: Self.X, y: NoneType) raises -> Int:
+        return self._cv.n_samples(X, y)
+
+    def input_rows(self, X: Self.X, rows: IndexArray, train: IndexArray) raises -> Self.X:
+        return self._cv.input_rows(X, rows, train)
+
+    def target_rows(self, y: NoneType, rows: IndexArray) raises -> NoneType:
+        return self._cv.target_rows(y, rows)
+
+    def metadata_rows(self, metadata: NoneType, rows: IndexArray) raises -> NoneType:
+        return self._cv.metadata_rows(metadata, rows)
+
+    def fit(self, mut estimator: Self.E, X: Self.X, y: NoneType, metadata: NoneType) raises:
+        self._cv.fit(estimator, X, y, metadata)
+
+    def default_scorer(self) raises -> Self.Scorer:
+        return self._cv.default_scorer()
+
+    def default_cv(self, X: Self.X, y: NoneType) raises -> List[IndexSplit]:
+        return self._cv.default_cv(X, y)
 
 
 def _collect_splits[C: SplitCursor & Deinitable](var cursor: C) raises -> List[IndexSplit]:

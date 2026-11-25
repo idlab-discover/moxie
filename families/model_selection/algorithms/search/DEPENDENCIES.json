@@ -385,6 +385,7 @@
             "RandomizedSearchCV": "moxie.model_selection._search",
             "SearchAdapter": "moxie.model_selection._search",
             "DenseSupervisedAdapter": "moxie.model_selection._search",
+            "DenseUnsupervisedSearchAdapter": "moxie.model_selection._search",
             "SearchScorer": "moxie.model_selection._search",
             "SearchRefitPolicy": "moxie.model_selection._search",
             "SearchRefit": "moxie.model_selection._search",

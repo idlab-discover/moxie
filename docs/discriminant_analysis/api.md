@@ -81,6 +81,27 @@ estimator. The default `List[Int]` label type works with the multiclass
 Weighted scoring rejects NaN, infinity, all-zero weights and weights whose sum
 is zero, as in scikit-learn. Signed weights with a nonzero sum are accepted.
 
+## Native LDA persistence
+
+Use the experimental [Moxie archive format](../serialization.md) to save fitted
+or unfitted LDA models and restore them without training data.
+
+```mojo
+from moxie.discriminant_analysis_serialization import LinearDiscriminantAnalysisSchema
+from moxie.serialization import load_model, save_model
+
+save_model[LinearDiscriminantAnalysisSchema[]](lda, "lda.moxie")
+var restored = load_model[LinearDiscriminantAnalysisSchema[]]("lda.moxie")
+```
+
+Choose the same dtype and label type when saving and loading, for example
+`LinearDiscriminantAnalysisSchema[DType.float32, String]`. Version 1 supports
+`Int` and `String` labels and the default `NoCovarianceEstimator` type,
+including all three solvers and built-in shrinkage choices. The archive saves
+current configuration separately from fitted state, so a solver or component
+change made after fitting preserves the fitted projection on load. Loading
+validates array shapes, class order and the fitted solver's required fields.
+
 ## Cross-validation and shrinkage search
 
 For default five-fold stratified cross-validation with Float64 features and

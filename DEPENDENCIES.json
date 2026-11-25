@@ -188,6 +188,9 @@
         "moxie.kernel_approximation": {
           "file": "src/moxie/kernel_approximation.mojo"
         },
+        "moxie.discriminant_analysis_serialization": {
+          "file": "src/moxie/discriminant_analysis_serialization.mojo"
+        },
         "moxie.discriminant_analysis": {
           "file": "src/moxie/discriminant_analysis.mojo"
         },

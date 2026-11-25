@@ -96,7 +96,7 @@ def contract[dtype: DType]() raises:
     var ws = zero_weights.view_with_layout(Shape(6), Strides(-1), 5)
     for i in range(6):
         zero_weights.unsafe_set(i, Scalar[dtype](i + 1))
-    var solvers: List[String] = ["lbfgs", "newton-cholesky", "newton-cg"]
+    var solvers: List[String] = ["lbfgs", "newton-cholesky", "newton-cg", "liblinear"]
     for solver in solvers:
         var strided = LogisticRegression[dtype](solver=solver.copy())
         _ = strided.fit(Xs, ys, sample_weight=ws)
@@ -196,6 +196,41 @@ def numeric_label_contract() raises:
         _ = model.fit(X, y)
 
 
+def liblinear_contract[dtype: DType]() raises:
+    var inputs = data[dtype]()
+    ref X = inputs[0]
+    ref y = inputs[1]
+    var model = LogisticRegression[dtype](
+        solver="liblinear", random_state=42, dual=True, warm_start=True, max_iter=3,
+    )
+    _ = model.fit(X, y, sample_weight=2.0)
+    var initial = model.coef_.unsafe_get(0)
+    assert_true(initial > 0)
+    assert_equal(model.n_iter_.unsafe_get(0), 3)
+    assert_equal(model.predict_proba(X).shape[1], 2)
+    _ = model.fit(X, y, sample_weight=2.0)
+    assert_equal(model.coef_.unsafe_get(0), initial)
+
+    var fresh = clone(model)
+    assert_equal(fresh.get_params().random_state.value(), 42)
+    with assert_raises(contains="NotFittedError"):
+        _ = fresh.predict(X)
+    var zeros_weight = zeros[dtype](Shape(6))
+    with assert_raises(contains="no positive sample weights"):
+        _ = model.fit(X, y, sample_weight=zeros_weight)
+    assert_equal(model.coef_.unsafe_get(0), initial)
+    assert_equal(model.n_iter_.unsafe_get(0), 3)
+
+    # Reconfigure and refit with a different feature count. LIBLINEAR ignores
+    # warm_start and keeps a length-one zero intercept when bias is disabled.
+    var one_feature = X.view_with_layout(Shape(6, 1), Strides(2, 1), 0)
+    _ = model.set_params(dual=False, l1_ratio=1.0, fit_intercept=False).fit(one_feature, y)
+    assert_equal(model.n_features_in_, 1)
+    assert_equal(model.coef_.shape[1], 1)
+    assert_equal(model.intercept_.shape[0], 1)
+    assert_equal(model.intercept_.unsafe_get(0), 0)
+
+
 def main() raises:
     contract[DType.float64]()
     contract[DType.float32]()
@@ -203,4 +238,6 @@ def main() raises:
     hessian_product_contract[DType.float64](3, False)
     hessian_product_contract[DType.float64](3, True)
     numeric_label_contract()
+    liblinear_contract[DType.float32]()
+    liblinear_contract[DType.float64]()
     print("PASS: dense LogisticRegression contracts in Float32 and Float64")

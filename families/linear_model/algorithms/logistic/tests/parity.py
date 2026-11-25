@@ -2,8 +2,10 @@
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+import runpy
 import subprocess
 import sys
+from unittest.mock import patch
 import warnings
 
 import numpy as np
@@ -12,16 +14,49 @@ from sklearn import __version__ as support_version
 from sklearn.datasets import make_classification
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import _cd_fast
+from sklearn.svm import _liblinear
 from sklearn.utils import _array_api, fixes
 
 FAMILY = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(FAMILY / "tools"))
-from parity_io import case_line, close, load_pinned, parse_results, pinned_code, verify_reference
+from parity_io import REFERENCE, case_line, close, load_pinned, parse_results, pinned_code, verify_reference
 
 LOSS = "sklearn/linear_model/_linear_loss.py"
 LOGISTIC = "sklearn/linear_model/_logistic.py"
 NEWTON = "sklearn/linear_model/_glm/_newton_solver.py"
 OPTIMIZE = "sklearn/utils/optimize.py"
+SVM_BASE = "sklearn/svm/_base.py"
+LIBLINEAR = "sklearn/svm/src/liblinear"
+OUTPUT = FAMILY / "builds/logistic"
+
+
+def pinned_liblinear():
+    """Adapt the existing engine oracle to sklearn's dense train_wrap layout."""
+    engine_tests = FAMILY.parent / "svm/shared/liblinear/tests"
+    source = REFERENCE / LIBLINEAR
+    binary = OUTPUT / "liblinear_oracle"
+    subprocess.run(
+        ["g++", "-O3", "-ffp-contract=off", "-std=c++17", f"-I{source}",
+         engine_tests / "oracle.cpp", source / "linear.cpp", source / "tron.cpp", "-o", binary],
+        check=True,
+    )
+    adapter = runpy.run_path(str(engine_tests / "parity.py"))
+
+    def train_wrap(X, y, sparse, solver, tol, bias, C, cw, max_iter, seed, epsilon, sw):
+        assert not sparse and solver in (0, 6, 7)
+        if tol <= 0:
+            raise ValueError("eps <= 0")
+        fixture = OUTPUT / "liblinear_reference.txt"
+        adapter["write_case"](
+            fixture, X.astype(np.float64), y, sw, cw, solver, c=C, epsilon=epsilon,
+            tol=tol, fit=bias > 0, scale=bias, limit=max_iter, seed=seed,
+        )
+        coef, intercept, iterations, _ = adapter["invoke"](binary, fixture)
+        if bias > 0:
+            coef = np.column_stack((coef, intercept / bias))
+        return coef, iterations.astype(np.int32)
+
+    return train_wrap
 
 
 def unsupported_oracle_branch(*args, **kwargs):
@@ -29,10 +64,14 @@ def unsupported_oracle_branch(*args, **kwargs):
 
 
 def oracle():
-    hashes = verify_reference([LOSS, LOGISTIC, NEWTON, OPTIMIZE])
+    hashes = verify_reference([
+        LOSS, LOGISTIC, NEWTON, OPTIMIZE, SVM_BASE, "sklearn/svm/_liblinear.pyx",
+        f"{LIBLINEAR}/linear.cpp", f"{LIBLINEAR}/linear.h", f"{LIBLINEAR}/tron.cpp",
+        f"{LIBLINEAR}/tron.h", "sklearn/svm/src/newrand/newrand.h",
+    ])
     print(f"scikit-learn source SHA256 {hashes}, support wheel {support_version}")
     # These symbols let the module import with the locked 1.9.1 support wheel.
-    # The dense smooth solvers do not reach these compatibility shims.
+    # The fitted solvers do not reach these compatibility shims.
     if not hasattr(_cd_fast, "enet_coordinate_descent_sparse"):
         _cd_fast.enet_coordinate_descent_sparse = _cd_fast.sparse_enet_coordinate_descent
     for module, name in [
@@ -44,6 +83,8 @@ def oracle():
     newton = load_pinned(NEWTON, register=True)
     optimize = load_pinned(OPTIMIZE, register=True)
     estimator = load_pinned(LOGISTIC)
+    estimator._fit_liblinear = load_pinned(SVM_BASE)._fit_liblinear
+    pinned_code(estimator._fit_liblinear, SVM_BASE)
     pinned_code(loss.LinearModelLoss.loss_gradient, LOSS)
     pinned_code(loss.LinearModelLoss.gradient_hessian, LOSS)
     pinned_code(newton.NewtonCholeskySolver.inner_solve, NEWTON)
@@ -153,9 +194,60 @@ def fixtures():
         }, {"X": X, "y": y, "sw": sw, "Z": X}
 
 
+def liblinear_fixtures():
+    rng = np.random.default_rng(481)
+    for bits, dtype in [(32, np.float32), (64, np.float64)]:
+        X = rng.normal(size=(53, 5)).astype(dtype)
+        y = np.where(X[:, 0] - X[:, 1] + rng.normal(size=len(X)) > 0.4, 8, -3)
+        Z = rng.normal(size=(13, X.shape[1])).astype(dtype)
+        arrays = {"X": X, "y": y, "Z": Z}
+        sw = rng.uniform(0.25, 2, size=len(X)).astype(dtype)
+        sw[:2] = [0, -0.5]
+        base = {
+            "solver": "liblinear", "C": 0.7, "tol": 1e-8, "max_iter": 200,
+            "intercept": 1, "weight": "none", "unpenalized": 0, "seed": 42,
+        }
+        for mode, options in [
+            ("l2-primal", {}), ("l2-dual", {"dual": 1}), ("l1", {"ratio": 1.0}),
+        ]:
+            for scenario, params, data in [
+                ("default", {}, arrays),
+                ("wide-no-intercept", {"intercept": 0},
+                 {"X": X[:8].T, "Z": X[8:16].T, "y": np.array([-3, 8, -3, 8, -3])}),
+                ("signed-weights", {}, arrays | {"sw": sw}),
+                ("balanced", {"weight": "balanced"}, arrays | {"sw": sw}),
+                ("class-weight", {"weight": "explicit", "intercept_scaling": 2.3}, arrays | {"sw": sw}),
+                ("drop-class", {}, arrays | {"sw": (y == -3).astype(dtype)}),
+                ("warm-refit", {"refit_C": 0.4, "max_iter": 3, "exact_iterations": 1}, arrays),
+                ("zero-iter", {"max_iter": 0}, arrays),
+                ("one-iter", {"max_iter": 1, "seed": 19}, arrays),
+            ]:
+                yield f"{bits}-liblinear-{mode}-{scenario}", bits, base | options | params, data
+        yield f"{bits}-liblinear-explicit-l1", bits, base | {"penalty": "l1"}, arrays
+        limit_X = X.copy()
+        limit_X[0, 0] = dtype(1e30)
+        yield f"{bits}-liblinear-feature-limit", bits, base | {"max_iter": 0}, arrays | {"X": limit_X}
+        limit_X = limit_X.copy()
+        limit_X[0, 0] = np.nextafter(dtype(1e30), dtype(np.inf))
+        for scenario, params, data in [
+            ("multiclass", {}, arrays | {"y": np.where(np.arange(len(y)) == 0, 14, y)}),
+            ("one-class", {}, arrays | {"y": np.full_like(y, -3)}),
+            ("elasticnet", {"ratio": 0.5}, arrays),
+            ("dual-l1", {"dual": 1, "ratio": 1.0}, arrays),
+            ("unpenalized", {"unpenalized": 1}, arrays),
+            ("no-penalty", {"penalty": "None"}, arrays),
+            ("zero-tol", {"tol": 0}, arrays),
+            ("large-feature", {}, arrays | {"X": limit_X}),
+        ]:
+            yield f"{bits}-liblinear-invalid-{scenario}", bits, base | params | {"invalid": 1}, data
+
+
 def reference(model_type, params, arrays):
     verbose = 2 if params.get("backtracking") or params.get("cg_negative_curvature") else 0
     model = model_type(
+        penalty=None if params.get("penalty") == "None" else params.get("penalty", "deprecated"),
+        dual=bool(params.get("dual", 0)), l1_ratio=params.get("ratio", 0),
+        intercept_scaling=params.get("intercept_scaling", 1), random_state=params.get("seed"),
         solver=params.get("solver", "lbfgs"),
         C=np.inf if params["unpenalized"] else params["C"],
         tol=params["tol"], max_iter=params["max_iter"], fit_intercept=bool(params["intercept"]),
@@ -167,6 +259,7 @@ def reference(model_type, params, arrays):
     with warnings.catch_warnings(record=True) as diagnostics, redirect_stdout(trace):
         warnings.simplefilter("ignore", ConvergenceWarning)
         warnings.simplefilter("ignore", category=UserWarning)
+        warnings.simplefilter("ignore", FutureWarning)
         warnings.simplefilter("always", LinAlgWarning)
         model.fit(X, y, sample_weight=arrays.get("sw"))
         if "refit_C" in params:
@@ -177,10 +270,14 @@ def reference(model_type, params, arrays):
         assert "detected a negative curvature" in trace.getvalue()
     if params.get("singular"):
         assert any(issubclass(item.category, LinAlgWarning) for item in diagnostics)
-    assert model.coef_.dtype == model.intercept_.dtype == X.dtype
+    intercept = np.atleast_1d(model.intercept_)
+    if params.get("solver") == "liblinear":
+        assert model.coef_.dtype == intercept.dtype == np.float64
+    else:
+        assert model.coef_.dtype == intercept.dtype == X.dtype
     assert model.n_iter_.dtype == np.int32 and model.classes_.dtype == y.dtype
     return {
-        "classes": model.classes_, "coef": model.coef_, "intercept": model.intercept_,
+        "classes": model.classes_, "coef": model.coef_, "intercept": intercept,
         "iterations": model.n_iter_, "decision": model.decision_function(Z),
         "predictions": model.predict(Z), "probability": model.predict_proba(Z),
         "log_probability": model.predict_log_proba(Z),
@@ -190,8 +287,13 @@ def reference(model_type, params, arrays):
 
 def main():
     model_type = oracle()
-    cases = list(fixtures())
-    output = FAMILY / "builds/logistic"
+    with patch.object(_liblinear, "train_wrap", pinned_liblinear()):
+        compare(model_type)
+
+
+def compare(model_type):
+    cases = [*fixtures(), *liblinear_fixtures()]
+    output = OUTPUT
     fixture = output / "fixtures.txt"
     fixture.write_text("\n".join(case_line(*case) for case in cases) + "\n")
     completed = subprocess.run([output / "parity_driver", fixture], text=True, check=True, capture_output=True)
@@ -233,7 +335,7 @@ def main():
             widened_only += 1
         else:
             references.append(("native-dtype", expected))
-        if bits == 32:
+        if bits == 32 and solver != "liblinear":
             widened = {key: value if key == "y" else value.astype(np.float64) for key, value in arrays.items()}
             widened_result = reference(model_type, params, widened)
             if widened_result["classes"].size == 2:
@@ -257,7 +359,8 @@ def main():
                 actual = observed[ident][key]
                 if key == "iterations" and not exact_iterations:
                     assert actual.shape == wanted.shape == (1,)
-                    assert 0 < actual[0] <= params["max_iter"]
+                    minimum = 0 if solver == "liblinear" else 1
+                    assert minimum <= actual[0] <= params["max_iter"]
                     if kind == "native-dtype":
                         iteration_difference = max(iteration_difference, int(abs(actual[0] - wanted[0])))
                     continue
@@ -265,6 +368,8 @@ def main():
                     atol = 0
                 elif key == "score":
                     atol = 1e-7
+                elif solver == "liblinear":
+                    atol = 5e-6 if key in {"decision", "log_probability"} else 2e-6
                 elif bits == 32 and kind == "native-dtype":
                     atol = 3e-3 if key in {"decision", "log_probability"} else 9e-4
                 else:
@@ -275,7 +380,7 @@ def main():
                     wanted = wanted.astype(np.float64)
                     wanted -= wanted.mean(axis=axis, keepdims=True)
                 error = close(actual, wanted, 0, atol, f"{ident}/{kind}/{key}")
-                group = f"{bits}/{kind}/{key}"
+                group = f"{bits}/liblinear/{key}" if solver == "liblinear" else f"{bits}/{kind}/{key}"
                 maxima[group] = max(maxima.get(group, 0), error)
     print(f"PASS: {len(cases) - invalid} pinned dense logistic fits {fit_counts} and {invalid} input rejections."
           f" {widened_only} fits used only the widened oracle."

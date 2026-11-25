@@ -4,6 +4,7 @@
 
 from std.math import exp, inf, isfinite, log
 from numojo import NDArray, Shape, full, zeros
+from moxie._random import check_random_state
 from moxie.base import WeightedSupervisedEstimator
 from moxie.linear_model._base import ProbabilisticLinearClassifier
 from moxie.linear_model._contracts import validate_weights
@@ -16,6 +17,8 @@ from moxie.linear_model._logistic_solver import LogisticSolution, logistic_lbfgs
 from moxie.linear_model._ridge_labels import (
     ClassWeight, LabelEncoding, _label, accuracy, fit_labels,
 )
+from moxie.svm._contracts import LinearModel, LinearOptions
+from moxie.svm._liblinear import LibLinear
 from moxie.utils.validation import check_is_fitted
 
 
@@ -39,11 +42,11 @@ def _check_numeric_labels[dtype: DType](y: NDArray[dtype]) raises:
                     raise Error("ValueError: LogisticRegression labels must be finite integers")
 
 
-def _normalize_fit_weights[dtype: DType, label_dtype: DType](
+def _fit_weights[dtype: DType, label_dtype: DType](
     targets: List[Int], encoding: LabelEncoding[label_dtype],
     sample_weight: Optional[NDArray[dtype]], class_weight: Optional[ClassWeight],
     mut weights: NDArray[DType.float64],
-) raises -> Float64:
+) raises:
     var n = len(targets)
     if sample_weight:
         ref sw = sample_weight.value()
@@ -80,17 +83,16 @@ def _normalize_fit_weights[dtype: DType, label_dtype: DType](
             var product = weights.unsafe_get(i).cast[dtype]() * factor
             weights.unsafe_set(i, Float64(product))
 
-    var total = Float64(0)
     for i in range(n):
-        var weight = weights.unsafe_get(i)
-        if not isfinite(weight):
+        if not isfinite(weights.unsafe_get(i)):
             raise Error("ValueError: sample weights must be finite after class weighting")
-        total += weight
-    if not isfinite(total) or total <= 0:
-        raise Error("ValueError: logistic regression requires finite positive total weight")
-    for i in range(n):
-        weights.unsafe_set(i, weights.unsafe_get(i) / total)
-    return total
+
+
+@fieldwise_init
+struct _FittedCoefficients[dtype: DType](Movable):
+    var coef: NDArray[Self.dtype]
+    var intercept: NDArray[Self.dtype]
+    var iterations: Int
 
 
 @fieldwise_init
@@ -114,7 +116,7 @@ struct LogisticRegressionParams(Copyable, Movable):
 struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DType.int64](
     Copyable, ProbabilisticLinearClassifier, WeightedSupervisedEstimator,
 ):
-    """Dense L-BFGS logistic regression with sorted integer-valued numeric labels."""
+    """Dense logistic regression with sorted integer-valued numeric labels."""
 
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.label_dtype]
@@ -283,7 +285,7 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
         self._fit(X, y, Optional(weights^))
         return self
 
-    def _regularization_C(self) raises -> Float64:
+    def _regularization(self) raises -> Tuple[Float64, Bool]:
         if not (self.C > 0) or not (self.tol >= 0 and isfinite(self.tol)):
             raise Error("ValueError: LogisticRegression requires C > 0 and finite tol >= 0")
         if self.max_iter < 0 or self.verbose < 0:
@@ -294,23 +296,40 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             ref seed = self.random_state.value()
             if seed < 0 or seed > 4294967295:
                 raise Error("ValueError: random_state must be in [0, 2**32 - 1]")
-        if self.solver != "lbfgs" and self.solver != "newton-cholesky" and self.solver != "newton-cg":
+        var liblinear = self.solver == "liblinear"
+        if not liblinear and self.solver != "lbfgs" and self.solver != "newton-cholesky" and self.solver != "newton-cg":
             raise Error(String("NotImplementedError: LogisticRegression solver ", self.solver))
-        if self.dual:
+        if self.dual and not liblinear:
             raise Error("ValueError: LogisticRegression requires dual=False for the selected solver")
         var ratio = self.l1_ratio.or_else(0)
         if not (ratio >= 0 and ratio <= 1):
             raise Error("ValueError: l1_ratio must lie in [0, 1]")
-        if self.penalty:
-            ref penalty = self.penalty.value()
-            if penalty == "l2" or (penalty == "deprecated" and ratio == 0):
-                return self.C
-            if penalty != "deprecated" or self.C != inf[DType.float64]():
-                raise Error("ValueError: LogisticRegression supports L2 or no penalty for the selected solver")
-        return inf[DType.float64]()
+        var penalty = self.penalty.or_else(String("l2"))
+        var C = self.C
+        var unpenalized = not self.penalty
+        if penalty == "deprecated":
+            if not isfinite(C):
+                penalty = "l2"
+                unpenalized = True
+            elif ratio == 0:
+                penalty = "l2"
+            elif ratio == 1:
+                penalty = "l1"
+            else:
+                penalty = "elasticnet"
+        if liblinear:
+            if unpenalized or not isfinite(C) or (penalty != "l1" and penalty != "l2"):
+                raise Error("ValueError: liblinear requires finite C and an L1 or L2 penalty")
+            if self.dual and penalty == "l1":
+                raise Error("ValueError: liblinear requires L2 regularization when dual=True")
+        elif unpenalized:
+            C = inf[DType.float64]()
+        elif penalty != "l2":
+            raise Error("ValueError: LogisticRegression supports L2 or no penalty for the selected solver")
+        return C, penalty == "l1"
 
     def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
-        var C = self._regularization_C()
+        var C, l1 = self._regularization()
         if X.ndim != 2 or X.shape[0] == 0 or X.shape[1] == 0:
             raise Error("ValueError: LogisticRegression requires a nonempty feature matrix")
         if (y.ndim != 1 and (y.ndim != 2 or y.shape[1] != 1)) or y.shape[0] != X.shape[0]:
@@ -321,11 +340,79 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
         var classes = encoding.n_classes()
         if classes < 2:
             raise Error("ValueError: LogisticRegression requires at least two classes")
+        var liblinear = self.solver == "liblinear"
+        if liblinear and classes != 2:
+            raise Error("ValueError: liblinear supports binary classification only")
         var targets = List[Int](capacity=X.shape[0])
         for i in range(X.shape[0]):
             targets.append(encoding.index(_label(y, i, 0)))
         var weights = full[DType.float64](Shape(X.shape[0]), 1)
-        var mass = _normalize_fit_weights(targets, encoding, sample_weight, self.class_weight, weights)
+        _fit_weights(targets, encoding, sample_weight, self.class_weight, weights)
+        var fitted: _FittedCoefficients[Self.dtype]
+        if liblinear:
+            fitted = self._fit_liblinear(X, targets, weights, C, l1)
+        else:
+            fitted = self._fit_smooth(X, targets^, weights^, classes, C)
+        var iterations = full[DType.int32](Shape(1), Int32(fitted.iterations))
+        var labels = encoding.classes_array()
+        check_finite(fitted.coef, "coef_", "LogisticRegression")
+        check_finite(fitted.intercept, "intercept_", "LogisticRegression")
+        swap(self.coef_, fitted.coef)
+        swap(self.intercept_, fitted.intercept)
+        self.n_iter_ = iterations^
+        self.classes_ = labels^
+        self.n_features_in_ = X.shape[1]
+        self._encoding = encoding^
+
+    def _fit_liblinear(
+        self, X: Self.Input, targets: List[Int], weights: NDArray[DType.float64],
+        C: Float64, l1: Bool,
+    ) raises -> _FittedCoefficients[Self.dtype]:
+        var rows = X.shape[0]
+        var columns = X.shape[1]
+        for i in range(rows):
+            for j in range(columns):
+                if _entry(X, i, j) > Scalar[Self.dtype](1e30):
+                    raise Error("ValueError: liblinear requires the maximum feature value to be <= 1e30")
+        var labels = zeros[DType.float64](Shape(rows))
+        for i in range(rows):
+            labels.unsafe_set(i, Float64(targets[i]))
+        var class_costs = full[DType.float64](Shape(2), 1)
+        var solver_id = 6 if l1 else (7 if self.dual else 0)
+        var seed: Int
+        with check_random_state(self.random_state) as rng:
+            seed = rng[].randint(2147483647)
+        var options = LinearOptions(
+            solver_id, C, 0.0, self.tol, self.fit_intercept, self.intercept_scaling, self.max_iter, seed,
+        )
+        var engine = LibLinear()
+        var model: LinearModel
+        comptime if Self.dtype == DType.float64:
+            model = engine.solve(rebind[NDArray[DType.float64]](X), labels, weights, class_costs, options)
+        else:
+            # NuMojo astype traverses physical storage. Read the logical layout
+            # so Float32 sliced and reversed views widen correctly.
+            var widened = zeros[DType.float64](Shape(rows, columns))
+            for i in range(rows):
+                for j in range(columns):
+                    widened.unsafe_set(i * columns + j, Float64(_entry(X, i, j)))
+            model = engine.solve(widened, labels, weights, class_costs, options)
+        return _FittedCoefficients(
+            model.coef.astype[Self.dtype](), model.intercept.astype[Self.dtype](),
+            Int(model.iterations.unsafe_get(0)),
+        )
+
+    def _fit_smooth(
+        self, X: Self.Input, var targets: List[Int], var weights: NDArray[DType.float64],
+        classes: Int, C: Float64,
+    ) raises -> _FittedCoefficients[Self.dtype]:
+        var mass = Float64(0)
+        for i in range(len(targets)):
+            mass += weights.unsafe_get(i)
+        if not isfinite(mass) or mass <= 0:
+            raise Error("ValueError: logistic regression requires finite positive total weight")
+        for i in range(len(targets)):
+            weights.unsafe_set(i, weights.unsafe_get(i) / mass)
         var l2 = (1 / mass) / C if C < 1 else (1 / C) / mass
         if not isfinite(l2):
             raise Error("ValueError: LogisticRegression L2 strength overflows")
@@ -380,16 +467,7 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
                 var value = fitted.unsafe_get(intercept_start + k) - mean
                 intercept.unsafe_set(k, value.cast[Self.dtype]())
 
-        var iterations = full[DType.int32](Shape(1), Int32(solution.iterations))
-        var labels = encoding.classes_array()
-        check_finite(coef, "coef_", "LogisticRegression")
-        check_finite(intercept, "intercept_", "LogisticRegression")
-        self.coef_ = coef^
-        self.intercept_ = intercept^
-        self.n_iter_ = iterations^
-        self.classes_ = labels^
-        self.n_features_in_ = features
-        self._encoding = encoding^
+        return _FittedCoefficients(coef^, intercept^, solution.iterations)
 
     def _decision_matrix(self, X: Self.Input) raises -> Self.Decision:
         check_is_fitted(self)

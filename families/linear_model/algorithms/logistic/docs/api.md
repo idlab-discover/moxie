@@ -4,8 +4,11 @@ Import `LogisticRegression`, `LogisticRegressionParams` and `ClassWeight`
 from `moxie.linear_model`. The dense `lbfgs`, `newton-cg` and
 `newton-cholesky` solvers fit binary and multinomial problems with an L2
 penalty or an unpenalized objective. The defaults are `solver="lbfgs"` and
-L2. Set `C` to infinity or pass `None` as the penalty to remove
-regularization. Other solvers and L1 or elastic-net fitting are open work.
+L2. For these three solvers, set `C` to infinity or pass `None` as the
+penalty to remove regularization. For binary classification, `solver="liblinear"`
+supports primal L2, dual L2 and primal L1 with finite `C` and positive
+`tol`. Select L1 with `l1_ratio=1.0`. Additional solvers and elastic-net
+fitting are open work.
 
 ```mojo
 from moxie.linear_model import ClassWeight, LogisticRegression
@@ -42,15 +45,16 @@ var probabilities = model.fit(X, y).predict_proba(X)
   own state.
 - A normal fit replaces learned state. With `warm_start=True`, fit initializes
   from the previous coefficient matrix when its dimensions agree with the
-  current problem. An incompatible fit or invalid input leaves the previously
-  fitted state available.
+  current problem. LIBLINEAR starts each fit from scratch. An incompatible
+  fit or invalid input leaves the previously fitted state available.
 
 ## Numerical and runtime behavior
 
-The optimizer uses Float64 arithmetic in both feature dtypes. The returned
+The solvers use Float64 arithmetic in both feature dtypes. The returned
 coefficient, intercept, decision and probability arrays retain the feature
-dtype. The objective is the sample-weighted mean negative log likelihood plus
-`||coef||² / (2 * C * sum(effective_weights))`. Intercepts are unpenalized.
+dtype. For the three smooth solvers, the objective is the sample-weighted
+mean negative log likelihood plus `||coef||² / (2 * C * sum(effective_weights))`.
+Intercepts are unpenalized.
 The weighted mean requires a finite, positive sum. Balanced weights also
 require nonzero input mass in each class.
 
@@ -101,13 +105,31 @@ can drift along this direction. Moxie's Float64 arithmetic keeps a centered
 cold start close to centered, so raw coefficients and decision values may
 differ by that common offset.
 
+LIBLINEAR uses the existing `moxie.svm._liblinear` engine. Class weights are
+applied once to sample weights, and the engine drops nonpositive effective
+weights before optimization. At least one positive effective weight is
+required. Public `classes_` still records both original classes if one loses
+all its samples. The engine minimizes the sum of weighted logistic losses
+scaled by `C`, plus the L1 norm or half the squared L2 norm. When
+`fit_intercept=True`, the regularizer includes the synthetic bias
+coefficient and `intercept_scaling` sets its feature value.
+An integer `random_state` resets the shared MT19937 stream for each fit. With
+`None`, the solver draws its seed from Moxie's process-wide stream.
+
+For Float32 input, the wrapper widens the logical matrix to Float64 before
+calling the engine and casts the fitted arrays back to Float32. The pinned
+reference retains Float64 learned arrays and inference outputs for LIBLINEAR.
+Moxie keeps the same feature-dtype interface across solvers. With intercept
+disabled, Moxie returns a length-one zero intercept array where scikit-learn
+returns a scalar.
+
 The model retains the optimizer's accepted iterate on convergence stalls and
 iteration limits. An optimization attempt with no finite accepted iterate
 raises. Mojo exposes `n_iter_` and errors. Python's convergence and
 deprecation warnings, metadata routing, callback hooks and verbose logging
 are unavailable. `n_jobs` has no effect. `random_state` and
 `intercept_scaling` are accepted configuration parameters and have no effect
-with these solvers.
+with L-BFGS or either Newton solver.
 
 ## Focused validation
 
@@ -121,19 +143,29 @@ python tools/linear_model_checks.py logistic-composition
 
 The first command assembles the family namespace and builds both the native
 contracts and the differential driver. The second executes the estimator and
-linear-loss Python sources and the Newton-CG optimizer at scikit-learn
-revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`, using the locked
-support wheel and SciPy. The last compiles the StandardScaler pipeline
-through the integrated namespace and checks class order, decision scores,
-probabilities, accuracy, nested clone and nested parameter updates.
+linear-loss Python sources, the Newton-CG optimizer, the LIBLINEAR wrapper
+and the LIBLINEAR C++ sources at scikit-learn revision
+`4358542a1bd39af2e7e1cbace8b9fed067473c5b`, using the locked support wheel,
+SciPy and the SVM owner's C++ oracle adapter. The last compiles the
+StandardScaler pipeline through the integrated namespace and checks class
+order, decision scores, probabilities, accuracy, nested clone and nested
+parameter updates.
 
 The differential suite checks binary and multinomial fits in both dtypes
-for all three solvers. Cases cover weighting, unpenalized and warm-start
+for the three smooth solvers. Cases cover weighting, unpenalized and warm-start
 fits, zero and one iteration budgets, line-search backtracking, singular
 and nearly singular Hessians, stationary and negative-curvature Newton-CG
 starts, and invalid inputs. The native contracts compare the streamed
 Hessian-vector product against central differences of the analytic gradient
 with signed and zero weights.
+
+The LIBLINEAR matrix covers primal L1, primal L2, dual L2, signed and class
+weights, loss of one class after weight filtering, scaled and disabled
+bias, warm-start configuration, and limited iterations. It compares the
+native typed results against the Float64 reference with absolute bounds of
+`2e-6` for coefficients, intercepts and probabilities and `5e-6` for
+decisions and log probabilities. These bounds account for rounding back to
+Float32 and accumulation differences.
 
 The Float64 and widened Float32 oracles use absolute bounds of 2e-6 for
 coefficients, intercepts and probabilities and 5e-6 for decision and

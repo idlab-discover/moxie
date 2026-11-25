@@ -89,9 +89,9 @@ sentinels in a single object column. It also excludes arbitrary Python objects,
 bytes, mixed string/numeric scalars within a column, ordered-category comparison,
 automatic dtype promotion, and serialization adapters.
 
-This module does not yet provide a heterogeneous table, estimator adapters,
-standalone categorical `MissingIndicator`, or changes to impute/compose.
-Families exchange columns through this single core owner, following the
+[ColumnTable](compose/named-columns.md) stores these string columns alongside
+numeric data and supplies them to categorical transformers. Families exchange
+columns through this single core owner, following the
 [live-source development policy](family-development.md). Include
 `moxie._categorical` and NuMojo in the dependency manifest, retaining compatible
 toolchain locks; import the implementation from Moxie.

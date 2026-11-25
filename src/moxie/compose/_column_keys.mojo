@@ -30,9 +30,9 @@ struct KeyType:
 
 
 struct make_column_selector(Copyable, Movable, Writable):
-    """Column-selector configuration with native numeric dtype filtering.
+    """Column-selector configuration with native dtype filtering.
 
-    Native ColumnTable and ColumnSchema support numeric dtype filters. Unnamed
+    Native ColumnTable and ColumnSchema support numeric and categorical dtype filters. Unnamed
     arrays raise the reference error. Regex patterns raise explicitly pending
     the shared native regex capability; no substring approximation is used.
     """
@@ -59,7 +59,7 @@ struct make_column_selector(Copyable, Movable, Writable):
         return self(X.schema())
 
     def __call__(self, schema: ColumnSchema) raises -> ColumnKey:
-        """Select native column names by their actual numeric storage dtype."""
+        """Select native column names by their actual storage dtype."""
         if self.pattern:
             raise Error("NotImplementedError: regex column patterns require the shared native regex capability")
         var include = self.dtype_include.value().copy() if self.dtype_include else List[String]()
@@ -97,7 +97,7 @@ def _canonical_dtype(dtype: String) -> String:
 def _validate_dtype(dtype: String) raises:
     var known = List[String]("number", "floating", "float", "float32", "float64", "single", "double",
                              "integer", "signedinteger", "unsignedinteger", "int", "int8", "int16", "int32",
-                             "int64", "uint8", "uint16", "uint32", "uint64", "bool", "object", __list_literal__=None)
+                             "int64", "uint8", "uint16", "uint32", "uint64", "bool", "object", "category", __list_literal__=None)
     for item in known:
         if item == dtype:
             return
@@ -105,8 +105,9 @@ def _validate_dtype(dtype: String) raises:
 
 
 def _dtype_matches(filter: String, actual: String) -> Bool:
-    # ColumnTable currently admits only real floating-point storage.
-    return filter == "number" or filter == "floating" or _canonical_dtype(filter) == actual
+    if filter == "number" or filter == "floating":
+        return actual == "float32" or actual == "float64"
+    return _canonical_dtype(filter) == actual
 
 
 struct ColumnKey(Copyable, Movable, Writable):

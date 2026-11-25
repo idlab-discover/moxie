@@ -8,7 +8,7 @@ names in `sklearn.compose.__all__` have native implementations:
   parameter updates and cloning.
 - [TransformedTargetRegressor](target/api.md): target transformation,
   regression, inverse prediction, scoring and the LinearRegression default.
-- [ColumnTable and ColumnSchema](named-columns.md): native named numeric
+- [ColumnTable and ColumnSchema](named-columns.md): native named numeric and string categorical
   inputs, name-aligned selection and dtype filtering.
 
 Inputs and outputs use NuMojo Float32/Float64 dense arrays. These are typed
@@ -20,13 +20,12 @@ Sparse input/output, mixed sparse/dense stacking and density-based sparse
 output remain deferred (`sklearn/compose/_column_transformer.py::_hstack`).
 Sparse X in TransformedTargetRegressor is unavailable; sklearn also rejects
 sparse y. No implicit densification is provided. Use dense components, such
-as KBinsDiscretizer with `encode="onehot-dense"`. OneHotEncoder takes typed
-categorical columns rather than an `NDArray`, so it cannot be a component
-yet; see the [preprocessing composition notes](../../families/preprocessing/docs/api.md#composition). The default
+as KBinsDiscretizer with `encode="onehot-dense"` or OneHotEncoder with
+`sparse_output=False` on string categorical columns. The default
 `sparse_threshold=0.3` is valid for wholly dense components; zero explicitly
 requests dense output.
 
-Mixed-type native tables, regex selectors, Python dataframe bindings, metadata
+Regex selectors, Python dataframe bindings, metadata
 routing and HTML display are not implemented. Unsupported regex selection
 raises clearly. The typed component contracts reject unavailable capabilities.
 

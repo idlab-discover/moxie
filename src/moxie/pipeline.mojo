@@ -7,6 +7,6 @@ from ._pipeline_api import (
     make_union,
 )
 
-from ._pipeline_sequential import Pipeline, PipelineParams
+from ._pipeline_sequential import Pipeline, PipelineParams, TransformerPipeline
 
 from ._pipeline_union import FeatureUnion, FeatureUnionParams, UnionStep, union_step, UnionPair, UnionSentinel, UnionFeatureNames, UnionInputFeatures

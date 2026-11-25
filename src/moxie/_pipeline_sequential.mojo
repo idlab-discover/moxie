@@ -8,7 +8,7 @@ from moxie.base import (
     ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, SampleScorer,
 )
 from moxie._pipeline import validate_names
-from moxie._pipeline_contracts import PredictivePipeline
+from moxie._pipeline_contracts import PredictivePipeline, TransformingPipeline
 from moxie._pipeline_union import UnionFeatureNames, UnionInputFeatures
 from moxie.utils.validation import check_is_fitted
 
@@ -55,6 +55,24 @@ def _fit_transform[P: TransformerMixin, T: Copyable & Deinitable](
     raise Error("TypeError: pipeline target must be copyable and destructible")
 
 
+def _validate_pipeline_names(first: String, last: String) raises:
+    validate_names([first, last], ["steps", "memory", "verbose", "transform_input"])
+
+
+def _pipeline_feature_names[P: TransformerMixin, E: BaseEstimator](
+    first: P, last: E, first_name: String, last_name: String,
+    input_features: Optional[List[String]],
+) raises -> List[String]:
+    comptime if conforms_to(P, UnionFeatureNames):
+        var names = first.get_feature_names_out(input_features)
+        comptime if conforms_to(E, UnionFeatureNames):
+            return last.get_feature_names_out(Optional[List[String]](names^))
+        else:
+            raise Error("AttributeError: Estimator " + last_name + " does not provide get_feature_names_out")
+    else:
+        raise Error("AttributeError: Estimator " + first_name + " does not provide get_feature_names_out")
+
+
 struct Pipeline[
     P: TransformerMixin & Deinitable,
     E: SupervisedEstimator & Predictor & Deinitable,
@@ -98,8 +116,7 @@ struct Pipeline[
         self._validate_names()
 
     def _validate_names(self) raises:
-        validate_names([self.transformer_name, self.estimator_name],
-                       ["steps", "memory", "verbose", "transform_input"])
+        _validate_pipeline_names(self.transformer_name, self.estimator_name)
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(self.transformer_name, self.estimator_name,
@@ -112,8 +129,7 @@ struct Pipeline[
         ref[origin] self,
         ref[params_origin] params: Self.Params,
     ) raises -> ref[self] Self:
-        validate_names([params.transformer_name, params.estimator_name],
-                       ["steps", "memory", "verbose", "transform_input"])
+        _validate_pipeline_names(params.transformer_name, params.estimator_name)
         self.transformer_name = params.transformer_name
         self.estimator_name = params.estimator_name
         _ = self.transformer.set_params(params.transformer)
@@ -141,16 +157,9 @@ struct Pipeline[
         self, input_features: Optional[List[String]] = None,
     ) raises -> List[String]:
         """Pass names through every step; children own validation and fit checks."""
-        comptime if conforms_to(Self.P, UnionFeatureNames):
-            var names = self.transformer.get_feature_names_out(input_features)
-            comptime if conforms_to(Self.E, UnionFeatureNames):
-                return self.estimator.get_feature_names_out(Optional[List[String]](names^))
-            else:
-                raise Error("AttributeError: Estimator " + self.estimator_name +
-                            " does not provide get_feature_names_out")
-        else:
-            raise Error("AttributeError: Estimator " + self.transformer_name +
-                        " does not provide get_feature_names_out")
+        return _pipeline_feature_names(
+            self.transformer, self.estimator, self.transformer_name, self.estimator_name, input_features,
+        )
 
     def fit[
         origin: MutOrigin,
@@ -220,3 +229,107 @@ struct Pipeline[
             return rebind_var[Self.SampleScores](self.estimator.score_samples(rebind[Self.E.Input](transformed)))
         else:
             comptime assert False, "pipeline needs destructible intermediate values"
+
+
+def _fit_optional_step[P: TransformerMixin & UnsupervisedEstimator, T: Copyable & Deinitable](
+    mut step: P, X: P.Input, y: Optional[T],
+) raises -> P.Transformed:
+    comptime assert P.Target == T, "transformer pipeline target types must match"
+    comptime if conforms_to(P, FitTransformer):
+        return step.fit_transform(X, rebind[Optional[P.Target]](y))
+    else:
+        _ = step.fit(X, rebind[Optional[P.Target]](y))
+        return step.transform(X)
+
+
+struct TransformerPipeline[
+    P: TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable,
+    E: TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable,
+](TransformingPipeline, UnsupervisedEstimator, FitTransformer, Copyable, UnionFeatureNames):
+    """Two named transformer stages, nestable as ordinary transformers."""
+
+    comptime Input = Self.P.Input
+    comptime Target = Self.E.Target
+    comptime Transformed = Self.E.Transformed
+    comptime Params = PipelineParams[Self.P.Params, Self.E.Params]
+    var transformer_name: String
+    var estimator_name: String
+    var transformer: Self.P
+    var estimator: Self.E
+
+    def __init__(
+        out self, var transformer: Self.P, var estimator: Self.E,
+        *, transformer_name: String = "transformer", estimator_name: String = "estimator",
+    ) raises:
+        comptime assert Self.P.Transformed == Self.E.Input, "pipeline intermediate types must match"
+        comptime assert Self.P.Target == Self.E.Target, "transformer pipeline target types must match"
+        self.transformer_name = transformer_name
+        self.estimator_name = estimator_name
+        self.transformer = transformer^
+        self.estimator = estimator^
+        self._validate_names()
+
+    def _validate_names(self) raises:
+        _validate_pipeline_names(self.transformer_name, self.estimator_name)
+
+    def get_params(self, deep: Bool = True) raises -> Self.Params:
+        return Self.Params(self.transformer_name, self.estimator_name,
+                           self.transformer.get_params(deep), self.estimator.get_params(deep))
+
+    def set_params[
+        origin: MutOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
+        _validate_pipeline_names(params.transformer_name, params.estimator_name)
+        self.transformer_name = params.transformer_name
+        self.estimator_name = params.estimator_name
+        _ = self.transformer.set_params(params.transformer)
+        _ = self.estimator.set_params(params.estimator)
+        return self
+
+    def __sklearn_clone__(self) raises -> Self:
+        return Self(clone(self.transformer), clone(self.estimator),
+                    transformer_name=self.transformer_name, estimator_name=self.estimator_name)
+
+    def __sklearn_is_fitted__(self) -> Bool:
+        return self.estimator.__sklearn_is_fitted__()
+
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
+        self._validate_names()
+        comptime if conforms_to(Self.Target, Copyable & Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = _fit_optional_step(self.transformer, X, y)
+            _ = self.estimator.fit(rebind[Self.E.Input](transformed), y)
+        else:
+            comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
+        return self
+
+    def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
+        self._validate_names()
+        comptime if conforms_to(Self.Target, Copyable & Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = _fit_optional_step(self.transformer, X, y)
+            return _fit_optional_step(self.estimator, rebind[Self.E.Input](transformed), y)
+        else:
+            comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
+
+    def transform(self, X: Self.Input) raises -> Self.Transformed:
+        check_is_fitted(self)
+        comptime if conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = self.transformer.transform(X)
+            return self.estimator.transform(rebind[Self.E.Input](transformed))
+        else:
+            comptime assert False, "pipeline needs destructible intermediate values"
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
+        return _pipeline_feature_names(
+            self.transformer, self.estimator, self.transformer_name, self.estimator_name, input_features,
+        )

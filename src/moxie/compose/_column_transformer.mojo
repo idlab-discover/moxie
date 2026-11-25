@@ -4,9 +4,9 @@
 # sklearn/utils/metaestimators.py (_validate_names) and
 # sklearn/utils/_user_interface.py (_message_with_time); authors:
 # scikit-learn developers. SPDX-License-Identifier: BSD-3-Clause
-"""Apply transformers to column subsets of a dense array (`ColumnTransformer`)."""
+"""Apply transformers to selected columns and assemble a dense result."""
 from numojo import NDArray, Shape, zeros
-from moxie.compose._table import ColumnSchema, ColumnTable
+from moxie.compose._table import ColumnSchema, ColumnTable, StringColumn
 from std.reflection.type_info import _unqualified_type_name
 from std.time import perf_counter_ns
 from std.sys import num_logical_cores
@@ -27,7 +27,7 @@ from moxie.compose._column_keys import ColumnKey, KeyKind, KeyType, make_column_
 
 
 comptime ColumnComponent = TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable
-"""Column transformers: `Input`/`Transformed` are `NDArray[dtype]`.
+"""Column transformers with numeric or typed categorical inputs and dense output.
 
 A component that also conforms to `FitTransformer` is fitted with
 `fit_transform`, otherwise with `fit` then `transform` (sklearn's rule).
@@ -383,6 +383,53 @@ def _py_list(items: List[String]) -> String:
 # Dense helpers.
 
 
+struct _ColumnSource[dtype: DType, origin: ImmOrigin](Copyable, Movable):
+    """Borrow an array or named table throughout a composition call."""
+
+    var _array: Optional[Pointer[NDArray[Self.dtype], Self.origin]]
+    var _table: Optional[Pointer[ColumnTable[Self.dtype], Self.origin]]
+
+    def __init__(out self, X: Pointer[NDArray[Self.dtype], Self.origin]):
+        self._array = X
+        self._table = None
+
+    def __init__(out self, X: Pointer[ColumnTable[Self.dtype], Self.origin]):
+        self._array = None
+        self._table = X
+
+    def rows(self) raises -> Int:
+        if self._table:
+            return self._table.value()[].rows()
+        return self._array.value()[].shape[0]
+
+    def resolve(self, columns: Columns[Self.dtype], schema: Optional[ColumnSchema]) raises -> ColumnKey:
+        if self._array:
+            return columns.resolve(self._array.value()[])
+        if columns.function:
+            return columns.resolve(self._table.value()[].values(), schema)
+        if columns.key.is_callable():
+            return columns.key.selector.value()(schema.value())
+        return columns.key.copy()
+
+    def unnamed_width(self) raises -> Int:
+        return self._array.value()[].shape[1]
+
+    def numeric(self, indices: List[Int], scalar: Bool) raises -> NDArray[Self.dtype]:
+        if self._array:
+            return _select(self._array.value()[], indices, scalar)
+        ref table = self._table.value()[]
+        if len(table._categories) == 0:
+            return _select(table._data, indices, scalar)
+        return _select(table._data, table._numeric_indices(indices), scalar)
+
+    def categorical(self, indices: List[Int], scalar: Bool) raises -> List[StringColumn]:
+        if not self._table:
+            raise Error("TypeError: categorical components require a ColumnTable")
+        if scalar:
+            raise Error(_1D_MESSAGE)
+        return self._table.value()[].categorical_columns(indices)
+
+
 def _select[dtype: DType](X: NDArray[dtype], indices: List[Int], scalar: Bool) raises -> NDArray[dtype]:
     """`X[:, key]`: a vector for a scalar key, else an (n, k) matrix (owned)."""
     var n = X.shape[0]
@@ -484,34 +531,32 @@ def _fixed(value: Float64, width: Int) -> String:
 # Component calls (destructibility evidence for foundation associated types).
 
 
-def _fit_transform_impl[dtype: DType, E: ColumnComponent](
-    mut estimator: E, X: NDArray[dtype], y: Optional[NDArray[dtype]]
+def _fit_transform_impl[dtype: DType, E: ColumnComponent, A: Deinitable](
+    mut estimator: E, X: A, y: Optional[NDArray[dtype]]
 ) raises -> NDArray[dtype] where conforms_to(E.Input, Deinitable) and conforms_to(E.Target, Deinitable) and conforms_to(
     E.Transformed, Deinitable
 ):
-    var arg = rebind_var[E.Input](X.copy())
     comptime assert E.Target == NDArray[dtype], "column components take NDArray[dtype] targets"
     var target: Optional[E.Target] = None
     if y:
         target = rebind_var[E.Target](y.value().copy())
-    _ = estimator.fit(arg, target)
-    var out = estimator.transform(arg)
+    _ = estimator.fit(rebind[E.Input](X), target)
+    var out = estimator.transform(rebind[E.Input](X))
     return rebind_var[NDArray[dtype]](out^)
 
 
-def _fit_transform_combined[dtype: DType, E: ColumnComponent](
-    mut estimator: E, X: NDArray[dtype], y: Optional[NDArray[dtype]]
+def _fit_transform_combined[dtype: DType, E: ColumnComponent, A: Deinitable](
+    mut estimator: E, X: A, y: Optional[NDArray[dtype]]
 ) raises -> NDArray[dtype] where conforms_to(E, FitTransformer) and conforms_to(E.Input, Deinitable) and conforms_to(
     E.Target, Deinitable
 ) and conforms_to(E.Transformed, Deinitable):
     comptime assert E.Target == NDArray[dtype], "column components take NDArray[dtype] targets"
-    var arg = rebind_var[E.Input](X.copy())
     # The Optional is moved back to a destructible type after the call (on
     # every path), so no destructibility evidence for FitTransformer.Target
     # is needed.
     var target = rebind_var[Optional[E.Target]](y.copy())
     try:
-        var out = estimator.fit_transform(arg, target)
+        var out = estimator.fit_transform(rebind[E.Input](X), target)
         _ = rebind_var[Optional[NDArray[dtype]]](target^)
         return rebind_var[NDArray[dtype]](out^)
     except error:
@@ -519,18 +564,17 @@ def _fit_transform_combined[dtype: DType, E: ColumnComponent](
         raise error^
 
 
-def _transform_impl[dtype: DType, E: ColumnComponent](
-    estimator: E, X: NDArray[dtype]
+def _transform_impl[dtype: DType, E: ColumnComponent, A: Deinitable](
+    estimator: E, X: A
 ) raises -> NDArray[dtype] where conforms_to(E.Input, Deinitable) and conforms_to(E.Transformed, Deinitable):
-    var arg = rebind_var[E.Input](X.copy())
-    var out = estimator.transform(arg)
+    var out = estimator.transform(rebind[E.Input](X))
     return rebind_var[NDArray[dtype]](out^)
 
 
-def _fit_transform_one[dtype: DType, E: ColumnComponent](
-    mut estimator: E, X: NDArray[dtype], y: Optional[NDArray[dtype]]
+def _fit_transform_one[dtype: DType, E: ColumnComponent, A: Deinitable](
+    mut estimator: E, X: A, y: Optional[NDArray[dtype]]
 ) raises -> NDArray[dtype]:
-    comptime assert E.Input == NDArray[dtype], "column components take NDArray[dtype] input"
+    comptime assert E.Input == A, "column component input must match column storage"
     comptime assert E.Transformed == NDArray[dtype], "column components return NDArray[dtype]"
     comptime assert E.Target == NDArray[dtype], "column components take NDArray[dtype] targets"
     comptime if conforms_to(E.Input, Deinitable) and conforms_to(E.Target, Deinitable) and conforms_to(
@@ -541,14 +585,16 @@ def _fit_transform_one[dtype: DType, E: ColumnComponent](
         else:
             return _fit_transform_impl[dtype](estimator, X, y)
     else:
-        comptime assert False, "column components must use NDArray[dtype] arrays"
+        comptime assert False, "column component data types must be destructible"
 
 
-def _transform_one[dtype: DType, E: ColumnComponent](estimator: E, X: NDArray[dtype]) raises -> NDArray[dtype]:
+def _transform_one[dtype: DType, E: ColumnComponent, A: Deinitable](estimator: E, X: A) raises -> NDArray[dtype]:
+    comptime assert E.Input == A, "column component input must match column storage"
+    comptime assert E.Transformed == NDArray[dtype], "column components return NDArray[dtype]"
     comptime if conforms_to(E.Input, Deinitable) and conforms_to(E.Transformed, Deinitable):
         return _transform_impl[dtype](estimator, X)
     else:
-        comptime assert False, "column components must use NDArray[dtype] arrays"
+        comptime assert False, "column component data types must be destructible"
 
 
 def _names_out[E: ColumnComponent](estimator: E, selected: List[String]) raises -> List[String] where conforms_to(
@@ -632,9 +678,9 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
 
     # -- fit phases ---------------------------------------------------------
 
-    def resolve(mut self, X: NDArray[Self.dtype], schema: Optional[ColumnSchema] = None) raises:
-        var key = self.columns.resolve(X, schema)
-        self.indices_ = key.indices(schema.value()) if schema else key.indices(X.shape[1])
+    def resolve(mut self, X: _ColumnSource[Self.dtype, _], schema: Optional[ColumnSchema] = None) raises:
+        var key = X.resolve(self.columns, schema)
+        self.indices_ = key.indices(schema.value()) if schema else key.indices(X.unnamed_width())
         self.columns_ = key^
 
     def set_resolved(mut self, var key: ColumnKey, var indices: List[Int]):
@@ -645,8 +691,10 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
         """Drop entries and empty selections are not fitted (sklearn `_iter`)."""
         return self.transformer.mode() == Mode.DROP or self.columns_.value().is_empty()
 
+    # Keep component instantiations shared by the serial and parallel traversals.
+    @no_inline
     def fit_transform(
-        mut self, X: NDArray[Self.dtype], y: Optional[NDArray[Self.dtype]], context: FitContext, mut counter: Int,
+        mut self, X: _ColumnSource[Self.dtype, _], y: Optional[NDArray[Self.dtype]], context: FitContext, mut counter: Int,
         mut blocks: List[NDArray[Self.dtype]], mut names: List[String]
     ) raises:
         self.mode_ = self.transformer.mode()
@@ -658,17 +706,20 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
             return
         counter += 1
         var started = perf_counter_ns()
-        var selection = _select(X, self.indices_, self.columns_.value().is_scalar())
+        var scalar = self.columns_.value().is_scalar()
         var block: NDArray[Self.dtype]
         if self.mode_ == Mode.PASSTHROUGH:
-            block = selection^
+            block = X.numeric(self.indices_, scalar)
         else:
             comptime if conforms_to(Self.E, _ModeOnly):
                 raise Error("TypeError: NoTransformer entries hold no estimator")
             else:
                 var estimator = clone(self.transformer.estimator.value())
                 try:
-                    block = _fit_transform_one[Self.dtype](estimator, selection, y)
+                    comptime if Self.E.Input == List[StringColumn]:
+                        block = _fit_transform_one[Self.dtype](estimator, X.categorical(self.indices_, scalar), y)
+                    else:
+                        block = _fit_transform_one[Self.dtype](estimator, X.numeric(self.indices_, scalar), y)
                 except error:
                     raise _remap_1d(error)
                 self.fitted_ = estimator^
@@ -682,7 +733,8 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
 
     # -- fitted use ---------------------------------------------------------
 
-    def transform(self, X: NDArray[Self.dtype], weights: Optional[Dict[String, Float64]], mut blocks: List[NDArray[Self.dtype]],
+    @no_inline
+    def transform(self, X: _ColumnSource[Self.dtype, _], weights: Optional[Dict[String, Float64]], mut blocks: List[NDArray[Self.dtype]],
                   mut names: List[String], mapping: List[Int] = List[Int]()) raises:
         if not self.active_:
             return
@@ -692,16 +744,19 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
                 indices[i] = mapping[indices[i]]
                 if indices[i] < 0:
                     raise Error("ValueError: columns are missing from the named input")
-        var selection = _select(X, indices, self.columns_.value().is_scalar())
+        var scalar = self.columns_.value().is_scalar()
         var block: NDArray[Self.dtype]
         if self.mode_ == Mode.PASSTHROUGH:
-            block = selection^
+            block = X.numeric(indices, scalar)
         else:
             comptime if conforms_to(Self.E, _ModeOnly):
                 raise Error("TypeError: NoTransformer entries hold no estimator")
             else:
                 try:
-                    block = _transform_one[Self.dtype](self.fitted_.value(), selection)
+                    comptime if Self.E.Input == List[StringColumn]:
+                        block = _transform_one[Self.dtype](self.fitted_.value(), X.categorical(indices, scalar))
+                    else:
+                        block = _transform_one[Self.dtype](self.fitted_.value(), X.numeric(indices, scalar))
                 except error:
                     raise _remap_1d(error)
         if weights and self.name in weights.value():
@@ -788,10 +843,10 @@ trait ColumnList(Copyable, Movable, Deinitable):
     def active_before(self, index: Int) -> Int:
         ...
 
-    def fit_at(mut self, index: Int, X: NDArray[Self.dtype], y: Optional[NDArray[Self.dtype]], context: FitContext, mut counter: Int, mut result: _TaskResult[Self.dtype]) raises:
+    def fit_at(mut self, index: Int, X: _ColumnSource[Self.dtype, _], y: Optional[NDArray[Self.dtype]], context: FitContext, mut counter: Int, mut result: _TaskResult[Self.dtype]) raises:
         ...
 
-    def transform_at(self, index: Int, X: NDArray[Self.dtype], weights: Optional[Dict[String, Float64]], mapping: List[Int], mut result: _TaskResult[Self.dtype]) raises:
+    def transform_at(self, index: Int, X: _ColumnSource[Self.dtype, _], weights: Optional[Dict[String, Float64]], mapping: List[Int], mut result: _TaskResult[Self.dtype]) raises:
         ...
 
     def unfitted(self) raises -> Self:
@@ -806,7 +861,7 @@ trait ColumnList(Copyable, Movable, Deinitable):
     def all_valid(self, mut invalid: List[String]):
         ...
 
-    def resolve(mut self, X: NDArray[Self.dtype], mut used: List[Int], schema: Optional[ColumnSchema] = None) raises:
+    def resolve(mut self, X: _ColumnSource[Self.dtype, _], mut used: List[Int], schema: Optional[ColumnSchema] = None) raises:
         ...
 
     def key_types(self, mut types: List[Int]) raises:
@@ -815,11 +870,11 @@ trait ColumnList(Copyable, Movable, Deinitable):
     def count_active(self) -> Int:
         ...
 
-    def fit_transform(mut self, X: NDArray[Self.dtype], y: Optional[NDArray[Self.dtype]], context: FitContext,
+    def fit_transform(mut self, X: _ColumnSource[Self.dtype, _], y: Optional[NDArray[Self.dtype]], context: FitContext,
                       mut counter: Int, mut blocks: List[NDArray[Self.dtype]], mut names: List[String]) raises:
         ...
 
-    def transform(self, X: NDArray[Self.dtype], weights: Optional[Dict[String, Float64]], mut blocks: List[NDArray[Self.dtype]],
+    def transform(self, X: _ColumnSource[Self.dtype, _], weights: Optional[Dict[String, Float64]], mut blocks: List[NDArray[Self.dtype]],
                   mut names: List[String], mapping: List[Int] = List[Int]()) raises:
         ...
 
@@ -849,10 +904,10 @@ struct EndColumns[d: DType = DType.float64](ColumnList):
     def active_before(self, index: Int) -> Int:
         return 0
 
-    def fit_at(mut self, index: Int, X: NDArray[Self.dtype], y: Optional[NDArray[Self.dtype]], context: FitContext, mut counter: Int, mut result: _TaskResult[Self.dtype]) raises:
+    def fit_at(mut self, index: Int, X: _ColumnSource[Self.dtype, _], y: Optional[NDArray[Self.dtype]], context: FitContext, mut counter: Int, mut result: _TaskResult[Self.dtype]) raises:
         pass
 
-    def transform_at(self, index: Int, X: NDArray[Self.dtype], weights: Optional[Dict[String, Float64]], mapping: List[Int], mut result: _TaskResult[Self.dtype]) raises:
+    def transform_at(self, index: Int, X: _ColumnSource[Self.dtype, _], weights: Optional[Dict[String, Float64]], mapping: List[Int], mut result: _TaskResult[Self.dtype]) raises:
         pass
 
     def unfitted(self) raises -> Self:
@@ -867,7 +922,7 @@ struct EndColumns[d: DType = DType.float64](ColumnList):
     def all_valid(self, mut invalid: List[String]):
         pass
 
-    def resolve(mut self, X: NDArray[Self.dtype], mut used: List[Int], schema: Optional[ColumnSchema] = None) raises:
+    def resolve(mut self, X: _ColumnSource[Self.dtype, _], mut used: List[Int], schema: Optional[ColumnSchema] = None) raises:
         pass
 
     def key_types(self, mut types: List[Int]) raises:
@@ -876,11 +931,11 @@ struct EndColumns[d: DType = DType.float64](ColumnList):
     def count_active(self) -> Int:
         return 0
 
-    def fit_transform(mut self, X: NDArray[Self.dtype], y: Optional[NDArray[Self.dtype]], context: FitContext,
+    def fit_transform(mut self, X: _ColumnSource[Self.dtype, _], y: Optional[NDArray[Self.dtype]], context: FitContext,
                       mut counter: Int, mut blocks: List[NDArray[Self.dtype]], mut names: List[String]) raises:
         pass
 
-    def transform(self, X: NDArray[Self.dtype], weights: Optional[Dict[String, Float64]], mut blocks: List[NDArray[Self.dtype]],
+    def transform(self, X: _ColumnSource[Self.dtype, _], weights: Optional[Dict[String, Float64]], mut blocks: List[NDArray[Self.dtype]],
                   mut names: List[String], mapping: List[Int] = List[Int]()) raises:
         pass
 
@@ -914,13 +969,13 @@ struct ColumnCons[E: ColumnComponent, Rest: ColumnList](ColumnList):
             return 0
         return (0 if self.head.is_skipped() else 1) + self.tail.active_before(index - 1)
 
-    def fit_at(mut self, index: Int, X: NDArray[Self.dtype], y: Optional[NDArray[Self.dtype]], context: FitContext, mut counter: Int, mut result: _TaskResult[Self.dtype]) raises:
+    def fit_at(mut self, index: Int, X: _ColumnSource[Self.dtype, _], y: Optional[NDArray[Self.dtype]], context: FitContext, mut counter: Int, mut result: _TaskResult[Self.dtype]) raises:
         if index == 0:
             self.head.fit_transform(X, y, context, counter, result.blocks, result.names)
         else:
             self.tail.fit_at(index - 1, X, y, context, counter, result)
 
-    def transform_at(self, index: Int, X: NDArray[Self.dtype], weights: Optional[Dict[String, Float64]], mapping: List[Int], mut result: _TaskResult[Self.dtype]) raises:
+    def transform_at(self, index: Int, X: _ColumnSource[Self.dtype, _], weights: Optional[Dict[String, Float64]], mapping: List[Int], mut result: _TaskResult[Self.dtype]) raises:
         if index == 0:
             self.head.transform(X, weights, result.blocks, result.names, mapping)
         else:
@@ -942,7 +997,7 @@ struct ColumnCons[E: ColumnComponent, Rest: ColumnList](ColumnList):
             invalid.append(self.head.transformer.text)
         self.tail.all_valid(invalid)
 
-    def resolve(mut self, X: NDArray[Self.dtype], mut used: List[Int], schema: Optional[ColumnSchema] = None) raises:
+    def resolve(mut self, X: _ColumnSource[Self.dtype, _], mut used: List[Int], schema: Optional[ColumnSchema] = None) raises:
         self.head.resolve(X, schema)
         for index in self.head.indices_:
             used.append(index)
@@ -955,12 +1010,12 @@ struct ColumnCons[E: ColumnComponent, Rest: ColumnList](ColumnList):
     def count_active(self) -> Int:
         return (0 if self.head.is_skipped() else 1) + self.tail.count_active()
 
-    def fit_transform(mut self, X: NDArray[Self.dtype], y: Optional[NDArray[Self.dtype]], context: FitContext,
+    def fit_transform(mut self, X: _ColumnSource[Self.dtype, _], y: Optional[NDArray[Self.dtype]], context: FitContext,
                       mut counter: Int, mut blocks: List[NDArray[Self.dtype]], mut names: List[String]) raises:
         self.head.fit_transform(X, y, context, counter, blocks, names)
         self.tail.fit_transform(X, y, context, counter, blocks, names)
 
-    def transform(self, X: NDArray[Self.dtype], weights: Optional[Dict[String, Float64]], mut blocks: List[NDArray[Self.dtype]],
+    def transform(self, X: _ColumnSource[Self.dtype, _], weights: Optional[Dict[String, Float64]], mut blocks: List[NDArray[Self.dtype]],
                   mut names: List[String], mapping: List[Int] = List[Int]()) raises:
         self.head.transform(X, weights, blocks, names, mapping)
         self.tail.transform(X, weights, blocks, names, mapping)
@@ -1401,10 +1456,14 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
     # -- fitting --------------------------------------------------------------
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        return self._fit_transform(X, y)
+        self._validate_params()
+        self._check_input(X)
+        return self._fit_transform(_ColumnSource(Pointer(to=X)), X.shape[1], y)
 
     def fit_transform(mut self, X: ColumnTable[Self.dtype], y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        return self._fit_transform(X.values(), y, X.schema())
+        var schema = X.schema()
+        self._validate_params()
+        return self._fit_transform(_ColumnSource(Pointer(to=X)), len(schema.names), y, schema^)
 
     def fit[
         origin: MutOrigin,
@@ -1417,15 +1476,11 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
         _ = self.fit_transform(X, y)
         return self
 
-    def _fit_transform(mut self, X: Self.Input, y: Optional[Self.Target], schema: Optional[ColumnSchema] = None) raises -> Self.Transformed:
+    def _fit_transform(mut self, X: _ColumnSource[Self.dtype, _], n_features: Int, y: Optional[Self.Target], schema: Optional[ColumnSchema] = None) raises -> Self.Transformed:
         """Fit all transformers and return the horizontally stacked outputs.
 
         Learned state (including `n_features_in_`) is replaced only on success.
         """
-        self._validate_params()
-        self._check_input(X)
-        var n_features = X.shape[1]
-        var n_samples = X.shape[0]
         self._validate_transformers()
         var used = List[Int]()
         var blocks = List[NDArray[Self.dtype]]()
@@ -1486,7 +1541,7 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
             if blocks[b].ndim != 2:
                 raise Error(String("ValueError: The output of the '", names[b], "' transformer should be 2D ",
                                    "(numpy array, scipy sparse array, dataframe)."))
-        var output = zeros[Self.dtype](Shape(n_samples, 0)) if len(blocks) == 0 else _hstack(blocks)
+        var output = zeros[Self.dtype](Shape(X.rows(), 0)) if len(blocks) == 0 else _hstack(blocks)
         # Every step succeeded: publish the fitted state.
         self._fitted_transformers = fitted^
         if included:
@@ -1531,25 +1586,29 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
         """Transform with the fitted transformers and their fitted column indices."""
         check_is_fitted(self)
         self._check_input(X)
-        if X.shape[1] != self.n_features_in_.value():
-            raise Error(String("ValueError: X has ", X.shape[1], " features, but ColumnTransformer is expecting ",
+        self._check_feature_count(X.shape[1])
+        return self._transform(_ColumnSource(Pointer(to=X)))
+
+    def _check_feature_count(self, width: Int) raises:
+        if width != self.n_features_in_.value():
+            raise Error(String("ValueError: X has ", width, " features, but ColumnTransformer is expecting ",
                                self.n_features_in_.value(), " features as input."))
-        return self._transform(X)
 
     def transform(self, X: ColumnTable[Self.dtype]) raises -> Self.Transformed:
         check_is_fitted(self)
-        if not self.feature_names_in_:
-            return self.transform(X.values())
         var schema = X.schema()
+        if not self.feature_names_in_:
+            self._check_feature_count(len(schema.names))
+            return self._transform(_ColumnSource(Pointer(to=X)))
         var positions = Dict[String, Int]()
         for i in range(len(schema.names)):
             positions[schema.names[i]] = i
         var mapping = List[Int]()
         for name in self.feature_names_in_.value():
             mapping.append(positions[name] if name in positions else -1)
-        return self._transform(X.values(), mapping)
+        return self._transform(_ColumnSource(Pointer(to=X)), mapping)
 
-    def _transform(self, X: Self.Input, mapping: List[Int] = List[Int]()) raises -> Self.Transformed:
+    def _transform(self, X: _ColumnSource[Self.dtype, _], mapping: List[Int] = List[Int]()) raises -> Self.Transformed:
         var blocks = List[NDArray[Self.dtype]]()
         var names = List[String]()
         var tasks = Self.L.size + Int(Bool(self._remainder_entry))
@@ -1576,7 +1635,7 @@ struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dty
                 raise Error(String("ValueError: The output of the '", names[b], "' transformer should be 2D ",
                                    "(numpy array, scipy sparse array, dataframe)."))
         if len(blocks) == 0:
-            return zeros[Self.dtype](Shape(X.shape[0], 0))
+            return zeros[Self.dtype](Shape(X.rows(), 0))
         return _hstack(blocks)
 
     # -- fitted attributes ----------------------------------------------------

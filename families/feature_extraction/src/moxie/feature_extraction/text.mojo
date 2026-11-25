@@ -2,105 +2,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Native text feature extraction and explicit unsupported declarations."""
 from moxie.feature_extraction._api_types import APIValue
+from moxie.feature_extraction._count_vectorizer import (
+    CountVectorizer, CountVectorizerParams, DocumentFrequency, TextAnalysis, TextStopWords, TextVocabulary,
+)
+from moxie.feature_extraction._text_analysis import (
+    DocumentAnalyzer, DocumentPreprocessor, DocumentTokenizer, TextPreprocessor, TextTokenizer, strip_tags,
+)
 from moxie.feature_extraction._tfidf import TfidfTransformer, TfidfTransformerParams
-
-struct CountVectorizer(Movable):
-
-    "API scaffold for sklearn.feature_extraction.text.CountVectorizer. Operations are deferred."
-
-    var input: APIValue
-
-    var encoding: APIValue
-
-    var decode_error: APIValue
-
-    var strip_accents: APIValue
-
-    var lowercase: APIValue
-
-    var preprocessor: APIValue
-
-    var tokenizer: APIValue
-
-    var stop_words: APIValue
-
-    var token_pattern: APIValue
-
-    var ngram_range: APIValue
-
-    var analyzer: APIValue
-
-    var max_df: APIValue
-
-    var min_df: APIValue
-
-    var max_features: APIValue
-
-    var vocabulary: APIValue
-
-    var binary: APIValue
-
-    var dtype: APIValue
-
-    var vocabulary_: APIValue
-
-    var fixed_vocabulary_: APIValue
-
-    def get_metadata_routing(mut self) raises -> APIValue:
-        "Scikit-learn signature: get_metadata_routing(self)."
-        raise Error("NotImplementedError: CountVectorizer.get_metadata_routing is an API scaffold")
-
-    def get_params(mut self, deep: Some[Movable] = True) raises -> APIValue:
-        "Scikit-learn signature: get_params(self, deep=True)."
-        raise Error("NotImplementedError: CountVectorizer.get_params is an API scaffold")
-
-    def set_params(mut self, params: Some[Movable] = None) raises:
-        "Scikit-learn signature: set_params(self, **params)."
-        raise Error("NotImplementedError: CountVectorizer.set_params is an API scaffold")
-
-    def decode(mut self, doc: Some[Movable]) raises -> APIValue:
-        "Scikit-learn signature: decode(self, doc)."
-        raise Error("NotImplementedError: CountVectorizer.decode is an API scaffold")
-
-    def build_preprocessor(mut self) raises -> APIValue:
-        "Scikit-learn signature: build_preprocessor(self)."
-        raise Error("NotImplementedError: CountVectorizer.build_preprocessor is an API scaffold")
-
-    def build_tokenizer(mut self) raises -> APIValue:
-        "Scikit-learn signature: build_tokenizer(self)."
-        raise Error("NotImplementedError: CountVectorizer.build_tokenizer is an API scaffold")
-
-    def get_stop_words(mut self) raises -> APIValue:
-        "Scikit-learn signature: get_stop_words(self)."
-        raise Error("NotImplementedError: CountVectorizer.get_stop_words is an API scaffold")
-
-    def build_analyzer(mut self) raises -> APIValue:
-        "Scikit-learn signature: build_analyzer(self)."
-        raise Error("NotImplementedError: CountVectorizer.build_analyzer is an API scaffold")
-
-    def __init__(out self, *, input: Some[Movable] = "content", encoding: Some[Movable] = "utf-8", decode_error: Some[Movable] = "strict", strip_accents: Some[Movable] = None, lowercase: Some[Movable] = True, preprocessor: Some[Movable] = None, tokenizer: Some[Movable] = None, stop_words: Some[Movable] = None, token_pattern: Some[Movable] = "(?u)\\b\\w\\w+\\b", ngram_range: Some[Movable] = (1, 1), analyzer: Some[Movable] = "word", max_df: Some[Movable] = 1.0, min_df: Some[Movable] = 1, max_features: Some[Movable] = None, vocabulary: Some[Movable] = None, binary: Some[Movable] = False, dtype: Some[Movable] = DType.int64) raises:
-        "Scikit-learn signature: __init__(self, *, input='content', encoding='utf-8', decode_error='strict', strip_accents=None, lowercase=True, preprocessor=None, tokenizer=None, stop_words=None, token_pattern='(?u)\\\\b\\\\w\\\\w+\\\\b', ngram_range=(1, 1), analyzer='word', max_df=1.0, min_df=1, max_features=None, vocabulary=None, binary=False, dtype=np.int64)."
-        raise Error("NotImplementedError: CountVectorizer.__init__ is an API scaffold")
-
-    def fit(mut self, raw_documents: Some[Movable], y: Some[Movable] = None) raises:
-        "Scikit-learn signature: fit(self, raw_documents, y=None)."
-        raise Error("NotImplementedError: CountVectorizer.fit is an API scaffold")
-
-    def fit_transform(mut self, raw_documents: Some[Movable], y: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: fit_transform(self, raw_documents, y=None)."
-        raise Error("NotImplementedError: CountVectorizer.fit_transform is an API scaffold")
-
-    def transform(mut self, raw_documents: Some[Movable]) raises -> APIValue:
-        "Scikit-learn signature: transform(self, raw_documents)."
-        raise Error("NotImplementedError: CountVectorizer.transform is an API scaffold")
-
-    def inverse_transform(mut self, X: Some[Movable]) raises -> APIValue:
-        "Scikit-learn signature: inverse_transform(self, X)."
-        raise Error("NotImplementedError: CountVectorizer.inverse_transform is an API scaffold")
-
-    def get_feature_names_out(mut self, input_features: Some[Movable] = None) raises -> APIValue:
-        "Scikit-learn signature: get_feature_names_out(self, input_features=None)."
-        raise Error("NotImplementedError: CountVectorizer.get_feature_names_out is an API scaffold")
 
 struct HashingVectorizer(Movable):
 
@@ -309,9 +217,5 @@ def strip_accents_ascii(s: Some[Movable]) raises -> APIValue:
 def strip_accents_unicode(s: Some[Movable]) raises -> APIValue:
     "Scikit-learn signature: strip_accents_unicode(s)."
     raise Error("NotImplementedError: strip_accents_unicode is an API scaffold")
-
-def strip_tags(s: Some[Movable]) raises -> APIValue:
-    "Scikit-learn signature: strip_tags(s)."
-    raise Error("NotImplementedError: strip_tags is an API scaffold")
 
 from ._stop_words import ENGLISH_STOP_WORDS

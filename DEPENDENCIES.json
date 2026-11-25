@@ -2878,7 +2878,8 @@
     },
     {
       "assets": {
-        "licenses/feature-extraction-scikit-learn.txt": "algorithms/image/LICENSES/scikit-learn.txt"
+        "licenses/feature-extraction-scikit-learn.txt": "algorithms/image/LICENSES/scikit-learn.txt",
+        "licenses/feature-extraction-text-unicode.txt": "algorithms/text/LICENSE.unicode"
       },
       "exports": {
         "schema": 1,
@@ -2901,6 +2902,9 @@
         "moxie.feature_extraction._base": {
           "file": "src/moxie/feature_extraction/_base.mojo"
         },
+        "moxie.feature_extraction._count_vectorizer": {
+          "file": "algorithms/text/src/moxie/feature_extraction/_count_vectorizer.mojo"
+        },
         "moxie.feature_extraction._image_contracts": {
           "file": "src/moxie/feature_extraction/_image_contracts.mojo"
         },
@@ -2910,11 +2914,17 @@
         "moxie.feature_extraction._stop_words": {
           "file": "src/moxie/feature_extraction/_stop_words.mojo"
         },
+        "moxie.feature_extraction._text_analysis": {
+          "file": "algorithms/text/src/moxie/feature_extraction/_text_analysis.mojo"
+        },
         "moxie.feature_extraction._text_contracts": {
           "file": "src/moxie/feature_extraction/_text_contracts.mojo"
         },
         "moxie.feature_extraction._tfidf": {
           "file": "algorithms/text/src/moxie/feature_extraction/_tfidf.mojo"
+        },
+        "moxie.feature_extraction._unicode_data": {
+          "file": "algorithms/text/src/moxie/feature_extraction/_unicode_data.mojo"
         },
         "moxie.feature_extraction._validation": {
           "file": "src/moxie/feature_extraction/_validation.mojo"

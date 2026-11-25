@@ -156,6 +156,7 @@
             "SVCImportance": "moxie.feature_selection._svc_importance",
             "DenseSupervisedCV": "moxie.feature_selection._sequential_adapter",
             "DiscreteFeatures": "moxie.feature_selection._mutual_info",
+            "BayesianRidgeImportance": "moxie.feature_selection._linear_model_importance",
             "ElasticNetImportance": "moxie.feature_selection._linear_model_importance",
             "EstimatorCVScore": "moxie.feature_selection._sequential_adapter",
             "FeatureCount": "moxie.feature_selection._rfe",
@@ -218,7 +219,9 @@
             "LogisticRegression": "moxie.linear_model._logistic",
             "LogisticRegressionParams": "moxie.linear_model._logistic",
             "RidgeClassifier": "moxie.linear_model._ridge",
-            "RidgeClassifierParams": "moxie.linear_model._ridge"
+            "RidgeClassifierParams": "moxie.linear_model._ridge",
+            "BayesianRidge": "moxie.linear_model._bayes",
+            "BayesianRidgeParams": "moxie.linear_model._bayes"
           }
         },
         "schema": 1
@@ -275,6 +278,9 @@
         },
         "moxie.feature_selection._incremental_pca_importance": {
           "file": "src/moxie/feature_selection/_incremental_pca_importance.mojo"
+        },
+        "moxie.linear_model._bayes": {
+          "file": "src/moxie/linear_model/_bayes.mojo"
         },
         "moxie.feature_selection._linear_model_importance": {
           "file": "src/moxie/feature_selection/_linear_model_importance.mojo"

@@ -3,8 +3,8 @@
 `SelectFromModel` fits a cloned estimator or reads a prefitted one, then selects
 features by their importances. It delegates optimization to the wrapped model.
 The family supplies adapters for the live dense Lasso, ElasticNet, LinearRegression,
-Ridge, RidgeClassifier, LinearSVC, linear-kernel SVC, LogisticRegression,
-DecisionTreeClassifier and IncrementalPCA implementations.
+BayesianRidge, Ridge, RidgeClassifier, LinearSVC, linear-kernel SVC,
+LogisticRegression, DecisionTreeClassifier and IncrementalPCA implementations.
 Both Float32 and Float64 features are supported.
 
 ```mojo
@@ -69,10 +69,11 @@ at least one feature and finite values, matching the shared selector contract.
 `SelectionEstimator` extends the family's `ImportanceProvider` and base estimator
 contracts. An adapter supplies cloning, fitting, feature count, raw importances,
 and the default-threshold and NaN policies. The supplied `LassoImportance`,
-`ElasticNetImportance`, `LinearRegressionImportance` and `RidgeImportance`
-own a fitted or unfitted model in `.model`. Their `"auto"` and `"coef_"`
-getters return a copy of its coefficients. For LinearRegression and Ridge,
-the default threshold is the mean of the aggregated importances, as in sklearn.
+`ElasticNetImportance`, `LinearRegressionImportance`, `BayesianRidgeImportance`
+and `RidgeImportance` own a fitted or unfitted model in `.model`. Their
+`"auto"` and `"coef_"` getters return a copy of its coefficients. The default
+threshold for LinearRegression, BayesianRidge and Ridge is the mean of the
+aggregated importances, as in sklearn.
 Other getter strings fail clearly. An adapter
 for an estimator exposing both attributes must prefer `coef_` for `"auto"`.
 Custom getter logic belongs in a typed adapter's `importances` method; Python
@@ -94,6 +95,14 @@ regressor work with `SelectFromModel`, `RFE`, and
 for `X`, `y`, and optional sample weights. Vector targets keep vector
 coefficients and predictions. For matrix targets, coefficients have shape
 `(n_outputs, n_features)` and predictions retain the target's output axis.
+
+`BayesianRidgeImportance(BayesianRidge())` works with the same three selectors.
+Use a single target with shape `(n_samples,)` or `(n_samples, 1)` and optional
+sample weights with shape `(n_samples,)`. Use one dtype, Float32 or Float64,
+for features, targets and weights. The adapter exposes borrowed fluent fit and
+typed parameter records. With RFE and RFECV, `predict(X)` returns the posterior
+mean. For predictive standard deviations, call
+`selector.estimator_().model.predict_std(selector.transform(X))`.
 
 A data-dependent limit implements `FeatureLimitPolicy.resolve[dtype](X)` and is
 passed as `max_features=YourPolicy()`. It is evaluated during fit and stored as

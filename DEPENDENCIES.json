@@ -787,6 +787,7 @@
             "LogisticRegressionImportance": "moxie.feature_selection._logistic_importance",
             "DenseSupervisedCV": "moxie.feature_selection._sequential_adapter",
             "DiscreteFeatures": "moxie.feature_selection._mutual_info",
+            "BayesianRidgeImportance": "moxie.feature_selection._linear_model_importance",
             "ElasticNetImportance": "moxie.feature_selection._linear_model_importance",
             "EstimatorCVScore": "moxie.feature_selection._sequential_adapter",
             "FeatureCount": "moxie.feature_selection._rfe",

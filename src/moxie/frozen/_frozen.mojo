@@ -28,7 +28,7 @@ from moxie.base import (
     ClusterMixin,
 )
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
-from moxie._pipeline_contracts import PipelineSteps
+from moxie._pipeline_contracts import PipelineSlice, PipelineSteps, _SliceBound
 from moxie.compose._base import NamedColumnTransformers
 from moxie.metadata_routing import (
     FitScoreMetadataRequest,
@@ -41,11 +41,6 @@ from ._base import FrozenEstimatorAPI
 trait _FrozenIdentity(BaseEstimator):
     def _is_clusterer(self) -> Bool:
         ...
-
-
-comptime _SliceBound[bound: Int] = (
-    2 if bound >= 2 else (1 if bound == -1 else (0 if bound < 0 else bound))
-)
 
 
 struct FrozenPipelineSlice[
@@ -69,55 +64,51 @@ struct FrozenPipelineSlice[
         comptime assert 0 <= Self.stop and Self.stop <= 2, "invalid pipeline slice stop"
         self._parent = parent^
 
+    def _view[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> PipelineSlice[Self.Parent, origin_of(self._parent), Self.start, Self.stop]:
+        return PipelineSlice[Self.Parent, origin_of(self._parent), Self.start, Self.stop](
+            Pointer(to=self._parent)
+        )
+
     def __len__(self) -> Int:
-        return Self._size
+        return len(self._view())
 
     def step[origin: ImmOrigin, //, index: Int](ref[origin] self) -> ref[self._parent] Self.Parent.StepAt[
         Self.start + (index + Self._size if index < 0 else index)
     ]:
         """Borrow the selected step at a position relative to this slice."""
-        comptime position = index + Self._size if index < 0 else index
-        comptime assert 0 <= position and position < Self._size, "pipeline slice step index out of range"
-        return self._parent.step[Self.start + position]()
+        return self._view().step[index]()
 
     def named_step[origin: ImmOrigin, //, Step: BaseEstimator](
         ref[origin] self, name: StringSpan,
     ) raises -> ref[self._parent] Step:
         """Borrow a step by its original name and concrete type."""
-        var index = self._parent._step_index(name)
-        if index < Self.start or index >= Self.stop:
-            raise Error(t"KeyError: no pipeline slice step named '{name}'")
-        return self._parent.named_step[Step](name)
+        return self._view().named_step[Step](name)
 
     def estimator[origin: ImmOrigin](ref[origin] self) -> ref[origin] Self.Selected where Self._size > 0:
         """Borrow the estimator that executes this slice."""
-        comptime if Self._size == 2:
-            return rebind[ImmPointer[Self.Selected, origin]](Pointer(to=self._parent))[]
-        else:
-            return rebind[ImmPointer[Self.Selected, origin]](
-                Pointer(to=self._parent.step[Self.start]())
-            )[]
+        return rebind[ImmPointer[Self.Selected, origin]](
+            Pointer(to=self._view().estimator())
+        )[]
 
     def __sklearn_is_fitted__(self) -> Bool:
-        comptime if Self._size > 0:
-            return self.estimator().__sklearn_is_fitted__()
-        else:
-            return True
+        return self._view().__sklearn_is_fitted__()
 
     def transform(
         self, X: Self.Input,
     ) raises -> Self.Transformed where Self._size > 0 and conforms_to(Self.Selected, TransformerMixin):
-        return self.estimator().transform(X)
+        return self._view().transform(X)
 
     def predict(
         self, X: Self.Input,
     ) raises -> Self.Prediction where Self._size > 0 and conforms_to(Self.Selected, Predictor):
-        return self.estimator().predict(X)
+        return self._view().predict(X)
 
     def predict_proba(
         self, X: Self.Input,
     ) raises -> Self.Probabilities where Self._size > 0 and conforms_to(Self.Selected, ProbabilityPredictor):
-        return self.estimator().predict_proba(X)
+        return self._view().predict_proba(X)
 
 
 @fieldwise_init

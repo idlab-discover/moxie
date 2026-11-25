@@ -63,7 +63,22 @@ borrow the stored child immutably, before or after fitting. The public child
 fields support mutation. `FrozenEstimator` follows the same
 [access contract](../frozen/api.md#access-to-pipeline-steps).
 The [step parity check](../../tests/pipeline/steps_parity.py) compares
-lengths, step selection and fitted child outputs with pinned scikit-learn.
+lengths, step selection, slices and fitted outputs with pinned scikit-learn.
+
+Use `pipe.slice[stop=-1]()` for the prefix, `pipe.slice[-1]()` for the final
+step, and `pipe.slice[]()` for both. Bounds are compile-time, half-open and
+clipped like Python slice bounds. Only stride 1 is accepted. Slices count
+immediate steps, so a nested pipeline remains one step at its parent level.
+
+A slice borrows its source and provides read-only access to the selected fitted
+steps. Its `step` and `named_step` accessors work within the selected range.
+Nonempty slices forward `transform`, `predict`, `predict_proba` and
+`get_feature_names_out` when the selected estimator supports them.
+`view.estimator()` borrows that estimator for other read-only capabilities.
+An empty slice has length zero and reports fitted, with no inference methods.
+The source must outlive use of its slice. The view observes a later fit on the
+source, and its step accessors borrow children immutably. In sklearn, a slice
+can also mutate the shared children directly.
 
 `PipelineParams` holds both names and both child parameter records. `deep` is
 forwarded to each child; the native record shape is unchanged for `deep=False`.
@@ -106,8 +121,9 @@ Pipeline does not add step prefixes, remove duplicate names, or impose a fitted
 check of its own. Empty lists are forwarded as supplied. Missing capabilities
 raise an AttributeError-style error identifying the step; earlier child errors
 propagate first. A final predictor without feature names therefore raises.
-The current API has no slicing: request prefix names directly from
-`pipe.transformer.get_feature_names_out(...)` when only those are needed.
+Request names for just the prefix with
+`pipe.slice[stop=-1]().get_feature_names_out(...)` when the prefix supports
+feature names.
 
 The native result is an owned `List[String]`, rather than NumPy's string array;
 input names are borrowed and are not mutated by the container. Native contracts
@@ -481,10 +497,10 @@ from the pinned checkout, after building `test_pipeline_cluster.mojo` and
 This implementation exposes fit, final-step weighted fit, conditional fit_predict,
 predict, conditional transforms and score, per-sample scores, decision and probability methods,
 ordered numeric classes, feature names, input feature counts, configuration,
-typed step access, length, cloning and the two factories. The following sklearn Pipeline
+typed step access, read-only slicing, length, cloning and the two factories. The following sklearn Pipeline
 API is **deferred** (absent from the typed API, so use fails at compile time):
 
-- `passthrough`/`None` steps, slice indexing and a heterogeneous `named_steps` mapping;
+- `passthrough`/`None` steps and a heterogeneous `named_steps` mapping;
 - constructor options `memory`, `verbose` and `transform_input`;
 - arbitrary fit parameter routing, metadata routing, callbacks,
   `set_output` and `feature_names_in_`.

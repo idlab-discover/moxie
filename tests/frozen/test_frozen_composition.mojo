@@ -292,12 +292,12 @@ def kfold_splits(n: Int) raises -> List[IndexSplit]:
 
 
 def check_fitted_cv_and_search[E: ClassifierMixin & Deinitable](
-    frozen: FrozenEstimator[E], X: Dense, y: List[Int], name: String,
+    frozen: FrozenEstimator[E], X: FrozenEstimator[E].Input, y: List[Int], name: String,
 ) raises:
     comptime assert E.Prediction == List[Int]
     comptime Adapter = DenseSupervisedAdapter[FrozenEstimator[E], List[Int]]
     var adapter = Adapter()
-    var original = rebind_var[List[Int]](frozen.predict(rebind[E.Input](X)))
+    var original = rebind_var[List[Int]](frozen.predict(X))
     var scores = cross_val_score[Adapter](frozen, X, y, adapter)
     var evaluation = cross_validate[Adapter](
         frozen, X, y, adapter, return_estimator=True,
@@ -309,7 +309,7 @@ def check_fitted_cv_and_search[E: ClassifierMixin & Deinitable](
         assert_equal(scores.item(fold), evaluation.scores.test_scores.item(0, fold, 0))
         ref fitted = evaluation.estimators.value()[fold]
         assert_true(fitted.__sklearn_is_fitted__())
-        assert_equal(rebind_var[List[Int]](fitted.predict(rebind[E.Input](X))), original)
+        assert_equal(rebind_var[List[Int]](fitted.predict(X)), original)
         print("frozen_cv", name, "default", fold, scores.item(fold))
 
     var explicit = cross_val_score[Adapter](
@@ -339,7 +339,7 @@ def check_fitted_cv_and_search[E: ClassifierMixin & Deinitable](
     var random_predictions = rebind_var[List[Int]](random.predict(X))
     assert_equal(grid_predictions, original)
     assert_equal(random_predictions, original)
-    assert_equal(rebind_var[List[Int]](frozen.predict(rebind[E.Input](X))), original)
+    assert_equal(rebind_var[List[Int]](frozen.predict(X)), original)
     assert_equal(search.best_score_(), random.best_score_())
     print("frozen_search", name, "grid", search.best_score_())
     print("frozen_search", name, "random", random.best_score_())

@@ -4,7 +4,7 @@ from moxie.dummy import DummyRegressor
 from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
 from numojo import Shape, zeros
-from std.testing import assert_equal, assert_false, assert_true
+from std.testing import assert_equal, assert_false, assert_raises, assert_true
 
 
 def main() raises:
@@ -16,6 +16,8 @@ def main() raises:
     assert_equal(len(pipe), 2)
     assert_false(pipe.step[0]().__sklearn_is_fitted__())
     assert_false(pipe.step[-1]().__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = pipe.slice[stop=-1]().transform(X)
     _ = pipe.fit(X, y)
     assert_true(Pointer(to=pipe.step[0]()) == Pointer(to=pipe.step[-2]()))
     assert_true(Pointer(to=pipe.step[1]()) == Pointer(to=pipe.step[-1]()))
@@ -28,6 +30,24 @@ def main() raises:
     var transformed = pipe.step[0]().transform(X)
     var prediction = last.predict(transformed)
     print("supervised", len(pipe), transformed.item(0), prediction.item(0))
+
+    var prefix = pipe.slice[stop=-1]()
+    var tail = pipe.slice[-1, 99]()
+    var full = pipe.slice[-99, 99]()
+    var empty = pipe.slice[2, 0]()
+    var names = prefix.get_feature_names_out()
+    assert_equal(len(names), 1)
+    print("slice_feature", names[0])
+    assert_true(Pointer(to=prefix.step[-1]()) == Pointer(to=pipe.step[0]()))
+    assert_true(Pointer(to=tail.named_step[DummyRegressor[]](name)) == Pointer(to=last))
+    assert_true(Pointer(to=full.estimator()) == Pointer(to=pipe))
+    assert_true(empty.__sklearn_is_fitted__())
+    with assert_raises(contains="KeyError"):
+        _ = prefix.named_step[DummyRegressor[]](name)
+    with assert_raises(contains="TypeError"):
+        _ = tail.named_step[StandardScaler[]](name)
+    print("slices", len(prefix), len(tail), len(full), len(empty),
+          prefix.transform(X).item(0), tail.predict(transformed).item(0), full.predict(X).item(0))
 
     var fresh = clone(pipe)
     assert_false(fresh.named_step[DummyRegressor[]](name).__sklearn_is_fitted__())
@@ -62,4 +82,11 @@ def main() raises:
     ref final_scaler = scalers.named_step[StandardScaler[]]("standardscaler-2")
     assert_true(Pointer(to=final_scaler) == Pointer(to=scalers.step[-1]()))
     var both = final_scaler.transform(scalers.step[0]().transform(X))
-    print("transformers", len(scalers), both.item(0))
+    print("transformers", len(scalers), both.item(0), scalers.slice[]().transform(X).item(0))
+
+    var live_prefix = scalers.slice[stop=1]()
+    var shifted = X.copy()
+    shifted.itemset(0, 4)
+    shifted.itemset(1, 6)
+    _ = scalers.fit(shifted)
+    print("refit_slice", live_prefix.transform(X).item(0))

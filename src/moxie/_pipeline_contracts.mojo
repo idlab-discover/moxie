@@ -1,5 +1,8 @@
 """Stable pipeline capability traits, re-exported by moxie.pipeline."""
-from moxie.base import BaseEstimator, Predictor, TransformerMixin
+from moxie.base import (
+    BaseEstimator, InputEstimator, Predictor, ProbabilityPredictor, TransformerMixin,
+)
+from moxie._feature_metadata import FeatureNamesOut
 
 
 trait PipelineEstimator(BaseEstimator):
@@ -68,3 +71,98 @@ trait PipelineSteps(BaseEstimator, Sized):
                     Pointer(to=self._final_step())
                 )[]
         raise Error(t"TypeError: pipeline step '{name}' has a different type")
+
+
+comptime _SliceBound[bound: Int] = (
+    2 if bound >= 2 else (1 if bound == -1 else (0 if bound < 0 else bound))
+)
+
+
+trait SliceablePipeline(PipelineSteps):
+    """A sequential pipeline whose steps can be borrowed as a range."""
+
+    def slice[origin: ImmOrigin, //, start: Int = 0, stop: Int = 2, stride: Int = 1](
+        ref[origin] self,
+    ) -> PipelineSlice[Self, origin, _SliceBound[start], _SliceBound[stop]]:
+        """Borrow a read-only half-open range of immediate pipeline steps."""
+        comptime assert stride == 1, "pipeline slicing only supports a step of 1"
+        return PipelineSlice[Self, origin, _SliceBound[start], _SliceBound[stop]](
+            Pointer(to=self)
+        )
+
+
+struct PipelineSlice[
+    Parent: PipelineSteps,
+    parent_origin: ImmOrigin,
+    start: Int,
+    stop: Int,
+](Sized):
+    """An immutable view tied to the lifetime of its source pipeline."""
+
+    comptime _size = Self.stop - Self.start if Self.stop > Self.start else 0
+    comptime Selected = Self.Parent if Self._size == 2 else Self.Parent.StepAt[Self.start]
+    comptime Input where conforms_to(Self.Selected, InputEstimator) = Self.Selected.Input
+    comptime Transformed where conforms_to(Self.Selected, TransformerMixin) = Self.Selected.Transformed
+    comptime Prediction where conforms_to(Self.Selected, Predictor) = Self.Selected.Prediction
+    comptime Probabilities where conforms_to(Self.Selected, ProbabilityPredictor) = Self.Selected.Probabilities
+
+    var _parent: Pointer[Self.Parent, origin=Self.parent_origin]
+
+    def __init__(out self, parent: Pointer[Self.Parent, origin=Self.parent_origin]):
+        comptime assert 0 <= Self.start and Self.start <= 2, "invalid pipeline slice start"
+        comptime assert 0 <= Self.stop and Self.stop <= 2, "invalid pipeline slice stop"
+        self._parent = parent
+
+    def __len__(self) -> Int:
+        return Self._size
+
+    def step[index: Int](self) -> ref[Self.parent_origin] Self.Parent.StepAt[
+        Self.start + (index + Self._size if index < 0 else index)
+    ]:
+        """Borrow a stored step at a position relative to this slice."""
+        comptime position = index + Self._size if index < 0 else index
+        comptime assert 0 <= position and position < Self._size, "pipeline slice step index out of range"
+        return self._parent[].step[Self.start + position]()
+
+    def named_step[Step: BaseEstimator](self, name: StringSpan) raises -> ref[Self.parent_origin] Step:
+        """Borrow a stored step by its original name and type."""
+        var index = self._parent[]._step_index(name)
+        if index < Self.start or index >= Self.stop:
+            raise Error(t"KeyError: no pipeline slice step named '{name}'")
+        return self._parent[].named_step[Step](name)
+
+    def estimator(self) -> ref[Self.parent_origin] Self.Selected where Self._size > 0:
+        """Borrow the pipeline or single step that executes the selected range."""
+        comptime if Self._size == 2:
+            return rebind[Pointer[Self.Selected, origin=Self.parent_origin]](self._parent)[]
+        else:
+            return rebind[Pointer[Self.Selected, origin=Self.parent_origin]](
+                Pointer(to=self.step[0]())
+            )[]
+
+    def __sklearn_is_fitted__(self) -> Bool:
+        comptime if Self._size > 0:
+            return self.estimator().__sklearn_is_fitted__()
+        else:
+            return True
+
+    def transform(
+        self, X: Self.Input,
+    ) raises -> Self.Transformed where Self._size > 0 and conforms_to(Self.Selected, TransformerMixin):
+        return self.estimator().transform(X)
+
+    def predict(
+        self, X: Self.Input,
+    ) raises -> Self.Prediction where Self._size > 0 and conforms_to(Self.Selected, Predictor):
+        return self.estimator().predict(X)
+
+    def predict_proba(
+        self, X: Self.Input,
+    ) raises -> Self.Probabilities where Self._size > 0 and conforms_to(Self.Selected, ProbabilityPredictor):
+        return self.estimator().predict_proba(X)
+
+
+    def get_feature_names_out(
+        self, input_features: Optional[List[String]] = None,
+    ) raises -> List[String] where Self._size > 0 and conforms_to(Self.Selected, FeatureNamesOut):
+        return self.estimator().get_feature_names_out(input_features)

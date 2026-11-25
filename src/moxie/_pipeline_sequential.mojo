@@ -10,7 +10,7 @@ from moxie.base import (
     ClusterMixin, DensityMixin, FitPredictor, OutlierMixin, UnsupervisedScorer,
 )
 from moxie._pipeline import validate_names
-from moxie._pipeline_contracts import PipelineEstimator, PipelineSteps, PredictivePipeline, TransformingPipeline
+from moxie._pipeline_contracts import PipelineEstimator, PredictivePipeline, SliceablePipeline, TransformingPipeline
 from moxie._pipeline_union import UnionFeatureNames, UnionInputFeatures
 from moxie.utils.validation import check_is_fitted
 
@@ -87,7 +87,7 @@ def _pipeline_feature_names[P: TransformerMixin, E: BaseEstimator](
 struct Pipeline[
     P: TransformerMixin & Deinitable,
     E: SupervisedEstimator & Predictor & Deinitable,
-](SupervisedEstimator, PredictivePipeline, PipelineSteps, UnionFeatureNames, UnionInputFeatures, InputFeatureCount,
+](SupervisedEstimator, PredictivePipeline, SliceablePipeline, UnionFeatureNames, UnionInputFeatures, InputFeatureCount,
   Copyable where conforms_to(P, Copyable) and conforms_to(E, Copyable),
   TransformingPipeline where conforms_to(E, TransformerMixin),
   FitTransformer where conforms_to(E, FitTransformer) or conforms_to(E, TransformerMixin),
@@ -376,7 +376,7 @@ struct TransformerPipeline[
     E: UnsupervisedEstimator & Deinitable,
 ](
     PipelineEstimator,
-    PipelineSteps,
+    SliceablePipeline,
     UnsupervisedEstimator,
     Copyable where conforms_to(P, Copyable) and conforms_to(E, Copyable),
     UnionFeatureNames,

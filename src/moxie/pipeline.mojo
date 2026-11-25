@@ -1,5 +1,5 @@
 """Pipeline family contracts and typed sequential execution. See docs/pipeline/sequential.md."""
-from ._pipeline_contracts import PipelineEstimator, PredictivePipeline, TransformingPipeline
+from ._pipeline_contracts import PipelineEstimator, PipelineSlice, PredictivePipeline, TransformingPipeline
 
 # Public scikit-learn API scaffold.
 from ._pipeline_api import (

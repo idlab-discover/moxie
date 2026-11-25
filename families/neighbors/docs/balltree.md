@@ -65,7 +65,8 @@ of the supported numerical domain.
 
 Point distances retain the family's arithmetic and inclusive radius boundaries;
 the local mojo-datastructures reference's outward-rounded distance is not used.
-Float32 arithmetic widens before output conversion. Ties use original row IDs.
+Fitted data, bounds and query distances retain the feature dtype. Kernel
+densities and log densities always return a Float64 NDArray. Ties use original row IDs.
 Arbitrary Minkowski powers retain the shared metric's numerical limitations.
 Counters count point comparisons, excluding centroid/bound calculations; their
 values need not equal sklearn's counters. Construction and queries have the same

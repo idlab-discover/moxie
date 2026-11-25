@@ -39,11 +39,15 @@ def native(X, Y, metric='euclidean', p=2, leaf=2, k=3, dual=False, breadth=False
                 min(k, len(X)), int(dual), int(breadth), kernel, h, int(return_log),
                 int(weights is not None), atol, rtol]
         output = subprocess.check_output([str(ROOT/'builds/evaluate_kdtree'), *map(str, args)], text=True)
-    result = {tag: [] for tag in 'QORCDTNIB'}
+    rows = {tag: [] for tag in 'QORCDTNIB'}
+    metadata = {}
     for line in output.splitlines():
         tag, *values = line.split()
-        result[tag].append(list(map(float, values)))
-    return {tag: np.array(rows) for tag, rows in result.items()}
+        if tag == 'dtype':
+            metadata[tag] = tuple(map(np.dtype, values))
+        else:
+            rows[tag].append(list(map(float, values)))
+    return {**{tag: np.array(values) for tag, values in rows.items()}, **metadata}
 
 
 def independent_cases():
@@ -136,9 +140,39 @@ class NativeTree:
             distances.append(row[:,1].astype(self.X.dtype) if len(row) else np.array([],dtype=self.X.dtype))
         return (ids,distances) if return_distance else ids
     def kernel_density(self,Y,h,kernel='gaussian',atol=0,rtol=1e-8,breadth_first=True):
-        return native(self.X,np.atleast_2d(Y),self.metric,self.p,self.leaf,kernel=kernel,h=h,atol=atol,rtol=rtol,breadth=breadth_first)['D'].ravel().astype(self.X.dtype)
+        return native(self.X,np.atleast_2d(Y),self.metric,self.p,self.leaf,kernel=kernel,h=h,atol=atol,rtol=rtol,breadth=breadth_first)['D'].ravel()
     def two_point_correlation(self,Y,r,dualtree=False):
         return native(self.X,np.atleast_2d(Y),self.metric,self.p,self.leaf,radii=r,dual=dualtree)['T'].ravel()
+
+
+class PrivateFloat32Tree(NativeTree):
+    """Adapt density only for sklearn's private KDTree32/BallTree32 tests."""
+    def __init__(self, X, **kwargs):
+        super().__init__(np.asarray(X, dtype=np.float32), **kwargs)
+
+    def kernel_density(self, *args, **kwargs):
+        return super().kernel_density(*args, **kwargs).astype(np.float32)
+
+
+def check_public_dtypes(tree_class, native_tree):
+    for dtype in [np.float32, np.float64]:
+        # The same fixture gives a density above the Float32 range and a
+        # positive density below its smallest subnormal.
+        X = np.zeros((3, 3), dtype=dtype)
+        Y = X.copy()
+        h = 2.0**-46
+        Y[1, 0] = 22 * h
+        tree = tree_class(X)
+        query_distances, _ = tree.query(Y)
+        _, radius_distances = tree.query_radius(Y, 1, return_distance=True)
+        assert np.asarray(tree.data).dtype == query_distances.dtype == radius_distances[0].dtype == np.float64
+        for return_log in [False, True]:
+            expected = tree.kernel_density(Y, h, return_log=return_log)
+            assert expected.dtype == np.float64
+            got = native_tree(X, Y, h=h, return_log=return_log)
+            assert got['dtype'] == (np.dtype(dtype),) * 3 + (expected.dtype,)
+            assert_allclose(got['D'].ravel(), expected, rtol=2e-12, atol=0)
+    print(f'PASS {tree_class.__name__} storage, query and kernel density dtypes against pinned sklearn')
 
 
 def original_tests():
@@ -151,6 +185,8 @@ def original_tests():
     installed = Path(sklearn.__file__).resolve().parent.parent
     for source in SOURCES[:2]:
         assert (installed/source).read_bytes() == (REFERENCE/source).read_bytes(), source
+    from sklearn.neighbors import KDTree
+    check_public_dtypes(KDTree, native)
     import importlib.util
     # The build provenance is checked separately; test bodies always come from
     # the exact local checkout, not whichever tests shipped in an installed wheel.
@@ -174,7 +210,7 @@ def original_tests():
     kd_tests = importlib.util.module_from_spec(spec_kd)
     spec_kd.loader.exec_module(kd_tests)
     kd_tests.KDTree64 = lambda X, **kw: NativeTree(np.asarray(X,dtype=np.float64),**kw)
-    kd_tests.KDTree32 = lambda X, **kw: NativeTree(np.asarray(X,dtype=np.float32),**kw)
+    kd_tests.KDTree32 = PrivateFloat32Tree
     for metric in kd_tests.METRICS:
         kd_tests.test_kd_tree_numerical_consistency(42,metric)
         kd_tests.test_kernel_density_numerical_consistency(42,metric)

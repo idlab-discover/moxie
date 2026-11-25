@@ -53,7 +53,9 @@ The optional-input overload also accepts `None` for self queries, which exclude
 each row's own training index while retaining duplicates. Explicit arrays
 include self. Equal distances use ascending training index; sklearn backend tie
 selection is unspecified. Radius membership is inclusive. Negative/NaN radii are
-rejected; infinity is accepted. Result distances retain feature dtype.
+rejected; infinity is accepted. Both query records retain the feature dtype
+for distances on every backend. This adaptation keeps Float32 distance buffers
+compact. The pinned scikit-learn estimators return Float64 distances.
 
 `algorithm="auto"` selects KDTree, then BallTree for eligible low-dimensional
 inputs; other cases use streaming brute force. Explicit `"brute"`, `"kd_tree"`

@@ -474,11 +474,11 @@ struct SpatialTree[dtype: DType = DType.float64, ball: Bool = False, M: DenseMet
 
     def kernel_density(mut self, X: nm.NDArray[Self.dtype], h: Float64,
                        kernel: String = "gaussian", atol: Float64 = 0, rtol: Float64 = 1e-8,
-                       breadth_first: Bool = True, return_log: Bool = False) raises -> nm.NDArray[Self.dtype]:
+                       breadth_first: Bool = True, return_log: Bool = False) raises -> nm.NDArray[DType.float64]:
         var stats = TreeStats()
         var result = self._density(X,h,kernel,atol,rtol,breadth_first,return_log,stats)
         self._add_stats(stats)
-        return result.astype[Self.dtype]()
+        return result^
 
     def two_point_correlation(mut self, X: nm.NDArray[Self.dtype], r: nm.NDArray[DType.float64],
                               dualtree: Bool = False) raises -> List[Int]:

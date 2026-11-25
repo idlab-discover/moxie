@@ -42,11 +42,15 @@ def native(X, Y, metric='euclidean', p=2, leaf=2, k=3, dual=False, breadth=False
                 min(k, len(X)), int(dual), int(breadth), kernel, h, int(return_log),
                 int(weights is not None), atol, rtol, 'params']
         output = subprocess.check_output([str(ROOT/'builds/evaluate_balltree'), *map(str, args)], text=True)
-    result = {tag: [] for tag in 'QORCDTNIB'}
+    rows = {tag: [] for tag in 'QORCDTNIB'}
+    metadata = {}
     for line in output.splitlines():
         tag, *values = line.split()
-        result[tag].append(list(map(float, values)))
-    return {tag: np.array(rows) for tag, rows in result.items()}
+        if tag == 'dtype':
+            metadata[tag] = tuple(map(np.dtype, values))
+        else:
+            rows[tag].append(list(map(float, values)))
+    return {**{tag: np.array(values) for tag, values in rows.items()}, **metadata}
 
 
 def check_queries(X,Y,metric,p,leaf,dual,breadth,params=None):
@@ -167,7 +171,7 @@ def original_tests():
     import importlib.util
     import sklearn
     assert sklearn.__version__=='1.10.dev0'
-    from sklearn.neighbors import VALID_METRICS
+    from sklearn.neighbors import BallTree, VALID_METRICS
     names={key:[] for key in VALID_METRICS}
     for line in subprocess.check_output([str(ROOT/'builds/evaluate_balltree'),'registry'],text=True).splitlines():
         backend,name=line.split();names[backend].append(name)
@@ -175,6 +179,7 @@ def original_tests():
     installed=Path(sklearn.__file__).resolve().parent.parent
     for source in SOURCES[:2]: assert (installed/source).read_bytes()==(REFERENCE/source).read_bytes()
     import parity_kdtree as kd
+    kd.check_public_dtypes(BallTree, native)
     # Reuse only the typed result adapter, pointed at the BallTree executable.
     kd.native=native
     class NativeTree(kd.NativeTree):
@@ -189,7 +194,7 @@ def original_tests():
             tests.test_ball_tree_query_metrics(metric,'array',factory);count+=1
         tests.test_query_haversine(factory,6 if dtype==np.float64 else 5);count+=1
     tests.BallTree64=lambda X,**kw:NativeTree(np.asarray(X,dtype=np.float64),**kw)
-    tests.BallTree32=lambda X,**kw:NativeTree(np.asarray(X,dtype=np.float32),**kw)
+    tests.BallTree32 = kd.PrivateFloat32Tree
     for metric in [*tests.METRICS,*tests.BOOLEAN_METRICS]:
         tests.test_ball_tree_numerical_consistency(42,metric)
         tests.test_kernel_density_numerical_consistency(42,metric)

@@ -4,7 +4,9 @@ import numojo as nm
 from std.math import isfinite
 from moxie.serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema
 from moxie.svm._c_svm import SVC, SVR
-from moxie.svm._classification import Gamma, Probability, checked_int32, support_counts
+from moxie.svm._classification import (
+    Gamma, Probability, _KernelFitDiagnostics, checked_int32, support_counts,
+)
 from moxie.svm._contracts import Dense, KernelModel, KernelSpec, TrainingSnapshot
 from moxie.svm._linear import ClassWeight
 from moxie.svm._nu_svm import NuSVC, NuSVR
@@ -187,11 +189,11 @@ def _write_fit(
     mut archive: ModelArchive, mut writer: BinaryWriter,
     kernel: KernelSpec, engine: Optional[KernelModel],
     snapshot: Optional[TrainingSnapshot], public_support: _PublicIndices,
-    classes: Int,
+    classes: Int, diagnostics: Optional[_KernelFitDiagnostics],
 ) raises:
     writer.boolean(Bool(engine))
     if not engine:
-        if snapshot or classes != 0:
+        if snapshot or classes != 0 or diagnostics:
             raise Error("ModelSchemaError: inconsistent unfitted kernel SVM")
         return
     if not snapshot:
@@ -224,6 +226,36 @@ def _write_fit(
     _write_array(archive, "prob_a", model.prob_a, [calibration])
     _write_array(archive, "prob_b", model.prob_b, [calibration])
     _validate_support(model, public_support, rows, classes)
+    writer.boolean(Bool(diagnostics))
+    if diagnostics:
+        ref fit = diagnostics.value()
+        _validate_diagnostics(fit, model, classes)
+        writer.integer(fit.max_iter)
+        writer.boolean(fit.probability_explicit)
+
+
+def _validate_diagnostics(fit: _KernelFitDiagnostics, model: KernelModel, classes: Int) raises:
+    var calibrated = model.prob_a.size != 0
+    if (
+        fit.max_iter < -1
+        or (model.fit_status == 1 and fit.max_iter < 0)
+        or (fit.probability_explicit and classes == 0)
+        or (calibrated and not fit.probability_explicit)
+    ):
+        raise Error("ModelSchemaError: invalid kernel SVM fit diagnostics")
+    if fit.max_iter == -1:
+        return
+    var reached_limit = False
+    for i in range(model.iterations.size):
+        var iterations = Int(model.iterations.unsafe_get(i * Int(model.iterations.strides[0])))
+        if iterations > fit.max_iter:
+            raise Error("ModelSchemaError: invalid kernel SVM fit iteration limit")
+        reached_limit |= iterations == fit.max_iter
+    # For calibrated fits, a smaller CV subproblem can also reach the cap.
+    if (reached_limit and model.fit_status == 0) or (
+        model.fit_status == 1 and not calibrated and not reached_limit
+    ):
+        raise Error("ModelSchemaError: inconsistent kernel SVM fit iteration limit")
 
 
 @fieldwise_init
@@ -232,6 +264,7 @@ struct _KernelFit(Movable):
     var engine: Optional[KernelModel]
     var snapshot: Optional[TrainingSnapshot]
     var support: _PublicIndices
+    var diagnostics: Optional[_KernelFitDiagnostics]
 
 
 def _read_fit(
@@ -242,7 +275,7 @@ def _read_fit(
             raise Error("ModelSchemaError: unexpected unfitted kernel SVM state")
         return _KernelFit(
             KernelSpec("rbf", 0, 3, 0), None, None,
-            nm.zeros[DType.int32](nm.Shape(0)),
+            nm.zeros[DType.int32](nm.Shape(0)), None,
         )
     if len(archive.payloads) != 10 + extra_arrays:
         raise Error("ModelSchemaError: unexpected fitted kernel SVM array count")
@@ -282,8 +315,15 @@ def _read_fit(
     )
     var support = _read_array[DType.int32](archive, "support_", support_shape)
     _validate_support(engine, support, rows, classes)
+    var diagnostics: Optional[_KernelFitDiagnostics] = None
+    if archive.schema_version == 2 and reader.boolean():
+        var fit = _KernelFitDiagnostics(reader.integer(), reader.boolean())
+        _validate_diagnostics(fit, engine, classes)
+        diagnostics = fit^
     var training = _read_array[DType.float64](archive, "training", shape)
-    return _KernelFit(kernel^, engine^, TrainingSnapshot(training, gram), support^)
+    return _KernelFit(
+        kernel^, engine^, TrainingSnapshot(training, gram), support^, diagnostics^,
+    )
 
 
 def _class_count[Label: Copyable & Comparable & Deinitable](classes: List[Label], fitted: Bool) raises -> Int:
@@ -304,11 +344,11 @@ def _read_class_weights(archive: ModelArchive, classes: Int) raises -> Dense:
 
 
 struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchema):
-    """Version 1 state for a dense SVC."""
+    """Version 2 state for a dense SVC."""
 
     comptime Model = SVC[Self.Label]
     comptime TypeId = "moxie.svm.SVC"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -328,7 +368,7 @@ struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchem
         _write_rng(writer, model._rng)
         _write_fit(
             archive, writer, model._kernel, model._model, model._snapshot,
-            model.support_, classes,
+            model.support_, classes, model._fit_diagnostics,
         )
         if classes:
             _write_array(archive, "class_weight_", model.class_weight_, [classes])
@@ -338,7 +378,7 @@ struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchem
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        archive.expect(Self.TypeId, 1 if archive.schema_version == 1 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -378,6 +418,9 @@ struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchem
             model.n_features_in_ = snapshot.n_features
             model.shape_fit_ = snapshot.x.shape.copy()
             model.fit_status_ = engine.fit_status
+            if state.diagnostics:
+                model.fit_warnings = state.diagnostics.value().warnings(engine.fit_status)
+            swap(model._fit_diagnostics, state.diagnostics)
             model._gamma = state.kernel.gamma
             swap(model.support_, state.support)
             swap(model._kernel, state.kernel)
@@ -387,11 +430,11 @@ struct SVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchem
 
 
 struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchema):
-    """Version 1 state for a dense NuSVC."""
+    """Version 2 state for a dense NuSVC."""
 
     comptime Model = NuSVC[Self.Label]
     comptime TypeId = "moxie.svm.NuSVC"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -411,7 +454,7 @@ struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSch
         _write_rng(writer, model._rng)
         _write_fit(
             archive, writer, model._kernel, model._model, model._snapshot,
-            model.support_, classes,
+            model.support_, classes, model._fit_diagnostics,
         )
         if classes:
             _write_array(archive, "class_weight_", model.class_weight_, [classes])
@@ -421,7 +464,7 @@ struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSch
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        archive.expect(Self.TypeId, 1 if archive.schema_version == 1 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -461,6 +504,9 @@ struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSch
             model.n_features_in_ = snapshot.n_features
             model.shape_fit_ = snapshot.x.shape.copy()
             model.fit_status_ = engine.fit_status
+            if state.diagnostics:
+                model.fit_warnings = state.diagnostics.value().warnings(engine.fit_status)
+            swap(model._fit_diagnostics, state.diagnostics)
             model._gamma = state.kernel.gamma
             swap(model.support_, state.support)
             swap(model._kernel, state.kernel)
@@ -470,11 +516,11 @@ struct NuSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSch
 
 
 struct SVRSchema(ModelSchema):
-    """Version 1 state for a dense SVR."""
+    """Version 2 state for a dense SVR."""
 
     comptime Model = SVR
     comptime TypeId = "moxie.svm.SVR"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -489,14 +535,14 @@ struct SVRSchema(ModelSchema):
         _write_rng(writer, model._rng)
         _write_fit(
             archive, writer, model._kernel, model._model, model._snapshot,
-            model.support_, 0,
+            model.support_, 0, model._fit_diagnostics,
         )
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        archive.expect(Self.TypeId, 1 if archive.schema_version == 1 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -523,6 +569,9 @@ struct SVRSchema(ModelSchema):
             model.n_features_in_ = snapshot.n_features
             model.shape_fit_ = snapshot.x.shape.copy()
             model.fit_status_ = engine.fit_status
+            if state.diagnostics:
+                model.fit_warnings = state.diagnostics.value().warnings(engine.fit_status)
+            swap(model._fit_diagnostics, state.diagnostics)
             model._gamma = state.kernel.gamma
             swap(model.support_, state.support)
             swap(model._kernel, state.kernel)
@@ -532,11 +581,11 @@ struct SVRSchema(ModelSchema):
 
 
 struct NuSVRSchema(ModelSchema):
-    """Version 1 state for a dense NuSVR."""
+    """Version 2 state for a dense NuSVR."""
 
     comptime Model = NuSVR
     comptime TypeId = "moxie.svm.NuSVR"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -551,14 +600,14 @@ struct NuSVRSchema(ModelSchema):
         _write_rng(writer, model._rng)
         _write_fit(
             archive, writer, model._kernel, model._model, model._snapshot,
-            model.support_, 0,
+            model.support_, 0, model._fit_diagnostics,
         )
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        archive.expect(Self.TypeId, 1 if archive.schema_version == 1 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -585,6 +634,9 @@ struct NuSVRSchema(ModelSchema):
             model.n_features_in_ = snapshot.n_features
             model.shape_fit_ = snapshot.x.shape.copy()
             model.fit_status_ = engine.fit_status
+            if state.diagnostics:
+                model.fit_warnings = state.diagnostics.value().warnings(engine.fit_status)
+            swap(model._fit_diagnostics, state.diagnostics)
             model._gamma = state.kernel.gamma
             swap(model.support_, state.support)
             swap(model._kernel, state.kernel)
@@ -594,11 +646,11 @@ struct NuSVRSchema(ModelSchema):
 
 
 struct OneClassSVMSchema(ModelSchema):
-    """Version 1 state for a dense OneClassSVM."""
+    """Version 2 state for a dense OneClassSVM."""
 
     comptime Model = OneClassSVM
     comptime TypeId = "moxie.svm.OneClassSVM"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -612,7 +664,7 @@ struct OneClassSVMSchema(ModelSchema):
         _write_rng(writer, model._rng)
         _write_fit(
             archive, writer, model._kernel, model._model, model._snapshot,
-            model.support_, 0,
+            model.support_, 0, model._fit_diagnostics,
         )
         if model._model:
             _write_array(archive, "offset_", model.offset_, [1])
@@ -621,7 +673,7 @@ struct OneClassSVMSchema(ModelSchema):
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        archive.expect(Self.TypeId, 1 if archive.schema_version == 1 else Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var config = _KernelConfig.read(reader)
@@ -648,6 +700,9 @@ struct OneClassSVMSchema(ModelSchema):
             model.n_features_in_ = snapshot.n_features
             model.shape_fit_ = snapshot.x.shape.copy()
             model.fit_status_ = engine.fit_status
+            if state.diagnostics:
+                model.fit_warnings = state.diagnostics.value().warnings(engine.fit_status)
+            swap(model._fit_diagnostics, state.diagnostics)
             model._gamma = state.kernel.gamma
             swap(model.support_, state.support)
             swap(model._kernel, state.kernel)

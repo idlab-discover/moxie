@@ -63,11 +63,12 @@ strided views, for
 `fit`, `partial_fit`, prediction and `score`. sklearn's array-valued `alpha` is
 the native keyword `alpha_values`, an owned `(n_features,)` Float64 NDArray
 that takes precedence over scalar `alpha`; `set_params(alpha=...)` clears it.
-Their `class_count_` `(C,)`, `feature_count_` and `feature_log_prob_` `(C,F)`
-and ComplementNB's `feature_all_` `(F,)` are Float64 NDArrays, read with
-`.item(...)`. `class_log_prior_` is a List. For NDArray queries, the probability,
-log probability and joint log probability methods return Float64 NDArrays of
-shape `(n_samples, n_classes)`, including for Float32 and integer features.
+Their `class_count_` and `class_log_prior_` have shape `(C,)`. The
+`feature_count_` and `feature_log_prob_` arrays have shape `(C,F)`, and
+ComplementNB's `feature_all_` has shape `(F,)`. Read these Float64 NDArrays with
+`.item(...)`. For NDArray queries, the probability, log probability and joint log
+probability methods return Float64 NDArrays of shape `(n_samples, n_classes)`,
+including for Float32 and integer features.
 List queries return nested Lists and are converted to dense arrays internally.
 
 `BernoulliNB` (implemented in `moxie._nb_bernoulli`) accepts boolean, integer
@@ -78,11 +79,11 @@ The default target domain uses List[Int]; fit and partial_fit accept a Float64
 scalar or List[Float64] weights. Pass `sample_weight=weights.copy()` for a List
 on array overloads.
 
-Bernoulli learned `class_count_` `(C,)`, `feature_count_` `(C,F)`, and
-`feature_log_prob_` `(C,F)` are now Float64 NDArrays for both input interfaces;
-use `.item(c)` or `.item(c, f)` instead of nested List indexing. `class_log_prior_`
-remains a List. The constructor and `BernoulliNBParams` also accept
-`alpha_values`, an owned rank-one Float64 NDArray of length `n_features`.
+Bernoulli learned `class_count_` and `class_log_prior_` are Float64 NDArrays of
+shape `(C,)`. Its `feature_count_` and `feature_log_prob_` have shape `(C,F)`
+and the same dtype. Use `.item(c)` or `.item(c, f)` with either input interface.
+The constructor and `BernoulliNBParams` also accept `alpha_values`, an owned
+rank-one Float64 NDArray of length `n_features`.
 It takes precedence over scalar `alpha`; `set_params(alpha=...)` clears it.
 Clone, copy and parameter records own independent vector storage. The original
 five positional `BernoulliNBParams` arguments remain valid; the optional vector
@@ -139,9 +140,10 @@ configured minimum); previously allocated category buffers do not shrink.
 `CategoricalNB` accepts boolean, integer and Float32/Float64 NDArray features
 for fitting, incremental
 updates, prediction and scoring, including strided views. List features remain
-supported. Its `class_count_` is a Float64 NDArray `(n_classes,)`; category counts
-and feature log probabilities use one independently owned Float64 array per
-feature. `n_categories_` and `class_log_prior_` remain Lists. Array probability
+supported. Its `class_count_` and `class_log_prior_` are Float64 NDArrays of shape
+`(n_classes,)`. Category counts and feature log probabilities use one independently
+owned Float64 array per feature. `n_categories_` is an Int64 NDArray of shape
+`(n_features,)`. Read each learned vector with `.item(index)`. Array probability
 outputs are Float64 NDArrays `(n_samples, n_classes)`; List features produce List
 probabilities. Construction can raise on allocation.
 

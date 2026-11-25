@@ -87,12 +87,6 @@ from moxie._naive_bayes_dense import (
 )
 
 
-def _vector(X: DenseMatrix) raises -> List[Float64]:
-    var result = List[Float64]()
-    for i in range(X.shape[0]):
-        result.append(X.item(i))
-    return result^
-
 @fieldwise_init
 struct MultinomialNBParams(Copyable, Movable):
     var alpha: Float64
@@ -121,7 +115,7 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
     var classes_: Self.Target
     var _domain: Optional[Self.D]
     var class_count_: DenseMatrix
-    var class_log_prior_: List[Float64]
+    var class_log_prior_: DenseMatrix
     var n_features_in_: Int
     var feature_count_: DenseMatrix
     var feature_log_prob_: DenseMatrix
@@ -143,7 +137,7 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self.classes_ = Self.D.empty_target()
         self._domain = None
         self.class_count_ = nm.zeros[DType.float64](nm.Shape(0))
-        self.class_log_prior_ = List[Float64]()
+        self.class_log_prior_ = nm.zeros[DType.float64](nm.Shape(0))
         self.n_features_in_ = 0
         self.feature_count_ = nm.zeros[DType.float64](nm.Shape(0, 0))
         self.feature_log_prob_ = nm.zeros[DType.float64](nm.Shape(0, 0))
@@ -368,7 +362,7 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self.feature_log_prob_ = CountsFinalizer[False](False).finalize(stats, alpha, self.force_alpha)
         self.class_count_ = stats.class_count.copy()
         self.feature_count_ = stats.feature_count.copy()
-        self.class_log_prior_ = _log_priors(_vector(self.class_count_), self.class_prior, self.fit_prior)
+        self.class_log_prior_ = _log_priors(self.class_count_, self.class_prior, self.fit_prior)
 
     def fit[
         input_dtype: DType,
@@ -415,7 +409,7 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
                 var score = Float64(0)
                 for f in range(self.n_features_in_):
                     score += Float64(X.item(i, f)) * self.feature_log_prob_.item(c, f)
-                score += self.class_log_prior_[c]
+                score += self.class_log_prior_.item(c)
                 result[nm.Item(i, c)] = score
         return result^
 
@@ -522,7 +516,7 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
     var classes_: Self.Target
     var _domain: Optional[Self.D]
     var class_count_: DenseMatrix
-    var class_log_prior_: List[Float64]
+    var class_log_prior_: DenseMatrix
     var n_features_in_: Int
     var feature_count_: DenseMatrix
     var feature_log_prob_: DenseMatrix
@@ -547,7 +541,7 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
         self.classes_ = Self.D.empty_target()
         self._domain = None
         self.class_count_ = nm.zeros[DType.float64](nm.Shape(0))
-        self.class_log_prior_ = List[Float64]()
+        self.class_log_prior_ = nm.zeros[DType.float64](nm.Shape(0))
         self.n_features_in_ = 0
         self.feature_count_ = nm.zeros[DType.float64](nm.Shape(0, 0))
         self.feature_log_prob_ = nm.zeros[DType.float64](nm.Shape(0, 0))
@@ -779,7 +773,7 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
         self.feature_log_prob_ = CountsFinalizer[True](self.norm).finalize(stats, alpha, self.force_alpha)
         self.class_count_ = stats.class_count.copy()
         self.feature_count_ = stats.feature_count.copy()
-        self.class_log_prior_ = _log_priors(_vector(self.class_count_), self.class_prior, self.fit_prior)
+        self.class_log_prior_ = _log_priors(self.class_count_, self.class_prior, self.fit_prior)
         self.feature_all_ = sum_axis2d(self.feature_count_, 0)
 
     def fit[
@@ -828,7 +822,7 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
                 for f in range(self.n_features_in_):
                     score += Float64(X.item(i, f)) * self.feature_log_prob_.item(c, f)
                 if self.class_count_.size == 1:
-                    score += self.class_log_prior_[c]
+                    score += self.class_log_prior_.item(c)
                 result[nm.Item(i, c)] = score
         return result^
 

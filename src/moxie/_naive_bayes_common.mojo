@@ -1,5 +1,6 @@
 """Shared Naive Bayes validation; formulas retain sklearn attribution."""
 from std.math import isfinite
+import numojo as nm
 from numax.core.libm import exp as _libm_exp, log as _libm_log
 from moxie.base import IncrementalClassifier, LogProbabilityPredictor
 
@@ -90,17 +91,28 @@ def _check_prior(
 
 
 def _log_priors(
-    counts: List[Float64], prior: Optional[List[Float64]], fit_prior: Bool
-) raises -> List[Float64]:
-    _check_prior(prior, len(counts))
-    var result = List[Float64]()
-    for i in range(len(counts)):
-        if prior:
-            result.append(_log(prior.value()[i]))
-        elif fit_prior:
-            result.append(_log(counts[i]) - _log(_sum(counts)))
-        else:
-            result.append(-_log(Float64(len(counts))))
+    counts: nm.NDArray[DType.float64],
+    prior: Optional[List[Float64]],
+    fit_prior: Bool,
+) raises -> nm.NDArray[DType.float64]:
+    var n_classes = counts.size
+    _check_prior(prior, n_classes)
+    var result = nm.zeros[DType.float64](nm.Shape(n_classes))
+    if prior:
+        for c in range(n_classes):
+            result[nm.Item(c)] = _log(prior.value()[c])
+    elif fit_prior:
+        # Preserve the ordered Float64 sum used for the empirical priors.
+        var total = Float64(0)
+        for c in range(n_classes):
+            total += counts.item(c)
+        var log_total = _log(total)
+        for c in range(n_classes):
+            result[nm.Item(c)] = _log(counts.item(c)) - log_total
+    else:
+        var log_uniform = -_log(Float64(n_classes))
+        for c in range(n_classes):
+            result[nm.Item(c)] = log_uniform
     return result^
 
 

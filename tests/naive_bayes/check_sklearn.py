@@ -154,7 +154,7 @@ case_names = []
 expected_counter = 0
 
 
-def compare(expr, value, *, labels=False):
+def compare(expr, value, *, labels=False, array_dtype=None):
     global expected_counter
     if isinstance(value, list) or isinstance(value, np.ndarray) and value.ndim != 0:
         leaf = value
@@ -170,6 +170,10 @@ def compare(expr, value, *, labels=False):
         expected_counter += 1
         varname = f"expected{expected_counter}"
         lines.append(f"    var {varname}: {dtype} = {literal(value)}")
+        if array_dtype:
+            actual = f"actual{expected_counter}"
+            lines.append(f"    var {actual}: nm.NDArray[DType.{array_dtype}] = {expr}.copy()")
+            expr = actual
         lines.append(f"    {method}({expr}, {varname})")
     elif isinstance(value, (int, np.integer)):
         lines.append(f"    assert_equal({expr}, {int(value)})")
@@ -248,7 +252,8 @@ def case(name, params, X, y, Q, *, weights=None, chunks=None, classes=None, dtyp
             if name == "ComplementNB":
                 attrs += ["feature_all_"]
         for attr in attrs:
-            compare("model." + attr, getattr(model, attr), labels=attr == "classes_")
+            array_dtype = {"class_log_prior_": "float64", "n_categories_": "int64"}.get(attr)
+            compare("model." + attr, getattr(model, attr), labels=attr == "classes_", array_dtype=array_dtype)
         query = Q.copy()
         if name == "CategoricalNB":
             for f, counts in enumerate(model.category_count_):

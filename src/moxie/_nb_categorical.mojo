@@ -72,11 +72,11 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
     var classes_: Self.Target
     var _domain: Optional[Self.D]
     var class_count_: DenseMatrix
-    var class_log_prior_: List[Float64]
+    var class_log_prior_: DenseMatrix
     var n_features_in_: Int
     var category_count_: List[DenseMatrix]
     var feature_log_prob_: List[DenseMatrix]
-    var n_categories_: List[Int]
+    var n_categories_: NDArray[DType.int64]
 
     def __init__(
         out self,
@@ -97,11 +97,11 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self.classes_ = Self.D.empty_target()
         self._domain = None
         self.class_count_ = nm.zeros[DType.float64](Shape(0))
-        self.class_log_prior_ = List[Float64]()
+        self.class_log_prior_ = nm.zeros[DType.float64](Shape(0))
         self.n_features_in_ = 0
         self.category_count_ = List[DenseMatrix]()
         self.feature_log_prob_ = List[DenseMatrix]()
-        self.n_categories_ = List[Int]()
+        self.n_categories_ = nm.zeros[DType.int64](Shape(0))
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return Self.Params(
@@ -346,9 +346,9 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
             self._domain = prepared.domain.copy()
             self.n_features_in_ = batch.n_features
             self.class_count_ = nm.zeros[DType.float64](Shape(batch.n_classes))
+            self.n_categories_ = nm.zeros[DType.int64](Shape(batch.n_features))
             for _ in range(batch.n_features):
                 self.category_count_.append(nm.zeros[DType.float64](Shape(batch.n_classes, 0)))
-                self.n_categories_.append(0)
         for f in range(batch.n_features):
             var categories = minimum.scalar
             if minimum.values:
@@ -357,7 +357,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
             for i in range(X.shape[0]):
                 categories = max(categories, Int(X.item(i, f)) + 1)
             # Per-batch metadata can shrink, but learned histogram columns cannot.
-            self.n_categories_[f] = categories
+            self.n_categories_[Item(f)] = Int64(categories)
             var previous = self.category_count_[f].shape[1]
             if categories > previous:
                 var grown = nm.zeros[DType.float64](Shape(batch.n_classes, categories))
@@ -382,10 +382,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
                 for k in range(smoothed.shape[1]):
                     smoothed[Item(c, k)] = _log(smoothed.item(c, k)) - _log(totals.item(c))
             self.feature_log_prob_.append(smoothed^)
-        var counts = List[Float64]()
-        for c in range(batch.n_classes):
-            counts.append(self.class_count_.item(c))
-        self.class_log_prior_ = _log_priors(counts, self.class_prior, self.fit_prior)
+        self.class_log_prior_ = _log_priors(self.class_count_, self.class_prior, self.fit_prior)
 
     def predict_joint_log_proba[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> DenseMatrix:
         check_is_fitted(self)
@@ -399,7 +396,7 @@ struct CategoricalNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
                     if k >= self.feature_log_prob_[f].shape[1]:
                         raise Error("ValueError: category was not allocated during fit")
                     joint += self.feature_log_prob_[f].item(c, k)
-                result[Item(i, c)] = joint + self.class_log_prior_[c]
+                result[Item(i, c)] = joint + self.class_log_prior_.item(c)
         return result^
 
     def predict[input_dtype: DType](self, X: NDArray[input_dtype]) raises -> Self.Target:

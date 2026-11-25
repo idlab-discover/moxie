@@ -44,8 +44,8 @@ def test_count_models_predict_negative_values() raises:
 def test_unnormalized_class_prior_is_logged_verbatim() raises:
     var model = MultinomialNB(class_prior=List[Float64]([2.0, 6.0]))
     _ = model.fit(data(), labels())
-    close(model.class_log_prior_[0], 0.6931471805599453)
-    close(model.class_log_prior_[1], 1.791759469228055)
+    close(model.class_log_prior_.item(0), 0.6931471805599453)
+    close(model.class_log_prior_.item(1), 1.791759469228055)
 
 
 def test_partial_fit_after_fit_accumulates() raises:

@@ -116,6 +116,20 @@ for c in cases:
         gram_cases.append(dict(c, id='replaced-gram-' + c['id'], X=X, gram=X.T @ X))
 cases += gram_cases
 
+# Replay varied paths with both Gram sources. Supply cross products in
+# explicit-Gram cases with a generated alpha grid.
+gram_path_cases = []
+for case in path_cases:
+    gram_path_cases.append(dict(case, id='computed-gram-' + case['id'], precompute=True))
+    X = case['X']
+    gram_path_cases.append(dict(
+        case, id='supplied-gram-' + case['id'], gram=X.T @ X,
+        Xy=X.T @ case['y'] if case['alphas'] is None else None,
+    ))
+    if case['mode'] == 'default':
+        gram_path_cases.append(dict(case, id='auto-' + case['id'], precompute='auto'))
+path_cases += gram_path_cases
+
 folder = ROOT / 'builds/parity'
 folder.mkdir(parents=True, exist_ok=True)
 lines=[]
@@ -130,7 +144,14 @@ for case in path_cases:
     params = {k: case[k] for k in ('ratio', 'count', 'eps', 'max_iter')}
     params.update(path=1, positive=int(case['positive']))
     if 'seed' in case: params['seed'] = case['seed']
-    arrays = {k: case[k] for k in ('X', 'y', 'alphas', 'initial') if case[k] is not None}
+    if case.get('precompute') == 'auto':
+        params['auto'] = 1
+    elif case.get('precompute'):
+        params['precompute'] = 1
+    arrays = {
+        k: case[k] for k in ('X', 'y', 'alphas', 'initial', 'gram', 'Xy')
+        if case.get(k) is not None
+    }
     lines.append(io.case_line(case['id'], case['bits'], params, arrays))
 fixtures=folder/'fixtures.txt'; fixtures.write_text('\n'.join(lines)+'\n')
 output=subprocess.run([str(ROOT/'builds/parity_driver'),str(fixtures)],env=environment(ROOT),text=True,capture_output=True,check=True).stdout
@@ -176,7 +197,8 @@ for case in path_cases:
     got = results[ident]
     assert 'error' not in got, (ident, got)
     kwargs = dict(
-        eps=case['eps'], precompute=False, positive=case['positive'],
+        eps=case['eps'], precompute=case.get('gram', case.get('precompute', False)),
+        Xy=case.get('Xy'), positive=case['positive'],
         max_iter=case['max_iter'], return_n_iter=True,
         alphas=case['count'] if case['alphas'] is None else case['alphas'],
     )
@@ -214,6 +236,6 @@ for case in path_cases:
 (folder/'path-report.json').write_text(
     json.dumps(dict(revision=io.REVISION, sources=hashes, results=path_report), indent=2) + '\n'
 )
-print(f'Dense ElasticNet/Lasso path parity passed: {len(path_cases)} cases')
+print(f'Dense ElasticNet/Lasso path parity passed: {len(path_cases)} cases ({len(gram_path_cases)} Gram or auto)')
 (folder/'report.json').write_text(json.dumps(dict(revision=io.REVISION,sources=hashes,cases=len(cases),results=report),indent=2)+'\n')
 print(f'Dense ElasticNet/Lasso parity passed: {len(cases)} cases ({len(gram_cases)} Gram); pinned sklearn Python and Cython {io.REVISION[:10]}')

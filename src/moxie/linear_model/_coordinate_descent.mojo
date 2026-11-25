@@ -8,7 +8,7 @@ from moxie._random import RandomStateHandle, check_random_state
 from moxie.base import WeightedSupervisedEstimator
 from moxie.utils.validation import check_is_fitted
 from moxie.linear_model._base import LinearRegressor
-from moxie.linear_model._contracts import validate_weights
+from moxie.linear_model._contracts import validate_weights, validate_xy
 from moxie.linear_model._linear_base import (
     preprocess_data, set_intercept, canonical_coef, public_coef, linear_decision,
     public_prediction, check_predict_input, r2_score, check_finite,
@@ -81,6 +81,9 @@ def enet_path[dtype: DType](
     eps: Float64 = 1e-3,
     n_alphas: Int = 100,
     alphas: Optional[NDArray[DType.float64]] = None,
+    precompute: Optional[Bool] = Optional[Bool](False),
+    gram: Optional[NDArray[dtype]] = None,
+    Xy: Optional[NDArray[dtype]] = None,
     coef_init: Optional[NDArray[dtype]] = None,
     return_n_iter: Bool = False,
     positive: Bool = False,
@@ -101,18 +104,57 @@ def enet_path[dtype: DType](
         raise Error("ValueError: max_iter must be positive and tol finite and nonnegative")
 
     var random = _random_selection(selection, random_state)
-    var design = _CoordinateDesign[dtype](X, y)
+    validate_xy(X, y)
+    if y.ndim != 1:
+        raise Error("ValueError: coordinate solver needs vector y")
     var n = Float64(X.shape[0])
     var p = X.shape[1]
-    var alpha_max = Float64(0)
-    if not alphas:
-        alpha_max = design.max_correlation(positive) / (n * l1_ratio)
+    var start: NDArray[dtype]
+    if coef_init:
+        ref initial = coef_init.value()
+        if initial.ndim != 1 or initial.shape[0] != p:
+            raise Error("ValueError: coordinate solver needs coef (n_features,)")
+        check_finite(initial, "initial", "coordinate_descent")
+        start = compact_vector(initial)
+    else:
+        start = zeros[dtype](Shape(p))
+    if Xy:
+        ref cross = Xy.value()
+        if cross.ndim != 1 or cross.shape[0] != p:
+            raise Error("ValueError: Xy must have shape (n_features,)")
+        check_finite(cross, "Xy", "coordinate_descent")
+
+    var use_gram = Bool(gram) or precompute.or_else(X.shape[0] > p)
+    var design = Optional[_CoordinateDesign[dtype]]()
+    var path_gram = Optional[NDArray[dtype]]()
+    var cross = zeros[dtype](Shape(0))
+    var norm = Float64(0)
+    var max_correlation = Float64(0)
+    if use_gram:
+        check_finite(X, "X", "coordinate_descent")
+        check_finite(y, "y", "coordinate_descent")
+        path_gram = _prepare_gram(X, True, gram)
+        if Xy:
+            cross = compact_vector(Xy.value())
+        else:
+            cross = transpose_product(X, y)
+            check_finite(cross, "Xy", "coordinate_descent")
+        norm = _gram_target_norm(y)
+        if not alphas:
+            for j in range(p):
+                var value = Float64(cross.unsafe_get(j))
+                max_correlation = max(max_correlation, value if positive else abs(value))
+    else:
+        design = _CoordinateDesign(X, y)
+        if not alphas:
+            max_correlation = design.value().max_correlation(positive)
+
+    var alpha_max = max_correlation / (n * l1_ratio) if not alphas else 0.0
     var grid = _path_alphas(alphas, n_alphas, alpha_max, eps)
     var count = grid.shape[0]
     var coefs = zeros[dtype](Shape(p, count))
     var gaps = zeros[DType.float64](Shape(count))
     var iterations = List[Int]()
-    var start = compact_vector(coef_init.value()) if coef_init else zeros[dtype](Shape(p))
     var rng = Optional[RandomStateHandle[MutUntrackedOrigin]]()
     if random:
         rng = check_random_state(random_state)
@@ -121,10 +163,21 @@ def enet_path[dtype: DType](
         var seed = Optional[UInt32]()
         if random:
             seed = UInt32(rng.value()[].randint(2147483647))
-        var solved = design.solve(
-            start, alpha * l1_ratio * n, alpha * (1 - l1_ratio) * n,
-            max_iter, tol, positive, early_stopping=early_stopping, random_seed=seed,
-        )
+        var l1 = alpha * l1_ratio * n
+        var l2 = alpha * (1 - l1_ratio) * n
+        var solved: CoordinateResult[dtype]
+        if path_gram:
+            if not isfinite(Scalar[dtype](l1)) or not isfinite(Scalar[dtype](l2)):
+                raise Error("ValueError: coordinate penalties exceed the Gram solver dtype range")
+            solved = coordinate_descent_gram(
+                path_gram.value(), cross, start.copy(), norm, l1, l2, max_iter, tol,
+                positive=positive, early_stopping=early_stopping, random_seed=seed,
+            )
+        else:
+            solved = design.value().solve(
+                start, l1, l2, max_iter, tol, positive,
+                early_stopping=early_stopping, random_seed=seed,
+            )
         for j in range(p):
             coefs.unsafe_set(j * count + i, solved.coef.unsafe_get(j))
         gaps.unsafe_set(i, solved.dual_gap / n)
@@ -142,6 +195,9 @@ def lasso_path[dtype: DType](
     eps: Float64 = 1e-3,
     n_alphas: Int = 100,
     alphas: Optional[NDArray[DType.float64]] = None,
+    precompute: Optional[Bool] = Optional[Bool](False),
+    gram: Optional[NDArray[dtype]] = None,
+    Xy: Optional[NDArray[dtype]] = None,
     coef_init: Optional[NDArray[dtype]] = None,
     return_n_iter: Bool = False,
     positive: Bool = False,
@@ -154,7 +210,8 @@ def lasso_path[dtype: DType](
     """Fit a warm-started Lasso path on a matrix and vector target."""
     return enet_path(
         X, y, l1_ratio=1, eps=eps, n_alphas=n_alphas, alphas=alphas,
-        coef_init=coef_init, return_n_iter=return_n_iter, positive=positive,
+        precompute=precompute, gram=gram, Xy=Xy, coef_init=coef_init,
+        return_n_iter=return_n_iter, positive=positive,
         max_iter=max_iter, tol=tol, early_stopping=early_stopping,
         selection=selection, random_state=random_state,
     )
@@ -171,29 +228,36 @@ struct _FitResult[dtype: DType](Movable):
 
 def _prepare_gram[dtype: DType](
     X: NDArray[dtype],
-    offset: NDArray[dtype],
     var precompute: Bool,
     supplied: Optional[NDArray[dtype]],
+    offset: Optional[NDArray[dtype]] = None,
 ) raises -> Optional[NDArray[dtype]]:
     var p = X.shape[1]
     if supplied:
+        ref input_gram = supplied.value()
         var centered = False
-        for j in range(p):
-            centered |= abs(Float64(offset.unsafe_get(j))) > 1e-8
+        var first = p // 2
+        var second = min(first + 1, p - 1)
+        var first_offset = Float64(0)
+        var second_offset = Float64(0)
+        if offset:
+            ref means = offset.value()
+            for j in range(p):
+                centered |= abs(Float64(means.unsafe_get(j))) > 1e-8
+            first_offset = Float64(means.unsafe_get(first))
+            second_offset = Float64(means.unsafe_get(second))
         if not centered:
-            ref input_gram = supplied.value()
             if input_gram.ndim != 2 or input_gram.shape[0] != p or input_gram.shape[1] != p:
                 raise Error("ValueError: gram must have shape (n_features, n_features)")
             check_finite(input_gram, "gram", "ElasticNet")
             var gram = compact_matrix(input_gram)
             # Match sklearn's sampled-entry check on the prepared design.
-            var first = p // 2
-            var second = min(first + 1, p - 1)
             var expected = Float64(0)
             for i in range(X.shape[0]):
+                var row = i * Int(X.strides[0])
                 expected += (
-                    (Float64(X.unsafe_get(i * p + first)) - Float64(offset.unsafe_get(first)))
-                    * (Float64(X.unsafe_get(i * p + second)) - Float64(offset.unsafe_get(second)))
+                    (Float64(X.unsafe_get(row + first * Int(X.strides[1]))) - first_offset)
+                    * (Float64(X.unsafe_get(row + second * Int(X.strides[1]))) - second_offset)
                 )
             var actual = Float64(gram.unsafe_get(first * p + second))
             comptime relative = 1e-4 if dtype == DType.float32 else 1e-7
@@ -207,6 +271,16 @@ def _prepare_gram[dtype: DType](
         check_finite(computed, "gram", "ElasticNet")
         return Optional(computed^)
     return None
+
+
+def _gram_target_norm[dtype: DType](y: NDArray[dtype]) raises -> Float64:
+    var norm = Float64(0)
+    for i in range(y.shape[0]):
+        var value = Float64(y.unsafe_get(i * Int(y.strides[0])))
+        norm += value * value
+    if not isfinite(Scalar[dtype](norm)):
+        raise Error("ValueError: squared target norm exceeds the Gram solver dtype range")
+    return norm
 
 
 def _fit_coordinate[dtype: DType](
@@ -247,7 +321,7 @@ def _fit_coordinate[dtype: DType](
     var n = data.X.shape[0]
     var p = data.X.shape[1]
     var k = data.y.shape[1]
-    var gram = _prepare_gram(data.X, data.X_offset, precompute, supplied_gram)
+    var gram = _prepare_gram(data.X, precompute, supplied_gram, data.X_offset.view())
     var products = Optional[NDArray[dtype]]()
     if gram:
         check_finite(data.y, "y", "ElasticNet")
@@ -282,14 +356,8 @@ def _fit_coordinate[dtype: DType](
             var column = zeros[dtype](Shape(p))
             for j in range(p):
                 column.unsafe_set(j, cross.unsafe_get(j * k + t))
-            var norm = Float64(0)
-            for i in range(n):
-                var value = Float64(target.unsafe_get(i))
-                norm += value * value
-            if not isfinite(Scalar[dtype](norm)):
-                raise Error("ValueError: squared target norm exceeds the Gram solver dtype range")
             solved = coordinate_descent_gram(
-                gram.value(), column, start^, norm, l1, l2, max_iter, tol,
+                gram.value(), column, start^, _gram_target_norm(target), l1, l2, max_iter, tol,
                 positive=positive, early_stopping=True, random_seed=seed,
             )
         else:

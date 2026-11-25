@@ -19,7 +19,7 @@ Float32 tolerance is 3e-4 for reduction order. Target-scaled absolute tolerances
 Float64 iteration counts are enforced by the script. Raw reports are ignored
 under builds/parity. Tests are correctness evidence, not performance claims.
 
-Unfinished dense work includes Gram and multi-task paths,
+Unfinished dense work includes multi-task paths,
 MultiTaskLasso, MultiTaskElasticNet and CV. Sparse matrices/targets and sparse
 coefficient conversion remain deferred under session-plan/SPARSITY-SCOPE.md.
 Fit parity also checks computed and supplied Gram matrices, weighted and
@@ -32,14 +32,16 @@ separately allocated transposed design for these products. Numax
 norm accumulates directly in Float64 before rounding to the solver dtype.
 Path tests cover generated and supplied grids, positive constraints,
 degenerate inputs, seeded initial coefficients, strided inputs and iteration
-limits in both dtypes. The path shares a single column layout and set of
-norms across alpha values. Numax `geomspace` and `dot` require compile-time
-extents. The path uses runtime-size NuMojo `logspace` after handling the
+limits in both dtypes. The residual path shares a single column layout and
+set of norms across alpha values. The Gram path reuses the validated Gram
+matrix, feature–target products and squared target norm across alpha values.
+Numax `geomspace` and `dot` require compile-time extents. The path uses runtime-size NuMojo `logspace` after handling the
 single-point case and uses a Float64 correlation reduction on the engine's
 packed columns. NuMojo vector `dot` is excluded by the shared numerical policy.
 The correlation reduction avoids a transposed matrix or widened data buffer.
 
-The pinned path comparison covers 72 cyclic and 72 seeded random cases. It checks grids at relative
+The pinned comparison covers 144 residual paths and 300 Gram or automatic
+paths, including computed and supplied products. It checks grids at relative
 tolerances of 2e-9 (Float64) and 2e-6 (Float32), allowing for the geometric-grid
 implementation and BLAS reduction order. Coefficients and dual gaps use the
 fit tolerances above, scaled by target magnitude and its square respectively.

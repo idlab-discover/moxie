@@ -5,7 +5,7 @@ from numojo import NDArray, Shape, array, zeros
 from .decomposition._pca import PCA, ComponentCount, IteratedPower
 from .decomposition._incremental_pca import IncrementalPCA
 from .decomposition._truncated_svd import TruncatedSVD
-from .decomposition._factor_analysis import FactorAnalysis
+from .decomposition._factor_analysis import FactorAnalysis, _FA_CONVERGENCE_MESSAGE
 from .decomposition._fastica import FastICA, WhitenOption
 from .decomposition._kernel_pca import KernelPCA, KernelPower
 from .decomposition._lda import LatentDirichletAllocation, LatentDirichletAllocationParams
@@ -16,6 +16,7 @@ from .decomposition._nmf import (
 )
 from .serialization import ArrayPayload, BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 from ._random import RandomState
+from .warnings import FitWarning
 
 
 def _write_optional_int(mut writer: BinaryWriter, value: Optional[Int]):
@@ -495,14 +496,14 @@ def _check_loglike(fitted: Bool, iterations: Int, history: List[Float64]) raises
 
 
 struct FactorAnalysisSchema[dtype: DType = DType.float64](ModelSchema):
-    """Version 1 of the dense FactorAnalysis state with Float64 learned arrays."""
+    """Dense FactorAnalysis state with Float64 learned arrays and fit diagnostics."""
 
     comptime Model = FactorAnalysis[Self.dtype]
     comptime _type_id = "moxie.decomposition.FactorAnalysis"
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
-        var archive = ModelArchive(Self._type_id, 1)
+        var archive = ModelArchive(Self._type_id, 2)
         var writer = BinaryWriter()
         writer.uint(UInt64(dtype_code[Self.dtype]()))
         _write_optional_int(writer, model.n_components)
@@ -524,6 +525,14 @@ struct FactorAnalysisSchema[dtype: DType = DType.float64](ModelSchema):
         _check_loglike(state.fitted, model.n_iter_, model.loglike_)
         writer.integer(model.n_iter_)
         _write_float64_list(writer, model.loglike_)
+        if model.fit_warnings:
+            if (
+                not state.fitted or len(model.fit_warnings) != 1
+                or model.fit_warnings[0].category != "ConvergenceWarning"
+                or model.fit_warnings[0].message != _FA_CONVERGENCE_MESSAGE
+            ):
+                raise Error("ModelSchemaError: invalid FactorAnalysis fit warnings")
+        writer.boolean(Bool(model.fit_warnings))
         archive.manifest = writer^.finish()
         _write_array(archive, "components_", model.components_, state.fitted, [state.rank, state.features])
         _write_array(archive, "noise_variance_", model.noise_variance_, state.fitted, [state.features])
@@ -532,7 +541,7 @@ struct FactorAnalysisSchema[dtype: DType = DType.float64](ModelSchema):
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self._type_id, 1)
+        archive.expect(Self._type_id, 1 if archive.schema_version == 1 else 2)
         archive.validate()
         var reader = BinaryReader(archive.manifest)
         _check_dtype[Self.dtype](reader)
@@ -552,6 +561,10 @@ struct FactorAnalysisSchema[dtype: DType = DType.float64](ModelSchema):
         model.n_iter_ = reader.integer()
         model.loglike_ = _read_float64_list(reader)
         _check_loglike(state.fitted, model.n_iter_, model.loglike_)
+        if archive.schema_version == 2 and reader.boolean():
+            if not state.fitted:
+                raise Error("ModelSchemaError: unfitted FactorAnalysis has fit warnings")
+            model.fit_warnings.append(FitWarning("ConvergenceWarning", _FA_CONVERGENCE_MESSAGE))
         reader.finish()
         _check_arrays(archive, state.fitted, 3)
         model.components_ = _read_array[DType.float64](archive, "components_", state.fitted, [state.rank, state.features])

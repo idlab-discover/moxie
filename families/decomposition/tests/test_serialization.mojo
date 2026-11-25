@@ -214,6 +214,10 @@ def test_factor_analysis[dtype: DType](path: String) raises:
     assert_equal(unfitted.rotation.value(), String("varimax"))
     assert_true(not unfitted.random_state)
     assert_equal(unfitted.tol, 0.001)
+    var invalid_unfitted = Schema.encode(unfitted)
+    invalid_unfitted.manifest[len(invalid_unfitted.manifest) - 8] = 1
+    with assert_raises(contains="unfitted FactorAnalysis has fit warnings"):
+        _ = Schema.decode(invalid_unfitted)
 
     _ = model.fit(X)
     _ = model.set_params(copy=False, max_iter=1, n_components=Optional[Optional[Int]](Optional[Int](0)))
@@ -234,10 +238,10 @@ def test_factor_analysis[dtype: DType](path: String) raises:
     assert_equal(model.score(X), restored.score(X))
 
     var archive = Schema.encode(restored)
-    archive.schema_version = 2
+    archive.schema_version = 3
     with assert_raises(contains="unsupported estimator type or state schema"):
         _ = Schema.decode(archive)
-    archive.schema_version = 1
+    archive.schema_version = 2
     archive.payloads[0].shape = [3, 1]
     with assert_raises(contains="invalid shape for components_"):
         _ = Schema.decode(archive)
@@ -611,6 +615,11 @@ def test_lda[dtype: DType](path: String) raises:
 
 def main() raises:
     var path = String(argv()[1])
+    if len(argv()) == 3 and argv()[2] == "factor_analysis":
+        test_factor_analysis[DType.float32](path)
+        test_factor_analysis[DType.float64](path)
+        print("PASS: FactorAnalysis serialization in Float32 and Float64")
+        return
     test_pca[DType.float32](path)
     test_pca[DType.float64](path)
     test_incremental_pca[DType.float32](path)

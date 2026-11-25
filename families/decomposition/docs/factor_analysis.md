@@ -36,8 +36,10 @@ Language adaptations, each covered by contract tests:
 - `copy=False` needs `fit_inplace(mut X)`; for Float64 input it leaves X
   centered like sklearn. `fit` with `copy=False` raises instead of mutating an
   immutable borrow.
-- The reference's `ConvergenceWarning` has no native warning channel: check
-  `n_iter_ == max_iter`.
+- `fit_warnings` records the reference `ConvergenceWarning` when the EM loop
+  exhausts its budget. Convergence on the final allowed iteration leaves the
+  list empty. Successful fits replace the list, failed fits preserve it, and
+  unfitted clones start with an empty list.
 - `svd_method="lapack"` uses the shared engine's exact Jacobi SVD (not LAPACK),
   `"randomized"` the shared randomized SVD with one seeded RandomState stream
   across EM iterations, as in sklearn. Inverses and log-determinants use
@@ -45,13 +47,13 @@ Language adaptations, each covered by contract tests:
 
 ## Validation
 
-`pixi run parity` runs 186 cases against the pinned source: tall and wide
-shapes, both SVD methods, `n_components` None/0/1/2/3, both rotations, tight
+The FactorAnalysis parity driver runs 190 cases against the pinned source. It
+covers tall and wide shapes, both SVD methods, `n_components` None/0/1/2/3, both rotations, tight
 `tol`, truncated `max_iter`, custom `noise_variance_init`, several
 `iterated_power`/seeds, a constant feature (SMALL floor) and scaled data, in
 Float64 and Float32 input. The driver checks transforms on training and held-out
-rows. The EM iteration count must match exactly. Values
-use relative/absolute tolerance 1e-7 (scaled by the data magnitude), 1e-6 for
+rows. The EM iteration and convergence warning counts must match exactly.
+Values use relative/absolute tolerance 1e-7 (scaled by the data magnitude), 1e-6 for
 precision and latent scores. Component rows and latent columns are compared
 up to one sign per factor because the reference keeps LAPACK's arbitrary
 singular-vector signs. Wide `n_components=None` fits are excluded: centered

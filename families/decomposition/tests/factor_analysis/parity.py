@@ -30,8 +30,8 @@ def compare(x, k, method="randomized", rotation=None, max_iter=1000, tol=1e-2, p
     global count
     reference = Reference(k, svd_method=method, rotation=rotation, max_iter=max_iter, tol=tol,
                           iterated_power=power, random_state=seed, noise_variance_init=psi)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as fit_warnings:
+        warnings.simplefilter("always")
         expected_z = reference.fit_transform(x)
     psi_matrix = np.ones((1, x.shape[1])) if psi is None else np.asarray(psi, dtype=np.float64)[None, :]
     # A separate batch with values distinct from the training rows.
@@ -40,6 +40,8 @@ def compare(x, k, method="randomized", rotation=None, max_iter=1000, tol=1e-2, p
                      max_iter, tol, power, seed, int(psi is not None))
     label = f"{x.dtype} {x.shape} {k=} {method} {rotation} {max_iter=} {tol=} {power=}"
     assert int(got["n_iter"][0]) == reference.n_iter_, (label, got["n_iter"], reference.n_iter_)
+    expected_warning_count = sum(w.category.__name__ == "ConvergenceWarning" for w in fit_warnings)
+    assert int(got["fit_warning_count"][0]) == expected_warning_count, (label, got["fit_warning_count"], fit_warnings)
     scale = max(1.0, float(np.abs(x).max()))
     assert_close(got["loglike"], reference.loglike_, TOL, label + ": loglike", atol=TOL * x.size * scale)
     for key, value in [("noise", reference.noise_variance_), ("mean", reference.mean_),
@@ -88,4 +90,6 @@ for dtype in (np.float64, np.float32):
     compare(x, 2, "lapack")
     compare(x, 2, "randomized")
     compare((rng.normal(size=(30, 5)) * 1e3).astype(dtype), 2, "lapack")
+    compare(x, 2, "lapack", max_iter=1)
+    compare(x, 2, "lapack", max_iter=2, tol=1e6)
 print(f"PASS: {count} dense FactorAnalysis cases against local sklearn {REVISION}")

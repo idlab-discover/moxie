@@ -4,6 +4,8 @@ from std.math import abs
 from numojo import NDArray, Shape, zeros, NDArrayStrides
 from moxie.base import clone
 from moxie.decomposition import FactorAnalysis
+from moxie.decomposition_serialization import FactorAnalysisSchema
+from moxie.serialization import dumps, loads
 
 
 def matrix[dtype: DType](n: Int, p: Int) raises -> NDArray[dtype]:
@@ -88,8 +90,44 @@ def inplace() raises:
         assert_true(abs(total) < 1e-10)
 
 
+def warnings[dtype: DType]() raises:
+    comptime Schema = FactorAnalysisSchema[dtype]
+    var x = matrix[dtype](12, 4)
+    var model = FactorAnalysis[dtype](2, max_iter=1)
+    assert_equal(len(model.fit_warnings), 0)
+    _ = model.fit_transform(x)
+    assert_equal(len(model.fit_warnings), 1)
+    assert_equal(model.fit_warnings[0].category, "ConvergenceWarning")
+    assert_equal(model.fit_warnings[0].message,
+        "FactorAnalysis did not converge. You might want to increase the number of iterations.")
+    var unfitted = clone(model)
+    assert_equal(len(unfitted.fit_warnings), 0)
+    var archive = Schema.encode(model)
+    var restored = Schema.decode(loads(dumps(archive)))
+    assert_equal(len(restored.fit_warnings), 1)
+    assert_equal(restored.fit_warnings[0].message, model.fit_warnings[0].message)
+    archive.schema_version = 1
+    # Version 1 ends before the eight-byte warning flag.
+    for _ in range(8):
+        _ = archive.manifest.pop()
+    var legacy = Schema.decode(archive)
+    assert_equal(len(legacy.fit_warnings), 0)
+    assert_equal(legacy.score(x), model.score(x))
+
+    _ = model.set_params(max_iter=2, tol=1e6)
+    with assert_raises(contains="insufficient samples"):
+        _ = model.fit(zeros[dtype](Shape(0, 4)))
+    assert_equal(len(model.fit_warnings), 1)
+    _ = model.fit(x)
+    assert_equal(model.n_iter_, 2)
+    assert_equal(len(model.fit_warnings), 0)
+    assert_equal(len(restored.fit_warnings), 1)
+
+
 def main() raises:
     check[DType.float32]()
     check[DType.float64]()
     inplace()
+    warnings[DType.float32]()
+    warnings[DType.float64]()
     print("PASS: FactorAnalysis contracts in Float32 and Float64")

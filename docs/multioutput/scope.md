@@ -17,8 +17,9 @@ Classifier chains support `predict`, `predict_proba`, `predict_log_proba`, and
 `decision_function` feature responses when the component exposes the matching
 trait. Probability and decision outputs are restored to original target order.
 `predict_log_proba` computes the logarithm of the final positive probabilities.
-CV fitting accepts an explicit `ChainResponses` provider; the provider owns
-fold construction, independent fold clones and out-of-fold coverage.
+CV fitting accepts an integer fold count, a native `KFold` or
+`StratifiedKFold`, or a custom `ChainResponses` provider. Native CV clones
+components per fold and writes held-out responses in original sample order.
 
 ## Current limits
 
@@ -33,9 +34,9 @@ fold construction, independent fold clones and out-of-fold coverage.
 - Random chain order uses `random_order=True`, with an optional integer
   `random_state`. Mutable RNG objects and response-method preference lists
   are not supported.
-- CV is passed to `fit(X, y, cv=provider)` rather than stored as a Python-style
-  constructor object. Integer CV values, Python splitters and `prefit` are
-  not accepted. The default `fit(X, y)` uses true preceding targets.
+- CV is specified per fit. The default `fit(X, y)` uses true preceding targets.
+  Native splitter and class-response diagnostics use Mojo errors for invalid
+  folds and handle undersized classes silently.
 - Incremental sample weights, arbitrary fit metadata, Python reflection,
   metadata routing and feature-name propagation are not implemented.
 - Component inputs, targets and predictions must match the wrapper's declared

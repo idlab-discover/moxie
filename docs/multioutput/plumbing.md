@@ -68,6 +68,13 @@ leakage prevention. Unsupported modes must raise rather than fabricate values.
 The wrappers fit a separate full-data component at every position and request
 CV responses only for positions preceding the final link.
 
+The native provider resolves folds for each preceding target column. It reuses
+model selection's splitters, dense row selection, partition validation,
+class-response alignment and scatter logic. Class-response folds fit on
+globally encoded labels and align against the full class vocabulary before
+selecting response column 1. This keeps a missing positive class from changing
+which probability column feeds the next link.
+
 Classifier response extraction selects the last column of binary probability
 or log-probability matrices. Feature responses and requested output responses
 are separate buffers, and output columns are restored to original target order.

@@ -33,7 +33,9 @@ recorded revision when adding algorithms; upstream main may have changed.
 | Probability | `ProbabilityPredictor`, `LogProbabilityPredictor` | Columns follow `classes_`; rows normalize |
 | Decision values | `DecisionFunction` | Shape/sign follow the individual estimator |
 | Transformation | `TransformerMixin`, `FitTransformer`, `InverseTransformer` | Independently opt into each capability |
+| Training labels | `FitPredictor` | `fit_predict(X, y=None)` labels the training rows |
 | Clustering | `ClusterMixin` | `fit_predict`; unseen-data prediction is separate |
+| Unsupervised scoring | `UnsupervisedScorer` | `score(X, y=None)` applies the estimator's aggregation |
 | Density | `DensityMixin` | `score_samples`; `score` aggregation follows the estimator |
 | Outliers | `OutlierMixin` | +1 inliers, -1 outliers; zero decision boundary |
 | Weighted fit | `WeightedSupervisedEstimator` | Explicit opt-in overload |

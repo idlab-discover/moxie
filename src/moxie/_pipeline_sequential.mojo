@@ -7,7 +7,7 @@ from moxie.base import (
     TransformerMixin, FitTransformer, InverseTransformer, SupervisedScorer, ClassifierMixin, clone,
     ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, SampleScorer,
     NumericClassifierClasses, WeightedSupervisedEstimator,
-    ClusterMixin, DensityMixin, OutlierMixin,
+    ClusterMixin, DensityMixin, FitPredictor, OutlierMixin, UnsupervisedScorer,
 )
 from moxie._pipeline import validate_names
 from moxie._pipeline_contracts import PipelineEstimator, PipelineSteps, PredictivePipeline, TransformingPipeline
@@ -322,11 +322,20 @@ struct Pipeline[
 def _fit_optional_step[P: TransformerMixin & UnsupervisedEstimator, T: Copyable & Deinitable](
     mut step: P, X: P.Input, y: Optional[T],
 ) raises -> P.Transformed:
-    comptime assert P.Target == T, "transformer pipeline target types must match"
+    comptime if P.Target == T:
+        return _fit_optional_transform(step, X, rebind[Optional[P.Target]](y))
+    else:
+        var none = Optional[downcast[P.Target, Movable & Deinitable]](None)
+        return _fit_optional_transform(step, X, rebind[Optional[P.Target]](none))
+
+
+def _fit_optional_transform[P: TransformerMixin & UnsupervisedEstimator](
+    mut step: P, X: P.Input, y: Optional[P.Target],
+) raises -> P.Transformed:
     comptime if conforms_to(P, FitTransformer):
         return step.fit_transform(X, rebind[Optional[P.Target]](y))
     else:
-        _ = step.fit(X, rebind[Optional[P.Target]](y))
+        _ = step.fit(X, y)
         return step.transform(X)
 
 
@@ -344,9 +353,11 @@ struct TransformerPipeline[
     TransformerMixin where conforms_to(E, TransformerMixin),
     TransformingPipeline where conforms_to(E, TransformerMixin),
     FitTransformer where conforms_to(E, TransformerMixin),
+    FitPredictor where conforms_to(E, FitPredictor),
     ClusterMixin where conforms_to(E, ClusterMixin),
     SampleScorer where conforms_to(E, SampleScorer),
     DensityMixin where conforms_to(E, DensityMixin),
+    UnsupervisedScorer where conforms_to(E, UnsupervisedScorer),
     DecisionFunction where conforms_to(E, DecisionFunction),
     OutlierMixin where conforms_to(E, OutlierMixin),
     InverseTransformer where conforms_to(P, InverseTransformer) and conforms_to(E, InverseTransformer),
@@ -358,7 +369,7 @@ struct TransformerPipeline[
     comptime Input = Self.P.Input
     comptime Target = Self.E.Target
     comptime Transformed where conforms_to(Self.E, TransformerMixin) = Self.E.Transformed
-    comptime Labels where conforms_to(Self.E, ClusterMixin) = Self.E.Labels
+    comptime Labels where conforms_to(Self.E, FitPredictor) = Self.E.Labels
     comptime Prediction where conforms_to(Self.E, Predictor) = Self.E.Prediction
     comptime SampleScores where conforms_to(Self.E, SampleScorer) = Self.E.SampleScores
     comptime Decision where conforms_to(Self.E, DecisionFunction) = Self.E.Decision
@@ -384,7 +395,6 @@ struct TransformerPipeline[
         *, transformer_name: String = "transformer", estimator_name: String = "estimator",
     ) raises:
         comptime assert Self.P.Transformed == Self.E.Input, "pipeline intermediate types must match"
-        comptime assert Self.P.Target == Self.E.Target, "transformer pipeline target types must match"
         self.transformer_name = transformer_name
         self.estimator_name = estimator_name
         self.transformer = transformer^
@@ -437,7 +447,7 @@ struct TransformerPipeline[
 
     def fit_predict(
         mut self, X: Self.Input, y: Optional[Self.Target] = None,
-    ) raises -> Self.Labels where conforms_to(Self.E, ClusterMixin):
+    ) raises -> Self.Labels where conforms_to(Self.E, FitPredictor):
         self._validate_names()
         comptime if conforms_to(Self.Target, Copyable & Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
             var transformed = _fit_optional_step(self.transformer, X, y)
@@ -497,7 +507,7 @@ struct TransformerPipeline[
 
     def score(
         self, X: Self.Input, y: Optional[Self.Target] = None,
-    ) raises -> Float64 where conforms_to(Self.E, DensityMixin):
+    ) raises -> Float64 where conforms_to(Self.E, UnsupervisedScorer):
         check_is_fitted(self)
         comptime if conforms_to(Self.P.Transformed, Deinitable):
             var transformed = self.transformer.transform(X)

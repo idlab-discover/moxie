@@ -316,10 +316,10 @@ checks training and held-out projections in both dense floating-point dtypes.
 `TransformerPipeline(first, last)` is a concrete implementation of the
 `TransformingPipeline` capability. `make_pipeline(first, last)` selects
 it for two transformers with optional-target `fit`. The pipeline is copyable
-when both children are copyable. Their target types must match exactly,
-as must the first output and last input. The pipeline forwards the optional
-target to both children and prefers each child's `fit_transform` where a
-transformed result is needed.
+when both children are copyable. The first output and last input must match.
+The optional target follows the final step's type. A prefix with a different
+target type receives `None`. The pipeline prefers each child's `fit_transform`
+where a transformed result is needed.
 
 ```mojo
 from moxie.impute import SimpleImputer
@@ -348,9 +348,10 @@ scikit-learn implementation.
 
 `UnsupervisedPipeline(prefix, final)` and `make_pipeline(prefix, final)` compose
 an optional-target transformer with an `UnsupervisedEstimator`. The prefix
-output and final input must have the same type. Both steps share the final
-estimator's optional target type. `UnsupervisedPipeline` and
-`TransformerPipeline` are two names for the same typed engine.
+output and final input must have the same type. The prefix receives the final
+estimator's optional target when the types agree and `None` otherwise.
+`UnsupervisedPipeline` and `TransformerPipeline` are two names for the same
+typed engine.
 
 ```mojo
 from moxie.cluster import DBSCAN
@@ -368,11 +369,11 @@ var log_likelihood = density.score(X_query)
 ```
 
 Training prefers the prefix's `fit_transform` and otherwise calls its
-`fit` and `transform`. `fit_predict` delegates through `ClusterMixin` and
+`fit` and `transform`. `fit_predict` delegates through `FitPredictor` and
 returns the final estimator's labels directly. Prediction on unseen rows
-requires `Predictor`, independently of `ClusterMixin`. The pipeline forwards
+requires `Predictor`, independently of `FitPredictor`. The pipeline forwards
 transformation, per-sample scoring, and decision values when the final
-estimator declares those capabilities. `score` follows `DensityMixin` and
+estimator declares those capabilities. `score` follows `UnsupervisedScorer` and
 uses the final estimator's aggregation. A concrete final-step method beyond
 these traits is accessible on `pipe.estimator`, with input already transformed
 by the caller. Configuration-dependent methods retain final-step validation.
@@ -388,7 +389,7 @@ from the pinned checkout, after building `test_pipeline_cluster.mojo` and
 
 ## Current boundary
 
-This implementation exposes fit, final-step weighted fit, clusterer fit_predict,
+This implementation exposes fit, final-step weighted fit, conditional fit_predict,
 predict, conditional transforms and score, per-sample scores, decision and probability methods,
 ordered numeric classes, feature names, input feature counts, configuration,
 cloning and the two factories. The following sklearn Pipeline

@@ -1,8 +1,8 @@
 """Interfaces for the covariance family contracts; no algorithms are implemented. See docs/family.md."""
-from moxie.base import OutlierMixin, SampleScorer, UnsupervisedEstimator
+from moxie.base import OutlierMixin, SampleScorer, UnsupervisedScorer
 
 
-trait CovarianceEstimator(UnsupervisedEstimator):
+trait CovarianceEstimator(UnsupervisedScorer):
     comptime Precision: Movable
     comptime Distances: Movable
 
@@ -14,11 +14,6 @@ trait CovarianceEstimator(UnsupervisedEstimator):
         ...
 
     def mahalanobis(self, X: Self.Input) raises -> Self.Distances:
-        ...
-
-    def score(
-        self, X: Self.Input, y: Optional[Self.Target] = None
-    ) raises -> Float64:
         ...
 
 

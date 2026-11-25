@@ -162,8 +162,8 @@ trait SampleScorer(InputEstimator):
         ...
 
 
-trait DensityMixin(SampleScorer, UnsupervisedEstimator):
-    """Score aggregation follows the estimator; score_samples is per sample."""
+trait UnsupervisedScorer(UnsupervisedEstimator):
+    """Aggregate score available without a target."""
 
     def score(
         self, X: Self.Input, y: Optional[Self.Target] = None
@@ -171,8 +171,14 @@ trait DensityMixin(SampleScorer, UnsupervisedEstimator):
         ...
 
 
-trait ClusterMixin(UnsupervisedEstimator):
-    """Fit_predict does not imply prediction of unseen data (e.g. DBSCAN)."""
+trait DensityMixin(SampleScorer, UnsupervisedScorer):
+    """Score aggregation follows the estimator; score_samples is per sample."""
+
+    pass
+
+
+trait FitPredictor(UnsupervisedEstimator):
+    """Fit and label the training rows."""
 
     comptime Labels: Movable
 
@@ -180,6 +186,12 @@ trait ClusterMixin(UnsupervisedEstimator):
         mut self, X: Self.Input, y: Optional[Self.Target] = None
     ) raises -> Self.Labels:
         ...
+
+
+trait ClusterMixin(FitPredictor):
+    """Clustering fit_predict does not imply prediction of unseen data."""
+
+    pass
 
 
 trait OutlierMixin(DecisionFunction, Predictor, UnsupervisedEstimator):

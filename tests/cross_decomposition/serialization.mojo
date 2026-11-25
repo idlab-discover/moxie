@@ -80,18 +80,21 @@ def pls_round_trip[flavor: Int, dtype: DType](
     var x = inputs[dtype]()
     var y = targets[dtype](single)
     var unfitted_archive = Schema.encode(model)
+    assert_equal(unfitted_archive.schema_version, 1)
     var fresh = Schema.decode(file_round_trip(unfitted_archive, path))
     assert_true(not fresh.__sklearn_is_fitted__())
+    assert_true(fresh.get_metadata_routing().score.value().isa[NoneType]())
     same_archive(Schema.encode(fresh), unfitted_archive)
     with assert_raises():
         _ = fresh.predict(x)
 
-    _ = model.fit(x, y)
+    _ = model.set_score_request(sample_weight=String("validation_weight")).fit(x, y)
     var prediction = model.predict(x)
     var projected = model.transform(x, y)
     assert_equal(prediction.ndim, y.ndim)
     _ = model.set_params(n_components=-1, scale=False, max_iter=0, tol=-1.0, copy=False)
     var fitted_archive = Schema.encode(model)
+    assert_equal(fitted_archive.schema_version, 2)
     var restored = Schema.decode(file_round_trip(fitted_archive, path))
     assert_equal(restored.n_components, -1)
     assert_equal(restored.max_iter, 0)
@@ -103,7 +106,9 @@ def pls_round_trip[flavor: Int, dtype: DType](
     assert_equal(restored.n_iter_, model.n_iter_)
     same_array(restored.predict(x), prediction)
     same_scores(restored.transform(x, y), projected)
-    assert_true(not clone(restored).__sklearn_is_fitted__())
+    var cloned = clone(restored)
+    assert_true(not cloned.__sklearn_is_fitted__())
+    assert_equal(cloned.get_metadata_routing().score.requested_name().or_else(""), "validation_weight")
     restored.intercept_.unsafe_set(0, 987.0)
     same_array(model.predict(x), prediction)
 
@@ -173,6 +178,38 @@ def constant_residual() raises:
 
 
 @no_inline
+def score_requests() raises:
+    comptime Schema = PLSRegressionSchema[]
+    var model = PLSRegression()
+    var metadata = {"sample_weight": 7, "validation_weight": 8}
+    with assert_raises():
+        _ = model.get_metadata_routing().score.route(metadata)
+
+    _ = model.set_score_request(sample_weight=False)
+    var declined = Schema.decode(loads(dumps(Schema.encode(model))))
+    assert_true(not declined.get_metadata_routing().score.route(metadata))
+    _ = model.set_score_request(sample_weight=True).set_score_request()
+    var accepted = Schema.decode(loads(dumps(Schema.encode(model))))
+    assert_equal(accepted.get_metadata_routing().score.route(metadata).or_else(-1), 7)
+
+    _ = model.set_score_request(sample_weight=String("validation_weight"))
+    with assert_raises():
+        _ = model.set_score_request(sample_weight=String("invalid alias"))
+    assert_equal(model.get_metadata_routing().score.route(metadata).or_else(-1), 8)
+    var snapshot = model.get_metadata_routing()
+    var invalid = Schema.encode(model)
+    invalid.manifest[len(invalid.manifest) - 1] = 32
+    with assert_raises():
+        _ = Schema.decode(invalid)
+
+    _ = model.set_score_request(sample_weight=None)
+    assert_equal(Schema.encode(model).schema_version, 1)
+    assert_equal(snapshot.score.route(metadata).or_else(-1), 8)
+    with assert_raises():
+        _ = model.get_metadata_routing().score.route(metadata)
+
+
+@no_inline
 def invalid_state() raises:
     var model = PLSCanonical(2, algorithm="svd")
     _ = model.fit(inputs[DType.float64](), targets[DType.float64](False))
@@ -183,7 +220,7 @@ def invalid_state() raises:
         _ = PLSCanonicalSchema[DType.float32].decode(archive)
 
     var invalid = archive.copy()
-    invalid.schema_version += 1
+    invalid.schema_version = 3
     with assert_raises():
         _ = PLSCanonicalSchema.decode(invalid)
     invalid = archive.copy()
@@ -229,5 +266,6 @@ def main() raises:
     plssvd_round_trip[DType.float64]()
     strided_state()
     constant_residual()
+    score_requests()
     invalid_state()
     print("PASS: cross-decomposition model schemas")

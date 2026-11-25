@@ -79,6 +79,17 @@ class IndexedSequenceKernel(SequenceKernel):
         return super().diag(self._decode(X))
 
 
+def pinned_classifier():
+    load_pinned("sklearn/multiclass.py", "pinned_gp_multiclass", "sklearn")
+    return load_pinned(
+        "sklearn/gaussian_process/_gpc.py", "pinned_gp_gpc", "sklearn.gaussian_process",
+        extra=[
+            ("from sklearn.gaussian_process.kernels import", "from pinned_gp_kernels import"),
+            ("from sklearn.multiclass import", "from pinned_gp_multiclass import"),
+        ],
+    ).GaussianProcessClassifier
+
+
 def classification_reference(name, gpc):
     binary = name in ("classification_gallery", "classification_optimized")
     fixed = name == "classification_gallery"
@@ -136,14 +147,7 @@ def main():
         )
     expected = {(case, key): value for case in ("fixed", "optimized")
                 for key, value in reference(case == "fixed").items()}
-    load_pinned("sklearn/multiclass.py", "pinned_gp_multiclass", "sklearn")
-    classifier = load_pinned(
-        "sklearn/gaussian_process/_gpc.py", "pinned_gp_gpc", "sklearn.gaussian_process",
-        extra=[
-            ("from sklearn.gaussian_process.kernels import", "from pinned_gp_kernels import"),
-            ("from sklearn.multiclass import", "from pinned_gp_multiclass import"),
-        ],
-    ).GaussianProcessClassifier
+    classifier = pinned_classifier()
     for name in ("classification_gallery", "classification_optimized",
                  "classification_ovr", "classification_ovo"):
         expected.update({(name, key): value

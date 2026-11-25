@@ -232,8 +232,8 @@ tree storage use Float64. Both Moxie trees return Float64 kernel densities,
 including in log space. Sparse graph APIs remain deferred.
 
 [Imputation](../families/impute/README.md) is owned by Moxie, including dense simple, integer,
-string and KNN imputers, numeric/string indicators, and dense deterministic
-IterativeImputer. The standalone checkout is not a build dependency.
+string and KNN imputers, numeric/string indicators, and dense deterministic and
+posterior IterativeImputer. The standalone checkout is not a build dependency.
 
 [Ensemble](../families/ensemble/README.md) is owned by Moxie, including the four
 dense RandomForest/ExtraTrees estimators and shared forest engine. Other ensemble

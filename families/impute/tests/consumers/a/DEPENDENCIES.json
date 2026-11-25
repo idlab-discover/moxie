@@ -3,7 +3,9 @@
   "projects": [
     {
       "assets": {
-        "licenses/linear_model-scikit-learn.txt": "families/linear_model/LICENSES/scikit-learn.txt"
+        "licenses/linear_model-scikit-learn.txt": "families/linear_model/LICENSES/scikit-learn.txt",
+        "licenses/preprocessing-scipy.txt": "families/preprocessing/LICENSES/scipy.txt",
+        "licenses/preprocessing-numpy.txt": "families/preprocessing/LICENSES/numpy.txt"
       },
       "exports": {
         "packages": {
@@ -21,6 +23,7 @@
             "FittedState": "moxie.utils.validation",
             "check_is_fitted": "moxie.utils.validation"
           },
+          "moxie.preprocessing": {},
           "moxie.linear_model": {
             "BayesianRidge": "moxie.linear_model._bayes"
           }
@@ -37,6 +40,9 @@
         },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
+        },
+        "moxie.preprocessing._special_math": {
+          "file": "src/moxie/preprocessing/_special_math.mojo"
         },
         "moxie.linear_model._base": {
           "file": "src/moxie/linear_model/_base.mojo"
@@ -187,7 +193,8 @@
             "StringSimpleImputer": "moxie.impute._string",
             "StringMissingIndicator": "moxie.impute._string",
             "IterativeBound": "moxie.impute._iterative",
-            "IterativeParams": "moxie.impute._iterative"
+            "IterativeParams": "moxie.impute._iterative",
+            "IterativePosteriorRegressor": "moxie.impute._iterative"
           },
           "moxie.utils": {}
         },

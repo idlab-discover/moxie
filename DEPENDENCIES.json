@@ -2122,7 +2122,8 @@
             "StringSimpleImputer": "moxie.impute._string",
             "StringMissingIndicator": "moxie.impute._string",
             "IterativeBound": "moxie.impute._iterative",
-            "IterativeParams": "moxie.impute._iterative"
+            "IterativeParams": "moxie.impute._iterative",
+            "IterativePosteriorRegressor": "moxie.impute._iterative"
           },
           "moxie.utils": {}
         },

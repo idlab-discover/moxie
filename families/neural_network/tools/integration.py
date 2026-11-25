@@ -47,7 +47,8 @@ def build():
     sources = list((RBM / 'tests').glob('test_*.mojo'))
     sources += [RBM / 'tests/kernel_dump.mojo', RBM / 'tests/estimator_dump.mojo', RBM / 'tests/lifecycle_dump.mojo',
                 RBM / 'examples/rbm.mojo', ENGINE / 'tests/parameters.mojo',
-                ENGINE / 'tests/parameter_dump.mojo', ENGINE / 'examples/parameters.mojo']
+                ENGINE / 'tests/parameter_dump.mojo', ENGINE / 'tests/objective_dump.mojo',
+                ENGINE / 'examples/parameters.mojo']
     for source in sources:
         owner = RBM if source.is_relative_to(RBM) else ENGINE
         (owner / 'builds').mkdir(parents=True, exist_ok=True)
@@ -60,12 +61,13 @@ def test():
                          (ENGINE, ['parameters', 'example'])]:
         for name in names:
             run(owner / 'builds' / name)
+    subprocess.run([ENGINE / 'builds/objective_dump'], check=True, stdout=subprocess.DEVNULL)
     run(sys.executable, FAMILY / 'tools/check.py', 'test')
 
 
 def parity():
     for path in [RBM / 'tests/kernel_parity.py', RBM / 'tests/estimator_parity.py', RBM / 'tests/lifecycle_parity.py',
-                 ENGINE / 'tests/parameter_parity.py']:
+                 ENGINE / 'tests/parameter_parity.py', ENGINE / 'tests/objective_parity.py']:
         run(sys.executable, path)
     print('PASS supported subset parity; MLP training and Float32 partial_fit remain deferred', flush=True)
 

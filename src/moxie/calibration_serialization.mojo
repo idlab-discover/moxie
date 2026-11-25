@@ -24,8 +24,12 @@ from .discriminant_analysis_serialization import (
 )
 from .isotonic_serialization import IsotonicRegressionSchema
 from .model_selection import KFold, LeaveOneOut, StratifiedKFold
-from .naive_bayes import GaussianNB, MultinomialNB
-from .naive_bayes_serialization import GaussianNBSchema, MultinomialNBSchema
+from .naive_bayes import ComplementNB, GaussianNB, MultinomialNB
+from .naive_bayes_serialization import (
+    ComplementNBSchema,
+    GaussianNBSchema,
+    MultinomialNBSchema,
+)
 from .serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema
 from .svm import LinearSVC, SVC
 from .svm.kernel_serialization import SVCSchema
@@ -281,6 +285,29 @@ struct _MultinomialNBCodec(_AdapterCodec):
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Adapter:
         return adapt_classifier(MultinomialNBSchema[].decode(archive))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().n_features_in_
+
+
+struct _ComplementNBCodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[ComplementNB[]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.ComplementNB"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in ComplementNB adapter"
+            )
+        return ComplementNBSchema[].encode(adapter.estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(ComplementNBSchema[].decode(archive))
 
     @staticmethod
     def feature_count(adapter: Self.Adapter) -> Int:
@@ -577,5 +604,6 @@ comptime CalibratedClassifierCVSchema = _CalibrationSchema[_LinearSVCCodec]
 comptime CalibratedSVCClassifierCVSchema = _CalibrationSchema[_SVCCodec]
 comptime CalibratedGaussianNBClassifierCVSchema = _CalibrationSchema[_GaussianNBCodec]
 comptime CalibratedMultinomialNBClassifierCVSchema = _CalibrationSchema[_MultinomialNBCodec]
+comptime CalibratedComplementNBClassifierCVSchema = _CalibrationSchema[_ComplementNBCodec]
 comptime CalibratedLDAClassifierCVSchema = _CalibrationSchema[_LDACodec]
 comptime CalibratedQDAClassifierCVSchema = _CalibrationSchema[_QDACodec]

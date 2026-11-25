@@ -287,6 +287,7 @@ calibrator's base estimator. Each schema accepts fitted and unfitted models.
 | `adapt_classifier(SVC(...))` | `CalibratedSVCClassifierCVSchema` |
 | `adapt_classifier(GaussianNB(...))` | `CalibratedGaussianNBClassifierCVSchema` |
 | `adapt_classifier(MultinomialNB(...))` | `CalibratedMultinomialNBClassifierCVSchema` |
+| `adapt_classifier(ComplementNB(...))` | `CalibratedComplementNBClassifierCVSchema` |
 | `adapt_classifier(LinearDiscriminantAnalysis(...))` | `CalibratedLDAClassifierCVSchema` |
 | `adapt_classifier(QuadraticDiscriminantAnalysis(...))` | `CalibratedQDAClassifierCVSchema` |
 
@@ -332,8 +333,9 @@ materialized splits, missing classes, default minority-class splits, and
 explicit KFold and seeded shuffled KFold and StratifiedKFold. Production
 classifier cases load GaussianNB, LDA, QDA and LogisticRegression from the
 same revision and check binary and multiclass class order, predictions and
-probabilities. Standalone SVC, GaussianNB, LDA and QDA cases exercise native
-round trips for all three calibration methods in ensemble and pooled modes.
+probabilities. SVC, GaussianNB, MultinomialNB, ComplementNB, LDA and QDA cases
+exercise native round trips for all three calibration methods in ensemble and
+pooled modes. ComplementNB cases include weighted fitting and `norm=True`.
 Restored probabilities match the original Mojo outputs exactly. Against
 scikit-learn, the allowed difference is `5e-6 * (1 + abs(expected))` for solver
 rounding. Default LinearSVC cases cover all three calibrators, weighted and

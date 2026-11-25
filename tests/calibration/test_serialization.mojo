@@ -14,6 +14,7 @@ from moxie.calibration import (
 )
 from moxie.calibration_serialization import (
     CalibratedClassifierCVSchema,
+    CalibratedComplementNBClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
     CalibratedLDAClassifierCVSchema,
     CalibratedMultinomialNBClassifierCVSchema,
@@ -26,7 +27,7 @@ from moxie.discriminant_analysis import (
     QuadraticDiscriminantAnalysis,
 )
 from moxie.model_selection import KFold, LeaveOneOut, StratifiedKFold
-from moxie.naive_bayes import GaussianNB, MultinomialNB
+from moxie.naive_bayes import ComplementNB, GaussianNB, MultinomialNB
 from moxie.serialization import (
     ModelArchive, ModelSchema, dumps, loads, load_model, save_model,
 )
@@ -267,6 +268,56 @@ def test_multinomial(X: Dense, y: Dense) raises:
         _ = MultinomialSchema.encode(custom)
 
 
+def test_complement(X: Dense, y: Dense) raises:
+    comptime ComplementSchema = CalibratedComplementNBClassifierCVSchema
+    var file = "builds/calibration-complement-model.moxie"
+    var model = CalibratedClassifierCV(
+        adapt_classifier(ComplementNB(alpha=0.0, force_alpha=False, norm=True)),
+        cv=3, method="sigmoid", ensemble=False,
+    )
+    check_unfitted[ComplementSchema](model, X)
+    _ = model.fit(X, y)
+    _ = model.set_params(
+        estimator=adapt_classifier(ComplementNB(alpha=2.0, norm=False)),
+        method="temperature",
+    )
+    save_model[ComplementSchema](model, file)
+    var restored = load_model[ComplementSchema](file)
+    assert_equal(restored.estimator.estimator().alpha, 2.0)
+    assert_false(restored.estimator.estimator().norm)
+    ref fitted = restored.calibrated_classifiers_[0].estimator.estimator()
+    assert_true(fitted.norm)
+    assert_equal(len(fitted.fit_warnings), 1)
+    assert_equal(restored.calibrated_classifiers_[0].method, "sigmoid")
+    assert_equal_predictions(model, restored, X, y)
+    assert_false(clone(restored).__sklearn_is_fitted__())
+
+    var archive = ComplementSchema.encode(restored)
+    assert_equal(dumps(archive), dumps(ComplementSchema.encode(model)))
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = CalibratedMultinomialNBClassifierCVSchema.decode(archive)
+    for ref payload in archive.payloads:
+        if payload.name == "fold/0/estimator/feature_all_":
+            payload.name = "fold/0/estimator/unknown"
+    with assert_raises(contains="feature_all_"):
+        _ = ComplementSchema.decode(loads(dumps(archive)))
+
+    _ = restored.fit(X, y)
+    _ = model.fit(X, y)
+    assert_false(restored.calibrated_classifiers_[0].estimator.estimator().norm)
+    assert_equal(restored.calibrated_classifiers_[0].method, "temperature")
+    assert_equal_predictions(model, restored, X, y)
+
+    def read_classes(estimator: ComplementNB[]) raises -> Dense:
+        return Dense(nm.Shape(0))
+
+    var custom = CalibratedClassifierCV(
+        ClassifierCalibrationAdapter(ComplementNB(), read_classes, "ComplementNB")
+    )
+    with assert_raises(contains="requires the built-in ComplementNB adapter"):
+        _ = ComplementSchema.encode(custom)
+
+
 def test_cv_configuration() raises:
     var splits: List[CalibrationSplit] = [
         CalibrationSplit([1, 3, 4], [0, 2]),
@@ -309,6 +360,7 @@ def main() raises:
     test_lda_fold_fit_warnings(X, y)
     test_gaussian(X, y)
     test_multinomial(X, y)
+    test_complement(X, y)
     var file = "builds/calibration-test-model.moxie"
     var model = CalibratedClassifierCV(
         adapt_classifier(LinearSVC(C=0.5, random_state=0)),

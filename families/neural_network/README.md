@@ -27,7 +27,13 @@ Side-by-side notebooks against the official gallery live in
 `notebooks/neural_network/`: `plot_rbm_logistic_classification` (Float64
 numerical parity of the RBM pipeline, Float32 distribution checks) and
 `plot_mlp_alpha` (bounded dense MLP parity and full-budget diagnostics).
-Run them with `pixi run -e notebooks notebooks notebooks/neural_network`.
+The [MLP training-curves notebook](../../notebooks/neural_network/plot_mlp_training_curves.ipynb)
+compares full loss curves, stopping epochs and predictions for the seven
+gallery strategies on Iris, Digits, Circles and Moons.
+
+```sh
+pixi run -e notebooks notebooks notebooks/neural_network/plot_mlp_training_curves.ipynb
+```
 
 See [scope](docs/scope.md), [RBM API](algorithms/rbm/docs/api.md),
 [MLP engine](shared/mlp_engine/docs/api.md), and [provenance](provenance/rollup.json).

@@ -12,7 +12,7 @@ in-place fit, associated array types, and other Mojo-specific differences.
 
 | Trait | Shared capabilities | Additional required methods |
 | --- | --- | --- |
-| `PairwiseInput` | Family-local capability | `pairwise_input(self) -> Bool`, current configuration |
+| `PairwiseInput` | Optional estimator capability | `pairwise_input(self) -> Bool`, current configuration |
 | `MulticlassClassifier` | `ClassifierMixin` | Inherited only |
 | `MulticlassDecision` | `MulticlassClassifier, DecisionFunction` | Inherited only |
 | `MulticlassProbability` | `MulticlassClassifier, ProbabilityPredictor` | Inherited only |

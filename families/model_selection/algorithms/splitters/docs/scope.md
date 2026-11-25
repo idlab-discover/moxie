@@ -20,8 +20,10 @@ Custom CV adapters can import `select_rows` from `moxie.model_selection`.
 It supports rank-one and rank-two NuMojo arrays and lists of copyable elements.
 Pass a rank-one Int64 `IndexArray` of nonnegative row coordinates. The result
 owns its data and preserves row order, duplicates, array dtype, and trailing
-shape. Empty index arrays select zero rows. Use a custom adapter for pairwise
-kernels that need both row and column selection.
+shape. Empty index arrays select zero rows. For pairwise CV adapters,
+`select_rows(X, indices, columns=train)` requires a square rank-two input and
+copies the block in the supplied row and column order. It validates both index
+arrays and preserves dtype, duplicates, and empty axes.
 
 ## Labels and groups
 

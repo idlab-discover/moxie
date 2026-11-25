@@ -41,6 +41,13 @@ ignore `kernel_params`, matching sklearn.
 
 Precomputed fit takes `(n, n)` and predict takes `(m, n)` (test versus training
 samples). `n_features_in_` is n in this mode. Other modes record feature count.
+The shared query `moxie.multiclass.pairwise_input(model)` is true when
+`kernel="precomputed"` and follows configuration changes, including on unfitted
+clones. In a CV adapter, use the query when configuring the adapter and return
+`select_rows(X, rows, columns=train)` from `input_rows` for pairwise input.
+Model selection supplies the training indices on both fit and score calls.
+This produces train-by-train and test-by-train blocks from the full square
+Gram matrix. Ordinary feature input uses `select_rows(X, rows)`.
 `X_fit_`, `dual_coef_` and `n_features_in_` become valid after fitting.
 Inference on an unfitted model raises a descriptive `NotFittedError` message.
 

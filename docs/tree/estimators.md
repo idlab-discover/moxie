@@ -35,7 +35,9 @@ Unicode normalization. Numeric targets may be vectors or matrices; strings use
 the previously fitted tree intact. `fit(X, y, sample_weight=weights)` borrows the
 weight array. The positional optional-weight overload accepts an explicit
 `Optional[Values]` or a transferred/copied array. Fitted trees retain no aliases
-to training data. Cloning copies constructor configuration and is unfitted.
+to training data. `copy()` takes an independent fitted snapshot, including the
+learned tree, classes and feature encoder. `clone()` copies constructor
+configuration into an unfitted estimator.
 
 `predict` returns the declared target type, with a vector for one output and
 a matrix for multiple outputs. Regression predictions remain Float64. `apply` returns an Int64 vector of leaf IDs. `predict_proba` and

@@ -2,6 +2,7 @@
 from std.sys import argv
 from std.testing import assert_equal, assert_raises, assert_true
 from numojo import array
+from moxie.base import get_tags
 from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
 from moxie.isotonic_serialization import IsotonicRegressionSchema
@@ -135,6 +136,15 @@ def run_cases[dtype: DType]() raises:
         var context = kind + " case " + String(count)
         if kind == "routing":
             check_routing[dtype](String(fields[1]), String(fields[2]), String(fields[3]), String(fields[4]))
+        elif kind == "tags":
+            var model = IsotonicRegression[dtype]()
+            if fields[1] == "true":
+                var x: List[Scalar[dtype]] = [0, 1]
+                _ = model.fit(array(x, [2, 1]), array(x, [2]))
+            var tags = get_tags(model)
+            assert_equal(tags.input_tags.one_d_array, fields[2] == "true", msg=context)
+            assert_equal(tags.input_tags.two_d_array, fields[3] == "true", msg=context)
+            assert_equal(tags._skip_test, fields[4] == "true", msg=context)
         elif kind == "serialized_requests":
             comptime Schema = IsotonicRegressionSchema[dtype]
             var model = IsotonicRegression[dtype]()

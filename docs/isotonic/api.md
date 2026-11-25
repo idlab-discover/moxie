@@ -203,6 +203,14 @@ unfitted clones preserve both requests. Direct `fit` and `score` always use
 their explicit `sample_weight` arguments. Pipeline and model selection still
 require their existing explicit metadata arguments.
 
+### Estimator tags
+
+`get_tags(model)` from `moxie.base` returns a value snapshot with
+`input_tags.one_d_array=True`, `input_tags.two_d_array=False`, and
+`_skip_test=False` for both dtypes and in either fitted state. These are the
+reference tag values. The estimator also accepts an `(n, 1)` array as a
+single-feature input.
+
 ## Persistence
 
 Use the experimental [native model format](../serialization.md) for fitted or
@@ -248,9 +256,9 @@ for in-place fitting and typed configuration differences.
 `pixi run python tools/isotonic_checks.py test` covers trait conformance,
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
 strided arrays, direction, bounds, weighted R², and native persistence.
-`pixi run python tools/isotonic_checks.py parity` compares 720 Float64 and
-553 Float32 deterministic cases, including scaler pipeline predictions,
-interpolator reconstruction, validation edges, warning diagnostics and sample-weight requests,
+`pixi run python tools/isotonic_checks.py parity` compares 722 Float64 and
+555 Float32 deterministic cases, including scaler pipeline predictions,
+interpolator reconstruction, validation edges, warning diagnostics, sample-weight requests and input tags,
 against the pinned Python module and Cython tie engine. The scikit-learn
 support wheel and SciPy come from the locked Pixi environment. Float64 uses
 `atol=rtol=2e-12` and Float32 uses `atol=rtol=2e-6` to allow for differences

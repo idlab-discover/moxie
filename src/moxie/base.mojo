@@ -36,6 +36,37 @@ def clone[E: BaseEstimator](estimator: E) raises -> E:
     return estimator.__sklearn_clone__()
 
 
+@fieldwise_init
+struct InputTags(ImplicitlyCopyable):
+    """Array ranks supported by the general estimator contract."""
+
+    var one_d_array: Bool
+    var two_d_array: Bool
+
+
+struct EstimatorTags(ImplicitlyCopyable):
+    """Native capabilities reported independently of fitted state."""
+
+    var input_tags: InputTags
+    var _skip_test: Bool
+
+    def __init__(out self, input_tags: InputTags, *, _skip_test: Bool = False):
+        self.input_tags = input_tags
+        self._skip_test = _skip_test
+
+
+trait EstimatorTagsProvider(BaseEstimator):
+    """Optional runtime tag query for generic consumers."""
+
+    def __sklearn_tags__(self) -> EstimatorTags:
+        ...
+
+
+def get_tags[E: EstimatorTagsProvider](estimator: E) -> EstimatorTags:
+    """Return an independently owned snapshot of the estimator's tags."""
+    return estimator.__sklearn_tags__()
+
+
 trait InputEstimator(BaseEstimator):
     comptime Input: Movable
 

@@ -31,6 +31,7 @@ REFERENCE_SOURCES = (
     "sklearn/_isotonic.pyx",
     "sklearn/metrics/_regression.py",
     "sklearn/utils/_metadata_requests.py",
+    "sklearn/utils/_tags.py",
 )
 
 
@@ -92,6 +93,16 @@ def main():
 
     def add(*values):
         records.append("|".join(map(encode, values)))
+
+    def estimator_tags():
+        model = reference.IsotonicRegression()
+        for fitted in (False, True):
+            if fitted:
+                x = np.asarray([0, 1], dtype=dtype)
+                model.fit(x.reshape(-1, 1), x)
+            tags = model.__sklearn_tags__()
+            add("tags", fitted, tags.input_tags.one_d_array, tags.input_tags.two_d_array,
+                tags._skip_test)
 
     def routing_requests():
         source = args.sklearn_checkout / "sklearn/utils/_metadata_requests.py"
@@ -301,6 +312,7 @@ def main():
     score_warnings()
     routing_requests()
     serialized_requests()
+    estimator_tags()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(240):
@@ -359,6 +371,7 @@ def main():
     score_warnings()
     routing_requests()
     serialized_requests()
+    estimator_tags()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(150):

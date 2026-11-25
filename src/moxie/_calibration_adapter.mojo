@@ -84,10 +84,10 @@ def adapt_classifier(
     return adapter^
 
 
-def adapt_classifier(
-    var estimator: FrozenEstimator[GaussianNB[]],
-) -> ClassifierCalibrationAdapter[FrozenEstimator[GaussianNB[]]]:
-    def classes(model: FrozenEstimator[GaussianNB[]]) raises -> Array:
+def adapt_classifier[dtype: DType](
+    var estimator: FrozenEstimator[GaussianNB[dtype=dtype]],
+) -> ClassifierCalibrationAdapter[FrozenEstimator[GaussianNB[dtype=dtype]]]:
+    def classes(model: FrozenEstimator[GaussianNB[dtype=dtype]]) raises -> Array:
         return _numeric_classes(model.estimator().classes_)
 
     var adapter = ClassifierCalibrationAdapter(estimator^, classes, "GaussianNB")

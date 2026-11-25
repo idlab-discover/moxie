@@ -42,6 +42,10 @@ trait CalibrationEstimator(BaseEstimator, Copyable, Deinitable):
     def uses_probabilities(self) -> Bool:
         ...
 
+    def probability_sum_tolerance(self) -> Float64:
+        """Return the absolute tolerance for a probability row to sum to one."""
+        return 1e-8
+
     def is_frozen(self) -> Bool:
         return False
 
@@ -64,13 +68,44 @@ def validate_integral_labels(y: Array) raises:
 
 
 comptime _ClassReader[E: ClassifierMixin] = def(E) thin raises -> Array
+comptime _Float32Array = nm.NDArray[DType.float32]
+
+
+def _cast_calibration_array[source: DType, //, target: DType](
+    values: nm.NDArray[source],
+) raises -> nm.NDArray[target]:
+    if values.ndim != 1 and values.ndim != 2:
+        raise Error("ValueError: expected a calibration vector or matrix")
+    if values.is_c_contiguous() or values.is_f_contiguous():
+        return values.astype[target]()
+    # NuMojo astype reads consecutive storage. Convert views by logical index.
+    var result = nm.NDArray[target](values.shape)
+    if values.ndim == 1:
+        for i in range(values.size):
+            result[nm.Item(i)] = values[nm.Item(i)].cast[target]()
+    else:
+        for i in range(values.shape[0]):
+            for j in range(values.shape[1]):
+                result[nm.Item(i, j)] = values.item(i, j).cast[target]()
+    return result^
+
+
+def _calibration_response[R: Movable](var values: R) raises -> Array:
+    comptime if R == Array:
+        return rebind_var[Array](values^)
+    else:
+        comptime assert R == _Float32Array, (
+            "Calibration requires Float32 or Float64 responses"
+        )
+        var floats = rebind_var[_Float32Array](values^)
+        return _cast_calibration_array[target=DType.float64](floats)
 
 
 struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
     CalibrationEstimator,
     CalibrationDisplayEstimator where conforms_to(E, ProbabilityPredictor),
 ):
-    """Adapt a Float64 classifier with numeric list or Int64 array targets.
+    """Adapt a Float64 classifier or a fitted frozen Float32 classifier.
 
     Supply a reader that returns the fitted classifier's classes in column
     order. Prefer `adapt_classifier` for classifiers with a built-in reader.
@@ -90,7 +125,9 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
         read_classes: _ClassReader[Self.E],
         var name: String,
     ):
-        comptime assert Self.E.Input == Array, "Calibration requires Float64 features"
+        comptime assert Self.E.Input == Array or (
+            conforms_to(Self.E, FrozenEstimatorAPI) and Self.E.Input == _Float32Array
+        ), "Calibration requires Float64 features or a frozen Float32 classifier"
         comptime if not conforms_to(Self.E, FrozenEstimatorAPI):
             comptime assert (
                 Self._domain.supported
@@ -206,14 +243,26 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
     def uses_probabilities(self) -> Bool:
         return not conforms_to(Self.E, DecisionFunction)
 
+    def probability_sum_tolerance(self) -> Float64:
+        comptime if conforms_to(Self.E, ProbabilityPredictor):
+            comptime if Self.E.Probabilities == _Float32Array:
+                # The Float32 row was normalized before widening. Match the
+                # row-sum tolerance used to recognize probabilities in logits().
+                return 1.001e-5
+        return 1e-8
+
     def response(self, X: Array) raises -> Array:
         comptime if conforms_to(Self.E, DecisionFunction):
-            comptime assert Self.E.Decision == Array, (
-                "Calibration requires Float64 decision scores"
-            )
-            var scores = rebind_var[Array](
-                self._estimator[].decision_function(rebind[Self.E.Input](X))
-            )
+            var scores: Array
+            comptime if Self.E.Input == _Float32Array:
+                var features = _cast_calibration_array[target=DType.float32](X)
+                scores = _calibration_response(
+                    self._estimator[].decision_function(rebind[Self.E.Input](features))
+                )
+            else:
+                scores = _calibration_response(
+                    self._estimator[].decision_function(rebind[Self.E.Input](X))
+                )
             if scores.ndim == 1:
                 return scores.reshape(nm.Shape(scores.size, 1))
             return scores^
@@ -225,12 +274,15 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
     def calibration_probabilities(
         self, X: Array
     ) raises -> Array where conforms_to(Self.E, ProbabilityPredictor):
-        comptime assert Self.E.Probabilities == Array, (
-            "Calibration requires Float64 probabilities"
-        )
-        return rebind_var[Array](
-            self._estimator[].predict_proba(rebind[Self.E.Input](X))
-        )
+        comptime if Self.E.Input == _Float32Array:
+            var features = _cast_calibration_array[target=DType.float32](X)
+            return _calibration_response(
+                self._estimator[].predict_proba(rebind[Self.E.Input](features))
+            )
+        else:
+            return _calibration_response(
+                self._estimator[].predict_proba(rebind[Self.E.Input](X))
+            )
 
     def display_name(self) -> String:
         return self._name.copy()

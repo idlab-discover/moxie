@@ -42,3 +42,6 @@ struct FrozenCalibrationEstimator[E: CalibrationEstimator](CalibrationEstimator)
 
     def uses_probabilities(self) -> Bool:
         return self.estimator.estimator().uses_probabilities()
+
+    def probability_sum_tolerance(self) -> Float64:
+        return self.estimator.estimator().probability_sum_tolerance()

@@ -127,7 +127,8 @@ Copies share a read-only snapshot, and fitting replaces the snapshot on
 success. For classifiers without fitted copying, such as QDA, updating adapter
 parameters creates an unfitted snapshot. Ordinary clones are unfitted.
 Pass a `FrozenEstimator` handle directly to `adapt_classifier` for all five
-fitted default Naive Bayes specializations, `LinearDiscriminantAnalysis[]`,
+fitted default Naive Bayes specializations, Float32 `GaussianNB` with its
+default integer label domain, `LinearDiscriminantAnalysis[]`,
 `QuadraticDiscriminantAnalysis[]` and `LogisticRegression[]`. The same overload
 works for other classifiers implementing `NumericClassifierClasses`, including
 a fitted pipeline whose final step implements that trait.
@@ -137,14 +138,18 @@ var calibrated = CalibratedClassifierCV(adapt_classifier(frozen.copy()))
 _ = calibrated.fit(X_calibration, y_calibration)
 ```
 
-The generic overload uses Float64 NDArray features and the classifier's
-Float64 decision scores or probabilities, preferring decision scores when
-both traits are available. It reads class labels in the order returned by
-`get_classes()`. Class storage can be a supported numeric list or a
+The generic overload supports fitted classifiers with Float32 or Float64
+NDArray features and responses. It prefers decision scores when both
+response traits are available. The adapter converts features to Float32
+before calling a Float32 classifier, then widens Float32 responses to
+Float64 for calibration. Calibration targets, sample weights and calibrated
+probabilities remain Float64. Widened Float32 probability rows use an
+absolute sum tolerance of `1.001e-5` to account for rounding in the classifier.
+The adapter reads class labels in the order
+returned by `get_classes()`. Class storage can be a supported numeric list or a
 one-dimensional Int64, Float32 or Float64 NDArray. Labels must be integral
-and have magnitude at most `2**53 - 1`. The calibration targets still use a
-Float64 array. A classifier without the class metadata trait can supply a
-reader to `ClassifierCalibrationAdapter`.
+and have magnitude at most `2**53 - 1`. A classifier without the class metadata
+trait can supply a reader to `ClassifierCalibrationAdapter`.
 
 Copying the frozen handle shares the fitted estimator. Cloning the adapter
 preserves that handle. Fitting keeps the base estimator frozen, and
@@ -165,9 +170,9 @@ requires `fit(X, y, sample_weight=None)`, `class_labels()`, `response(X)`, and
 - `response()` returns the preferred decision response when available,
   otherwise probabilities. Binary decisions have shape `(n_samples, 1)`.
   Multiclass decisions and probability responses have one column per class.
-- Probability responses must be in `[0, 1]` and row sums must be within `1e-8`
-  of one. The wrapper selects the positive-class column for binary sigmoid
-  and isotonic fitting.
+- Probability responses must be in `[0, 1]` and row sums must be within
+  `probability_sum_tolerance()` of one. The default is `1e-8`. The wrapper
+  selects the positive-class column for binary sigmoid and isotonic fitting.
 - Adapters without weighted fitting must reject nonempty weights explicitly.
   The wrapper passes None when the caller did not provide weights.
 - A frozen adapter must preserve fitted state in its clone and make fit a
@@ -373,8 +378,13 @@ Float32 estimator cases cover all three calibration methods with both response
 types, pooled and ensemble fitting, and weighted scores. The reference receives
 Float32 features for default LinearSVC and features widened from Float32 for
 GaussianNB. scikit-learn's GaussianNB selects its statistics dtype from `X`, so
-its Float32 path can produce different calibrated probabilities. The native
-public test also checks column-major and negative-stride feature layouts.
+its Float32 path can produce different calibrated probabilities. The frozen
+Float32 cases use Float32 training, calibration, and query data in the reference
+and widen the responses before applying the reference calibrator.
+They cover weighted binary and multiclass calibration over GaussianNB
+probabilities and StandardScaler–LDA decision scores, with exact class and
+prediction checks and the family probability tolerance above. The native public
+test also checks column-major features and negative-stride features and scores.
 Additional checks compare Float32 and string-label curves and native display
 statistics, labels and metadata with the reference. SVG structure and native
 ownership/overlay behavior have separate contract tests.

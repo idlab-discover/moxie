@@ -4,7 +4,9 @@ from std.math import isnan, abs
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
 from moxie.model_selection import (
-    GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, SplitLabels, StratifiedGroupKFold, StratifiedKFold,
+    GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit,
+    RepeatedKFold, RepeatedStratifiedKFold, SplitLabels, StratifiedGroupKFold,
+    StratifiedKFold,
 )
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import RandomState, seed_global_random_state
@@ -436,6 +438,39 @@ def test_predefined_cv() raises:
     assert_true(model.get_feature_names_out() == names)
 
 
+def test_repeated_cv() raises:
+    var X = table()
+    var y = target()
+    var model = TargetEncoder(cv=RepeatedKFold(n_splits=3, n_repeats=1, random_state=0))
+    var expected = TargetEncoder(cv=KFold(3, shuffle=True, random_state=0))
+    var training = expected.fit_transform(X, y)
+    assert_same(model.fit_transform(X, y), training)
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_true(fresh.get_params().cv.isa[RepeatedKFold]())
+    assert_same(fresh.fit_transform(X, y), training)
+
+    _ = fresh.set_params(cv=RepeatedKFold(n_splits=3, n_repeats=2, random_state=0))
+    with assert_raises(contains="must cover each sample index exactly once"):
+        _ = fresh.fit_transform(X, y)
+    _ = fresh.fit(X, y)
+    assert_same(fresh.transform(X), expected.transform(X))
+
+    _ = model.set_params(cv=RepeatedStratifiedKFold(n_splits=2, n_repeats=1, random_state=0))
+    _ = fresh.set_params(model.get_params())
+    assert_true(fresh.cv.isa[RepeatedStratifiedKFold]())
+    _ = expected.set_params(cv=StratifiedKFold(2, shuffle=True, random_state=0))
+    var labels = TargetEncoder[StringKind, NumericLabels[DType.int64]](cv=fresh.cv.copy())
+    var stratified = TargetEncoder[StringKind, NumericLabels[DType.int64]](cv=expected.cv.copy())
+    var classes = ints([0, 1, 2, 0, 1, 2, 0, 1, 2, 0])
+    var names: List[String] = ["color", "size"]
+    assert_same(labels.fit_transform_named(X, names, classes), stratified.fit_transform(X, classes))
+    var expected_names: List[String] = [
+        "color_0", "color_1", "color_2", "size_0", "size_1", "size_2",
+    ]
+    assert_true(labels.get_feature_names_out() == expected_names)
+
+
 def main() raises:
     test_lifecycle()
     test_params()
@@ -447,4 +482,5 @@ def main() raises:
     test_grouped_cv()
     test_leave_one_cv()
     test_predefined_cv()
+    test_repeated_cv()
     print("PASS target encoder lifecycle contracts")

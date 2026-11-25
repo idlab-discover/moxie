@@ -326,11 +326,35 @@ def test_fastica[dtype: DType](path: String) raises:
     assert_true(not roundtrip.whitening_)
     same_array(roundtrip.transform(X), uncentered.transform(X))
 
+    var warned = FastICA[dtype](4, max_iter=1, tol=0, random_state=37)
+    _ = warned.fit(X)
+    _ = warned.set_params(whiten=WhitenOption(False), max_iter=200,
+        n_components=Optional[Optional[Int]](Optional[Int](1)))
+    save_model[Schema](warned, path)
+    var restored_warnings = load_model[Schema](path)
+    assert_equal(len(restored_warnings.fit_warnings), 2)
+    assert_equal(restored_warnings.fit_warnings[0].message, "n_components is too large: it will be set to 3")
+    assert_equal(restored_warnings.fit_warnings[1].category, "ConvergenceWarning")
+    var legacy = Schema.encode(warned)
+    legacy.schema_version = 1
+    for _ in range(8):
+        _ = legacy.manifest.pop()
+    var restored_legacy = Schema.decode(legacy)
+    assert_equal(len(restored_legacy.fit_warnings), 0)
+    same_array(restored_legacy.transform(X), warned.transform(X))
+    var invalid_warnings = Schema.encode(warned)
+    invalid_warnings.manifest[len(invalid_warnings.manifest) - 8] = 8
+    with assert_raises(contains="invalid FastICA fit warnings"):
+        _ = Schema.decode(invalid_warnings)
+    warned.fit_warnings[0].message = "invalid"
+    with assert_raises(contains="invalid FastICA fit warnings"):
+        _ = Schema.encode(warned)
+
     var archive = Schema.encode(restored)
-    archive.schema_version = 2
+    archive.schema_version = 3
     with assert_raises(contains="unsupported estimator type or state schema"):
         _ = Schema.decode(archive)
-    archive.schema_version = 1
+    archive.schema_version = 2
     archive.payloads[3].shape = [1, 4]
     with assert_raises(contains="invalid shape for _unmixing"):
         _ = Schema.decode(archive)
@@ -615,6 +639,11 @@ def test_lda[dtype: DType](path: String) raises:
 
 def main() raises:
     var path = String(argv()[1])
+    if len(argv()) == 3 and argv()[2] == "fastica":
+        test_fastica[DType.float32](path)
+        test_fastica[DType.float64](path)
+        print("PASS: FastICA serialization in Float32 and Float64")
+        return
     if len(argv()) == 3 and argv()[2] == "factor_analysis":
         test_factor_analysis[DType.float32](path)
         test_factor_analysis[DType.float64](path)

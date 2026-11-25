@@ -40,8 +40,8 @@ def compare(x, k=None, algorithm="parallel", whiten="unit-variance", fun="logcos
                   fun_args=None if alpha == 1.0 else {"alpha": alpha}, max_iter=max_iter, tol=tol,
                   w_init=w_init, whiten_solver=solver, random_state=seed)
     held_out = (x[:3] * 0.75 + 0.5).astype(x.dtype)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as diagnostics:
+        warnings.simplefilter("always")
         if mode == "function":
             expected = module.fastica(x, return_X_mean=True, return_n_iter=True, **kwargs)
         else:
@@ -56,6 +56,13 @@ def compare(x, k=None, algorithm="parallel", whiten="unit-variance", fun="logcos
                      "false" if whiten is False else whiten, fun, alpha, max_iter, tol, solver, seed,
                      int(w_init is not None), mode)
     label = f"{x.dtype} {x.shape} {k=} {algorithm} {whiten} {fun} {alpha=} {solver} {mode}"
+    observed_warnings = [
+        tuple(bytes(got[f"warning_{field}_{i}"].astype(np.uint8)).decode()
+              for field in ("category", "message"))
+        for i in range(int(got["warning_count"][0]))
+    ]
+    expected_warnings = [(item.category.__name__, str(item.message)) for item in diagnostics]
+    assert observed_warnings == expected_warnings, (label, observed_warnings, expected_warnings)
     t = tol_for(x.dtype, True)
     if mode == "function":
         K, W, S, mean, n_iter = expected
@@ -111,4 +118,12 @@ for dtype in (np.float64, np.float32):
     wide = np.random.RandomState(102).normal(size=(7, 11)).astype(dtype)
     compare(wide, 3, mode="fit")
     compare(wide, 3, algorithm="deflation", solver="eigh")
+    one = np.array([[-2], [-1], [1], [2]], dtype=dtype)
+    for mode in ("fit", "fit_transform", "function"):
+        # One iteration can converge, even when it is the last one allowed.
+        compare(one, max_iter=1, mode=mode)
+        # Clipping, small eigenvalues, and exhaustion are reported in that order.
+        compare(one * dtype(np.finfo(dtype).eps), 2, whiten="arbitrary-variance",
+                max_iter=1, tol=0, solver="eigh", mode=mode)
+    compare(one, 2, whiten=False, algorithm="deflation", max_iter=1, tol=0)
 print(f"PASS: {count} dense FastICA cases against local sklearn {REVISION}")

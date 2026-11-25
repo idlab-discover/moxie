@@ -40,6 +40,16 @@ both. `compute_sources=False` leaves `S` empty except under
 `whiten="unit-variance"`, where the reference computes the sources for the
 variance scaling and returns them.
 
+After `fit` or `fit_transform`, read `fit_warnings` for ordered
+`moxie.warnings.FitWarning` records. The functional `FastICAResult`
+also carries `fit_warnings`. The records use scikit-learn's categories and
+messages for ignored or clipped `n_components`, small eigenvalues during
+`eigh` whitening, and an exhausted parallel iteration budget. Convergence
+on the final allowed iteration leaves no convergence warning. Successful
+refits replace the list, and clones start with an empty list.
+`FastICASchema` version 2 preserves warnings. Version 1 archives load
+with an empty list.
+
 Behavior matches the reference, including: `n_components` clipped to
 `min(n_samples, n_features)` and ignored for `whiten=False`; whitening by
 economy SVD (shared engine) or eigen-decomposition of `Xc^T X` (mojo-linalg,
@@ -49,14 +59,12 @@ decorrelation `(W W^T)^{-1/2} W` via mojo-linalg `symmetric_eigh`;
 unit-variance rescaling; `mixing_ = pinv(components_)` via mojo-linalg SVD
 with scipy's default cutoff.
 
-Not supported natively: Python callables for `fun` (binding work), the
-`ConvergenceWarning` (check `n_iter_ == max_iter`) and the `n_components`
-warnings. `whiten=False` requires `n_samples >= n_features`, where the
-reference fails with a shape error.
+Python callables for `fun` require bindings. `whiten=False` requires
+`n_samples >= n_features`, where the reference fails with a shape error.
 
 ## Validation
 
-`pixi run parity` runs 184 cases against the pinned source: both algorithms,
+The FastICA parity suite runs 198 cases against the pinned source across both algorithms,
 all three nonlinearities, both whitening modes and solvers, `alpha=1.5`,
 truncated/tight `tol`/`max_iter`, custom `w_init`, `fit` versus
 `fit_transform`, the `fastica` function, clipped `n_components` and
@@ -67,4 +75,5 @@ permutation matching). Tolerances: Float64 1e-6, Float32 2e-2 relative and
 absolute (scaled by the data magnitude); Float64 iteration counts must match,
 Float32 may differ by two sweeps because its stopping test compares a
 rounding-level change with `tol`. Data use four non-Gaussian sources so the
-problem is identifiable.
+problem is identifiable. Warning categories, messages, and occurrence order
+are compared exactly.

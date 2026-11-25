@@ -308,6 +308,8 @@ calibrator's base estimator. Each schema accepts fitted and unfitted models.
 | `adapt_classifier(CategoricalNB(...))` | `CalibratedCategoricalNBClassifierCVSchema` |
 | `adapt_classifier(LinearDiscriminantAnalysis(...))` | `CalibratedLDAClassifierCVSchema` |
 | `adapt_classifier(QuadraticDiscriminantAnalysis(...))` | `CalibratedQDAClassifierCVSchema` |
+| `adapt_classifier(FrozenEstimator(LinearDiscriminantAnalysis(...)))` | `CalibratedFrozenLDAClassifierCVSchema` |
+| `adapt_classifier(FrozenEstimator(QuadraticDiscriminantAnalysis(...)))` | `CalibratedFrozenQDAClassifierCVSchema` |
 
 ```mojo
 from moxie.calibration import CalibratedClassifierCV
@@ -331,10 +333,10 @@ representation in the file. The LDA and QDA schemas require
 `covariance_estimator=None`. For CategoricalNB, use `min_categories` for a
 scalar minimum and `min_categories_values=List[Int]([4, 3, 5])` for
 scikit-learn's per-feature minimum. Both settings are preserved in the
-archive. The frozen GaussianNB schema preserves the current base snapshot
-and each fitted calibrator's snapshot, including when the base was replaced
-after calibration. On load the snapshots are independent. Clone still retains
-the restored frozen base and discards the calibration state.
+archive. The frozen GaussianNB, LDA and QDA schemas preserve the current base
+snapshot and each fitted calibrator's snapshot, including when the base was
+replaced after calibration. On load the snapshots are independent. Clone still
+retains the restored frozen base and discards the calibration state.
 See [native model files](../serialization.md) for format and load
 limits.
 
@@ -362,7 +364,9 @@ probabilities. SVC, GaussianNB, MultinomialNB, ComplementNB, BernoulliNB,
 CategoricalNB, LDA and QDA cases exercise native round trips for all three
 calibration methods in ensemble and pooled modes. The weighted ComplementNB
 cases use `norm=True`.
-The weighted BernoulliNB cases use a nondefault binarization threshold.
+Frozen GaussianNB, LDA and QDA round trips cover all three methods, automatic
+pooled calibration and explicit ensembles with sample weights. The weighted
+BernoulliNB cases use a nondefault binarization threshold.
 The weighted CategoricalNB cases use per-feature category minima and query
 categories reserved by those minima that were absent during training.
 Restored probabilities match the original Mojo outputs exactly. Against

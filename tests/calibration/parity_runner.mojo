@@ -26,6 +26,8 @@ from moxie.calibration_serialization import (
     CalibratedClassifierCVSchema,
     CalibratedComplementNBClassifierCVSchema,
     CalibratedFrozenGaussianNBClassifierCVSchema,
+    CalibratedFrozenLDAClassifierCVSchema,
+    CalibratedFrozenQDAClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
     CalibratedLDAClassifierCVSchema,
     CalibratedMultinomialNBClassifierCVSchema,
@@ -136,7 +138,11 @@ def compare_serialized[
     context: String,
 ) raises where Schema.Model == CalibratedClassifierCV[E]:
     var ensemble: Variant[Bool, String] = "auto"
-    if String(fields[7]) != "auto":
+    if fields[7] == "auto":
+        estimator = clone(estimator)
+        if not estimator.is_frozen() or not estimator.__sklearn_is_fitted__():
+            raise Error(context + ": clone must preserve the fitted frozen classifier")
+    else:
         ensemble = fields[7] == "true"
     var model = CalibratedClassifierCV(
         estimator^, cv=3, method=String(fields[6]), ensemble=ensemble^,
@@ -463,14 +469,14 @@ def main() raises:
             elif kind == "production_frozen_lda":
                 var estimator = LinearDiscriminantAnalysis()
                 _ = estimator.fit(train_x, labels)
-                compare_production(
+                compare_serialized[CalibratedFrozenLDAClassifierCVSchema](
                     adapt_classifier(FrozenEstimator(estimator^)),
                     x, y, w, q, expected, fields, context,
                 )
             elif kind == "production_frozen_qda":
                 var estimator = QuadraticDiscriminantAnalysis()
                 _ = estimator.fit(train_x, labels)
-                compare_production(
+                compare_serialized[CalibratedFrozenQDAClassifierCVSchema](
                     adapt_classifier(FrozenEstimator(estimator^)),
                     x, y, w, q, expected, fields, context,
                 )

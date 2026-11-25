@@ -409,6 +409,33 @@ struct _LDACodec(_AdapterCodec):
         return adapter.estimator().n_features_in_
 
 
+struct _FrozenLDACodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[FrozenEstimator[LinearDiscriminantAnalysis[]]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.FrozenLinearDiscriminantAnalysis"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in frozen LDA adapter"
+            )
+        ref estimator = adapter.estimator().estimator()
+        if estimator.covariance_estimator:
+            raise Error("ModelSchemaError: calibrated LDA requires covariance_estimator=None")
+        return LinearDiscriminantAnalysisSchema[].encode(estimator)
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        var estimator = LinearDiscriminantAnalysisSchema[].decode(archive)
+        return adapt_classifier(FrozenEstimator(estimator^))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().estimator().n_features_in_
+
+
 struct _QDACodec(_AdapterCodec):
     comptime Adapter = ClassifierCalibrationAdapter[QuadraticDiscriminantAnalysis[]]
     comptime TypeId: StaticString = (
@@ -432,6 +459,33 @@ struct _QDACodec(_AdapterCodec):
     @staticmethod
     def feature_count(adapter: Self.Adapter) -> Int:
         return adapter.estimator().n_features_in_
+
+
+struct _FrozenQDACodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[FrozenEstimator[QuadraticDiscriminantAnalysis[]]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.FrozenQuadraticDiscriminantAnalysis"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in frozen QDA adapter"
+            )
+        ref estimator = adapter.estimator().estimator()
+        if estimator.covariance_estimator:
+            raise Error("ModelSchemaError: calibrated QDA requires covariance_estimator=None")
+        return QuadraticDiscriminantAnalysisSchema[].encode(estimator)
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        var estimator = QuadraticDiscriminantAnalysisSchema[].decode(archive)
+        return adapt_classifier(FrozenEstimator(estimator^))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().estimator().n_features_in_
 
 
 def _check_pair[Codec: _AdapterCodec](
@@ -680,3 +734,5 @@ comptime CalibratedBernoulliNBClassifierCVSchema = _CalibrationSchema[_Bernoulli
 comptime CalibratedCategoricalNBClassifierCVSchema = _CalibrationSchema[_CategoricalNBCodec]
 comptime CalibratedLDAClassifierCVSchema = _CalibrationSchema[_LDACodec]
 comptime CalibratedQDAClassifierCVSchema = _CalibrationSchema[_QDACodec]
+comptime CalibratedFrozenLDAClassifierCVSchema = _CalibrationSchema[_FrozenLDACodec]
+comptime CalibratedFrozenQDAClassifierCVSchema = _CalibrationSchema[_FrozenQDACodec]

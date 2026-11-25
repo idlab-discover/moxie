@@ -192,7 +192,9 @@ def adapt_classifier(
     def classes(model: FrozenEstimator[LinearDiscriminantAnalysis[]]) raises -> Array:
         return _numeric_classes(model.estimator().classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "LinearDiscriminantAnalysis")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "LinearDiscriminantAnalysis")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(
@@ -212,7 +214,9 @@ def adapt_classifier(
     def classes(model: FrozenEstimator[QuadraticDiscriminantAnalysis[]]) raises -> Array:
         return _numeric_classes(model.estimator().classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "QuadraticDiscriminantAnalysis")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "QuadraticDiscriminantAnalysis")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def _logistic_classes(model: LogisticRegression[]) raises -> Array:

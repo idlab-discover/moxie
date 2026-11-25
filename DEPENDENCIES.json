@@ -2785,6 +2785,9 @@
         "moxie.manifold._api_types": {
           "file": "src/moxie/manifold/_api_types.mojo"
         },
+        "moxie.manifold._barnes_hut_tsne": {
+          "file": "src/moxie/manifold/_barnes_hut_tsne.mojo"
+        },
         "moxie.manifold._base": {
           "file": "src/moxie/manifold/_base.mojo"
         },

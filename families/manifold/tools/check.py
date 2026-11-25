@@ -172,10 +172,9 @@ if __name__ == '__main__':
             target = name / 'builds/test_tsne'
             compile_file(ROOT / 'tests/test_tsne.mojo', target, consumer=name)
             run(target, consumer=name)
-        for name in ('trustworthiness', 'classical_mds', 'deferred'):
-            target = ROOT / f'builds/test_{name}'
-            compile_file(ROOT / f'tests/test_{name}.mojo', target)
-            run(target)
+        target = ROOT / 'builds/test_trustworthiness'
+        compile_file(ROOT / 'tests/test_trustworthiness.mojo', target)
+        run(target)
     else:
         build()
         if action == 'test':

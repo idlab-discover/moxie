@@ -1,6 +1,6 @@
 # Manifold plumbing
 
-This directory owns manifold contracts, validation, exact TSNE, ClassicalMDS
+This directory owns manifold contracts, validation, dense TSNE, ClassicalMDS
 and trustworthiness.
 Existing `EmbeddingEstimator` and `OutOfSampleEmbedding` remain unchanged.
 Public imports follow sklearn.manifold; `_plumbing` is a private native exchange
@@ -14,7 +14,7 @@ module. Its records are not new sklearn public exports.
 | `algorithms/mds/` | MDS, ClassicalMDS, smacof; stress/disparities and classical scaling | scaffold, isotonic.regression, decomposition.svd_engine |
 | `algorithms/spectral/` | SpectralEmbedding, spectral_embedding; affinities, Laplacians, connectivity diagnostics | scaffold, neighbors.nearest, decomposition.svd_engine |
 | `algorithms/lle/` | LocallyLinearEmbedding, locally_linear_embedding; local reconstruction | scaffold, neighbors.nearest, decomposition.svd_engine |
-| `algorithms/tsne/` | TSNE, trustworthiness; exact probabilities, KL optimization and rank diagnostics | scaffold, neighbors.nearest, decomposition.pca |
+| `algorithms/tsne/` | TSNE, trustworthiness; exact and fixed-k probabilities, Barnes–Hut forces, KL optimization and rank diagnostics | scaffold, neighbors.nearest, decomposition.pca |
 | `algorithms/isomap/` (deferred) | Isomap; graph shortest paths | scaffold, neighbors.nearest, decomposition.kernel_pca |
 
 The child directories in this table describe planned organization; no algorithm child

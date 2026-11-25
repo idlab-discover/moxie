@@ -1,8 +1,11 @@
-"""Native exact t-SNE entry points used by the pinned sklearn comparison."""
+"""Native t-SNE entry points used by the pinned sklearn comparison."""
 from std.sys import argv
 from numojo import NDArray, Shape, zeros
 from moxie.manifold import TSNE, TSNEMetricParams
-from moxie.manifold._t_sne import _gradient_descent, _joint_probabilities, _kl_divergence, _squared_distances
+from moxie.manifold._t_sne import (
+    _gradient_descent, _joint_probabilities, _kl_divergence, _neighbor_probabilities, _squared_distances,
+)
+from moxie.manifold._barnes_hut_tsne import _barnes_hut_objective
 
 from trustworthiness_driver import read_matrix
 
@@ -20,8 +23,13 @@ def fit[input_dtype: DType, output_dtype: DType]() raises:
     var metric = String(args[7])
     var minimum_gradient = Float64(String(args[11]))
     var perplexity = Float64(String(args[14]))
+    var method = "exact"
+    var angle: Float64 = 0.5
+    if len(args) > 16:
+        method = String(args[15])
+        angle = Float64(String(args[16]))
     var model = TSNE[input_dtype, output_dtype](
-        components, method="exact", perplexity=perplexity, metric=metric,
+        components, method=method, angle=angle, perplexity=perplexity, metric=metric,
         max_iter=Int(String(args[8])), early_exaggeration=Float64(String(args[9])),
         min_grad_norm=minimum_gradient, n_iter_without_progress=Int(String(args[12])),
         random_state=Int(String(args[13])),
@@ -66,6 +74,21 @@ def objective[dtype: DType]() raises:
     write_array(P)
 
 
+def barnes_hut_objective[dtype: DType]() raises:
+    var args = argv()
+    var X = read_matrix[dtype](String(args[3]))
+    var Y = read_matrix[DType.float32](String(args[4]))
+    var angle = Float32(Float64(String(args[7])))
+    var P = _neighbor_probabilities(X, String(args[5]), None, Float64(String(args[6])))
+    var gradient = zeros[DType.float64](Y.shape)
+    print(_barnes_hut_objective(Y, P, 1, gradient, angle, True))
+    var dof = Float32(max(Y.shape[1] - 1, 1))
+    for i in range(gradient.size):
+        print(Float32(gradient.unsafe_get(i)) * (2 * (dof + 1) / dof))
+    for pair in P:
+        print(pair[0], pair[1], pair[2])
+
+
 def descent() raises:
     var args = argv()
     var Y = read_matrix[DType.float64](String(args[2]))
@@ -88,6 +111,11 @@ def main() raises:
             pairwise[DType.float32]()
         else:
             pairwise[DType.float64]()
+    elif args[1] == "barnes_hut_objective":
+        if args[2] == "float32":
+            barnes_hut_objective[DType.float32]()
+        else:
+            barnes_hut_objective[DType.float64]()
     elif args[1] == "objective":
         if args[2] == "float32":
             objective[DType.float32]()

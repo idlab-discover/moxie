@@ -1,7 +1,7 @@
 # Manifold
 
-Moxie owns exact TSNE, ClassicalMDS, trustworthiness and the dense manifold
-contracts in this directory. See [exact t-SNE](docs/tsne.md),
+Moxie owns dense TSNE, ClassicalMDS, trustworthiness and the dense manifold
+contracts in this directory. See [dense t-SNE](docs/tsne.md),
 [ClassicalMDS and trustworthiness](docs/algorithms.md), and [scope](docs/scope.md)
 for supported metrics and native API differences.
 

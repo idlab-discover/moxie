@@ -15,9 +15,9 @@ def points[dtype: DType]() raises -> NDArray[dtype]:
     return X^
 
 
-def repeat_and_clone[dtype: DType]() raises:
+def repeat_and_clone[dtype: DType](method: String) raises:
     var X = points[dtype]()
-    var model = TSNE[dtype](perplexity=2, method="exact", init="random", random_state=17,
+    var model = TSNE[dtype](perplexity=2, method=method, init="random", random_state=17,
                            max_iter=260, learning_rate=2.0)
     assert_false(model.__sklearn_is_fitted__())
     with assert_raises(contains="NotFittedError"):
@@ -93,11 +93,14 @@ def fit_validation() raises:
     var X = points[DType.float64]()
     var model = TSNE()
     assert_equal(model.method, "barnes_hut")
-    with assert_raises(contains='NotImplementedError: TSNE method="barnes_hut"'):
-        _ = model.fit(X)
-    _ = model.set_params(method="exact")
     with assert_raises(contains="perplexity"):
         _ = model.fit(X)
+    _ = model.set_params(perplexity=2.0, n_components=4)
+    with assert_raises(contains="n_components must be at most 3"):
+        _ = model.fit(X)
+    _ = model.set_params(n_components=2, max_iter=251)
+    assert_true(isfinite(model.fit(X).kl_divergence_))
+    _ = model.set_params(method="exact")
     _ = model.set_params(perplexity=2.0, max_iter=249)
     with assert_raises(contains="max_iter"):
         _ = model.fit(X)
@@ -127,6 +130,34 @@ def fit_validation() raises:
         _ = model.fit(X)
 
 
+def barnes_hut_bounds() raises:
+    var X = points[DType.float64]()
+    var init = zeros[DType.float64](Shape(6, 2))
+    for i in range(6):
+        # Adjacent representable Float32 values near 1024 are farther apart
+        # than the duplicate threshold and must split into separate leaves.
+        init.unsafe_set(i * 2, 1024 + Float64(i) * 0.0001220703125)
+    var model = TSNE[DType.float64, DType.float64](
+        init=init.copy(), perplexity=2, max_iter=251, learning_rate=0.5, angle=0.0,
+    )
+    var embedding: NDArray[DType.float64] = model.fit_transform(X)
+    assert_true(isfinite(model.kl_divergence_))
+    assert_equal(embedding.shape[0], 6)
+    assert_true(embedding.unsafe_get(0) != embedding.unsafe_get(2))
+
+    _ = model.set_params(angle=1.1)
+    with assert_raises(contains="angle must be in"):
+        _ = model.fit(X)
+    assert_equal(model.embedding_.value().unsafe_get(0), embedding.unsafe_get(0))
+    init.unsafe_set(0, 1e50)
+    var params = model.get_params()
+    params.angle = 0.5
+    params.init = init^
+    _ = model.set_params(params)
+    with assert_raises(contains="coordinates must fit in Float32"):
+        _ = model.fit(X)
+
+
 def global_stream() raises:
     var X = points[DType.float64]()
     var seeded = TSNE(method="exact", init="random", perplexity=2, random_state=17,
@@ -148,9 +179,11 @@ def global_stream() raises:
 
 
 def main() raises:
-    repeat_and_clone[DType.float64]()
-    repeat_and_clone[DType.float32]()
+    for method in ["exact", "barnes_hut"]:
+        repeat_and_clone[DType.float64](method)
+        repeat_and_clone[DType.float32](method)
     explicit_configuration()
     fit_validation()
+    barnes_hut_bounds()
     global_stream()
-    print("PASS: native exact TSNE contracts")
+    print("PASS: native exact and Barnes–Hut TSNE contracts")

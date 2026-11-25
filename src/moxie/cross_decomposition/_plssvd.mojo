@@ -10,7 +10,11 @@ rotations or prediction.
 import numojo as nm
 from numojo import NDArray, Shape
 from std.math import isnan
-from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
+from moxie._feature_metadata import (
+    EstimatorClassName,
+    FeatureNamesOut,
+    InputFeatureCount,
+)
 from moxie.cross_decomposition._base import CrossDecompositionTransformer
 from moxie.cross_decomposition._contracts import Matrix, PairedScores
 from moxie.cross_decomposition._pls import (
@@ -53,7 +57,12 @@ def _standardize(x: Matrix, mean: Matrix, std: Matrix) raises -> Matrix:
 
 
 struct PLSSVD[dtype: DType = DType.float64](
-    Copyable, CrossDecompositionTransformer, FeatureNamesOut, InputFeatureCount, Movable
+    Copyable,
+    CrossDecompositionTransformer,
+    EstimatorClassName,
+    FeatureNamesOut,
+    InputFeatureCount,
+    Movable,
 ):
     """Partial Least Square SVD over NuMojo arrays of `dtype`.
 

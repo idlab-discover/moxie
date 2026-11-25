@@ -226,8 +226,10 @@ fixtures, not implemented density or outlier algorithms.
 ## Factories
 
 `make_pipeline(transformer, estimator)` builds the two-stage Pipeline with
-sklearn's automatic names: lowercased type names (from `std.reflection`),
-numbered `-1`, `-2`, ... on collision. `make_union(a, b)` and
+sklearn's automatic names. The factories lowercase reflected type names and
+append `-1`, `-2`, ... on collision. Estimators backed by a shared struct,
+such as `PLSRegression` and `CCA`, can supply their public class name through
+`EstimatorClassName`. `make_union(a, b)` and
 `make_union(a, b, c)` build a flat FeatureUnion the same way and accept
 `n_jobs`, `verbose` and `verbose_feature_names_out`; select Float32 branches
 with `make_union[DType.float32](...)`.

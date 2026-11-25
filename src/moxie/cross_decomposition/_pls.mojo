@@ -14,7 +14,11 @@ from std.math import sqrt, isfinite, isnan
 import numojo as nm
 from numojo import NDArray, Shape
 from mojo_linalg import svd, SVDFactor
-from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
+from moxie._feature_metadata import (
+    EstimatorClassName,
+    FeatureNamesOut,
+    InputFeatureCount,
+)
 from moxie.cross_decomposition._base import (
     CrossDecompositionTransformer,
     PLSPredictor,
@@ -970,6 +974,7 @@ def fit_two_block(
 struct _PLS[flavor: Int, dtype: DType = DType.float64](
     Copyable,
     CrossDecompositionTransformer,
+    EstimatorClassName,
     FeatureNamesOut,
     InputFeatureCount,
     Movable,

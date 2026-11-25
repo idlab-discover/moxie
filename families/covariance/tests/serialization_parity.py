@@ -12,15 +12,18 @@ import pinned_sklearn
 
 def main():
     modules = pinned_sklearn.load([
-        "_empirical_covariance", "_shrunk_covariance", "_robust_covariance", "_elliptic_envelope",
+        "_empirical_covariance", "_shrunk_covariance", "_robust_covariance",
+        "_elliptic_envelope", "_graph_lasso",
     ])
     empirical = modules["_empirical_covariance"].EmpiricalCovariance
     shrinkage = modules["_shrunk_covariance"]
     min_cov_det = modules["_robust_covariance"].MinCovDet
     envelope = modules["_elliptic_envelope"].EllipticEnvelope
+    graphical = modules["_graph_lasso"]
     for function in (empirical.fit, empirical.score, empirical.mahalanobis,
                      shrinkage.ShrunkCovariance.fit, shrinkage.LedoitWolf.fit, shrinkage.OAS.fit,
-                     min_cov_det.fit, envelope.fit, envelope.predict, envelope.decision_function):
+                     min_cov_det.fit, envelope.fit, envelope.predict, envelope.decision_function,
+                     graphical.GraphicalLasso.fit, graphical.GraphicalLassoCV.fit):
         assert pinned_sklearn.executed_from_pinned(function), function
 
     builds = FAMILY / "builds"
@@ -63,11 +66,29 @@ def main():
             envelope_score_samples=detector.score_samples(probe),
             envelope_mahalanobis=detector.mahalanobis(probe),
         )
+        fixed = graphical.GraphicalLasso(alpha=0.1, mode="lars", max_iter=70).fit(robust_X)
+        cv = graphical.GraphicalLassoCV(alphas=[0.2, 0.4, 0.1], cv=3, n_jobs=1, mode="lars").fit(robust_X)
+        for name, model in (("graphical", fixed), ("graphical_cv", cv)):
+            expected[f"{name}_score"] = [model.score(probe)]
+            expected[f"{name}_mahalanobis"] = model.mahalanobis(probe)
+            expected[f"{name}_covariance"] = model.covariance_.ravel()
+            expected[f"{name}_precision"] = model.precision_.ravel()
+            expected[f"{name}_location"] = model.location_
+            expected[f"{name}_costs"] = np.asarray(model.costs_).ravel()
+            expected[f"{name}_n_iter"] = [model.n_iter_]
+        results = cv.cv_results_
+        expected.update(
+            graphical_cv_alpha=[cv.alpha_],
+            graphical_cv_alphas=results["alphas"],
+            graphical_cv_splits=np.column_stack([results[f"split{i}_test_score"] for i in range(3)]).ravel(),
+            graphical_cv_mean=results["mean_test_score"],
+            graphical_cv_std=results["std_test_score"],
+        )
         assert native.keys() == expected.keys()
         for key, ref in expected.items():
             # The fixture is well-conditioned. Allow Float32 accumulation and
             # eigenvalue rounding differences, and Float64 solver roundoff.
-            if key in {"mcd_raw_support", "mcd_support", "envelope_predict"}:
+            if key in {"mcd_raw_support", "mcd_support", "envelope_predict"} or key.endswith("_n_iter"):
                 np.testing.assert_array_equal(native[key], ref, err_msg=key)
             else:
                 np.testing.assert_allclose(native[key], ref, rtol=tolerance, atol=tolerance, err_msg=key)

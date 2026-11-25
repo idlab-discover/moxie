@@ -23,6 +23,8 @@
       "GraphicalLassoCV": "moxie.covariance._graph_lasso",
       "EllipticEnvelopeSchema": "moxie.covariance._serialization",
       "EmpiricalCovarianceSchema": "moxie.covariance._serialization",
+      "GraphicalLassoCVSchema": "moxie.covariance._serialization",
+      "GraphicalLassoSchema": "moxie.covariance._serialization",
       "LedoitWolfSchema": "moxie.covariance._serialization",
       "MinCovDetSchema": "moxie.covariance._serialization",
       "OASSchema": "moxie.covariance._serialization",

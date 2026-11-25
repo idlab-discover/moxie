@@ -27,7 +27,8 @@ supports explicit grids and materialized custom splits with typed results.
 ## Model files
 
 `EmpiricalCovarianceSchema`, `ShrunkCovarianceSchema`, `LedoitWolfSchema`,
-`OASSchema`, `MinCovDetSchema`, and `EllipticEnvelopeSchema` are exported from
+`OASSchema`, `MinCovDetSchema`, `EllipticEnvelopeSchema`,
+`GraphicalLassoSchema` and `GraphicalLassoCVSchema` are exported from
 `moxie.covariance`. Pass the matching schema and dtype explicitly to the shared
 experimental model-file API:
 
@@ -50,6 +51,13 @@ decisions after loading use the original fitted threshold. The archive encodes
 Boolean support masks as UInt32 arrays with values 0 and 1, then restores them
 as Boolean NDArrays. The seed setting is stored when present. A caller-owned
 `RandomState` stream stays with the caller.
+
+The graphical schemas also store the Float64 cost and dual-gap history and
+the reported iteration count. The CV schema preserves the selected alpha and
+all four typed result arrays, including the order of folds and the zero-alpha
+baseline. Both schemas preserve IEEE diagnostic values, including failed-fold
+scores of negative infinity and NaN standard deviations.
+
 Post-fit parameter updates are saved separately from learned values. Loading
 never refits. The schemas reject inconsistent learned state, including partial
 first fits and feature-count mismatches after failed refits. Each schema

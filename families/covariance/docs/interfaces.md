@@ -82,9 +82,10 @@ through their own `__sklearn_clone__` implementation.
 - The weighted-fit trait requires an explicit `sample_weight` value on its
   overload. Score accepts optional weights. Incremental weight support and
   estimator-specific extra fit arguments are added by the concrete algorithm.
-- Python reflection, serialization, rich repr, pandas output, metadata routing,
+- Python reflection, pickle, rich repr, pandas output, metadata routing,
   full sklearn tags, and Python bindings are outside this scaffold. They must
   be designed and tested before claiming compatibility with those facilities.
+  Native model files use the [family schemas](parity.md#model-files).
 
 ## Validation and extension
 

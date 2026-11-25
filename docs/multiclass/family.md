@@ -63,6 +63,25 @@ Use `adapter.estimator` to inspect the underlying model, and use the adapter's
 typed `get_params` and `set_params` to configure it. A fitted copy owns its
 state independently, while `clone` returns an unfitted adapter.
 
+## Decision tree components
+
+```mojo
+from moxie.multiclass import OneVsRestClassifier
+from moxie.tree import DecisionTreeClassifier
+
+comptime Tree = DecisionTreeClassifier[DType.int64]
+var model = OneVsRestClassifier[Tree, DType.float32](Tree(random_state=0))
+_ = model.fit(X, y)
+```
+
+The tree's generic input type is Float32. Supply Float32 feature matrices
+to fit and predict, converting at the boundary if needed. The wrapper owns
+the outer label domain and fits the tree on rank-one Int64 binary codes.
+The native tree returns one Float64 probability matrix per output. OvR,
+OvO and OutputCode use column 1 of the single binary matrix. The `tree`
+production parity group exercises all three wrappers with unrestricted
+depth and `max_depth=2`.
+
 ## K-nearest neighbors components
 
 ```mojo

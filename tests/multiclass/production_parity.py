@@ -4,9 +4,8 @@ The other runners use paired test doubles to isolate wrapper logic. This one
 wraps real Moxie estimators and their sklearn counterparts:
 
 - `moxie.linear_model.RidgeClassifier` (decision_function component),
-- `moxie.tree.DecisionTreeClassifier` through the dense
-  `moxie.feature_selection.DecisionTreeClassifierImportance` adapter
-  (predict_proba component; the tree's own API returns List probabilities), and
+- `moxie.tree.DecisionTreeClassifier` with native Float32 features, Int64
+  component targets and one Float64 probability matrix per output, and
 - `moxie.svm.SVC` and `moxie.svm.LinearSVC`,
   `moxie.discriminant_analysis.LinearDiscriminantAnalysis`, and
   `moxie.naive_bayes.GaussianNB` through `BinaryAdapter` for the native List
@@ -65,6 +64,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier, _classification as neighbors_classification
 from sklearn.svm import SVC, LinearSVC, _classes as svm_classes
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import _classes as tree_classes
 
 from ovr_parity import OUT, REFERENCE, REVISION, ROOT, driver, lit, matrix, parse
 
@@ -88,9 +88,9 @@ COMPONENTS = {
     "ridge-noint": (lambda: RidgeClassifier(alpha=0.1, fit_intercept=False),
                     "RidgeClassifier[{dtype}](0.1, fit_intercept=False)"),
     "tree": (lambda: DecisionTreeClassifier(random_state=0),
-             "DecisionTreeClassifierImportance[{dtype}](DecisionTreeClassifier[DType.int64](random_state=0))"),
+             "DecisionTreeClassifier[DType.int64](random_state=0)"),
     "tree-depth2": (lambda: DecisionTreeClassifier(max_depth=2, random_state=0),
-                    "DecisionTreeClassifierImportance[{dtype}](DecisionTreeClassifier[DType.int64](max_depth=2, random_state=0))"),
+                    "DecisionTreeClassifier[DType.int64](max_depth=2, random_state=0)"),
     "linear-svc": (lambda: LinearSVC(dual=False, tol=1e-9, random_state=0),
                    "BinaryAdapter(LinearSVC(dual=False, tol=1e-9, random_state=0))"),
     "svc": (lambda: SVC(tol=1e-6, random_state=0),
@@ -110,8 +110,8 @@ COMPONENTS = {
 }
 COMPONENT_TYPE = {
     "ridge": "RidgeClassifier[{dtype}]", "ridge-noint": "RidgeClassifier[{dtype}]",
-    "tree": "DecisionTreeClassifierImportance[{dtype}]",
-    "tree-depth2": "DecisionTreeClassifierImportance[{dtype}]",
+    "tree": "DecisionTreeClassifier[DType.int64]",
+    "tree-depth2": "DecisionTreeClassifier[DType.int64]",
     "linear-svc": "BinaryAdapter[LinearSVC[]]",
     "svc": "BinaryAdapter[SVC[]]",
     "svc-probability": "BinaryAdapter[SVC[]]",
@@ -123,6 +123,8 @@ COMPONENT_TYPE = {
 }
 SVC_COMPONENTS = ("svc", "svc-probability", "svc-precomputed")
 OUTPUT_CODE_RESPONSE = {
+    "tree": ("predict_proba", "response[0][Item(i, 1)]"),
+    "tree-depth2": ("predict_proba", "response[0][Item(i, 1)]"),
     "gaussian-nb": ("predict_proba", "response[Item(i, 1)]"),
     "knn": ("predict_proba", "response[0][Item(i, 1)]"),
     "knn-distance": ("predict_proba", "response[0][Item(i, 1)]"),
@@ -151,8 +153,8 @@ def cases(components):
                     rng.shuffle(y)
                     X = rng.normal(size=(n, 4)) + y[:, None] * np.array([0.8, -0.5, 0.3, 0.0])
                     Xt = rng.normal(size=(15, 4)) + rng.integers(0, k, 15)[:, None] * 0.6
-                    dtype = "float32" if labels == "float32-features" else "float64"
-                    if dtype == "float32":
+                    dtype = "float32" if labels == "float32-features" or component.startswith("tree") else "float64"
+                    if labels == "float32-features":
                         X, Xt = X.astype(np.float32), Xt.astype(np.float32)
                     if labels == "string":
                         target = np.array([STRINGS[v] for v in y])
@@ -242,7 +244,6 @@ from moxie.naive_bayes import GaussianNB, IntListDomain
 from moxie.neighbors import KNeighborsClassifier
 from moxie.svm import LinearSVC, SVC
 from moxie.tree import DecisionTreeClassifier
-from moxie.feature_selection import DecisionTreeClassifierImportance
 from std.testing import assert_raises
 
 
@@ -367,6 +368,7 @@ def run_native(group, all_cases, expected):
 def main():
     groups = {
         "ridge-tree": ("ridge", "ridge-noint", "tree", "tree-depth2"),
+        "tree": ("tree", "tree-depth2"),
         "linear-svc": ("linear-svc",),
         "svc": SVC_COMPONENTS,
         "lda": ("lda",),
@@ -378,8 +380,14 @@ def main():
     selection = parser.parse_args().group
     all_cases, expected, got = [], [], []
     for group, components in groups.items():
+        if selection == "all" and group == "tree":
+            continue  # The combined ridge-tree group already covers native trees.
         if selection not in ("all", group):
             continue
+        if group in ("ridge-tree", "tree"):
+            assert Path(inspect.getfile(tree_classes)).read_bytes() == (
+                REFERENCE / "sklearn/tree/_classes.py"
+            ).read_bytes(), "install the pinned local scikit-learn checkout"
         if group in ("linear-svc", "svc"):
             assert Path(inspect.getfile(svm_classes)).read_bytes() == (
                 REFERENCE / "sklearn/svm/_classes.py"

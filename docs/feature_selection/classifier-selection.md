@@ -80,13 +80,20 @@ against pinned scikit-learn. Discrete comparisons are exact, including Int64
 labels above 2**53. The respective tolerances 1e-5 and 1e-6 account for
 Float32 rounding and differences in solver termination.
 
+The [digits RFE gallery notebook](../../notebooks/feature_selection/plot_rfe_digits.ipynb)
+fits a native `Pipeline(MinMaxScaler(), RFE(...))` that removes one pixel at a
+time. It uses `FeatureCount(1)` for integer counts and reads the fitted
+selector with `step[1]()`. Both implementations select pixel 38 (row 4,
+column 6 in zero-based coordinates) and match exactly on all 64 rankings,
+the transformed values and the final predictions.
+
 The [RFECV gallery notebook](../../notebooks/feature_selection/plot_rfe_with_cross_validation.ipynb)
 uses the eight-class reference example. It checks the selected features and
 predictions, and compares all five folds' accuracy, support and rankings at
 every feature count. The accuracy scorer comes from the classifier and Moxie
 executes the folds serially.
 
-To rerun the notebook from the repository root, use the locked Mojo and
+To rerun these notebooks from the repository root, use the locked Mojo and
 notebook environments. Prepare the pinned scikit-learn build once with
 `python families/ensemble/tools/prepare_oracle.py` using the default environment.
 With the notebook environment activated and the locked `mojo` on `PATH`, run
@@ -94,7 +101,8 @@ With the notebook environment activated and the locked `mojo` on `PATH`, run
 ```sh
 PYTHONPATH="$PWD/families/ensemble/builds/oracle-env/lib/python3.14/site-packages" \
   OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
-  python tools/run_notebooks.py notebooks/feature_selection/plot_rfe_with_cross_validation.ipynb
+  python tools/run_notebooks.py notebooks/feature_selection/plot_rfe_digits.ipynb \
+  notebooks/feature_selection/plot_rfe_with_cross_validation.ipynb
 ```
 
 ## Ridge classifier

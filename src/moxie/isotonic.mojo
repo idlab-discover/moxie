@@ -15,6 +15,7 @@ from moxie.base import (
     TransformerMixin,
     WeightedSupervisedEstimator,
 )
+from moxie.compose._table import ColumnTable
 from moxie._isotonic_adapters import IsotonicCVAdapter, IsotonicScorer, IsotonicSearchValue
 from moxie.metadata_routing import (
     FitScoreMetadataRequest,
@@ -773,6 +774,26 @@ struct IsotonicRegression[dtype: DType = DType.float64](
     ) raises -> Self.Transformed:
         _ = self.fit(X, y, sample_weight=sample_weight)
         return self.transform(X)
+
+    def transform_table(self, X: Self.Input) raises -> ColumnTable[Self.dtype]:
+        """Return an owned, one-column table of transformed values in input order."""
+        var names = self.get_feature_names_out()
+        var values = self.predict(_feature(X))
+        return ColumnTable(array(values, [len(values), 1]), names)
+
+    def fit_transform_table(
+        mut self,
+        X: Self.Input,
+        y: Self.Target,
+        *,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ColumnTable[Self.dtype]:
+        """Fit from dense samples and return their transformed values as a table."""
+        if sample_weight:
+            _ = self.fit(X, y, sample_weight=sample_weight.value())
+        else:
+            _ = self.fit(X, y)
+        return self.transform_table(X)
 
     def score(
         self, X: Self.Input, y: Self.Target,

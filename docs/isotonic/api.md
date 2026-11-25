@@ -87,6 +87,16 @@ input clipping. Empty queries return empty output. With multiple thresholds,
 NaN queries return NaN and infinite queries follow the fitted out-of-bounds
 behavior. With one threshold, all query values return the fitted constant.
 
+### Labeled transforms
+
+Use `transform_table(X)` or `fit_transform_table(X, y, sample_weight=weights)`
+to return an owned [`ColumnTable`](../compose/named-columns.md). The methods
+accept the standard dense NDArray shapes. Each result has shape `(n, 1)`,
+preserves the estimator dtype and input row order, and names the column
+`isotonicregression0`. The training weights are optional. The explicit table
+methods give the labeled result a static Mojo type. Rows are indexed by
+position.
+
 ## Ordering, ties, and boundaries
 
 Fit sorts observations by X, then by y. Duplicate X values are replaced by
@@ -271,10 +281,10 @@ for in-place fitting and typed configuration differences.
 `pixi run python tools/isotonic_checks.py test` covers trait conformance,
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
 strided arrays, direction, bounds, weighted R², and native persistence.
-`pixi run python tools/isotonic_checks.py parity` compares 856 Float64 and
-719 Float32 deterministic cases, including both public helpers with Lists and
-NDArrays, native transform output, scaler pipeline predictions, interpolator
-reconstruction, validation edges, warning
+`pixi run python tools/isotonic_checks.py parity` compares 858 Float64 and
+721 Float32 deterministic cases, including both public helpers with Lists and
+NDArrays, default and labeled transform output, scaler pipeline predictions,
+interpolator reconstruction, validation edges, warning
 diagnostics, sample-weight requests and input tags, against the pinned Python
 module and Cython tie engine. The scikit-learn
 support wheel and SciPy come from the locked Pixi environment. Float64 uses

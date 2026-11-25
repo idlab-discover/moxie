@@ -3,6 +3,7 @@ from std.sys import argv
 from std.testing import assert_equal, assert_raises, assert_true
 from numojo import NDArray, array
 from moxie.base import get_tags
+from moxie.compose import ColumnTable
 from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
 from moxie.isotonic_serialization import IsotonicRegressionSchema
@@ -28,6 +29,18 @@ def vector[dtype: DType](text: String) raises -> List[Scalar[dtype]]:
     for part in text.split(","):
         result.append(Scalar[dtype](Float64(String(part))))
     return result^
+
+def compare_table[dtype: DType](
+    table: ColumnTable[dtype], name: String, expected: List[Scalar[dtype]], context: String,
+) raises:
+    var schema = table.schema()
+    assert_equal(schema.names, [name.copy()])
+    assert_equal(schema.dtypes, [String(dtype)])
+    ref values = table.values()
+    assert_equal(values.ndim, 2)
+    assert_equal(values.shape[0], len(expected))
+    assert_equal(values.shape[1], 1)
+    compare(values.tolist(), expected, context)
 
 
 def optional_number(text: String) raises -> Optional[Float64]:
@@ -294,6 +307,25 @@ def run_cases[dtype: DType]() raises:
             compare(fitted.tolist(), vector[dtype](String(fields[3])), context + " fit_transform")
             compare(transformed.tolist(), vector[dtype](String(fields[4])), context + " transform")
             compare(predicted.tolist(), vector[dtype](String(fields[5])), context + " predict")
+        elif kind == "labeled_output":
+            var x = vector[dtype](String(fields[1]))
+            var y = vector[dtype](String(fields[2]))
+            var query = vector[dtype](String(fields[4]))
+            var column = array(x, [len(x), 1])
+            var target = array(y, [len(y)])
+            var queries = array(query, [len(query)])
+            var weights: Optional[NDArray[dtype]] = None
+            if String(fields[3]) != "-":
+                var values = vector[dtype](String(fields[3]))
+                weights = array(values, [len(values)])
+            var model = IsotonicRegression[dtype](out_of_bounds=String(fields[5]))
+            with assert_raises(contains="NotFittedError"):
+                _ = model.transform_table(queries)
+            var fitted = model.fit_transform_table(column, target, sample_weight=weights)
+            var transformed = model.transform_table(queries)
+            var name = String(fields[6])
+            compare_table(fitted, name, vector[dtype](String(fields[7])), context + " fit")
+            compare_table(transformed, name, vector[dtype](String(fields[8])), context + " inference")
         elif kind == "pipeline":
             var x = vector[dtype](String(fields[1]))
             var y = vector[dtype](String(fields[2]))

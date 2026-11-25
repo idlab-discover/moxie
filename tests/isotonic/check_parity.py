@@ -285,6 +285,35 @@ def main():
             assert result.dtype == dtype and result.shape == x.shape
         add("default_output", x, y, fitted, transformed, predicted)
 
+    def labeled_output():
+        x = np.asarray([0, 1, 1, 2, 3], dtype=dtype)
+        y = np.asarray([1, 4, 2, 2, 6], dtype=dtype)
+        query = np.asarray([4, 1.5, -1, 1], dtype=dtype)
+        for mode, weights in (
+            ("clip", None),
+            ("nan", np.asarray([0, 1, 3, 2, 0], dtype=dtype)),
+        ):
+            model = reference.IsotonicRegression(out_of_bounds=mode)
+            reference_output._SetOutputMixin.set_output(model, transform="pandas")
+            # Apply the pinned wrapper to the pinned methods. The class was
+            # otherwise auto-wrapped by the installed supporting sklearn wheel.
+            transform = reference_output._wrap_method_output(
+                reference.IsotonicRegression.transform.__wrapped__, "transform"
+            )
+            fit_transform = reference_output._wrap_method_output(
+                reference.IsotonicRegression.fit_transform.__wrapped__, "transform"
+            )
+            fitted = fit_transform(model, x[:, None], y, sample_weight=weights)
+            transformed = transform(model, query)
+            name, = fitted.columns
+            assert transformed.columns.tolist() == [name]
+            for table, inputs in ((fitted, x), (transformed, query)):
+                assert table.shape == (len(inputs), 1)
+                assert table.dtypes.iloc[0] == dtype
+                np.testing.assert_array_equal(table.index, np.arange(len(inputs)))
+            add("labeled_output", x, y, weights, query, mode, name,
+                fitted[name].to_numpy(), transformed[name].to_numpy())
+
     def fit_warnings():
         for x, y, mode, weights in [
             ([0], [1], "auto", None),
@@ -347,6 +376,7 @@ def main():
 
     pipeline()
     default_output()
+    labeled_output()
     serialization()
     validation_edges()
     fit_warnings()
@@ -408,6 +438,7 @@ def main():
     dtype = np.float32
     pipeline()
     default_output()
+    labeled_output()
     serialization()
     validation_edges()
     fit_warnings()

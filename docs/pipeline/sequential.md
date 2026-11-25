@@ -381,6 +381,50 @@ uses the final estimator's aggregation. A concrete final-step method beyond
 these traits is accessible on `pipe.estimator`, with input already transformed
 by the caller. Configuration-dependent methods retain final-step validation.
 
+### Outlier training labels
+
+```mojo
+from moxie.neighbors import LocalOutlierFactor
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
+
+var outliers = make_pipeline(StandardScaler(), LocalOutlierFactor(n_neighbors=2))
+var labels = outliers.fit_predict(X)
+```
+
+LocalOutlierFactor uses its training-neighbor scores and returns a rank-one
+array of `+1` and `-1` in its configured Float32 or Float64 dtype. With
+`novelty=True`, the typed method raises an AttributeError-style error when
+the final step runs. This occurs after fitting the prefix. Python checks
+availability before fitting either step. OneClassSVM also implements
+`FitPredictor` and returns rank-one Int64 labels. Pipeline uses the
+`fit_predict(X, y=None)` trait signature. The concrete OneClassSVM method
+also accepts sample weights and provides overloads for Float32 input and
+custom kernel providers.
+
+The [outlier parity check](../../tests/pipeline/outlier_parity.py) compares
+training labels, LOF refits, and nested OneClassSVM query predictions against
+the pinned reference. Labels compare exactly. LOF training scores allow
+absolute tolerances of `2e-6` for Float32 and `1e-12` for Float64 to account
+for rounding in scaling and nearest-neighbor distances.
+
+With the locked Mojo toolchain active, run the focused check from the root:
+
+```sh
+python shared/assembly/tools/assemble_family.py --consumer "$PWD" \
+  --lock "$PWD/DEPENDENCIES.json" --output "$PWD/builds/deps"
+mkdir -p builds/tests/pipeline
+mojo build -O3 --fp-mode=contract=off -I builds/deps -I tests/pipeline \
+  -I tests/compose/support tests/pipeline/test_pipeline_outliers.mojo \
+  -o builds/tests/pipeline/test_pipeline_outliers
+python tests/pipeline/outlier_parity.py
+```
+
+Use Python with scikit-learn built from the revision recorded in
+[interfaces](../interfaces.md).
+
+### Clustering and density validation
+
 The [parity check](../../tests/pipeline/unsupervised_parity.py) compares Float32
 DBSCAN labels, Float64 nested KMeans labels and distances, KDE log densities
 and their sum, and LocalOutlierFactor novelty predictions and scores against

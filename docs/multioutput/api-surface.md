@@ -110,7 +110,30 @@ copy the configuration. Fit resolves it for out-of-fold responses and
 inference uses the fitted name.
 
 Use `random_order=True` to request a random permutation in the absence of an
-explicit order.
+explicit order. A constructor seed starts the same sequence on each fit.
+With `random_state=None`, random ordering draws from the
+[shared default stream](../../shared/random/docs/random.md).
+
+To share a mutable stream across fits, pass it by mutable borrow at fit time.
+
+```mojo
+from moxie._random import RandomState
+
+var stream = RandomState(7)
+var chain = ClassifierChain(estimator, random_order=True, cv=2)
+_ = chain.fit(X, y, random_state=stream)
+_ = chain.fit(X, y, random_state=stream)
+```
+
+Each call advances the stream for the permutation. Natural and explicit orders
+consume no draws. The fit-time stream takes precedence over a constructor seed
+for that call. The constructor configuration stays available to `get_params()`
+and `clone`, and callers explicitly pass the stream again to continue it.
+This is the Mojo lifetime adaptation of sklearn's constructor-held mutable
+`RandomState`. The overload accepts arrays and `ColumnTable`, uses the
+configured CV splitter, and accepts an optional owned weight vector for
+components that support weighted fit.
+
 `verbose=True` prints sklearn's `[Chain] ... (i of n) Processing order k, total=...`
 line after each link is fitted. Set `cv=3`, `cv=KFold(3)`, or
 `cv=StratifiedKFold(3)` on either chain constructor. Import the splitters from

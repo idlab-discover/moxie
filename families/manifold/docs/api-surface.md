@@ -1,8 +1,8 @@
-# Public API scaffold
+# Public manifold API
 
-Implemented public exports `ClassicalMDS` and `trustworthiness` now use the
-native implementations documented in [algorithms.md](algorithms.md). The
-remaining declarations below are deferred.
+The native implementations are documented in [ClassicalMDS and trustworthiness](algorithms.md)
+and [exact TSNE](tsne.md). MDS, Isomap, LocallyLinearEmbedding,
+SpectralEmbedding and their public helpers remain scaffold declarations.
 
 Public names and callable parameter names/defaults follow the local scikit-learn
 checkout. Newly declared constructors and operations raise `NotImplementedError`

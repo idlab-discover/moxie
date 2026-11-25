@@ -27,6 +27,9 @@
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },
+        "moxie._feature_metadata": {
+          "file": "src/moxie/_feature_metadata.mojo"
+        },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
         }
@@ -182,7 +185,9 @@
             "EmbeddingEstimator": "moxie.manifold._base",
             "OutOfSampleEmbedding": "moxie.manifold._base",
             "MDS": "moxie.manifold._api",
-            "TSNE": "moxie.manifold._api",
+            "TSNE": "moxie.manifold._t_sne",
+            "TSNEParams": "moxie.manifold._t_sne",
+            "TSNEMetricParams": "moxie.manifold._t_sne",
             "ClassicalMDS": "moxie.manifold._classical_mds",
             "Isomap": "moxie.manifold._api",
             "LocallyLinearEmbedding": "moxie.manifold._api",

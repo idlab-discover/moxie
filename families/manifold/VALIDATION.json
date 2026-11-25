@@ -16,7 +16,15 @@
     {
       "command": "moxie/families/manifold/builds/classical_example",
       "result": "Passed: 7 samples, 2 components, trustworthiness 1.0."
+    },
+    {
+      "command": "python families/manifold/tools/check.py tsne",
+      "result": "Passed native TSNE contracts in the integrated namespace and two independently assembled consumers. Trustworthiness, ClassicalMDS and remaining scaffold contract probes also passed."
+    },
+    {
+      "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python families/manifold/tools/tsne_parity.py",
+      "result": "Passed 10 probability, KL and gradient comparisons, 46 distance comparisons, 6 explicit-init fits, both stopping rules, 750 bit-identical Float32 initialization values, 4 PCA initializations and 5 seeded distribution comparisons."
     }
   ],
-  "scope": "ClassicalMDS, trustworthiness and dense helpers. Other algorithms remain explicit unsupported declarations. No full sklearn parity claim."
+  "scope": "Exact dense TSNE, ClassicalMDS, trustworthiness and dense helpers. Barnes-Hut and the remaining algorithm declarations raise explicit unsupported errors."
 }

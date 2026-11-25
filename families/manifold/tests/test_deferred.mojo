@@ -1,7 +1,7 @@
 """Exported declarations must reject unsupported operations explicitly."""
 from std.testing import assert_raises
 from moxie.manifold import (
-    MDS, TSNE, SpectralEmbedding, LocallyLinearEmbedding, Isomap,
+    MDS, SpectralEmbedding, LocallyLinearEmbedding, Isomap,
     locally_linear_embedding, smacof, spectral_embedding,
 )
 
@@ -9,8 +9,6 @@ from moxie.manifold import (
 def main() raises:
     with assert_raises(contains="NotImplementedError: MDS.__init__"):
         _ = MDS()
-    with assert_raises(contains="NotImplementedError: TSNE.__init__"):
-        _ = TSNE()
     with assert_raises(contains="NotImplementedError: SpectralEmbedding.__init__"):
         _ = SpectralEmbedding()
     with assert_raises(contains="NotImplementedError: LocallyLinearEmbedding.__init__"):

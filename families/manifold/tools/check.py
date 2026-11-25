@@ -13,6 +13,8 @@ sys.path.insert(0, str(CORE / 'tools'))
 from compiler_limits import compiler_command
 CONSUMERS = [ROOT / 'tests/consumers' / name for name in ('a', 'b')]
 FLAGS = ['-O3', '--fp-mode=contract=off']
+CONTRACTS = ('contracts', 'capabilities', 'family', 'plumbing', 'trustworthiness',
+             'classical_mds', 'deferred', 'tsne')
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -48,14 +50,12 @@ def assemble(consumer, lock=None, check=True):
                 for path in (ROOT / 'src/moxie/manifold').glob('*.mojo')
                 if path.stem != '__init__'}
             project['exports'] = json.loads((ROOT / 'EXPORTS.json').read_text())
-    # Follow the RNG owner's current transitive dependency declarations.
-    random_manifest = CORE / 'shared/random/DEPENDENCIES.lock.json'
-    known = {project['id'] for project in data['projects']}
-    for project in json.loads(random_manifest.read_text())['projects']:
-        if project['id'] not in known:
-            project['path'] = str((random_manifest.parent / project['path']).resolve())
+    # Keep standalone probes on the integrated numerical backends.
+    core_projects = json.loads((CORE / 'DEPENDENCIES.json').read_text())['projects']
+    for project in core_projects:
+        if project['id'] in ('mojo-linalg', 'numax'):
+            project['path'] = str((CORE / project['path']).resolve())
             data['projects'].append(project)
-            known.add(project['id'])
     for project in json.loads((ROOT / 'NUMERICAL-DEPENDENCIES.json').read_text())['projects']:
         project['path'] = str((ROOT / project['path']).resolve())
         data['projects'].append(project)
@@ -81,14 +81,14 @@ def build():
         '-o', ROOT / 'builds/moxie.mojoc')
     compile_file(ROOT / 'examples/estimator.mojo', ROOT / 'builds/example')
     compile_file(ROOT / 'examples/dense_embedding_contract.mojo', ROOT / 'builds/dense_example')
-    for name in ('contracts', 'capabilities', 'family', 'plumbing', 'trustworthiness', 'classical_mds', 'deferred'):
+    for name in CONTRACTS:
         compile_file(ROOT / f'tests/test_{name}.mojo', ROOT / f'builds/test_{name}')
     compile_file(ROOT / 'examples/classical_mds.mojo', ROOT / 'builds/classical_example')
     for consumer in CONSUMERS:
         build_consumer(consumer)
 
 def test():
-    for name in ('contracts', 'capabilities', 'family', 'plumbing', 'trustworthiness', 'classical_mds', 'deferred'):
+    for name in CONTRACTS:
         run(ROOT / f'builds/test_{name}')
     for name, message in [('missing_predict', "required function 'predict' is not implemented")]:
         result = run('mojo', 'build', '-I', ROOT / 'builds/deps',
@@ -163,6 +163,19 @@ if __name__ == '__main__':
         build_consumer(consumer)
         if action == 'test':
             run(consumer / 'builds/probe', consumer=consumer)
+    elif action == 'tsne':
+        # Compile authored modules and the shared trustworthiness entry point.
+        assemble(ROOT)
+        for name in (ROOT, *CONSUMERS):
+            if name != ROOT:
+                assemble(name)
+            target = name / 'builds/test_tsne'
+            compile_file(ROOT / 'tests/test_tsne.mojo', target, consumer=name)
+            run(target, consumer=name)
+        for name in ('trustworthiness', 'classical_mds', 'deferred'):
+            target = ROOT / f'builds/test_{name}'
+            compile_file(ROOT / f'tests/test_{name}.mojo', target)
+            run(target)
     else:
         build()
         if action == 'test':

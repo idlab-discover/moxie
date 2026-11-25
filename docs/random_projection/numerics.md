@@ -2,14 +2,20 @@
 
 This integration retains `ProjectionMatrix` and the existing projection and
 pseudoinverse helpers as private random-projection implementations. It does not
-introduce a shared sparse backend or an NDArray adapter.
+introduce a shared sparse backend.
 
-`moxie._dense` accepts NuMojo NDArray storage and supplies finite rank-2
-multiplication, but no CSR operations. `numojo.NDArray.__matmul__` would require
-copying the existing public list buffers and cannot preserve the CSR path that
-sums duplicate entries without densifying inputs. `project` retains input-dtype
-accumulation, finite-result validation and the exact dense/CSR output rule.
-It allocates result storage; it does not allocate a dense copy of CSR inputs.
+The trait path takes NuMojo `NDArray` input. `project_dense` multiplies a strided
+NDArray by the `ProjectionMatrix` components with the same input-dtype
+accumulation order as `project`, finite input and result checks, and one result
+allocation. Numax's dynamic `numax.linalg.blas.matmul` takes TensorLike buffers
+and dispatches to MAX GEMM. It would require materializing dense components
+from the row-major list or CSR buffers and would change the reduction order.
+`numojo.NDArray.__matmul__` likewise needs dense NDArray components. For CSR
+components, both approaches would allocate a dense matrix and compute products
+for its implicit zeros.
+
+`project` retains input-dtype accumulation and the dense/CSR output rule.
+Both paths use the stored component order and validate public component buffers.
 
 The existing scaled one-sided Jacobi pseudoinverse works in Float64 and applies
 `max(shape) * input_dtype_epsilon * largest_singular_value`. It handles tall,

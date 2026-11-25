@@ -6,6 +6,7 @@ from moxie.random_projection import (
     ProjectionMatrix, GaussianRandomProjectionParams, SparseRandomProjectionParams,
     ComponentCount, ProjectionDensity, RandomProjector,
 )
+from numojo import NDArray, Shape, zeros
 from moxie._random import RandomState, check_random_state, seed_global_random_state, entropy_state
 
 
@@ -18,6 +19,23 @@ def same[dtype: DType](a: ProjectionMatrix[dtype], b: ProjectionMatrix[dtype]) r
         assert_equal(x.data[i], y.data[i])
 
 
+def same_dense[dtype: DType](a: NDArray[dtype], b: ProjectionMatrix[dtype]) raises:
+    var x = b.to_dense()
+    assert_equal(a.ndim, 2)
+    assert_equal(a.shape[0], x.rows)
+    assert_equal(a.shape[1], x.cols)
+    for i in range(len(x.data)):
+        assert_equal(a.unsafe_get(i), x.data[i])
+
+
+def dense_of[dtype: DType](X: ProjectionMatrix[dtype]) raises -> NDArray[dtype]:
+    var x = X.to_dense()
+    var result = zeros[dtype](Shape(x.rows, x.cols))
+    for i in range(len(x.data)):
+        result.unsafe_set(i, x.data[i])
+    return result^
+
+
 def chain[E: UnsupervisedEstimator & TransformerMixin](mut model: E, params: E.Params, X: E.Input) raises -> E.Transformed where conforms_to(E.Target, Deinitable):
     return model.set_params(params).fit(X).transform(X)
 
@@ -26,17 +44,24 @@ def exercise[dtype: DType]() raises:
     var values: List[Scalar[dtype]] = [1.0, 2.0, 0.0, 4.0, 0.0, 3.0, 2.0, 0.0, 4.0, 0.0, 1.0, 2.0]
     var X = ProjectionMatrix[dtype](3, 4, values^)
     var csr = X.to_csr()
+    var dense = dense_of(X)
     var gaussian = GaussianRandomProjection[dtype](2, random_state=42)
-    var Y = chain(gaussian, gaussian.get_params(), X)
+    # The trait path is NDArray; ProjectionMatrix/CSR overloads are retained.
+    var Y_dense = chain(gaussian, gaussian.get_params(), dense)
+    var Y = gaussian.transform(X)
+    same_dense(Y_dense, Y)
     same(Y, gaussian.transform(csr))
+    same_dense(gaussian.inverse_transform(Y_dense), gaussian.inverse_transform(Y))
     var inverse = gaussian.inverse_transform(Y)
     assert_equal(inverse.cols, 4)
     assert_false(inverse.is_sparse)
     _ = gaussian.set_params(compute_inverse_components=True).fit(csr)
     same(inverse, gaussian.inverse_transform(Y))
     var sparse = SparseRandomProjection[dtype](2, density=0.5, random_state=42)
-    var S = chain(sparse, sparse.get_params(), csr)
+    var S_dense = chain(sparse, sparse.get_params(), dense)
+    var S = sparse.fit(csr).transform(csr)
     assert_true(S.is_sparse)
+    same_dense(S_dense, S)
     same(S, sparse.transform(X))
     var duplicate_values: List[Scalar[dtype]] = [1, 2, 3]
     var duplicate = ProjectionMatrix[dtype].from_csr(

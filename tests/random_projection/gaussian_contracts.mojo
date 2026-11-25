@@ -47,14 +47,6 @@ def input_data() raises -> ProjectionMatrix[DType.float64]:
     )
 
 
-def fit_generic[
-    E: RandomProjector
-](mut model: E, X: E.Input) raises -> E.Transformed where conforms_to(
-    E.Target, Deinitable
-):
-    return model.fit_transform(X)
-
-
 def test_gaussian_lifecycle() raises:
     var X = input_data()
     var model = GaussianRandomProjection(n_components=2, random_state=42)
@@ -65,7 +57,7 @@ def test_gaussian_lifecycle() raises:
         _ = model.inverse_transform(X)
     with assert_raises():
         _ = model.get_feature_names_out()
-    var transformed = fit_generic(model, X)
+    var transformed = model.fit_transform(X)
     assert_true(model.__sklearn_is_fitted__())
     assert_equal(model.n_components_, 2)
     assert_equal(model.n_features_in_, 4)

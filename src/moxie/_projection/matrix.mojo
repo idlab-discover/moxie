@@ -1,5 +1,6 @@
 """Owned dense/CSR storage used by the random-projection family."""
 from std.math import isfinite
+from numojo import NDArray, Shape, zeros
 
 
 struct ProjectionMatrix[dtype: DType = DType.float64](Copyable, Movable):
@@ -200,3 +201,56 @@ def project[
             X.rows, components.rows, values^, indices^, indptr^
         )
     return ProjectionMatrix[dtype](X.rows, components.rows, values^)
+
+
+def validate_dense[dtype: DType](X: NDArray[dtype]) raises:
+    """Require a nonempty, finite rank-2 NDArray; any valid strides."""
+    if X.ndim != 2:
+        raise Error("ValueError: expected a rank-2 array")
+    if X.shape[0] == 0 or X.shape[1] == 0:
+        raise Error("ValueError: input must contain samples and features")
+    var row_stride = Int(X.strides[0])
+    var col_stride = Int(X.strides[1])
+    for row in range(X.shape[0]):
+        for col in range(X.shape[1]):
+            if not isfinite(X.unsafe_get(row * row_stride + col * col_stride)):
+                raise Error("ValueError: input contains NaN or infinity")
+
+
+def project_dense[
+    dtype: DType
+](X: NDArray[dtype], components: ProjectionMatrix[dtype]) raises -> NDArray[dtype]:
+    """Compute X @ components.T after the caller validates the dense input.
+
+    Accumulates in the input dtype in the same order as `project`, so a dense
+    NDArray and the equivalent dense `ProjectionMatrix` give identical results.
+    """
+    components.validate(nonempty=True)
+    if X.shape[1] != components.cols:
+        raise Error("ValueError: feature count differs from fitted projection")
+    var row_stride = Int(X.strides[0])
+    var col_stride = Int(X.strides[1])
+    var rows = X.shape[0]
+    if rows > 9223372036854775807 // components.rows:
+        raise Error("ValueError: invalid matrix dimensions")
+    var result = zeros[dtype](Shape(rows, components.rows))
+    for row in range(X.shape[0]):
+        var base = row * row_stride
+        for comp in range(components.rows):
+            var total = Scalar[dtype](0)
+            if components.is_sparse:
+                for pos in range(components.indptr[comp], components.indptr[comp + 1]):
+                    total += (
+                        X.unsafe_get(base + components.indices[pos] * col_stride)
+                        * components.data[pos]
+                    )
+            else:
+                for col in range(X.shape[1]):
+                    total += (
+                        X.unsafe_get(base + col * col_stride)
+                        * components.data[comp * components.cols + col]
+                    )
+            if not isfinite(total):
+                raise Error("ValueError: projection produced NaN or infinity")
+            result.unsafe_set(row * components.rows + comp, total)
+    return result^

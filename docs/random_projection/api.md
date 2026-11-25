@@ -7,6 +7,24 @@ estimator contracts.
 
 ## Example
 
+`Input`, `Target`, and `Transformed` are NuMojo `NDArray[dtype]` in the
+estimator traits. The dense path works with `Pipeline` and `FeatureUnion`
+when the step array types match.
+
+```mojo
+from moxie.random_projection import SparseRandomProjection
+from moxie.linear_model import RidgeClassifier
+from moxie.pipeline import make_pipeline
+
+var pipe = make_pipeline(SparseRandomProjection(n_components=30, random_state=0), RidgeClassifier())
+_ = pipe.fit(X, y)  # X is Float64 (n_samples, n_features), y is Int64 (n_samples,)
+```
+
+Use the concrete `ProjectionMatrix` overloads for family-local dense/CSR
+storage. As with the dense trait path, `fit` returns a mutable borrow of the
+estimator. `transform`, `fit_transform`, and `inverse_transform` return
+`ProjectionMatrix` when passed one.
+
 ```mojo
 from moxie.random_projection import GaussianRandomProjection, ProjectionMatrix
 
@@ -31,8 +49,10 @@ Run `builds/examples/random_projection` for the complete dense and sparse exampl
 Invalid values are rejected at fit. `eps` must be finite and positive; automatic
 dimensionality additionally requires `eps < 1`.
 
-Fit validates finite, nonempty input and uses its shape, not its values. Targets
-are ignored. Successful fit replaces all learned state. A failed fit leaves the
+Fit checks that input is finite and nonempty, then uses its shape to generate
+components. Targets are ignored. Direct NDArray calls can omit `y` or pass an
+`NDArray[dtype]`; the `ProjectionMatrix` overloads accept an optional
+`List[Scalar[dtype]]`. Successful fit replaces all learned state. A failed fit leaves the
 previous learned state intact. Integer seeds restart the same stream at every
 fit. Repeated transforms use the fitted matrix without drawing random numbers.
 
@@ -83,9 +103,15 @@ var X = ProjectionMatrix[DType.float32](2, 3,
 var projected = model.fit_transform(X)
 ```
 
-Float32 inputs produce Float32 components and outputs. Gaussian output is always
-dense. Sparse projection output is CSR only if **both** its input and components
-are sparse and `dense_output=False`. With `density=1`, components and output are
+Float32 inputs produce Float32 components and outputs. NDArray input accepts any
+valid strides, must be rank-2, nonempty and finite, and always gives a dense
+`NDArray` result in its dtype; inverse transforms of NDArrays return NDArrays.
+`components_` stays a `ProjectionMatrix` (CSR for sparse projections), as
+sklearn keeps sparse components. The NDArray kernel accumulates in the same
+order as the `ProjectionMatrix` kernel for dense inputs, so both paths give
+identical values for equivalent dense inputs. Gaussian output is always dense.
+Sparse projection output is CSR only if both its input and components are
+sparse and `dense_output=False`. With `density=1`, components and output are
 dense, as in the reference implementation. Projection multiplication does not
 densify CSR inputs. Inverse transforms always return dense matrices.
 
@@ -139,16 +165,11 @@ uses the documented number of output features.
 
 ## Explicit native limits
 
-- Inputs use the owned dense/CSR Float32 or Float64 type. CSC/COO adapters,
+- Inputs support Float32/Float64 NDArray and family-local dense/CSR storage. CSC/COO adapters,
   integer-array conversion, dataframe feature metadata, Python bindings,
   arbitrary NumPy broadcasting, and dynamic metadata routing are not included.
-- `ProjectionMatrix` is not NuMojo `NDArray`, the storage every other Moxie
-  estimator and meta-estimator uses. The projections therefore cannot be
-  composed yet: `make_pipeline(SparseRandomProjection(...), RidgeClassifier())`
-  fails to compile with `pipeline intermediate types must match`, and
-  `FeatureUnion` and `ColumnTransformer` require `NDArray` steps. Scored
-  cross-validation or search over a projection needs such a pipeline. Convert explicitly between the two storages until a shared
-  decision lands (see `notebooks/random_projection/`).
+- Generic composition uses NDArray. The `ProjectionMatrix` overloads are
+  available on concrete projection estimators.
 - Sparse projection supports at most `2**32-1` input features. Matrix sizes and
   JL bounds that exceed native integer limits raise clear errors.
 - Python's dimensionality warning for explicit expansion is not emitted;
@@ -192,14 +213,16 @@ and SciPy provide test oracles only. The runner reports those versions and saves
 fixtures under ignored `builds/random_projection/parity/`. The library never calls Python or foreign
 numerical libraries.
 
-The original 365 fixtures include both dtypes, five seeds, sparse densities and sampling
+The 375 family fixtures include both dtypes, five seeds, sparse densities and sampling
 branches, storage choices, auto dimensions, cached/uncached inverse paths,
 rank-deficient matrices, and extreme inverse scales. Float64 Gaussian matrices
 use `3e-13 * (1 + abs(expected))`; transform/inverse cases use `3e-10`. Float32
 uses `2e-6` for matrices and `3e-5` for transforms/inverses to allow single-precision
 reductions and SVD rounding. Shapes and output storage are exact; Float64 sparse
-CSR indices and row pointers are also checked exactly. This is evidence for the
-native scope above, not full Python API parity.
+CSR indices and row pointers are also checked exactly. Dense fixtures also compare
+NDArray transforms and inverses exactly with the legacy dense path.
+The [digits notebook](../../notebooks/random_projection/plot_johnson_lindenstrauss_bound.ipynb)
+compares pipeline accuracy, predictions, and decision values with scikit-learn.
 
 Primary references:
 

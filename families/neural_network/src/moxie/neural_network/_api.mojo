@@ -259,8 +259,6 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
     ) raises:
         if incremental:
             validate_incremental(self._params.solver, self._params.early_stopping)
-        elif self._params.warm_start and self._state:
-            raise Error("NotImplementedError: MLP warm-start refitting is unfinished")
         if X.ndim != 2:
             raise Error("ValueError: expected a dense rank-2 matrix")
         if self._params.loss != "log_loss":
@@ -274,6 +272,9 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
             codes = encoding.encode(values)
         else:
             encoding = encode_column(values, classification=False)
+            if self._params.warm_start and self._classes:
+                if not _same_classes(_label_values(self._classes.value()), encoding.classes):
+                    raise Error("ValueError: warm_start requires y to contain the same classes")
             codes = encoding.index.inverse.copy()
         var count = encoding.classes.size
         var width = count if count > 2 else 1
@@ -591,8 +592,6 @@ struct MLPRegressor[dtype: DType = DType.float64](
     ) raises:
         if incremental:
             validate_incremental(self._params.solver, self._params.early_stopping)
-        elif self._params.warm_start and self._state:
-            raise Error("NotImplementedError: MLP warm-start refitting is unfinished")
         if X.ndim != 2:
             raise Error("ValueError: expected a dense rank-2 matrix")
         var target = _target_matrix(y, X.shape[0])

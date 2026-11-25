@@ -9,8 +9,8 @@ learned-state transition remains unfinished. See the [RBM scope](../algorithms/r
 The [MLP estimators](mlp.md) implement ordinary fit with dense Float32/Float64
 features, integer single-label classification, single- and multi-output
 regression, optional sample weights, L-BFGS, SGD and Adam. SGD and Adam also
-support one-epoch `partial_fit`. Validation-set early stopping and warm-start
-refitting remain open. See the
+support one-epoch `partial_fit`. All three solvers support warm-start refitting.
+Validation-set early stopping remains open. See the
 [engine scope](../shared/mlp_engine/docs/scope.md) for private trainer coverage.
 
 Dense finite rank-2 inputs, both dtypes and arbitrary valid strides use NuMojo
@@ -28,7 +28,8 @@ explicit RNG context, verbose output text, n_iter=0, set_params refit, strided
 input), RBM pipeline/union/clone composition, 32 MLP initialization/packing
 cases, 40 dense MLP forward/gradient fixtures, and L-BFGS and stochastic
 training fixtures, and 72 public MLP fits with native state, clone, pipeline
-and weighted CV contracts. Incremental checks compare 160 sequence snapshots
+and weighted CV contracts. The same check compares 216 warm-start snapshots
+against the pinned reference. Incremental checks compare 160 sequence snapshots
 against the same reference and exercise the native incremental traits.
 It also checks core ownership,
 licenses and an isolated public consumer. Tolerances are Float32 3e-5 and Float64 2e-12 for RBM;

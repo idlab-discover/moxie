@@ -125,11 +125,11 @@ def matrix_text(A):
     return f"{A.shape[0]} {A.shape[1]} " + ' '.join(repr(float(v)) for v in A.ravel())
 
 
-def run_native(sets):
+def run_native(sets, options):
     path = ROOT / 'builds/tests/gaussian_process/kernels/parity-datasets.txt'
     path.write_text('\n'.join(f"{name} {kind} {matrix_text(X)} {matrix_text(Y)}" for name, kind, X, Y in sets) + '\n')
     binary = ROOT / 'builds/tests/gaussian_process/kernels/kernel_driver'
-    output = subprocess.run([str(binary), str(path)], check=True, text=True, capture_output=True).stdout
+    output = subprocess.run([str(binary), str(path), *options], check=True, text=True, capture_output=True).stdout
     records = {}
     for line in output.splitlines():
         if not line.startswith('R|'):
@@ -205,8 +205,10 @@ def reference(kernel, X, Y, float32, fd=False):
 
 
 def main():
+    if sys.argv[1:] not in ([], ['--roundtrip']):
+        raise SystemExit('Usage: parity.py [--roundtrip]')
     sets = list(datasets())
-    native = run_native(sets)
+    native = run_native(sets, sys.argv[1:])
     assert native, 'native driver produced no records'
     tally = Tally()
     for index, kernel in enumerate(KERNELS):

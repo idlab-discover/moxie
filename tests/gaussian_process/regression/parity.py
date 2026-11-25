@@ -130,10 +130,12 @@ def mahalanobis(samples, expected):
 
 
 def main():
+    if sys.argv[1:] not in ([], ['--roundtrip']):
+        raise SystemExit('Usage: parity.py [--roundtrip]')
     all_cases = list(cases())
     path = ROOT / 'builds/tests/gaussian_process/regression/gpr-cases.txt'
     path.write_text('\n'.join(f'{n} {c} {k} {matrix(X)} {matrix(y)} {matrix(Xt)}' for n, c, k, X, y, Xt in all_cases) + '\n')
-    output = subprocess.run([str(ROOT / 'builds/tests/gaussian_process/regression/gpr_driver'), str(path)], check=True, text=True, capture_output=True).stdout
+    output = subprocess.run([str(ROOT / 'builds/tests/gaussian_process/regression/gpr_driver'), str(path), *sys.argv[1:]], check=True, text=True, capture_output=True).stdout
     native = {}
     for line in output.splitlines():
         if line.startswith('R|'):

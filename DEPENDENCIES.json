@@ -347,6 +347,9 @@
         "moxie.gaussian_process._gpr": {
           "file": "src/moxie/gaussian_process/_gpr.mojo"
         },
+        "moxie.gaussian_process.serialization": {
+          "file": "src/moxie/gaussian_process/serialization.mojo"
+        },
         "moxie.gaussian_process._search": {
           "file": "src/moxie/gaussian_process/_search.mojo"
         },

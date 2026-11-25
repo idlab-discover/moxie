@@ -177,9 +177,10 @@ weights. `validate_uncertainty` rejects simultaneous std/cov;
 `validate_likelihood` rejects gradients without explicit theta. Helpers use Mojo
 Error with descriptive prefixes. Native fit/set_params mutate in place as in the
 unchanged foundation contract. Language differences must be tested by children;
-Python reflection, pandas adapters, metadata routing and serialization remain
-binding work. The kernel engine implements general Matérn nu and dense string PairwiseKernel
-metrics. Native custom/structured kernels remain incomplete.
+Python reflection, pandas adapters and metadata routing remain binding work.
+The kernel engine implements general Matérn nu and dense string PairwiseKernel
+metrics. The family owns [native regressor and kernel schemas](regression/api.md#native-persistence).
+Native custom/structured kernels remain incomplete.
 
 ## Dependency assembly and verification
 

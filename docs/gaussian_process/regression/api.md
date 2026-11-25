@@ -107,6 +107,27 @@ for a cross-validation and search example.
 - Errors: Mojo `Error` prefixed with the sklearn exception name and message
   (non-SPD kernel `LinAlgError`, alpha length, n_targets, NaN input, feature count).
 
+## Native persistence
+
+```mojo
+from moxie.gaussian_process.serialization import GaussianProcessRegressorSchema
+from moxie.serialization import load_model, save_model
+
+save_model[GaussianProcessRegressorSchema[]](gpr, "regressor.moxie")
+var restored = load_model[GaussianProcessRegressorSchema[]]("regressor.moxie")
+```
+
+Use `GaussianProcessRegressorSchema[DType.float32]` for Float32 input. The
+experimental schema supports fitted and unfitted models with `FminLBFGSB` or
+`optimizer=None`. It restores the configured and learned kernels separately, along
+with the training snapshot, Cholesky factor, targets, normalization, dual
+coefficients, cached likelihood and fit warnings. Loading preserves pending
+parameter updates and restores learned state without fitting. Arrays are written
+in logical order, including when the training snapshot is strided. The schema
+rejects nonfinite learned arrays and invalid Cholesky factors. Custom optimizer
+types and external random streams are outside this schema.
+See [native model files](../../serialization.md) for the shared format.
+
 ## Language adaptations
 
 - All numerical work is Float64. Float32 X/y are widened exactly; outputs and

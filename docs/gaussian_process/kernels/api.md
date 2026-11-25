@@ -34,6 +34,22 @@ See `examples/gaussian_process_kernels.mojo` (run by `pixi run test`).
 `requires_vector_input()`, `name()`, `k1()`, `k2()`, `kernel()`, `exponent()`,
 `kernels()`, `==`, and `String(kernel)` (sklearn repr).
 
+## Native persistence
+
+```mojo
+from moxie.gaussian_process.serialization import KernelSchema
+from moxie.serialization import load_model, save_model
+
+save_model[KernelSchema](kernel, "kernel.moxie")
+var restored = load_model[KernelSchema]("kernel.moxie")
+```
+
+Convert a typed leaf to `Kernel` before saving it. The experimental schema
+stores built-in leaves and operators, child order, raw bounds, the distinction
+between integer and floating-point powers, and optional pairwise keyword
+arguments. Files support trees up to 256 levels deep and restore independent
+kernel values. See [native model files](../../serialization.md) for the format.
+
 ## Conventions (identical to sklearn)
 
 - theta: natural logs of non-fixed hyperparameters, hyperparameter names sorted

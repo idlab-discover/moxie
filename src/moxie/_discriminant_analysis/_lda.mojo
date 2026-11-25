@@ -5,6 +5,7 @@ from std.math import sqrt, abs
 from numojo import NDArray, Shape, zeros
 from moxie.base import NumericClassifierClasses
 from moxie.utils.validation import FittedState, check_is_fitted
+from moxie.compose._table import ColumnTable
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._discriminant_analysis_contracts import LinearDiscriminantTransformer
 from moxie.warnings import FitWarning
@@ -17,6 +18,7 @@ from ._work import (
     matrix,
     vector,
     input_matrix,
+    check_named_input,
     cast_array,
     widen,
     matmul,
@@ -387,6 +389,7 @@ struct LinearDiscriminantAnalysis[
     var xbar_: Optional[NDArray[Self.dtype]]
     var classes_: List[Self.L]
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var fit_warnings: List[FitWarning]
     var _max_components: Int
     var _fitted_solver: String
@@ -420,6 +423,7 @@ struct LinearDiscriminantAnalysis[
         self.xbar_ = None
         self.classes_ = List[Self.L]()
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self.fit_warnings = []
         self._max_components = 0
         self._fitted_solver = ""
@@ -539,6 +543,7 @@ struct LinearDiscriminantAnalysis[
         self.xbar_ = None
         self.classes_ = List[Self.L]()
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self._max_components = 0
         self._fitted_solver = ""
         self._state.reset()
@@ -550,6 +555,21 @@ struct LinearDiscriminantAnalysis[
     ) raises -> ref[self] Self:
         """Fit the model; replaces learned state (reset to unfitted on failure)."""
         self._reset()
+        self._fit(X, y)
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: List[Self.L]
+    ) raises -> ref[self] Self:
+        """Fit the numeric table and record its column names in order."""
+        self._reset()
+        ref values = X.values()
+        var names = X.schema().names.copy()
+        self._fit(values, y)
+        self.feature_names_in_ = names^
+        return self
+
+    def _fit(mut self, X: NDArray[Self.dtype], y: List[Self.L]) raises:
         self._validate_params()
         var work = input_matrix(X, ESTIMATOR, min_samples=2)
         var n = work.shape[0]
@@ -617,9 +637,37 @@ struct LinearDiscriminantAnalysis[
         self._fitted_solver = self.solver
         self._state.record_fit(n, p, n_targets=len(y))
         self.fit_warnings = warnings^
-        return self
 
     # ----- inference -----------------------------------------------------
+
+    def _check_named_input(self, X: ColumnTable[Self.dtype]) raises:
+        _ = self.get_n_features_in()
+        check_named_input(X, self.feature_names_in_)
+
+    def decision_function(self, X: ColumnTable[Self.dtype]) raises -> NDArray[Self.dtype]:
+        self._check_named_input(X)
+        return self.decision_function(X.values())
+
+    def predict(self, X: ColumnTable[Self.dtype]) raises -> List[Self.L]:
+        self._check_named_input(X)
+        return self.predict(X.values())
+
+    def predict_proba(self, X: ColumnTable[Self.dtype]) raises -> NDArray[Self.dtype]:
+        self._check_named_input(X)
+        return self.predict_proba(X.values())
+
+    def predict_log_proba(self, X: ColumnTable[Self.dtype]) raises -> NDArray[Self.dtype]:
+        self._check_named_input(X)
+        return self.predict_log_proba(X.values())
+
+    def score(
+        self,
+        X: ColumnTable[Self.dtype],
+        y: List[Self.L],
+        sample_weight: Optional[NDArray[Self.dtype]] = None,
+    ) raises -> Float64:
+        self._check_named_input(X)
+        return self.score(X.values(), y, sample_weight)
 
     def _check_input(self, X: NDArray[Self.dtype]) raises -> Work:
         if not self._state.is_fitted():
@@ -704,10 +752,22 @@ struct LinearDiscriminantAnalysis[
 
         'lsqr' raises NotImplementedError (checked before fitted state, like sklearn).
         """
+        self._check_transform_solver()
+        return self._transform(X)
+
+    def transform(self, X: ColumnTable[Self.dtype]) raises -> NDArray[Self.dtype]:
+        """Project a numeric table after checking its column names."""
+        self._check_transform_solver()
+        self._check_named_input(X)
+        return self._transform(X.values())
+
+    def _check_transform_solver(self) raises:
         if self.solver == "lsqr":
             raise Error(
                 "NotImplementedError: transform not implemented for 'lsqr' solver (use 'svd' or 'eigen')."
             )
+
+    def _transform(self, X: NDArray[Self.dtype]) raises -> NDArray[Self.dtype]:
         var work = self._check_input(X)
         if not self.scalings_:
             raise Error(
@@ -742,6 +802,15 @@ struct LinearDiscriminantAnalysis[
         self.fit(X, y.value())
         return self.transform(X)
 
+    def fit_transform(
+        mut self, X: ColumnTable[Self.dtype], y: Optional[List[Self.L]] = None
+    ) raises -> NDArray[Self.dtype]:
+        """Fit a numeric table, record its column names, and project its values."""
+        if not y:
+            raise Error("ValueError: LinearDiscriminantAnalysis.fit_transform requires y")
+        _ = self.fit(X, y.value())
+        return self.transform(X.values())
+
     def get_feature_names_out(
         self, input_features: Optional[List[String]] = None
     ) raises -> List[String]:
@@ -751,6 +820,9 @@ struct LinearDiscriminantAnalysis[
                 "NotFittedError: This LinearDiscriminantAnalysis instance is not fitted yet."
                 " Call 'fit' with appropriate arguments before using this estimator."
             )
+        if Bool(input_features) and Bool(self.feature_names_in_):
+            if input_features.value() != self.feature_names_in_.value():
+                raise Error("ValueError: input_features is not equal to feature_names_in_")
         if input_features and len(input_features.value()) != self.n_features_in_:
             raise Error(
                 String("ValueError: input_features should have length equal to number of features (")

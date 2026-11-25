@@ -1,13 +1,15 @@
 """Archive contracts for discriminant analysis estimators."""
+from std.sys import argv
 from std.testing import assert_equal, assert_false, assert_raises, assert_true
-from numojo import NDArray
+from numojo import NDArray, Shape
 from moxie.base import clone
+from moxie.compose import ColumnTable
 from moxie.discriminant_analysis import ClassLabel, Shrinkage
 from moxie.discriminant_analysis_serialization import (
     LinearDiscriminantAnalysisSchema,
     QuadraticDiscriminantAnalysisSchema,
 )
-from moxie.serialization import dumps, load_model, save_model
+from moxie.serialization import ModelSchema, dumps, loads, load_model, save_model
 from support.fixtures import matrix
 
 
@@ -257,7 +259,7 @@ def qda_invalid_state() raises:
     with assert_raises(contains="unsupported estimator"):
         _ = LinearDiscriminantAnalysisSchema[].decode(archive)
     bad = archive.copy()
-    bad.schema_version += 1
+    bad.schema_version = Schema.StateVersion + 1
     with assert_raises(contains="unsupported estimator"):
         _ = Schema.decode(bad)
     bad = archive.copy()
@@ -285,6 +287,143 @@ def qda_invalid_state() raises:
         _ = Schema.encode(model)
 
 
+def named_archive_round_trip[Schema: ModelSchema](
+    model: Schema.Model, unfitted: Schema.Model, version: Int,
+) raises -> Schema.Model where conforms_to(Schema.Model, Deinitable):
+    var archive = Schema.encode(model)
+    assert_equal(archive.schema_version, version)
+    var restored = Schema.decode(loads(dumps(archive)))
+    assert_equal(dumps(Schema.encode(restored)), dumps(archive))
+    var truncated = archive.copy()
+    _ = truncated.manifest.pop()
+    with assert_raises():
+        _ = Schema.decode(truncated)
+    var bad = Schema.encode(unfitted)
+    bad.schema_version = version
+    with assert_raises():
+        _ = Schema.decode(bad)
+    return restored^
+
+
+def named_lda[dtype: DType](emit_parity: Bool) raises:
+    comptime Schema = LinearDiscriminantAnalysisSchema[dtype]
+    var X = training_data[dtype]()
+    var y: List[Int] = [1, 1, 1, 1, 1, 2, 2, 2, 2]
+    var names: List[String] = ["mass", "âge"]
+    var reordered: List[String] = ["âge", "mass"]
+    var table = ColumnTable(X, names)
+    var reversed_table = ColumnTable(X, reordered)
+    var model = Schema.Model()
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict(table)
+    with assert_raises(contains="requires y"):
+        _ = model.fit_transform(table)
+    var projection = model.fit_transform(table, y.copy())
+    assert_equal(projection.tolist(), model.transform(X).tolist())
+    assert_equal(model.transform(table).tolist(), projection.tolist())
+    with assert_raises(contains="feature names should match"):
+        _ = model.transform(reversed_table)
+    assert_equal(model.feature_names_in_.value(), names)
+    assert_false(Bool(clone(model).feature_names_in_))
+    assert_equal(model.get_feature_names_out(names.copy()), model.get_feature_names_out())
+    with assert_raises(contains="input_features is not equal"):
+        _ = model.get_feature_names_out(reordered.copy())
+    assert_equal(model.predict(table), model.predict(X))
+    assert_equal(model.decision_function(table).tolist(), model.decision_function(X).tolist())
+    assert_equal(model.predict_proba(table).tolist(), model.predict_proba(X).tolist())
+    assert_equal(model.predict_log_proba(table).tolist(), model.predict_log_proba(X).tolist())
+    assert_equal(model.score(table, y), model.score(X, y))
+
+    var restored = named_archive_round_trip[Schema](model, Schema.Model(), Schema.StateVersion)
+    assert_equal(restored.feature_names_in_.value(), names)
+    assert_equal(restored.transform(table).tolist(), projection.tolist())
+    with assert_raises(contains="feature names should match"):
+        _ = restored.predict(reversed_table)
+    var duplicates: List[String] = ["mass", "mass"]
+    restored.feature_names_in_ = duplicates^
+    with assert_raises(contains="feature_names_in_ must be unique"):
+        _ = Schema.encode(restored)
+
+    if emit_parity:
+        print("lda|", String(dtype), "|", names, "|", model.predict(table),
+              "|", model.predict_proba(table).tolist(), sep="")
+        print("projection|", String(dtype), "|", model.get_feature_names_out(),
+              "|", projection.tolist(), sep="")
+
+    var unnormalized: List[Float64] = [1.0, 3.0]
+    model.priors = unnormalized^
+    _ = model.fit(table, y)
+    var combined = Schema.decode(Schema.encode(model))
+    assert_equal(len(combined.fit_warnings), 1)
+    assert_equal(combined.feature_names_in_.value(), names)
+    model.priors = None
+    _ = model.fit(X, y)
+    assert_false(Bool(model.feature_names_in_))
+    assert_equal(model.predict(table), model.predict(X))
+    _ = model.fit(table, y)
+    with assert_raises(contains="inconsistent numbers of samples"):
+        _ = model.fit(table, List[Int]())
+    assert_false(Bool(model.feature_names_in_))
+    assert_false(model.__sklearn_is_fitted__())
+
+
+def named_qda[dtype: DType](emit_parity: Bool) raises:
+    comptime Schema = QuadraticDiscriminantAnalysisSchema[dtype]
+    var X = training_data[dtype]()
+    var y: List[Int] = [1, 1, 1, 1, 1, 2, 2, 2, 2]
+    var names: List[String] = ["mass", "âge"]
+    var reordered: List[String] = ["âge", "mass"]
+    var renamed: List[String] = ["height", "âge"]
+    var table = ColumnTable(X, names)
+    var reversed_table = ColumnTable(X, reordered)
+    var renamed_table = ColumnTable(X, renamed)
+    var model = Schema.Model()
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict(table)
+    assert_equal(model.fit(table, y).get_n_features_in(), 2)
+    assert_equal(model.feature_names_in_.value(), names)
+    assert_false(Bool(clone(model).feature_names_in_))
+    assert_equal(model.predict(table), model.predict(X))
+    assert_equal(model.decision_function(table).tolist(), model.decision_function(X).tolist())
+    assert_equal(model.predict_proba(table).tolist(), model.predict_proba(X).tolist())
+    assert_equal(model.predict_log_proba(table).tolist(), model.predict_log_proba(X).tolist())
+    var weights = matrix[dtype](1, 9, [1.0, 1, 1, 2, 1, 2, 1, 2, 1]).reshape(Shape(9))
+    assert_equal(
+        model.score(table, y, sample_weight=weights.copy()),
+        model.score(X, y, sample_weight=weights.copy()),
+    )
+    with assert_raises(contains="feature names should match"):
+        _ = model.predict(reversed_table)
+    with assert_raises(contains="feature names should match"):
+        _ = model.predict_log_proba(renamed_table)
+
+    var restored = named_archive_round_trip[Schema](model, Schema.Model(), Schema.StateVersion)
+    assert_equal(restored.feature_names_in_.value(), names)
+    assert_equal(restored.predict_proba(table).tolist(), model.predict_proba(table).tolist())
+    with assert_raises(contains="feature names should match"):
+        _ = restored.predict(reversed_table)
+    restored.feature_names_in_ = List[String]()
+    with assert_raises(contains="invalid feature_names_in_ count"):
+        _ = Schema.encode(restored)
+
+    if emit_parity:
+        print("qda|", String(dtype), "|", names, "|", model.predict(table),
+              "|", model.predict_proba(table).tolist(), sep="")
+
+    _ = model.fit(reversed_table, y)
+    assert_equal(model.feature_names_in_.value(), reordered)
+    _ = model.fit(X, y)
+    assert_false(Bool(model.feature_names_in_))
+    assert_equal(model.predict(table), model.predict(X))
+    _ = model.fit(table, y)
+    var mixed = table.copy()
+    mixed.add_strings("comment", List[String](length=9, fill="text"))
+    with assert_raises(contains="mixed ColumnTable"):
+        _ = model.fit(mixed, y)
+    assert_false(Bool(model.feature_names_in_))
+    assert_false(model.__sklearn_is_fitted__())
+
+
 def main() raises:
     var binary_labels: List[Int] = [-1, -1, -1, -1, -1, 2, 2, 2, 2]
     var text_labels: List[String] = ["β", "a", "c", "a", "c", "β", "a", "c", "β"]
@@ -299,3 +438,9 @@ def main() raises:
     qda_unfitted_round_trip()
     qda_invalid_state()
     print("PASS: QDA serialization contracts")
+    var emit_parity = len(argv()) > 1 and argv()[1] == "--named-parity"
+    named_lda[DType.float32](emit_parity)
+    named_lda[DType.float64](emit_parity)
+    named_qda[DType.float32](emit_parity)
+    named_qda[DType.float64](emit_parity)
+    print("PASS: discriminant named input and archive contracts")

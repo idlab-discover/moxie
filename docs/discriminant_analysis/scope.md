@@ -27,7 +27,9 @@
   (`validate_data` without `accept_sparse`), so no branch is deferred.
 - Array-API (non-NumPy namespace/device) dispatch of the `svd` solver: not applicable to
   native Mojo arrays.
-- Python-only facilities: pickling, pandas `feature_names_in_`, metadata routing, `set_output`.
+- Native numeric `ColumnTable` inputs preserve fitted `feature_names_in_` on direct
+  estimator calls. See [API](api.md#named-dense-inputs).
+- Shared facilities still open: pandas inputs, pickling, metadata routing and `set_output`.
 - Inherited restrictions: mojo-linalg factorizations are scalar Float64 kernels
   (see performance.md); no GPU path.
 

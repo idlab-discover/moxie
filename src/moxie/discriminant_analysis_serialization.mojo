@@ -107,6 +107,38 @@ def _validate_class_order[L: ClassLabel](classes: List[L]) raises:
             raise Error("ModelSchemaError: classes_ must be strictly ascending")
 
 
+def _validate_feature_names(
+    names: Optional[List[String]], features: Int, fitted: Bool,
+) raises:
+    if not names:
+        return
+    ref values = names.value()
+    if not fitted or len(values) != features:
+        raise Error("ModelSchemaError: invalid feature_names_in_ count")
+    var seen = Dict[String, Bool]()
+    for name in values:
+        if name in seen:
+            raise Error("ModelSchemaError: feature_names_in_ must be unique")
+        seen[name] = True
+
+
+def _write_feature_names(mut writer: BinaryWriter, names: List[String]):
+    for name in names:
+        writer.string(name)
+
+
+def _read_feature_names(
+    mut reader: BinaryReader[_], features: Int,
+) raises -> List[String]:
+    # A string begins with an eight-byte length. Check the bound before allocating.
+    if features < 1 or features > reader.remaining() // 8:
+        raise Error("ModelSchemaError: invalid feature_names_in_ count")
+    var names = List[String](capacity=features)
+    for _ in range(features):
+        names.append(reader.string(reader.remaining()))
+    return names^
+
+
 def _validate_lda[dtype: DType, L: ClassLabel](
     model: LinearDiscriminantAnalysis[dtype, L]
 ) raises:
@@ -118,7 +150,9 @@ def _validate_lda[dtype: DType, L: ClassLabel](
             raise Error("ModelSchemaError: invalid LDA fit_warnings")
     var p = model.n_features_in_
     var k = len(model.classes_)
-    if not model.__sklearn_is_fitted__():
+    var fitted = model.__sklearn_is_fitted__()
+    _validate_feature_names(model.feature_names_in_, p, fitted)
+    if not fitted:
         if (
             p != 0 or k != 0 or model._max_components != 0 or model._fitted_solver != ""
             or model.covariance_ or model.scalings_ or model.xbar_ or model.explained_variance_ratio_
@@ -180,14 +214,16 @@ struct LinearDiscriminantAnalysisSchema[
 
     comptime Model = LinearDiscriminantAnalysis[Self.dtype, Self.L]
     comptime TypeId = "moxie.discriminant_analysis.LinearDiscriminantAnalysis"
-    comptime StateVersion = 2
+    comptime StateVersion = 3
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
         comptime assert Self.L == Int or Self.L == String, "LDA schema requires Int or String labels"
         _validate_lda(model)
         var has_warning = len(model.fit_warnings) != 0
-        var archive = ModelArchive(Self.TypeId, Self.StateVersion if has_warning else 1)
+        var has_names = Bool(model.feature_names_in_)
+        var version = Self.StateVersion if has_names else (2 if has_warning else 1)
+        var archive = ModelArchive(Self.TypeId, version)
         var writer = BinaryWriter()
         writer.uint(UInt64(dtype_code[Self.dtype]()))
         writer.boolean(Self.L == String)
@@ -215,7 +251,10 @@ struct LinearDiscriminantAnalysisSchema[
             _write_optional_array(writer, archive, "scalings_", model.scalings_)
             _write_optional_array(writer, archive, "xbar_", model.xbar_)
             _write_optional_array(writer, archive, "explained_variance_ratio_", model.explained_variance_ratio_)
-        if has_warning:
+        if has_names:
+            writer.boolean(has_warning)
+            _write_feature_names(writer, model.feature_names_in_.value())
+        elif has_warning:
             writer.boolean(True)
         archive.manifest = writer^.finish()
         return archive^
@@ -223,8 +262,9 @@ struct LinearDiscriminantAnalysisSchema[
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
         comptime assert Self.L == Int or Self.L == String, "LDA schema requires Int or String labels"
-        var has_warning = archive.schema_version == Self.StateVersion
-        archive.expect(Self.TypeId, Self.StateVersion if has_warning else 1)
+        var version = archive.schema_version
+        var has_names = version == Self.StateVersion
+        archive.expect(Self.TypeId, version if version == 2 or has_names else 1)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != UInt64(dtype_code[Self.dtype]()):
@@ -257,10 +297,15 @@ struct LinearDiscriminantAnalysisSchema[
             expected_arrays = 4 + Int(Bool(model.covariance_)) + Int(Bool(model.scalings_))
             expected_arrays += Int(Bool(model.xbar_)) + Int(Bool(model.explained_variance_ratio_))
             model._state.record_fit(1, model.n_features_in_)
-        if has_warning:
-            if not reader.boolean():
+        var has_warning = False
+        if version == 2 or has_names:
+            has_warning = reader.boolean()
+            if version == 2 and not has_warning:
                 raise Error("ModelSchemaError: invalid LDA fit_warnings")
+        if has_warning:
             model.fit_warnings.append(FitWarning("UserWarning", PRIOR_RENORMALIZATION_MESSAGE))
+        if has_names:
+            model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
         reader.finish()
         if len(archive.payloads) != expected_arrays:
             raise Error("ModelSchemaError: unexpected LDA arrays")
@@ -306,7 +351,9 @@ def _validate_qda[dtype: DType, L: ClassLabel](
 ) raises:
     var features = model.n_features_in_
     var classes = len(model.classes_)
-    if not model.__sklearn_is_fitted__():
+    var fitted = model.__sklearn_is_fitted__()
+    _validate_feature_names(model.feature_names_in_, features, fitted)
+    if not fitted:
         if features != 0 or classes != 0 or model.rotations_ or model.scalings_ or model.covariance_:
             raise Error("ModelSchemaError: unfitted QDA has learned state")
         _expect_shape(model.means_, [0, 0], "means_")
@@ -340,17 +387,18 @@ def _validate_qda[dtype: DType, L: ClassLabel](
 struct QuadraticDiscriminantAnalysisSchema[
     dtype: DType = DType.float64, L: ClassLabel = Int
 ](ModelSchema):
-    """Version 1 state for dense QDA with Int or String labels and built-in covariance."""
+    """Dense QDA state with Int or String labels and built-in covariance."""
 
     comptime Model = QuadraticDiscriminantAnalysis[Self.dtype, Self.L]
     comptime TypeId = "moxie.discriminant_analysis.QuadraticDiscriminantAnalysis"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
         comptime assert Self.L == Int or Self.L == String, "QDA schema requires Int or String labels"
         _validate_qda(model)
-        var archive = ModelArchive(Self.TypeId, Self.StateVersion)
+        var has_names = Bool(model.feature_names_in_)
+        var archive = ModelArchive(Self.TypeId, Self.StateVersion if has_names else 1)
         var writer = BinaryWriter()
         writer.uint(UInt64(dtype_code[Self.dtype]()))
         writer.boolean(Self.L == String)
@@ -371,13 +419,16 @@ struct QuadraticDiscriminantAnalysisSchema[
             _write_class_arrays(archive, "scalings_", model.scalings_)
             if model.covariance_:
                 _write_class_arrays(archive, "covariance_", model.covariance_.value())
+        if has_names:
+            _write_feature_names(writer, model.feature_names_in_.value())
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
         comptime assert Self.L == Int or Self.L == String, "QDA schema requires Int or String labels"
-        archive.expect(Self.TypeId, Self.StateVersion)
+        var has_names = archive.schema_version == Self.StateVersion
+        archive.expect(Self.TypeId, Self.StateVersion if has_names else 1)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != UInt64(dtype_code[Self.dtype]()):
@@ -409,6 +460,8 @@ struct QuadraticDiscriminantAnalysisSchema[
                 model.covariance_ = _read_class_arrays[Self.dtype](archive, "covariance_", classes, [features, features])
             expected_arrays = 4 + Int(has_covariance)
             model._state.record_fit(1, features)
+        if has_names:
+            model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
         reader.finish()
         if len(archive.payloads) != expected_arrays:
             raise Error("ModelSchemaError: unexpected QDA arrays")

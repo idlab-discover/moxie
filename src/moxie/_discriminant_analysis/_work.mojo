@@ -6,6 +6,7 @@ row-major `NDArray[DType.float64]` buffers created here (offset 0, strides
 `get`/`put` accessors are only valid for such compact work arrays.
 """
 from numojo import NDArray, Shape, zeros
+from moxie.compose._table import ColumnTable
 from std.math import isfinite, sqrt, abs
 # Numax fdlibm exp/log (within one ulp), re-exported for the family. Mojo 1.0 std.math.log
 # Float64 was off by up to ~1e-9 (log(0.707) by 1.2e-9) and std.math.exp by ~3e-13, which moved
@@ -48,6 +49,13 @@ def matrix(rows: Int, cols: Int) raises -> Work:
 def vector(n: Int) raises -> Work:
     """Zero-initialized work vector."""
     return zeros[DType.float64](Shape(n))
+
+
+def check_named_input[dtype: DType](
+    X: ColumnTable[dtype], fitted_names: Optional[List[String]],
+) raises:
+    if Bool(fitted_names) and X.schema().names != fitted_names.value():
+        raise Error("ValueError: The feature names should match those that were passed during fit.")
 
 
 def input_matrix[

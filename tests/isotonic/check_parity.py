@@ -62,7 +62,7 @@ def encode(value):
         return value
     if np.ndim(value) == 0:
         return repr(float(value))
-    return ",".join(repr(float(x)) for x in value)
+    return ",".join(repr(float(x)) for x in value) or "-"
 
 
 def main():
@@ -143,8 +143,46 @@ def main():
         assert expected.dtype == dtype
         add("pipeline", x, y, query, expected)
 
+    def validation_edges():
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            for x, y in [
+                ([], []),
+                ([np.nan], [1]),
+                ([0, 1, 2, 3], [0, 1, 2, np.nan]),
+                ([0, np.nan, 2], [0, 1, 2]),
+                ([0, 1, 2], [1, 2, np.inf]),
+                ([-np.inf, 0, np.inf, np.inf], [3, 2, 1, 1]),
+                ([0, 1, 2], [np.inf, np.inf, np.inf]),
+                ([], [1, 2]),
+                ([0, 1], [1]),
+            ]:
+                x, y = np.asarray(x, dtype=dtype), np.asarray(y, dtype=dtype)
+                try:
+                    expected = reference.check_increasing(x, y)
+                except ValueError:
+                    expected = "error"
+                add("direction", x, y, expected)
+        for mode in ("nan", "clip", "raise"):
+            for n in (1, 2):
+                x = np.arange(n, dtype=dtype)
+                y = x + 3
+                model = reference.IsotonicRegression(out_of_bounds=mode).fit(x, y)
+                for values in ([], [np.nan, 0.5], [-np.inf, np.nan, 0, np.inf]):
+                    query = np.asarray(values, dtype=dtype)
+                    try:
+                        expected = model.f_(query)
+                    except ValueError as error:
+                        if mode != "raise" or "interpolation range" not in str(error):
+                            raise
+                        expected = "error"
+                    else:
+                        assert expected.shape == query.shape and expected.dtype == dtype
+                    add("interpolator", x, y, mode, query, expected)
+
     pipeline()
     serialization()
+    validation_edges()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(240):
@@ -198,6 +236,7 @@ def main():
     dtype = np.float32
     pipeline()
     serialization()
+    validation_edges()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(150):

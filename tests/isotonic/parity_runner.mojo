@@ -101,11 +101,31 @@ def run_cases[dtype: DType]() raises:
             )
             compare(result, vector[dtype](String(fields[6])), context)
         elif kind == "direction":
-            var result = check_increasing(
-                vector[dtype](String(fields[1])), vector[dtype](String(fields[2]))
-            )
-            if result != (fields[3] == "true"):
-                raise Error(context + ": direction mismatch")
+            var x = vector[dtype](String(fields[1]))
+            var y = vector[dtype](String(fields[2]))
+            if fields[3] == "error":
+                with assert_raises(contains="inconsistent numbers of samples"):
+                    _ = check_increasing(x, y)
+            else:
+                assert_equal(check_increasing(x, y), fields[3] == "true")
+        elif kind == "interpolator":
+            var x = vector[dtype](String(fields[1]))
+            var y = vector[dtype](String(fields[2]))
+            var model = IsotonicRegression[dtype](out_of_bounds=String(fields[3]))
+            _ = model.fit(x, y)
+            var query = vector[dtype](String(fields[4]))
+            var query_array = array(query, [len(query)])
+            if fields[5] == "error":
+                with assert_raises(contains="outside the interpolation range"):
+                    _ = model.f_(query)
+                with assert_raises(contains="outside the interpolation range"):
+                    _ = model.f_(query_array)
+            else:
+                var expected = vector[dtype](String(fields[5]))
+                var predictions = model.f_(query_array)
+                assert_equal(predictions.ndim, 1)
+                compare(predictions.tolist(), expected, context + " NDArray")
+                compare(model.f_(query), expected, context + " List")
         elif kind == "pipeline":
             var x = vector[dtype](String(fields[1]))
             var y = vector[dtype](String(fields[2]))

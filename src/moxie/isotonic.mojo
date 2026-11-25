@@ -117,13 +117,16 @@ def _ranks[dtype: DType = DType.float64](values: List[Scalar[dtype]]) -> List[Fl
 def check_increasing[dtype: DType = DType.float64](x: List[Scalar[dtype]], y: List[Scalar[dtype]]) raises -> Bool:
     """Return the sign of Spearman's rank correlation, with average tied ranks.
 
-    Constant inputs (undefined correlation) return False. Python warning
-    emission is not implemented; see the explicit differences in docs/isotonic/api.md.
+    Infinities participate in ranking. NaNs, fewer than two samples,
+    and constant inputs produce an undefined correlation and return False.
     """
-    _validate(x, "x")
-    _validate(y, "y")
     if len(x) != len(y):
         raise Error("ValueError: inconsistent numbers of samples")
+    if len(x) < 2:
+        return False
+    for i in range(len(x)):
+        if isnan(x[i]) or isnan(y[i]):
+            return False
     var rx = _ranks(x)
     var ry = _ranks(y)
     var center = Float64(len(x) - 1) / 2.0
@@ -440,6 +443,8 @@ struct IsotonicRegression[dtype: DType = DType.float64](
         # sklearn uses a constant callable for a single threshold, even for OOB.
         if n == 1:
             return self.y_thresholds_[0]
+        if isnan(x):
+            return x
         if x < self.X_min_ or x > self.X_max_:
             if self._bounds_error:
                 raise Error(
@@ -464,11 +469,9 @@ struct IsotonicRegression[dtype: DType = DType.float64](
         return self.y_thresholds_[left] + slope * (x - self.X_thresholds_[left])
 
     def f_(self, T: Self.Vector) raises -> Self.Vector:
-        """Evaluate the fitted interpolator directly (without input clipping).
-        """
+        """Evaluate the fitted interpolator directly, without input clipping."""
         check_is_fitted(self)
-        _validate(T, "T")
-        var result = List[Scalar[Self.dtype]]()
+        var result = List[Scalar[Self.dtype]](capacity=len(T))
         for x in T:
             result.append(self._interpolate(x))
         return result^

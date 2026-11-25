@@ -77,8 +77,8 @@ def main() raises:
     var outside = single.predict(query32)
     assert_true(isnan(outside[0]) and isnan(outside[1]))
 
-    # Documented validation difference: the reference returns True for an
-    # infinite y (spearmanr ranks it last); Moxie rejects nonfinite inputs.
-    with assert_raises(contains="finite"):
-        _ = check_increasing([0.0, 1, 2], [1.0, 2, Float64("inf")])
+    # Infinities are ranked, and undefined correlations select decreasing.
+    assert_true(check_increasing([0.0, 1, 2], [1.0, 2, Float64("inf")]))
+    assert_false(check_increasing([0.0, 1, 2], [1.0, 2, Float64("nan")]))
+    assert_false(check_increasing(List[Float64](), List[Float64]()))
     print("Isotonic reference edge checks passed")

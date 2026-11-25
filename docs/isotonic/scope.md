@@ -50,9 +50,9 @@ tests cover invalid shapes, empty/nonfinite inputs, weight errors, unfitted
 access and failed refits; compile-failure checks reject missing predictor
 capability and implicit mixed-dtype conversion. Parity executes the pinned
 local Python module and a locally compiled copy of its Cython tie engine:
-627 Float64 cases and 460 Float32 cases, including weighted scores, scaler
-pipeline predictions, and interpolator reconstruction. Threshold counts,
-X thresholds, domain and direction must match exactly. Value tolerances
+654 Float64 cases and 487 Float32 cases, including weighted scores, scaler
+pipeline predictions, interpolator reconstruction and validation edges.
+Threshold counts, X thresholds, domain and direction must match exactly. Value tolerances
 are `2e-12` for Float64 and `2e-6` for Float32, allowing pooling/reduction order
 and rounding differences. Python and SciPy are validation tools only.
 

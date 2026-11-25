@@ -24,7 +24,8 @@ Float32 PAVA uses the Float64 solver and rounds before clipping, matching
 the SciPy-backed reference.
 Tie accumulation and interpolation retain input precision; score accumulates
 in Float64 and can differ from reference Float32 reductions in low bits.
-Inputs must be finite and nonempty; X, y, and weights must have matching lengths.
+Fit, predict, transform and score require finite, nonempty inputs. X, y and
+weights must have matching lengths where supplied.
 No input is mutated or retained by reference.
 
 ```mojo
@@ -76,9 +77,10 @@ and `increasing_`. Failed fits preserve the previous valid state. Learned fields
 exist before fitting because Mojo structs have fixed fields; they are valid
 only when `__sklearn_is_fitted__()` is true. Inference checks fitted state.
 
-`f_(T)` is a method evaluating the fitted interpolator directly. It does not
-apply input clipping. It is not a stored Python callable. It accepts the same
-finite, nonempty input contract as prediction.
+`f_(T)` is a native method that evaluates the fitted interpolator without
+input clipping. Empty queries return empty output. With multiple thresholds,
+NaN queries return NaN and infinite queries follow the fitted out-of-bounds
+behavior. With one threshold, all query values return the fitted constant.
 
 ## Ordering, ties, and boundaries
 
@@ -118,7 +120,9 @@ weights, matching the reference's SciPy implementation. It returns a new
 same-dtype list of the same length and never sorts its inputs.
 
 `check_increasing(x, y)` returns a Bool from Spearman's rank correlation.
-As a deliberate validation difference, it rejects empty and nonfinite inputs.
+The vectors must have equal lengths. Infinities participate in ranking. Empty
+vectors, NaN values and constant inputs give undefined correlation and return
+`False`.
 Python's confidence-interval and constant-input warnings are not emitted;
 small-sample R² warnings are also not emitted. The corresponding numerical
 results are covered by native and reference-comparison tests.
@@ -206,11 +210,11 @@ for in-place fitting and typed configuration differences.
 `pixi run python tools/isotonic_checks.py test` covers trait conformance,
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
 strided arrays, direction, bounds, weighted R², and native persistence.
-`pixi run python tools/isotonic_checks.py parity` compares 627 Float64 and
-460 Float32 deterministic cases, including scaler pipeline predictions and
-interpolator reconstruction, against the pinned Python module and Cython tie
-engine. The scikit-learn support wheel and SciPy come from the locked Pixi
-environment. Float64 uses
+`pixi run python tools/isotonic_checks.py parity` compares 654 Float64 and
+487 Float32 deterministic cases, including scaler pipeline predictions,
+interpolator reconstruction and validation edge cases, against the pinned
+Python module and Cython tie engine. The scikit-learn support wheel and SciPy
+come from the locked Pixi environment. Float64 uses
 `atol=rtol=2e-12` and Float32 uses `atol=rtol=2e-6` to allow for differences
 in rounding and reduction order.
 Threshold counts, X thresholds, domain, direction, and NaN locations must match. Fixture generation

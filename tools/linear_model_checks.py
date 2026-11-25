@@ -43,22 +43,39 @@ def ownership():
     print('PASS: core owns linear_model; private linalg bytes match their external owner; no standalone dependency', flush=True)
 
 
-def public_namespace():
+LOGISTIC_COMPOSITION = 'algorithms/logistic/tests/composition.mojo'
+
+
+def assemble_public_namespace():
     run(sys.executable, ROOT / 'shared/assembly/tools/assemble_family.py',
         '--consumer', ROOT, '--lock', ROOT / 'DEPENDENCIES.json', '--output', DEPS)
     ownership()
-    run('mojo', 'precompile', DEPS / 'moxie', '-I', DEPS, '-o', ROOT / 'builds/linear_model-public.mojoc')
-    for relative in ('examples/dense_estimators.mojo', 'tests/test_fluent.mojo', 'tests/test_composition.mojo',
-                     'algorithms/bayesian/examples/bayesian_ridge.mojo'):
+
+
+def check_public_programs(*programs):
+    for relative in programs:
         source = FAMILY / relative
         binary = ROOT / 'builds/linear_model-public' / source.stem
         binary.parent.mkdir(parents=True, exist_ok=True)
         run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS, source, '-o', binary)
         run(binary)
+
+
+def public_namespace():
+    assemble_public_namespace()
+    run('mojo', 'precompile', DEPS / 'moxie', '-I', DEPS, '-o', ROOT / 'builds/linear_model-public.mojoc')
+    check_public_programs(
+        'examples/dense_estimators.mojo', 'tests/test_fluent.mojo', 'tests/test_composition.mojo',
+        'algorithms/bayesian/examples/bayesian_ridge.mojo', LOGISTIC_COMPOSITION,
+    )
     print('PASS: all supported estimators compile and execute through the complete Moxie namespace', flush=True)
 
 
 def main(action):
+    if action == 'logistic-composition':
+        assemble_public_namespace()
+        check_public_programs(LOGISTIC_COMPOSITION)
+        return
     if action not in ('build', 'test', 'parity', 'start', 'namespace', 'test-only', 'parity-only'):
         raise SystemExit('expected build, test, parity, start or namespace')
     if action.endswith('-only'):

@@ -24,15 +24,15 @@ from the assembled package.
 | OrthogonalMatchingPursuit, orthogonal_mp, orthogonal_mp_gram, OrthogonalMatchingPursuitCV | Missing |
 | BayesianRidge | Dense empirical-Bayes fitting, full posterior covariance and predictive uncertainty; see [API and validation](../algorithms/bayesian/docs/api.md) |
 | ARDRegression | Missing |
-| LogisticRegression, LogisticRegressionCV | Missing |
+| LogisticRegression | [Dense binary and multinomial L-BFGS](../algorithms/logistic/docs/api.md) with L2 or no penalty. Other solvers and penalties remain open. |
+| LogisticRegressionCV | Missing |
 | PoissonRegressor, GammaRegressor, TweedieRegressor | Missing |
 | HuberRegressor, QuantileRegressor, RANSACRegressor, TheilSenRegressor | Missing |
 | SGDClassifier, SGDRegressor, SGDOneClassSVM | Missing |
 | Perceptron, PassiveAggressiveClassifier, PassiveAggressiveRegressor | Missing |
 
-`LogisticRegression` is the most visible gap. Many scikit-learn examples and
-other Moxie families (feature_selection, calibration, frozen, compose,
-naive_bayes notebooks) substitute other models for it. No linear model
+The feature_selection, calibration, frozen, compose and naive_bayes notebooks
+still use substitute estimators where their references use LogisticRegression. No linear model
 implements `ModelSchema` persistence (see `docs/serialization.md`). The
 `algorithms/ridge_cv` directory is an unbuilt placeholder: its check exits
 with `UNIMPLEMENTED`, and its `EXPORTS.json` is not assembled.

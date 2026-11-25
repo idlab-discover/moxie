@@ -30,8 +30,8 @@ parity or performance. See [plumbing.md](plumbing.md) for child responsibilities
 ## Public estimator assembly
 
 `pixi run build` assembles the real `LinearRegression`, `Ridge`,
-`RidgeClassifier`, `ridge_regression`, `ElasticNet`, `Lasso`, `BayesianRidge` and their typed
-configuration/results from the least_squares, ridge, elastic_net and bayesian children.
+`RidgeClassifier`, `ridge_regression`, `ElasticNet`, `Lasso`, `BayesianRidge`, `LogisticRegression` and their typed
+configuration/results.
 Implementations are owned by Moxie under src/moxie/linear_model. `pixi run start` runs `examples/dense_estimators.mojo` through
 those public imports; `pixi run parity` runs the child differential suites.
 
@@ -46,8 +46,8 @@ coefficients and predictions, as does this pinned reference; LinearRegression
 preserves the target rank. Integer-valued numeric classifier labels only.
 
 Unfinished dense work: Ridge SAG/SAGA, RidgeCV/RidgeClassifierCV, random/Gram coordinate
-solvers, multi-task estimators, paths, SGD/Perceptron, logistic and remaining
-family algorithms. The cyclic coordinate engine is implemented and consumed by
+solvers, multi-task estimators, paths, SGD/Perceptron, additional logistic solvers, LogisticRegressionCV and
+remaining family algorithms. The cyclic coordinate engine is implemented and consumed by
 ElasticNet/Lasso (see algorithms/elastic_net/docs/scope.md). Smooth and SGD
 engine directories still contain prerequisite probes, not functioning solvers. CV validation belongs to model_selection; shared
 `our_rand_r` belongs to Moxie. These gaps are not sparse deferrals and the

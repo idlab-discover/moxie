@@ -13,6 +13,8 @@ from moxie.linear_model._base import LinearRegressor
 from moxie.linear_model._base import OnlineLinearClassifier
 from moxie.linear_model._base import OnlineLinearRegressor
 from moxie.linear_model._base import ProbabilisticLinearClassifier
+from moxie.linear_model._logistic import LogisticRegression
+from moxie.linear_model._logistic import LogisticRegressionParams
 from moxie.linear_model._ridge import Ridge
 from moxie.linear_model._ridge import RidgeClassifier
 from moxie.linear_model._ridge import RidgeClassifierParams

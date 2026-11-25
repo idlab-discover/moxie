@@ -1,0 +1,177 @@
+from std.testing import assert_equal, assert_false, assert_raises, assert_true
+from std.math import isnan
+from std.memory import bitcast
+from numojo import NDArrayStrides, Shape, Item, array
+from moxie._labels import StringTarget
+from moxie._naive_bayes_dense import ClassDomain, dense_from_lists
+from moxie.naive_bayes import IntListDomain, NumericDomain, StringDomain
+from moxie.naive_bayes_serialization import GaussianNBSchema
+from moxie.serialization import BinaryWriter, dumps, dtype_code, load_model, loads, save_model
+
+
+def fitted_round_trip[D: ClassDomain, dtype: DType](y: D.Target) raises:
+    comptime Schema = GaussianNBSchema[D, dtype]
+    var X = dense_from_lists([[1.0, 2.0], [10.0, 3.0], [2.0, 4.0], [7.0, 1.0]])
+    var model = Schema.Model(priors=List[Float64]([0.25, 0.75]))
+    _ = model.fit(X, y)
+    _ = model.set_params(
+        priors=Optional[List[Float64]](List[Float64]([0.75, 0.25])),
+        var_smoothing=0.125,
+    )
+
+    var before = dumps(Schema.encode(model))
+    var restored = Schema.decode(loads(before))
+    assert_equal(restored.n_features_in_, 2)
+    var learned_priors: List[Scalar[dtype]] = [0.25, 0.75]
+    assert_equal(restored.class_prior_.tolist(), learned_priors)
+    assert_equal(restored.priors.value(), List[Float64]([0.75, 0.25]))
+    assert_equal(restored.var_smoothing, 0.125)
+    assert_equal(dumps(Schema.encode(restored)), before)
+    assert_equal(restored.predict_proba(X).tolist(), model.predict_proba(X).tolist())
+    var predicted = restored.predict(X)
+    var expected = model.predict(X)
+    for i in range(4):
+        assert_true(D.equal_at(predicted, expected, i))
+    assert_false(restored.__sklearn_clone__().__sklearn_is_fitted__())
+
+    # The next weighted update can use the rebuilt class domain without classes=.
+    var weights: List[Float64] = [0.5, 0.25, 0.75, 0.5]
+    _ = restored.partial_fit(X, y, sample_weight=weights.copy())
+    assert_equal(dumps(Schema.encode(model)), before)
+    _ = model.partial_fit(X, y, sample_weight=weights^)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+
+
+def file_round_trips() raises:
+    comptime Schema = GaussianNBSchema[]
+    var path = "builds/naive-bayes-gaussian-model.moxie"
+    var X = dense_from_lists([[2.0], [10.0], [3.0], [9.0]])
+    var y: List[Int] = [1, 2, 1, 2]
+    var model = Schema.Model(priors=List[Float64]([0.25, 0.75]), var_smoothing=0.0)
+    save_model[Schema](model, path)
+    var restored = load_model[Schema](path)
+    assert_false(restored.__sklearn_is_fitted__())
+    assert_equal(restored.priors.value(), model.priors.value())
+    assert_equal(restored.var_smoothing, 0.0)
+    with assert_raises(contains="NotFittedError"):
+        _ = restored.predict(X)
+
+    _ = restored.fit(X, y)
+    save_model[Schema](restored, path)
+    var fitted = load_model[Schema](path)
+    assert_true(fitted.__sklearn_is_fitted__())
+    assert_equal(fitted.predict(X), y)
+    assert_equal(dumps(Schema.encode(fitted)), dumps(Schema.encode(restored)))
+
+
+def logical_state_and_overflow() raises:
+    comptime Schema = GaussianNBSchema[]
+    var X = dense_from_lists([[2.0], [10.0], [3.0], [9.0]])
+    var y: List[Int] = [1, 2, 1, 2]
+    var model = Schema.Model(var_smoothing=0.0)
+    _ = model.fit(X, y)
+    var buffer = dense_from_lists([[-0.0, 100.0], [42.0, 100.0]])
+    model.theta_ = buffer.view_with_layout(Shape(2, 1), NDArrayStrides(-2, 1), 2)
+    var restored = Schema.decode(Schema.encode(model))
+    assert_equal(restored.theta_.item(0, 0), 42.0)
+    assert_equal(bitcast[DType.uint64, 1](restored.theta_.item(1, 0)), UInt64(1) << 63)
+    assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
+
+    # Finite inputs can overflow moments. Preserve the resulting NaN payloads.
+    var extreme = dense_from_lists([[1e200], [10.0], [-1e200], [9.0]])
+    _ = model.fit(extreme, y)
+    assert_true(isnan(model.epsilon_))
+    var bytes = dumps(Schema.encode(model))
+    restored = Schema.decode(loads(bytes))
+    assert_true(isnan(restored.var_.item(0, 0)))
+    assert_equal(dumps(Schema.encode(restored)), bytes)
+
+
+def malformed_state() raises:
+    comptime Schema = GaussianNBSchema[]
+    var X = dense_from_lists([[2.0], [10.0], [3.0], [9.0]])
+    var y: List[Int] = [-1, 2, -1, 2]
+    var model = Schema.Model()
+    var unfitted = Schema.encode(model)
+    model.n_features_in_ = -1
+    with assert_raises(contains="unfitted GaussianNB has learned state"):
+        _ = Schema.encode(model)
+    _ = model.fit(X, y)
+    var archive = Schema.encode(model)
+    with assert_raises(contains="dtype mismatch"):
+        _ = GaussianNBSchema[dtype=DType.float32].decode(archive)
+    with assert_raises(contains="label domain mismatch"):
+        _ = GaussianNBSchema[NumericDomain[DType.int64]].decode(archive)
+
+    var bad = archive.copy()
+    bad.schema_version += 1
+    with assert_raises(contains="unsupported estimator"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    bad.manifest.append(0)
+    with assert_raises(contains="trailing data"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    bad.payloads[0].shape = [2, 1]
+    with assert_raises(contains="invalid shape for class_count_"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    bad.payloads[0].dtype = dtype_code[DType.int64]()
+    with assert_raises(contains="array dtype or shape mismatch"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    bad.payloads[0].name = "unknown"
+    with assert_raises(contains="missing array class_count_"):
+        _ = Schema.decode(bad)
+    unfitted.payloads.append(archive.payloads[0].copy())
+    with assert_raises(contains="unexpected GaussianNB arrays"):
+        _ = Schema.decode(unfitted)
+
+    bad = archive.copy()
+    var negative_count = BinaryWriter()
+    negative_count.scalar(Float64(-1))
+    negative_count.scalar(Float64(2))
+    bad.payloads[0].data = negative_count^.finish()
+    with assert_raises(contains="invalid GaussianNB class count"):
+        _ = Schema.decode(bad)
+    bad = archive.copy()
+    var swapped_classes = BinaryWriter()
+    swapped_classes.uint(UInt64(dtype_code[DType.float64]()))
+    swapped_classes.uint(1)  # IntListDomain
+    swapped_classes.scalar(model.var_smoothing)
+    swapped_classes.boolean(False)  # no configured priors
+    swapped_classes.boolean(True)  # fitted
+    swapped_classes.integer(model.n_features_in_)
+    swapped_classes.scalar(model.epsilon_)
+    swapped_classes.uint(2)
+    swapped_classes.integer(2)
+    swapped_classes.integer(-1)
+    bad.manifest = swapped_classes^.finish()
+    with assert_raises(contains="sorted label domain"):
+        _ = Schema.decode(bad)
+
+    model.class_prior_[Item(0)] = -0.25
+    with assert_raises(contains="invalid GaussianNB learned prior"):
+        _ = Schema.encode(model)
+    model.class_prior_[Item(0)] = 0.5
+    model.classes_ = [2, -1]
+    with assert_raises(contains="sorted label domain"):
+        _ = Schema.encode(model)
+
+
+def main() raises:
+    fitted_round_trip[IntListDomain, DType.float64](List[Int]([2, -1, 2, -1]))
+    fitted_round_trip[StringDomain, DType.float32](StringTarget(["β", "a\0z", "β", "a\0z"]))
+    fitted_round_trip[NumericDomain[DType.int64], DType.float64](
+        array[DType.int64]([9223372036854775807, -1, 9223372036854775807, -1], [4])
+    )
+    fitted_round_trip[NumericDomain[DType.float32], DType.float32](
+        array[DType.float32]([2, -1, 2, -1], [4])
+    )
+    fitted_round_trip[NumericDomain[DType.float64], DType.float64](
+        array[DType.float64]([2, -1, 2, -1], [4])
+    )
+    file_round_trips()
+    logical_state_and_overflow()
+    malformed_state()
+    print("PASS: GaussianNB serialization contracts")

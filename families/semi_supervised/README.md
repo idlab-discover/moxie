@@ -26,7 +26,11 @@ validation.
 
 Side-by-side notebooks in `notebooks/semi_supervised/` replay
 `plot_label_propagation_digits`, `plot_self_training_varying_threshold` and
-`plot_semi_supervised_versus_svm_iris` against sklearn. Run them with
+`plot_semi_supervised_versus_svm_iris` against sklearn. The threshold and Iris
+notebooks use native calibrated RBF SVC with the gallery parameters. The
+threshold notebook also retains the GaussianNB k-best comparison.
+For pinned comparisons, use a wheel built from the reference revision. Add its
+unpacked directory to `PYTHONPATH` in the notebooks environment and run
 `pixi run -e notebooks notebooks notebooks/semi_supervised`.
 
 See [the API guide](docs/api-surface.md), [supported scope](docs/scope.md), and

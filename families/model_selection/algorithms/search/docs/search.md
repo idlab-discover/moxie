@@ -149,11 +149,31 @@ Use `None` or an explicit empty record when unused. The inherited adapter slices
 sample-aligned weights and preserves unsliced options. Pairwise inputs require
 a pairwise-aware adapter. These responsibilities are not inferred dynamically.
 
-`cv` accepts an optional materialized `List[IndexSplit]`. Supply explicit folds
-for grouped, temporal or custom CV. Constructors and
-parameter records own their indices; mutating the original arrays cannot change
-search folds. Fold order and duplicate/overlapping custom test indices are
-preserved. Fold means are unweighted even when fold sizes differ.
+The constructor's optional `cv` stores a snapshot of a materialized
+`List[IndexSplit]`. Custom fold order and duplicate or overlapping test
+indices are preserved. Fold means are unweighted even when fold sizes differ.
+
+For a splitter whose folds depend on the current training subset, pass it to
+`fit` with the groups for that subset.
+
+```mojo
+_ = search.fit(X_train, y_train, cv=GroupKFold(3), groups=train_groups.copy())
+```
+
+Both search types accept this overload with implicit or explicit fit and score
+metadata. The splitter must implement `CrossValidator` for an `Int` sample
+count and return a `SplitCursor`. The search generates one set of folds per fit
+and checks the count against `get_n_splits`. The supplied groups go to the
+splitter. The fit target is forwarded automatically when its type matches the
+splitter's target and is copyable. Use `split_target=` to supply an explicit
+target of the splitter's type, such as rank-one Int64 labels for
+`StratifiedKFold`. An owned group or split target can be transferred with
+`^`; pass `.copy()` when retaining it.
+
+This fit-time override takes precedence over constructor folds for that call.
+A later plain `fit(X, y)` uses the constructor folds or the adapter default.
+The fluent two-argument trait entry point uses the adapter's `default_cv` for
+inner folds that must follow each training subset in generic nested CV.
 
 `scoring` accepts an optional list of one scorer type. A tagged scorer can
 represent different metric implementations. Omit `metric_names` for one scalar
@@ -293,8 +313,6 @@ state with independent buffers; `clone(search)` retains only constructor
 configuration. A supervised search with prediction support can be a
 Pipeline’s final step.
 
-Inner folds that must follow each training subset belong in the adapter's
-`default_cv`, because `cv` holds materialized indices for one sample count.
 From the repository root, use the locked environment to assemble live
 sources and run the Pipeline and nested SVC comparisons.
 

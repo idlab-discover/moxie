@@ -8,7 +8,7 @@ from moxie.base import (
     SupervisedEstimator, SupervisedScorer, TransformerMixin, UnsupervisedScorer,
     WeightedSupervisedEstimator, clone,
 )
-from moxie.model_selection._base import SearchEstimator
+from moxie.model_selection._base import CrossValidator, SearchEstimator
 from moxie.model_selection._evaluation import EstimatorScore, TypedScorer, ParameterAdapter
 from moxie.model_selection._validation import (
     DefaultCVAdapter, DenseUnsupervisedAdapter, _NativePredictionAdapter,
@@ -95,6 +95,20 @@ def _collect_splits[C: SplitCursor & Deinitable](var cursor: C) raises -> List[I
         if not pair:
             return splits^
         splits.append(pair.take())
+
+
+def _search_splits[C: CrossValidator, Y: Movable](
+    cv: C, n_samples: Int, y: Y, var split_target: Optional[C.Target],
+    groups: Optional[C.Groups],
+) raises -> List[IndexSplit] where C.Input == Int and conforms_to(C.Input, Deinitable) and conforms_to(C.Target, Deinitable) and conforms_to(C.Splits, SplitCursor & Deinitable):
+    comptime if Y == C.Target and conforms_to(Y, Copyable):
+        if not split_target:
+            split_target = rebind_var[C.Target](y.copy())
+    var count = cv.get_n_splits(rebind_var[C.Input](n_samples), split_target, groups)
+    var splits = _collect_splits(cv.split(rebind_var[C.Input](n_samples), split_target, groups))
+    if len(splits) != count:
+        raise Error("ValueError: cv.split and cv.get_n_splits returned inconsistent counts")
+    return splits^
 
 
 comptime _IsDenseArray[P: AnyType] = (
@@ -569,15 +583,17 @@ struct _Search[A: SearchAdapter, R: SearchRefitPolicy](Movable, Copyable where c
         if not self.best_estimator:
             raise Error("AttributeError: " + name + " requires a successfully refitted estimator")
 
-    def fit(mut self, candidates: List[Dict[String, Self.A.Value]], X: Self.A.Scorer.Input, y: Self.A.Scorer.Target, fit_metadata: Self.A.Scorer.Metadata, score_metadata: Self.A.Scorer.Metadata) raises:
+    def fit(mut self, candidates: List[Dict[String, Self.A.Value]], X: Self.A.Scorer.Input, y: Self.A.Scorer.Target, fit_metadata: Self.A.Scorer.Metadata, score_metadata: Self.A.Scorer.Metadata, var cv: Optional[List[IndexSplit]]) raises:
         self.reset()
         var metric = self.options.refit.metric(self.options.metric_names, self.options.multimetric)
         if len(candidates) == 0:
             raise Error("ValueError: no search candidates")
-        var splits = List[IndexSplit]()
-        if self.options.cv:
-            for f in range(len(self.options.cv.value())):
-                splits.append(self.options.cv.value()[f].copy())
+        var splits: List[IndexSplit]
+        if cv:
+            splits = cv.take()
+        elif self.options.cv:
+            var stored = _copy_splits(self.options.cv)
+            splits = stored.take()
         else:
             splits = self.options.adapter.default_cv(X, y)
         var nc = len(candidates)
@@ -749,6 +765,13 @@ struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
         fit_metadata: Self.Metadata, score_metadata: Self.Metadata,
     ) raises -> ref[self] Self:
+        return self._fit(X, y, fit_metadata, score_metadata, None)
+
+    def _fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        fit_metadata: Self.Metadata, score_metadata: Self.Metadata,
+        var cv: Optional[List[IndexSplit]],
+    ) raises -> ref[self] Self:
         self._core.reset()
         var cursor = ParameterGrid[Self.A.Value](self._space.param_grid)
         var candidates = List[Dict[String, Self.A.Value]]()
@@ -757,8 +780,27 @@ struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value
             if not candidate:
                 break
             candidates.append(candidate.value().copy())
-        self._core.fit(candidates, X, y, fit_metadata, score_metadata)
+        self._core.fit(candidates, X, y, fit_metadata, score_metadata, cv^)
         return self
+
+    def fit[C: CrossValidator, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, cv: C, var split_target: Optional[C.Target] = None, groups: Optional[C.Groups] = None,
+    ) raises -> ref[self] Self where conforms_to(Self.Metadata, Defaultable) and C.Input == Int and conforms_to(C.Input, Deinitable) and conforms_to(C.Target, Deinitable) and conforms_to(C.Splits, SplitCursor & Deinitable):
+        return self.fit(
+            X, y, Self.Metadata(), Self.Metadata(), cv=cv, split_target=split_target^, groups=groups,
+        )
+
+    def fit[C: CrossValidator, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        fit_metadata: Self.Metadata, score_metadata: Self.Metadata,
+        *, cv: C, var split_target: Optional[C.Target] = None, groups: Optional[C.Groups] = None,
+    ) raises -> ref[self] Self where C.Input == Int and conforms_to(C.Input, Deinitable) and conforms_to(C.Target, Deinitable) and conforms_to(C.Splits, SplitCursor & Deinitable):
+        self._core.reset()
+        var splits = _search_splits(
+            cv, self._core.options.adapter.n_samples(X, y), y, split_target^, groups,
+        )
+        return self._fit(X, y, fit_metadata, score_metadata, Optional(splits^))
 
     def cv_results_(self) raises -> SearchResults[Self.A.Value]:
         self._core.check()
@@ -965,6 +1007,13 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
         fit_metadata: Self.Metadata, score_metadata: Self.Metadata,
     ) raises -> ref[self] Self:
+        return self._fit(X, y, fit_metadata, score_metadata, None)
+
+    def _fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        fit_metadata: Self.Metadata, score_metadata: Self.Metadata,
+        var cv: Optional[List[IndexSplit]],
+    ) raises -> ref[self] Self:
         self._core.reset()
         var cursor = ParameterSampler[Self.D](self._space.domains, self._space.n_iter, random_state=self._space.random_state)
         var candidates = List[Dict[String, Self.A.Value]]()
@@ -973,8 +1022,27 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
             if not candidate:
                 break
             candidates.append(rebind[Dict[String, Self.A.Value]](candidate.value()).copy())
-        self._core.fit(candidates, X, y, fit_metadata, score_metadata)
+        self._core.fit(candidates, X, y, fit_metadata, score_metadata, cv^)
         return self
+
+    def fit[C: CrossValidator, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        *, cv: C, var split_target: Optional[C.Target] = None, groups: Optional[C.Groups] = None,
+    ) raises -> ref[self] Self where conforms_to(Self.Metadata, Defaultable) and C.Input == Int and conforms_to(C.Input, Deinitable) and conforms_to(C.Target, Deinitable) and conforms_to(C.Splits, SplitCursor & Deinitable):
+        return self.fit(
+            X, y, Self.Metadata(), Self.Metadata(), cv=cv, split_target=split_target^, groups=groups,
+        )
+
+    def fit[C: CrossValidator, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+        fit_metadata: Self.Metadata, score_metadata: Self.Metadata,
+        *, cv: C, var split_target: Optional[C.Target] = None, groups: Optional[C.Groups] = None,
+    ) raises -> ref[self] Self where C.Input == Int and conforms_to(C.Input, Deinitable) and conforms_to(C.Target, Deinitable) and conforms_to(C.Splits, SplitCursor & Deinitable):
+        self._core.reset()
+        var splits = _search_splits(
+            cv, self._core.options.adapter.n_samples(X, y), y, split_target^, groups,
+        )
+        return self._fit(X, y, fit_metadata, score_metadata, Optional(splits^))
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
@@ -990,7 +1058,7 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
             if not candidate:
                 break
             candidates.append(rebind[Dict[String, Self.A.Value]](candidate.value()).copy())
-        self._core.fit(candidates, X, y, fit_metadata, score_metadata)
+        self._core.fit(candidates, X, y, fit_metadata, score_metadata, None)
         return self
 
     def cv_results_(self) raises -> SearchResults[Self.A.Value]:

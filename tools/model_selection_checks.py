@@ -81,6 +81,8 @@ def main():
             run(sys.executable, project / 'tests/parity.py', cwd=project)
             if child == 'search':
                 run(sys.executable, project / 'tests/search_parity.py', cwd=project)
+                run(sys.executable, project / 'tests/search_parity.py',
+                    '--fit-time-cv', build / 'fit_time_cv', cwd=project)
                 # The SVC composition uses the root-assembled namespace.
                 binary = build / 'iris_search'
                 run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,

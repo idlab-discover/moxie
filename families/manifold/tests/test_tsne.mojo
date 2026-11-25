@@ -324,6 +324,58 @@ def weighted_hamming_contract[dtype: DType]() raises:
         assert_equal(model.embedding_.value().unsafe_get(i), hamming.unsafe_get(i))
 
 
+def weighted_ratio_contract[dtype: DType]() raises:
+    var X = points[dtype]()
+    var backing = zeros[dtype](Shape(5))
+    backing.unsafe_set(0, 1)
+    backing.unsafe_set(4, 2)
+    var weights = backing.view_with_layout(Shape(3), NDArrayStrides(-2), 4)
+    var options = TSNEMetricParams[dtype](w=weights.copy())
+    for metric in ["canberra", "braycurtis"]:
+        var model = TSNE[dtype](
+            method="exact", metric=metric, metric_params=options.copy(),
+            init="random", perplexity=2, random_state=17, max_iter=260,
+        )
+        var distances = _squared_distances(X, metric, model.metric_params)
+        var expected = Float32(25.0 / 9.0) if metric == "canberra" else Float32(9.0 / 49.0)
+        assert_equal(distances.unsafe_get(1 * 6 + 2), expected)
+        assert_equal(distances.unsafe_get(2 * 6 + 1), expected)
+        assert_equal(model.fit_transform(X).shape[0], 6)
+        var fitted_kl = model.kl_divergence_
+        var fresh = clone(model)
+        assert_false(fresh.__sklearn_is_fitted__())
+        _ = fresh.fit(X)
+        assert_equal(fresh.kl_divergence_, fitted_kl)
+        var params = model.get_params()
+        with assert_raises(contains="must be a vector"):
+            params.metric_params = TSNEMetricParams[dtype](w=zeros[dtype](Shape(1, 3)))
+            _ = model.set_params(params).fit(X)
+        with assert_raises(contains="must match features"):
+            params.metric_params = TSNEMetricParams[dtype](w=zeros[dtype](Shape(2)))
+            _ = model.set_params(params).fit(X)
+        var invalid = zeros[dtype](Shape(3))
+        for value in [SIMD[dtype, 1](-1), nan[dtype]()]:
+            invalid.unsafe_set(0, value)
+            with assert_raises(contains="finite and nonnegative"):
+                params.metric_params = TSNEMetricParams[dtype](w=invalid.copy())
+                _ = model.set_params(params).fit(X)
+        with assert_raises(contains="metric_params do not match"):
+            params.metric_params = TSNEMetricParams[dtype](w=weights.copy(), p=2.0)
+            _ = model.set_params(params).fit(X)
+        params.method = "barnes_hut"
+        params.metric_params = options.copy()
+        with assert_raises(contains="metric_params do not match"):
+            _ = model.set_params(params).fit(X)
+        assert_equal(model.kl_divergence_, fitted_kl)
+
+    var zero_weights = Optional(TSNEMetricParams[dtype](w=zeros[dtype](Shape(3))))
+    var canberra = _squared_distances(X, "canberra", zero_weights)
+    for i in range(canberra.size):
+        assert_equal(canberra.unsafe_get(i), Float32(0))
+    with assert_raises(contains="finite nonnegative squared distances"):
+        _ = _squared_distances(X, "braycurtis", zero_weights)
+
+
 def main() raises:
     for method in ["exact", "barnes_hut"]:
         repeat_and_clone[DType.float64](method)
@@ -335,6 +387,8 @@ def main() raises:
     matching_contract[DType.float64]()
     weighted_hamming_contract[DType.float32]()
     weighted_hamming_contract[DType.float64]()
+    weighted_ratio_contract[DType.float32]()
+    weighted_ratio_contract[DType.float64]()
     explicit_configuration()
     fit_validation()
     barnes_hut_bounds()

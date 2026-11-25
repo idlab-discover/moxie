@@ -67,6 +67,17 @@ BallTree and optimized brute-force neighbor kernels. Native Barnes–Hut keeps
 this convention for every input layout. Sklearn can use the SciPy formula
 when its optimized neighbor backends are unavailable.
 
+Exact t-SNE accepts a feature-weight vector for Canberra and Bray–Curtis
+through `TSNEMetricParams[dtype](w=weights)`. Pass one finite, nonnegative
+weight per feature. Canberra scales each feature's ratio by its weight and
+counts a shared zero as zero. Bray–Curtis applies the weights to both sums
+in the SciPy formula. An all-zero vector gives Canberra distance zero and
+an undefined Bray–Curtis distance. Both calculations accumulate in Float64
+with feature-sized scratch storage. The Numax operations available to this
+build do not supply these weighted distances, and the neighbors kernel
+accepts feature weights only for Minkowski. Barnes–Hut rejects weights for
+these two metrics, as sklearn's native neighbor distance kernels do.
+
 Both methods accept a native metric through
 `metric="callable", metric_params=TSNEMetricParams[dtype](distance=my_distance)`.
 The callback type is
@@ -149,6 +160,8 @@ exercise sklearn's BallTree and optimized brute-force neighbor paths and allow
 Weighted Hamming and matching fixtures compare Float32 squared distance
 matrices exactly for both input dtypes, with the same fit tolerances for
 accumulated optimizer rounding.
+Weighted Canberra and Bray–Curtis use the same checks on signed inputs
+with zero and fractional weights, and verify the Barnes–Hut rejections.
 SciPy, NumPy and scikit-learn are used in validation only.
 The estimator and perplexity oracle sources come from sklearn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.

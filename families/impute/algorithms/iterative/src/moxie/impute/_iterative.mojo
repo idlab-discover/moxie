@@ -18,6 +18,7 @@ from moxie.impute._plumbing import (
     MissingValue,
     append_indicator,
     missing_mask,
+    promote_integer_matrix,
     select_features,
 )
 
@@ -538,6 +539,38 @@ struct IterativeImputer[
             for step in self.imputation_sequence_:
                 self._apply_step(filled, mask, step)
         return self._finish(filled^, original_mask)
+
+    @staticmethod
+    def _promote_integer_input[input_dtype: DType](
+        X: nm.NDArray[input_dtype],
+    ) raises -> Self.Input:
+        comptime assert Self.dtype == DType.float64, (
+            "integer input requires IterativeImputer[DType.float64]"
+        )
+        return rebind_var[Self.Input](promote_integer_matrix(X))
+
+    def fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: nm.NDArray[input_dtype],
+        y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self where input_dtype.is_integral():
+        _ = self.fit_transform(X, y)
+        return self
+
+    def fit_named[input_dtype: DType](
+        mut self, X: nm.NDArray[input_dtype], feature_names: List[String],
+        y: Optional[Self.Target] = None,
+    ) raises where input_dtype.is_integral():
+        self.fit_named(Self._promote_integer_input(X), feature_names, y)
+
+    def fit_transform[input_dtype: DType](
+        mut self, X: nm.NDArray[input_dtype], y: Optional[Self.Target] = None,
+    ) raises -> Self.Transformed where input_dtype.is_integral():
+        return self.fit_transform(Self._promote_integer_input(X), y)
+
+    def transform[input_dtype: DType](
+        self, X: nm.NDArray[input_dtype],
+    ) raises -> Self.Transformed where input_dtype.is_integral():
+        return self.transform(Self._promote_integer_input(X))
 
     def get_feature_names_out(
         self, input_features: Optional[List[String]] = None,

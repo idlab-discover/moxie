@@ -38,7 +38,7 @@ parameter records follow the [shared interface contract](interfaces.md).
 | MissingIndicator, dense numeric data | `MissingIndicator` | Sparse output and unsupported numeric dtypes |
 | MissingIndicator, string data | `StringMissingIndicator` | Heterogeneous categories; sparse output |
 | KNNImputer, dense floating data | `KNNImputer` using live neighbors query engine | See the KNN API for callback and dtype adaptations |
-| IterativeImputer | Dense deterministic imputation with native regressors | Posterior sampling and integer array promotion |
+| IterativeImputer | Dense deterministic imputation with native regressors and integer input promotion to Float64 | Posterior sampling |
 
 The family validation includes separate pinned parity runners for simple,
 integer, string, KNN and iterative behavior, generic estimator checks, and

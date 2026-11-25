@@ -2,9 +2,18 @@
 
 `IterativeImputer[DType.float64]()` fits a Bayesian ridge model per feature
 and round. `transform` replays the saved sequence in order on new missing
-cells. It preserves the input dtype, observed values and row order.
+cells. For floating inputs, it preserves dtype and observed values. Output
+rows follow input order.
 Pass `DType.float32` for Float32 inputs. Input arrays must be nonempty rank-two
 NuMojo arrays and can include strided views. The output owns its storage.
+
+The Float64 specialization also accepts signed and unsigned integer NDArrays
+through its concrete `fit`, `fit_named`, `fit_transform` and `transform`
+overloads. Values are promoted in logical row order before missing-value
+masking and initial imputation. Finite markers use Float64 equality after
+rounding, including for integers beyond exact Float64 precision. Results use
+Float64 storage. Trait-based composition uses the Float64 input type, so cast
+integer data before passing it through a generic pipeline.
 
 ```mojo
 from moxie.impute import IterativeImputer
@@ -51,8 +60,8 @@ named updates and clears learned state. Use the record to clear nullable
 settings, or supply an outer `Optional` containing the new optional value.
 Failed fits preserve the previous fitted estimator.
 
-`sample_posterior=True` currently raises on fit. Integer array promotion,
-Python metadata routing, warning objects and dataframe output are unavailable.
+`sample_posterior=True` currently raises on fit. Python metadata routing,
+warning objects and dataframe output are unavailable.
 Verbose diagnostics use Mojo console output. Import directly from
 `moxie.impute` without an experimental opt-in.
 
@@ -64,7 +73,9 @@ Numax Tensor. With NuMojo storage, an adapter would require materializing and
 converting the training array for that operation. Correlation uses the approved
 NuMojo rank-two product over a centered Float64 workspace, followed by
 normalization in the Gram buffer. The convergence loop combines the row
-reduction and the snapshot update in one pass.
+reduction and the snapshot update in one pass. Integer promotion uses NuMojo
+`astype` for contiguous inputs and `contiguous` followed by `astype` for
+strided inputs because the cast traverses physical storage.
 
 From the repository root, with the locked toolchain active:
 
@@ -75,6 +86,8 @@ python families/impute/algorithms/iterative/tests/parity.py
 Parity compares training fills, held-out replay, initial statistics, round
 counts, estimator ordering, sampled predictor indices and feature names
 against the pinned iterative, simple and Bayesian regression sources.
+Integer cases compare signed and unsigned input layouts, mixed integer and
+Float64 fit and replay, and missing-mask equality after Float64 rounding.
 Float64 comparisons use absolute and relative tolerances of `5e-8`. Float32
 uses `3e-4`. The allowances cover the reference's dtype-specific reductions
 and the use of SciPy SVD versus the native BayesianRidge solver across

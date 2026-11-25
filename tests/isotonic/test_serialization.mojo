@@ -16,9 +16,12 @@ def round_trips[dtype: DType]() raises:
     var model = IsotonicRegression[dtype](
         y_min=0.0, increasing="auto", out_of_bounds="raise"
     )
+    _ = model.set_fit_request(sample_weight="training_weights").set_score_request(sample_weight=True)
     save_model[Schema](model, path)
     var fresh = load_model[Schema](path)
     assert_false(fresh.__sklearn_is_fitted__())
+    assert_true(fresh.get_metadata_routing().fit.value().isa[NoneType]())
+    assert_true(fresh.get_metadata_routing().score.value().isa[NoneType]())
     assert_equal(fresh.y_min.or_else(-1.0), 0.0)
     assert_false(Bool(fresh.y_max))
     assert_equal(fresh.increasing[String], "auto")
@@ -36,6 +39,8 @@ def round_trips[dtype: DType]() raises:
     save_model[Schema](model, path)
     var fitted = load_model[Schema](path)
     assert_true(fitted.__sklearn_is_fitted__())
+    assert_true(fitted.get_metadata_routing().fit.value().isa[NoneType]())
+    assert_true(fitted.get_metadata_routing().score.value().isa[NoneType]())
     assert_equal(fitted.y_min.or_else(-1.0), 0.0)
     assert_equal(fitted.y_max.or_else(-1.0), 0.5)
     assert_true(fitted.increasing[Bool])

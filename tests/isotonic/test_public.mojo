@@ -81,9 +81,44 @@ def exercise_views[dtype: DType]() raises:
     assert_equal(model.predict(target).tolist(), index_values)
 
 
+def exercise_metadata() raises:
+    var model = IsotonicRegression()
+    var X: List[Float64] = [0, 1, 2]
+    var y: List[Float64] = [3, 1, 2]
+    var weights: List[Float64] = [0, 1, 1]
+    assert_true(model.get_metadata_routing().fit.value().isa[NoneType]())
+    assert_true(model.get_metadata_routing().score.value().isa[NoneType]())
+    _ = model.set_fit_request(sample_weight=False).set_score_request(sample_weight="score_weights")
+    _ = model.set_fit_request().fit(X, y, sample_weight=weights)
+    assert_equal(model.X_min_, 1.0)
+    var query: List[Float64] = [1, 2]
+    var target: List[Float64] = [1, 3]
+    var score_weights: List[Float64] = [1, 0]
+    assert_equal(model.score(query, target, sample_weight=score_weights.copy()), 1.0)
+    var copied = model.copy()
+    var cloned = clone(model)
+    assert_false(cloned.__sklearn_is_fitted__())
+    var snapshot = model.get_metadata_routing()
+    assert_false(snapshot.fit.value()[Bool])
+    with assert_raises(contains="metadata alias must be an ASCII identifier"):
+        _ = model.set_score_request(sample_weight="invalid-weight")
+    assert_equal(model.get_metadata_routing().score.requested_name().or_else(""), "score_weights")
+    var metadata = Dict[String, List[Float64]]()
+    metadata["score_weights"] = score_weights.copy()
+    var routed = snapshot.score.route(metadata)
+    metadata["score_weights"][0] = 0.0
+    assert_equal(routed^.or_else([]), score_weights)
+    snapshot.score.set(False)
+    _ = model.set_fit_request(sample_weight=None).set_score_request(sample_weight=True)
+    assert_true(model.get_metadata_routing().fit.value().isa[NoneType]())
+    assert_equal(copied.get_metadata_routing().score.requested_name().or_else(""), "score_weights")
+    assert_equal(cloned.get_metadata_routing().score.requested_name().or_else(""), "score_weights")
+
+
 def main() raises:
     exercise[DType.float32]()
     exercise[DType.float64]()
     exercise_views[DType.float32]()
     exercise_views[DType.float64]()
-    print("PASS: isotonic public exports, fluent contracts and dtype preservation")
+    exercise_metadata()
+    print("PASS: isotonic public exports, fluent contracts, metadata requests and dtype preservation")

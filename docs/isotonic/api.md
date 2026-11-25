@@ -183,6 +183,26 @@ Grid values use `IsotonicSearchValue`. Bounds take Float64 or `NoneType()`
 to clear a bound. Direction takes Bool or `String("auto")`. Out-of-bounds
 mode takes a String.
 
+### Sample-weight requests
+
+`set_fit_request(sample_weight=...)` and `set_score_request(sample_weight=...)`
+mutate the model fluently. Pass `True` to request the standard name, an ASCII
+identifier to request an alias, `False` to decline weights, or `None` to reject
+weights supplied to a parent under the standard name. Both methods default
+to rejecting incoming weights until configured. Omitting the argument in a
+setter preserves that method's existing request.
+
+```mojo
+_ = model.set_fit_request(sample_weight="training_weights").set_score_request(sample_weight=True)
+var requests = model.get_metadata_routing()
+var weight_name = requests.fit.requested_name()
+```
+
+`get_metadata_routing()` returns an independent snapshot. Fitted copies and
+unfitted clones preserve both requests. Direct `fit` and `score` always use
+their explicit `sample_weight` arguments. Pipeline and model selection still
+require their existing explicit metadata arguments.
+
 ## Persistence
 
 Use the experimental [native model format](../serialization.md) for fitted or
@@ -203,6 +223,7 @@ changed since the last fit. It restores independent threshold Lists without
 refitting. Constructor values retain their normal fit-time validation.
 Fit diagnostics describe the current instance's last successful fit.
 They start empty after loading an archive.
+Fit and score requests also return to their defaults when loading a native archive.
 Fitted thresholds must be finite, with strictly ascending X, monotone y in
 the fitted direction, and a domain matching the two endpoints.
 
@@ -214,7 +235,7 @@ training domain.
 ## Scope and validation
 
 Python bindings, automatic heterogeneous dtype coercion, scalar sample
-weights, pandas output and metadata routing are not implemented.
+weights, pandas output and automatic metadata forwarding remain open.
 Pass weights in the same dtype and container type as y.
 `get_feature_names_out(input_features)` accepts and ignores the optional names,
 as the reference does. Sparse inputs
@@ -225,9 +246,9 @@ for in-place fitting and typed configuration differences.
 `pixi run python tools/isotonic_checks.py test` covers trait conformance,
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
 strided arrays, direction, bounds, weighted R², and native persistence.
-`pixi run python tools/isotonic_checks.py parity` compares 666 Float64 and
-499 Float32 deterministic cases, including scaler pipeline predictions,
-interpolator reconstruction, validation edges and automatic-fit diagnostics,
+`pixi run python tools/isotonic_checks.py parity` compares 712 Float64 and
+545 Float32 deterministic cases, including scaler pipeline predictions,
+interpolator reconstruction, validation edges, warning diagnostics and sample-weight requests,
 against the pinned Python module and Cython tie engine. The scikit-learn
 support wheel and SciPy come from the locked Pixi environment. Float64 uses
 `atol=rtol=2e-12` and Float32 uses `atol=rtol=2e-6` to allow for differences

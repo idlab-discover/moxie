@@ -19,12 +19,19 @@ import numpy as np
 import scipy
 from scipy.optimize import isotonic_regression as scipy_isotonic
 import sklearn
+from sklearn.exceptions import UnsetMetadataPassedError
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 ROOT = Path(__file__).resolve().parents[2]
 REVISION = "4358542a1bd39af2e7e1cbace8b9fed067473c5b"
 SEED = 94217
+REFERENCE_SOURCES = (
+    "sklearn/isotonic.py",
+    "sklearn/_isotonic.pyx",
+    "sklearn/metrics/_regression.py",
+    "sklearn/utils/_metadata_requests.py",
+)
 
 
 def load_reference(checkout):
@@ -33,9 +40,10 @@ def load_reference(checkout):
     ).strip()
     if revision != REVISION:
         raise RuntimeError(f"Expected reference {REVISION}, found {revision}")
-    dirty = subprocess.check_output(["git", "-C", str(checkout), "status", "--porcelain", "--",
-                                     "sklearn/isotonic.py", "sklearn/_isotonic.pyx",
-                                     "sklearn/metrics/_regression.py"], text=True)
+    dirty = subprocess.check_output(
+        ["git", "-C", str(checkout), "status", "--porcelain", "--", *REFERENCE_SOURCES],
+        text=True,
+    )
     if dirty:
         raise RuntimeError("Modified reference source: " + dirty)
     subprocess.run([sys.executable, str(ROOT / 'tests/isotonic/build_reference.py'),
@@ -84,6 +92,26 @@ def main():
 
     def add(*values):
         records.append("|".join(map(encode, values)))
+
+    def routing_requests():
+        source = args.sklearn_checkout / "sklearn/utils/_metadata_requests.py"
+        spec = importlib.util.spec_from_file_location("sklearn.utils._moxie_reference_metadata", source)
+        routing = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(routing)
+        model = reference.IsotonicRegression()
+        for method in ("fit", "score"):
+            request = routing.MethodMetadataRequest(owner=model, method=method)
+            for setting in (None, False, True, "_weights2", "sample_weight", routing.UNCHANGED):
+                if setting != routing.UNCHANGED:
+                    request.add_request(param="sample_weight", alias=setting)
+                for metadata in ({}, {"sample_weight": 1}, {"_weights2": 2}):
+                    try:
+                        resolved = request._route_params(metadata, parent=model, caller=method)
+                    except UnsetMetadataPassedError:
+                        expected = "reject"
+                    else:
+                        expected = str(resolved.get("sample_weight", "-"))
+                    add("routing", method, setting, next(iter(metadata), "-"), expected)
 
     def warning_fields(caught):
         return [
@@ -256,6 +284,7 @@ def main():
     validation_edges()
     fit_warnings()
     score_warnings()
+    routing_requests()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(240):
@@ -312,6 +341,7 @@ def main():
     validation_edges()
     fit_warnings()
     score_warnings()
+    routing_requests()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(150):
@@ -338,7 +368,7 @@ def main():
     metadata = {"seed": SEED, "cases": len(records), "reference_revision": REVISION,
                 "python": platform.python_version(), "numpy": np.__version__,
                 "scipy": scipy.__version__, "sklearn_support_wheel": sklearn.__version__,
-                "platform": platform.platform(), "reference_hashes": {f: hashlib.sha256((args.sklearn_checkout / f).read_bytes()).hexdigest() for f in ["sklearn/isotonic.py", "sklearn/_isotonic.pyx", "sklearn/metrics/_regression.py"]}, "rtol": 2e-12, "atol": 2e-12}
+                "platform": platform.platform(), "reference_hashes": {f: hashlib.sha256((args.sklearn_checkout / f).read_bytes()).hexdigest() for f in REFERENCE_SOURCES}, "rtol": 2e-12, "atol": 2e-12}
     metadata["float32"] = {"cases": len(float32_records), "rtol": 2e-6, "atol": 2e-6}
     metadata["mojo"] = subprocess.check_output(["mojo", "--version"], cwd=ROOT, text=True).strip()
     (output / "environment.json").write_text(json.dumps(metadata, indent=2) + "\n")

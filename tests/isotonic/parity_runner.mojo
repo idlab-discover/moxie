@@ -6,6 +6,7 @@ from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
 from moxie.isotonic_serialization import IsotonicRegressionSchema
 from moxie.serialization import dumps, loads
+from moxie.metadata_routing import SampleWeightUpdate
 from std.math import isfinite, isnan
 from moxie.isotonic import (
     IsotonicRegression,
@@ -34,6 +35,38 @@ def optional_vector[dtype: DType](text: String) raises -> Optional[List[Scalar[d
     if text == "-":
         return None
     return vector[dtype](text)
+
+
+def check_routing[dtype: DType](method: String, setting: String, key: String, expected: String) raises:
+    var model = IsotonicRegression[dtype]()
+    var request: SampleWeightUpdate
+    if setting == "-":
+        request = None
+    elif setting == "false":
+        request = False
+    elif setting == "true":
+        request = True
+    else:
+        request = setting.copy()
+    if setting == "$UNCHANGED$":
+        _ = model.set_fit_request(sample_weight=True).set_score_request(sample_weight=True)
+    if method == "fit":
+        _ = model.set_fit_request(sample_weight=request)
+    else:
+        _ = model.set_score_request(sample_weight=request)
+    var snapshot = model.get_metadata_routing()
+    var method_request = snapshot.fit.copy() if method == "fit" else snapshot.score.copy()
+    var metadata = Dict[String, Int]()
+    if key == "sample_weight":
+        metadata[key] = 1
+    elif key == "_weights2":
+        metadata[key] = 2
+    if expected == "reject":
+        with assert_raises(contains="UnsetMetadataPassedError"):
+            _ = method_request.route(metadata)
+    else:
+        var routed = method_request.route(metadata)
+        assert_equal(String(routed.or_else(0)) if routed else "-", expected)
 
 
 def compare[dtype: DType](
@@ -90,7 +123,9 @@ def run_cases[dtype: DType]() raises:
         var fields = line.split("|")
         var kind = String(fields[0])
         var context = kind + " case " + String(count)
-        if kind == "kernel":
+        if kind == "routing":
+            check_routing[dtype](String(fields[1]), String(fields[2]), String(fields[3]), String(fields[4]))
+        elif kind == "kernel":
             var y = vector[dtype](String(fields[1]))
             var result = isotonic_regression(
                 y,

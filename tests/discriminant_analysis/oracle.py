@@ -27,6 +27,7 @@ FILES = ['sklearn/discriminant_analysis.py', 'sklearn/covariance/_empirical_cova
          'sklearn/covariance/_shrunk_covariance.py', 'sklearn/preprocessing/_data.py',
          'sklearn/utils/_array_api.py', 'sklearn/utils/extmath.py', 'sklearn/linear_model/_base.py',
          'sklearn/base.py', 'sklearn/tests/test_discriminant_analysis.py', 'sklearn/pipeline.py',
+         'sklearn/utils/_metadata_requests.py',
          'sklearn/model_selection/_search.py', 'sklearn/model_selection/_split.py']
 
 

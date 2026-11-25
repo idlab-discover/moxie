@@ -6,6 +6,12 @@ from numojo import NDArray, Shape, zeros
 from moxie.base import NumericClassifierClasses
 from moxie.utils.validation import FittedState, check_is_fitted
 from moxie.compose._table import ColumnTable
+from moxie.metadata_routing import (
+    FitScoreMetadataRequest,
+    FitScoreMetadataRequestProvider,
+    SampleWeightRequest,
+    SampleWeightUpdate,
+)
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._discriminant_analysis_contracts import LinearDiscriminantTransformer
 from moxie.warnings import FitWarning
@@ -338,7 +344,7 @@ struct LinearDiscriminantAnalysis[
     C: CovarianceEstimator = NoCovarianceEstimator,
 ](
     LinearDiscriminantTransformer, FeatureNamesOut, InputFeatureCount, Copyable,
-    NumericClassifierClasses where L == Int,
+    FitScoreMetadataRequestProvider, NumericClassifierClasses where L == Int,
 ):
     """Linear Discriminant Analysis (sklearn.discriminant_analysis.LinearDiscriminantAnalysis).
 
@@ -394,6 +400,7 @@ struct LinearDiscriminantAnalysis[
     var _max_components: Int
     var _fitted_solver: String
     var _state: FittedState
+    var _score_request: SampleWeightRequest
 
     def __init__(
         out self,
@@ -428,6 +435,7 @@ struct LinearDiscriminantAnalysis[
         self._max_components = 0
         self._fitted_solver = ""
         self._state = FittedState()
+        self._score_request = SampleWeightRequest()
 
     # ----- configuration -------------------------------------------------
 
@@ -484,9 +492,24 @@ struct LinearDiscriminantAnalysis[
             self.covariance_estimator = covariance_estimator.value().copy()
         return self
 
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure how a parent supplies sample weights to score."""
+        self._score_request.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        """Return an owned snapshot of the score request and the unset fit request."""
+        return FitScoreMetadataRequest(
+            fit=SampleWeightRequest(), score=self._score_request.copy()
+        )
+
     def __sklearn_clone__(self) raises -> Self:
         """Unfitted estimator with an independent copy of the configuration."""
-        return Self(
+        var cloned = Self(
             self.solver,
             self.shrinkage.copy(),
             self.priors.copy(),
@@ -495,6 +518,8 @@ struct LinearDiscriminantAnalysis[
             self.tol,
             clone_covariance_configuration(self.covariance_estimator),
         )
+        cloned._score_request = self._score_request.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.is_fitted()

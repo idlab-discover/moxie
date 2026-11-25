@@ -5,6 +5,7 @@ from numojo import NDArray, Shape
 from moxie.base import clone
 from moxie.compose import ColumnTable
 from moxie.discriminant_analysis import ClassLabel, Shrinkage
+from moxie.metadata_routing import FitScoreMetadataRequestProvider
 from moxie.discriminant_analysis_serialization import (
     LinearDiscriminantAnalysisSchema,
     QuadraticDiscriminantAnalysisSchema,
@@ -305,6 +306,93 @@ def named_archive_round_trip[Schema: ModelSchema](
     return restored^
 
 
+def check_unset_request[E: FitScoreMetadataRequestProvider](model: E) raises:
+    var requests = model.get_metadata_routing()
+    assert_true(requests.fit.value().isa[NoneType]())
+    assert_true(requests.score.value().isa[NoneType]())
+    with assert_raises(contains="UnsetMetadataPassedError"):
+        _ = requests.score.route({"sample_weight": 1})
+
+
+def check_score_request_archives[Schema: ModelSchema](
+    declined: Schema.Model, accepted: Schema.Model, aliased: Schema.Model,
+) raises where conforms_to(Schema.Model, FitScoreMetadataRequestProvider & Deinitable):
+    var metadata = {"sample_weight": 1, "validation_weight": 2}
+    var declined_archive = Schema.encode(declined)
+    var restored_declined = Schema.decode(loads(dumps(declined_archive)))
+    assert_false(restored_declined.__sklearn_is_fitted__())
+    assert_false(Bool(restored_declined.get_metadata_routing().score.route(metadata)))
+
+    var archive = Schema.encode(accepted)
+    var restored_accepted = Schema.decode(loads(dumps(archive)))
+    assert_false(restored_accepted.__sklearn_is_fitted__())
+    assert_equal(restored_accepted.get_metadata_routing().score.route(metadata).value(), 1)
+    archive.manifest[0] = UInt8(archive.schema_version)
+    with assert_raises(contains="unsupported discriminant schema version"):
+        _ = Schema.decode(archive)
+    archive = Schema.encode(accepted)
+    archive.manifest[len(archive.manifest) - 8] = 0
+    with assert_raises(contains="unknown discriminant score request"):
+        _ = Schema.decode(archive)
+    archive = Schema.encode(aliased)
+    archive.manifest[len(archive.manifest) - String("validation_weight").byte_length()] = 32
+    with assert_raises(contains="invalid discriminant score request alias"):
+        _ = Schema.decode(archive)
+
+
+def check_cloned_request[E: FitScoreMetadataRequestProvider](
+    model: E, cloned: E,
+) raises:
+    assert_true(model.__sklearn_is_fitted__())
+    assert_false(cloned.__sklearn_is_fitted__())
+    var metadata = {"validation_weight": 2}
+    assert_equal(model.get_metadata_routing().score.route(metadata).value(), 2)
+    assert_equal(cloned.get_metadata_routing().score.route(metadata).value(), 2)
+
+
+def test_score_request_lifecycle_and_archives() raises:
+    comptime LDA = LinearDiscriminantAnalysisSchema[]
+    comptime QDA = QuadraticDiscriminantAnalysisSchema[]
+    var X = training_data[DType.float64]()
+    var y: List[Int] = [1, 1, 1, 1, 1, 2, 2, 2, 2]
+
+    var lda = LDA.Model()
+    var lda_declined = LDA.Model()
+    var lda_accepted = LDA.Model()
+    check_unset_request(lda)
+    _ = lda_declined.set_score_request(sample_weight=False)
+    _ = lda_accepted.set_score_request(sample_weight=String("sample_weight")).set_score_request()
+    _ = lda.set_score_request(sample_weight=String("validation_weight")).fit(X, y)
+    with assert_raises(contains="ASCII identifier"):
+        _ = lda.set_score_request(sample_weight=String("invalid alias"))
+    check_cloned_request(lda, clone(lda))
+    check_score_request_archives[LDA](lda_declined, lda_accepted, lda)
+    var snapshot = lda.get_metadata_routing()
+    _ = lda.set_score_request(sample_weight=None)
+    check_unset_request(lda)
+    assert_equal(snapshot.score.route({"validation_weight": 2}).value(), 2)
+
+    var qda = QDA.Model()
+    var qda_declined = QDA.Model()
+    var qda_accepted = QDA.Model()
+    check_unset_request(qda)
+    _ = qda_declined.set_score_request(sample_weight=False)
+    _ = qda_accepted.set_score_request(sample_weight=True).set_score_request()
+    _ = qda.set_score_request(sample_weight=String("validation_weight")).fit(X, y)
+    check_cloned_request(qda, clone(qda))
+    check_score_request_archives[QDA](qda_declined, qda_accepted, qda)
+    _ = qda.set_score_request(sample_weight=None)
+    check_unset_request(qda)
+
+
+def routed_named_score[
+    dtype: DType, E: FitScoreMetadataRequestProvider
+](
+    model: E, weights: NDArray[dtype]
+) raises -> NDArray[dtype]:
+    return model.get_metadata_routing().score.route({"validation_weight": weights.copy()}).value().copy()
+
+
 def named_lda[dtype: DType](emit_parity: Bool) raises:
     comptime Schema = LinearDiscriminantAnalysisSchema[dtype]
     var X = training_data[dtype]()
@@ -334,8 +422,9 @@ def named_lda[dtype: DType](emit_parity: Bool) raises:
     assert_equal(model.predict_log_proba(table).tolist(), model.predict_log_proba(X).tolist())
     assert_equal(model.score(table, y), model.score(X, y))
 
-    var restored = named_archive_round_trip[Schema](model, Schema.Model(), Schema.StateVersion)
+    var restored = named_archive_round_trip[Schema](model, Schema.Model(), 3)
     assert_equal(restored.feature_names_in_.value(), names)
+    check_unset_request(restored)
     assert_equal(restored.transform(table).tolist(), projection.tolist())
     with assert_raises(contains="feature names should match"):
         _ = restored.predict(reversed_table)
@@ -344,9 +433,19 @@ def named_lda[dtype: DType](emit_parity: Bool) raises:
     with assert_raises(contains="feature_names_in_ must be unique"):
         _ = Schema.encode(restored)
 
+    _ = model.set_score_request(sample_weight=String("validation_weight"))
+    restored = named_archive_round_trip[Schema](model, Schema.Model(), Schema.StateVersion)
+    var score_labels = y.copy()
+    score_labels[0] = 2
+    var score_weights = matrix[dtype](1, 9, [4.0, 1, 1, 1, 1, 1, 1, 1, 1]).reshape(Shape(9))
+    var routed_score = restored.score(
+        table, score_labels, sample_weight=routed_named_score(restored, score_weights),
+    )
+    assert_equal(routed_score, model.score(table, score_labels, sample_weight=score_weights^))
+    assert_false(routed_score == model.score(table, score_labels))
     if emit_parity:
         print("lda|", String(dtype), "|", names, "|", model.predict(table),
-              "|", model.predict_proba(table).tolist(), sep="")
+              "|", model.predict_proba(table).tolist(), "|", routed_score, sep="")
         print("projection|", String(dtype), "|", model.get_feature_names_out(),
               "|", projection.tolist(), sep="")
 
@@ -397,8 +496,9 @@ def named_qda[dtype: DType](emit_parity: Bool) raises:
     with assert_raises(contains="feature names should match"):
         _ = model.predict_log_proba(renamed_table)
 
-    var restored = named_archive_round_trip[Schema](model, Schema.Model(), Schema.StateVersion)
+    var restored = named_archive_round_trip[Schema](model, Schema.Model(), 2)
     assert_equal(restored.feature_names_in_.value(), names)
+    check_unset_request(restored)
     assert_equal(restored.predict_proba(table).tolist(), model.predict_proba(table).tolist())
     with assert_raises(contains="feature names should match"):
         _ = restored.predict(reversed_table)
@@ -406,9 +506,19 @@ def named_qda[dtype: DType](emit_parity: Bool) raises:
     with assert_raises(contains="invalid feature_names_in_ count"):
         _ = Schema.encode(restored)
 
+    _ = model.set_score_request(sample_weight=String("validation_weight"))
+    restored = named_archive_round_trip[Schema](model, Schema.Model(), Schema.StateVersion)
+    var score_labels = y.copy()
+    score_labels[0] = 2
+    var score_weights = matrix[dtype](1, 9, [4.0, 1, 1, 1, 1, 1, 1, 1, 1]).reshape(Shape(9))
+    var routed_score = restored.score(
+        table, score_labels, sample_weight=routed_named_score(restored, score_weights),
+    )
+    assert_equal(routed_score, model.score(table, score_labels, sample_weight=score_weights^))
+    assert_false(routed_score == model.score(table, score_labels))
     if emit_parity:
         print("qda|", String(dtype), "|", names, "|", model.predict(table),
-              "|", model.predict_proba(table).tolist(), sep="")
+              "|", model.predict_proba(table).tolist(), "|", routed_score, sep="")
 
     _ = model.fit(reversed_table, y)
     assert_equal(model.feature_names_in_.value(), reordered)
@@ -438,6 +548,8 @@ def main() raises:
     qda_unfitted_round_trip()
     qda_invalid_state()
     print("PASS: QDA serialization contracts")
+    test_score_request_lifecycle_and_archives()
+    print("PASS: LDA and QDA score request lifecycle and archives")
     var emit_parity = len(argv()) > 1 and argv()[1] == "--named-parity"
     named_lda[DType.float32](emit_parity)
     named_lda[DType.float64](emit_parity)

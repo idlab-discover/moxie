@@ -9,18 +9,20 @@ import pandas as pd
 import sklearn.base
 from sklearn.utils import validation
 
-from oracle import SOURCE, _function
+from oracle import SOURCE, _function, _module
 
 
 def check_named_input(da, runner):
     path = 'sklearn/utils/validation.py'
+    routing_path = 'sklearn/utils/_metadata_requests.py'
     assert not subprocess.check_output(
-        ['git', '-C', str(SOURCE), 'status', '--porcelain', '--', path], text=True
+        ['git', '-C', str(SOURCE), 'status', '--porcelain', '--', path, routing_path], text=True
     )
     namespace = vars(validation).copy()
     _, check_names_out, check_names = _function(
         path, ['_get_feature_names', '_check_feature_names_in', '_check_feature_names'], namespace
     )
+    routing = _module('sklearn.utils._da_pinned_routing', routing_path)
     output = subprocess.check_output([str(runner), '--named-parity'], text=True)
     seen = set()
     with (
@@ -34,14 +36,14 @@ def check_named_input(da, runner):
             assert (kind, dtype) not in seen, (kind, dtype)
             seen.add((kind, dtype))
             assert names.startswith('[') and names.endswith(']'), names
-            _compare(da, kind, dtype, names[1:-1].split(', '), values)
+            _compare(da, routing, kind, dtype, names[1:-1].split(', '), values)
     assert seen == {
         (kind, dtype) for kind in ['lda', 'qda', 'projection'] for dtype in ['float32', 'float64']
     }, seen
-    print('Named-table parity PASS for LDA and QDA in Float32 and Float64')
+    print('Named-table and routed score parity PASS for LDA and QDA in Float32 and Float64')
 
 
-def _compare(da, kind, dtype, names, values):
+def _compare(da, routing, kind, dtype, names, values):
     columns = ['mass', 'âge']
     X = pd.DataFrame(
         [[0, 0], [-2, -2], [-2, -1], [-1, -1], [-1, -2], [1, 3], [1, 2], [2, 1], [2, 2]],
@@ -69,5 +71,19 @@ def _compare(da, kind, dtype, names, values):
         np.testing.assert_allclose(actual, expected, atol=tol, rtol=tol)
         with np.testing.assert_raises_regex(ValueError, 'feature names should match'):
             model.predict(X[columns[::-1]])
+        request = routing.MethodMetadataRequest(owner=type(model).__name__, method='score')
+        request.add_request(param='sample_weight', alias='validation_weight')
+        score_labels = y.copy()
+        score_labels[0] = 2
+        weights = np.array([4, 1, 1, 1, 1, 1, 1, 1, 1], dtype=dtype)
+        routed = request._route_params(
+            {'validation_weight': weights}, parent='TestParent', caller='score'
+        )
+        # The weighting sum is 12. A Float32 accuracy implementation may
+        # round a fractional score in single precision.
+        np.testing.assert_allclose(
+            float(values[2]), model.score(X, score_labels, **routed),
+            atol=1e-7 if dtype == 'float32' else 1e-15, rtol=0,
+        )
         model.fit(X.to_numpy(), y)
         assert not hasattr(model, 'feature_names_in_')

@@ -33,7 +33,8 @@
   native Mojo arrays.
 - Native numeric `ColumnTable` inputs preserve fitted `feature_names_in_` on direct
   estimator calls. See [API](api.md#named-dense-inputs).
-- Shared facilities still open: pandas inputs, pickling, metadata routing and `set_output`.
+- LDA and QDA expose typed score-weight requests. Parent-side routing,
+  pandas integration, pickling and `set_output` remain open.
 - Inherited restrictions: mojo-linalg factorizations are scalar Float64 kernels
   (see performance.md); no GPU path.
 

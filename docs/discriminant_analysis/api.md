@@ -106,6 +106,22 @@ an explicit `input_features` against them. Numeric inference arrays are
 positional. Switching between named and positional inputs is silent. A positional refit, failed fit, or unfitted clone has
 `feature_names_in_ = None`. Projection returns an NDArray.
 
+## Score sample-weight requests
+
+LDA and QDA expose the shared [sample-weight request contract](../interfaces.md#sample-weight-requests).
+A parent can read `get_metadata_routing().score` before fit and resolve
+weights from its validated metadata. For example,
+`model.set_score_request(sample_weight=String("validation_weight"))` lets the parent
+resolve that key and pass the resulting array as `sample_weight` to `score`.
+Use `True` for the standard key, `False` to decline weights, or `None` to
+restore the unset request. Omitting the argument keeps the previous request.
+
+The typed request is separate from constructor parameters. An unfitted clone
+retains the request. Direct `score` calls accept an explicit
+weight array independently of the request. The fit slot is unset because
+neither estimator accepts fit weights. Automatic forwarding belongs to the
+parent composition.
+
 ## Native model persistence
 
 Use the experimental [Moxie archive format](../serialization.md) to save fitted
@@ -199,6 +215,11 @@ and custom label codecs.
 
 For a complete codec and round trips for both estimators, see the
 [covariance archive contract](../../tests/discriminant_analysis/covariance_serialization.mojo).
+
+LDA version 6 and QDA version 5 preserve an explicit score-weight request
+alongside the earlier named input, label codec and covariance codec state.
+Older archives restore an unset score request. Saving with an unset request
+uses the previous archive layout.
 
 ## Cross-validation and shrinkage search
 
@@ -324,5 +345,5 @@ QDA: `means_` `(K, p)`, `priors_`, `rotations_` (List of `(p, n_k)`), `scalings_
 - `get_params` returns a typed `LinearDiscriminantAnalysisParams` / `QuadraticDiscriminantAnalysisParams`
   record. `set_params` takes that record, or keyword `Optional` values (a nullable parameter
   such as `n_components` takes `Optional[Optional[Int]]`, e.g. `n_components=Optional[Int](1)`).
-- Python reflection, pickling, pandas inputs, metadata routing, transform output configuration
-  and array-API dispatch are outside this port.
+- Python reflection, pickling, pandas inputs, transform output configuration
+  and array-API dispatch remain open.

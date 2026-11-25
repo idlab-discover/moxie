@@ -9,9 +9,37 @@ from moxie.discriminant_analysis import (
     QuadraticDiscriminantAnalysis,
     Shrinkage,
 )
+from moxie.metadata_routing import SampleWeightRequest, SampleWeightRequestValue, SampleWeightUpdate
 from moxie.serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 from moxie.warnings import FitWarning
 from moxie._discriminant_analysis._lda import PRIOR_RENORMALIZATION_MESSAGE
+
+
+def _write_score_request(mut writer: BinaryWriter, request: SampleWeightRequestValue):
+    if request.isa[Bool]():
+        writer.uint(UInt64(2 if request[Bool] else 1))
+    else:
+        writer.uint(3)
+        writer.string(request[String])
+
+
+def _read_score_request(mut reader: BinaryReader[_]) raises -> SampleWeightUpdate:
+    var tag = reader.uint()
+    if tag == 1 or tag == 2:
+        return SampleWeightUpdate(tag == 2)
+    if tag != 3:
+        raise Error("ModelSchemaError: unknown discriminant score request")
+
+    var name = reader.string(reader.remaining())
+    var request = SampleWeightRequest()
+    var update = SampleWeightUpdate(name^)
+    try:
+        request.set(update)
+    except:
+        raise Error("ModelSchemaError: invalid discriminant score request alias")
+    if not request.value().isa[String]():
+        raise Error("ModelSchemaError: invalid discriminant score request alias")
+    return update^
 
 
 def _write_array[dtype: DType](
@@ -362,7 +390,8 @@ struct LinearDiscriminantAnalysisSchema[
     comptime _LabelStateVersion = 4
     comptime _Covariance = _CovarianceArchive[Self.CovarianceCodec]
     comptime _CovarianceStateVersion = 5
-    comptime StateVersion = (
+    comptime StateVersion = 6
+    comptime _CodecStateVersion = (
         Self._CovarianceStateVersion if Self._Covariance.UsesCodec
         else Self._LabelStateVersion if Self._Labels.UsesCustomCodec
         else Self._NamedStateVersion
@@ -375,9 +404,13 @@ struct LinearDiscriminantAnalysisSchema[
         var has_names = Bool(model.feature_names_in_)
         var version = Self._NamedStateVersion if has_names else (2 if has_warning else 1)
         if Self._Covariance.UsesCodec or Self._Labels.UsesCustomCodec:
-            version = Self.StateVersion
-        var archive = ModelArchive(Self.TypeId, version)
+            version = Self._CodecStateVersion
+        var request = model.get_metadata_routing().score.value()
+        var has_request = not request.isa[NoneType]()
+        var archive = ModelArchive(Self.TypeId, Self.StateVersion if has_request else version)
         var writer = BinaryWriter()
+        if has_request:
+            writer.uint(UInt64(version))
         writer.uint(UInt64(dtype_code[Self.dtype]()))
         Self._Covariance.write(writer, model.covariance_estimator)
         if Self._Covariance.UsesCodec:
@@ -413,21 +446,29 @@ struct LinearDiscriminantAnalysisSchema[
             writer.boolean(has_warning)
         if has_names:
             _write_feature_names(writer, model.feature_names_in_.value())
+        if has_request:
+            _write_score_request(writer, request)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        var version = archive.schema_version
+        var schema_version = archive.schema_version
+        archive.expect(
+            Self.TypeId, schema_version if 1 <= schema_version <= Self.StateVersion else 1,
+        )
+        archive.validate()
+        var reader = BinaryReader(Span(archive.manifest))
+        var version = UInt64(schema_version)
+        var has_request = version == UInt64(Self.StateVersion)
+        if has_request:
+            version = reader.uint()
+        if version < 1 or version > UInt64(Self._CovarianceStateVersion):
+            raise Error("ModelSchemaError: unsupported discriminant schema version")
         var has_covariance_codec = version == Self._CovarianceStateVersion
         var has_custom_codec = version == Self._LabelStateVersion
         var has_names = version == Self._NamedStateVersion
         var has_name_flag = has_custom_codec or has_covariance_codec
-        archive.expect(
-            Self.TypeId, version if version == 2 or has_names or has_name_flag else 1,
-        )
-        archive.validate()
-        var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != UInt64(dtype_code[Self.dtype]()):
             raise Error("ModelSchemaError: LDA dtype mismatch")
         var estimator = Self._Covariance.read(reader, has_covariance_codec)
@@ -473,6 +514,8 @@ struct LinearDiscriminantAnalysisSchema[
             model.fit_warnings.append(FitWarning("UserWarning", PRIOR_RENORMALIZATION_MESSAGE))
         if has_names:
             model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
+        if has_request:
+            _ = model.set_score_request(sample_weight=_read_score_request(reader))
         reader.finish()
         if len(archive.payloads) != expected_arrays:
             raise Error("ModelSchemaError: unexpected LDA arrays")
@@ -566,7 +609,8 @@ struct QuadraticDiscriminantAnalysisSchema[
     comptime _LabelStateVersion = 3
     comptime _Covariance = _CovarianceArchive[Self.CovarianceCodec]
     comptime _CovarianceStateVersion = 4
-    comptime StateVersion = (
+    comptime StateVersion = 5
+    comptime _CodecStateVersion = (
         Self._CovarianceStateVersion if Self._Covariance.UsesCodec
         else Self._LabelStateVersion if Self._Labels.UsesCustomCodec
         else Self._NamedStateVersion
@@ -578,9 +622,13 @@ struct QuadraticDiscriminantAnalysisSchema[
         var has_names = Bool(model.feature_names_in_)
         var version = Self._NamedStateVersion if has_names else 1
         if Self._Covariance.UsesCodec or Self._Labels.UsesCustomCodec:
-            version = Self.StateVersion
-        var archive = ModelArchive(Self.TypeId, version)
+            version = Self._CodecStateVersion
+        var request = model.get_metadata_routing().score.value()
+        var has_request = not request.isa[NoneType]()
+        var archive = ModelArchive(Self.TypeId, Self.StateVersion if has_request else version)
         var writer = BinaryWriter()
+        if has_request:
+            writer.uint(UInt64(version))
         writer.uint(UInt64(dtype_code[Self.dtype]()))
         Self._Covariance.write(writer, model.covariance_estimator)
         if Self._Covariance.UsesCodec:
@@ -607,19 +655,29 @@ struct QuadraticDiscriminantAnalysisSchema[
             writer.boolean(has_names)
         if has_names:
             _write_feature_names(writer, model.feature_names_in_.value())
+        if has_request:
+            _write_score_request(writer, request)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        var version = archive.schema_version
+        var schema_version = archive.schema_version
+        archive.expect(
+            Self.TypeId, schema_version if 1 <= schema_version <= Self.StateVersion else 1,
+        )
+        archive.validate()
+        var reader = BinaryReader(Span(archive.manifest))
+        var version = UInt64(schema_version)
+        var has_request = version == UInt64(Self.StateVersion)
+        if has_request:
+            version = reader.uint()
+        if version < 1 or version > UInt64(Self._CovarianceStateVersion):
+            raise Error("ModelSchemaError: unsupported discriminant schema version")
         var has_covariance_codec = version == Self._CovarianceStateVersion
         var has_custom_codec = version == Self._LabelStateVersion
         var has_names = version == Self._NamedStateVersion
         var has_name_flag = has_custom_codec or has_covariance_codec
-        archive.expect(Self.TypeId, version if has_names or has_name_flag else 1)
-        archive.validate()
-        var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != UInt64(dtype_code[Self.dtype]()):
             raise Error("ModelSchemaError: QDA dtype mismatch")
         var estimator = Self._Covariance.read(reader, has_covariance_codec)
@@ -657,6 +715,8 @@ struct QuadraticDiscriminantAnalysisSchema[
             has_names = reader.boolean()
         if has_names:
             model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
+        if has_request:
+            _ = model.set_score_request(sample_weight=_read_score_request(reader))
         reader.finish()
         if len(archive.payloads) != expected_arrays:
             raise Error("ModelSchemaError: unexpected QDA arrays")

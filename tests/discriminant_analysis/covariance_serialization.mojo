@@ -81,6 +81,14 @@ def lda_round_trip() raises:
     assert_equal(restored.transform(table).tolist(), model.transform(table).tolist())
     assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
 
+    _ = model.set_score_request(sample_weight=String("validation_weight"))
+    var routed = Schema.decode(loads(dumps(Schema.encode(model))))
+    assert_equal(routed.covariance_estimator.value().amount, 0.7)
+    assert_equal(routed.feature_names_in_.value(), names)
+    assert_equal(routed.predict_proba(table).tolist(), before)
+    assert_equal(routed.get_metadata_routing().score.requested_name().value(), "validation_weight")
+    assert_equal(dumps(Schema.encode(routed)), dumps(Schema.encode(model)))
+
     _ = restored.fit(table, y)
     _ = model.fit(table, y)
     var after = restored.predict_proba(table).tolist()

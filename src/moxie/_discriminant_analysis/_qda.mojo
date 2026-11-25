@@ -5,6 +5,12 @@ from std.math import sqrt
 from numojo import NDArray, Shape, zeros
 from moxie.utils.validation import FittedState
 from moxie.compose._table import ColumnTable
+from moxie.metadata_routing import (
+    FitScoreMetadataRequest,
+    FitScoreMetadataRequestProvider,
+    SampleWeightRequest,
+    SampleWeightUpdate,
+)
 from moxie._feature_metadata import InputFeatureCount
 from moxie._discriminant_analysis_contracts import DiscriminantClassifier
 from ._labels import ClassLabel, sorted_unique, encode_labels, class_counts
@@ -119,7 +125,7 @@ struct QuadraticDiscriminantAnalysis[
     dtype: DType = DType.float64,
     L: ClassLabel = Int,
     C: CovarianceEstimator = NoCovarianceEstimator,
-](DiscriminantClassifier, InputFeatureCount):
+](DiscriminantClassifier, InputFeatureCount, FitScoreMetadataRequestProvider):
     """Quadratic Discriminant Analysis (sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis).
 
     Fits one Gaussian per class and classifies with Bayes' rule (quadratic boundary).
@@ -162,6 +168,7 @@ struct QuadraticDiscriminantAnalysis[
     var n_features_in_: Int
     var feature_names_in_: Optional[List[String]]
     var _state: FittedState
+    var _score_request: SampleWeightRequest
 
     def __init__(
         out self,
@@ -191,6 +198,7 @@ struct QuadraticDiscriminantAnalysis[
         self.n_features_in_ = 0
         self.feature_names_in_ = None
         self._state = FittedState()
+        self._score_request = SampleWeightRequest()
 
     # ----- configuration -------------------------------------------------
 
@@ -247,9 +255,24 @@ struct QuadraticDiscriminantAnalysis[
             self.covariance_estimator = covariance_estimator.value().copy()
         return self
 
+    def set_score_request[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        sample_weight: SampleWeightUpdate = SampleWeightUpdate(),
+    ) raises -> ref[self] Self:
+        """Configure how a parent supplies sample weights to score."""
+        self._score_request.set(sample_weight)
+        return self
+
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        """Return an owned snapshot of the score request and the unset fit request."""
+        return FitScoreMetadataRequest(
+            fit=SampleWeightRequest(), score=self._score_request.copy()
+        )
+
     def __sklearn_clone__(self) raises -> Self:
         """Unfitted estimator with an independent copy of the configuration."""
-        return Self(
+        var cloned = Self(
             solver=self.solver,
             shrinkage=self.shrinkage.copy(),
             priors=self.priors.copy(),
@@ -258,6 +281,8 @@ struct QuadraticDiscriminantAnalysis[
             tol=self.tol,
             covariance_estimator=clone_covariance_configuration(self.covariance_estimator),
         )
+        cloned._score_request = self._score_request.copy()
+        return cloned^
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.is_fitted()

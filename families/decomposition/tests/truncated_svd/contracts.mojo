@@ -41,7 +41,9 @@ def check[dtype: DType]() raises:
     params.algorithm = "arpack"
     copy.set_params(params)
     copy.fit(x)
-    assert_true(abs(Float64(copy.singular_values_.value().unsafe_get(0)) - Float64(first)) < 1e-3 * Float64(first))
+    # Pinned sklearn ARPACK on matrix(8, 4), rounded to eight decimals.
+    assert_true(abs(Float64(copy.singular_values_.value().unsafe_get(0)) - 13.00113763) < 1e-5)
+    assert_true(abs(Float64(copy.singular_values_.value().unsafe_get(1)) - 11.14591941) < 1e-5)
     # Negative-stride view of the same rows reversed.
     var reversed = x.view_with_layout(Shape(8, 4), NDArrayStrides(-4, 1), 28)
     copy.fit(reversed)

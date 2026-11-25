@@ -14,14 +14,16 @@ def counts[dtype: DType](n: Int, p: Int) raises -> NDArray[dtype]:
     return x^
 
 
-def rejects[dtype: DType](var model: NMF[dtype], x: NDArray[dtype]) raises:
-    with assert_raises(): model.fit(x)
+def rejects[dtype: DType](var model: NMF[dtype], x: NDArray[dtype], message: String) raises:
+    with assert_raises(contains=message):
+        model.fit(x)
 
 
 def check[dtype: DType]() raises:
     var x = counts[dtype](12, 5)
     var model = NMF[dtype](2, random_state=0)
-    with assert_raises(): _ = model.transform(x)
+    with assert_raises(contains="NotFittedError"):
+        _ = model.transform(x)
     var w = model.fit_transform(x)
     assert_equal(w.shape[0], 12)
     assert_equal(w.shape[1], 2)
@@ -48,19 +50,20 @@ def check[dtype: DType]() raises:
     assert_equal(auto.n_components_, 5)  # auto -> n_features
     var negative = x.copy()
     negative.unsafe_set(3, -1)
-    rejects(NMF[dtype](2), negative)
-    rejects(NMF[dtype](0), x)
-    rejects(NMF[dtype](2, solver="pg"), x)
-    rejects(NMF[dtype](2, beta_loss=BetaLoss(String("kullback-leibler"))), x)  # cd needs frobenius
-    rejects(NMF[dtype](2, solver="mu", beta_loss=BetaLoss(String("itakura-saito"))), x)  # zeros with beta <= 0
-    rejects(NMF[dtype](2, init=Optional[String]("svd")), x)
-    rejects(NMF[dtype](8, init=Optional[String]("nndsvd")), x)  # k > min(n, p)
-    rejects(NMF[dtype](2, init=Optional[String]("custom")), x)  # custom needs W and H
-    rejects(NMF[dtype](2, l1_ratio=2.0), x)
-    rejects(NMF[dtype](2, alpha_W=-1.0), x)
-    rejects(NMF[dtype](2, alpha_H=AlphaH(String("other"))), x)
-    rejects(NMF[dtype](2, max_iter=0), x)
-    with assert_raises(): _ = model.transform(zeros[dtype](Shape(2, 4)))
+    rejects(NMF[dtype](2), negative, "Negative values")
+    rejects(NMF[dtype](0), x, "n_components must be >= 1")
+    rejects(NMF[dtype](2, solver="pg"), x, "NMF solver must be")
+    rejects(NMF[dtype](2, beta_loss=BetaLoss(String("kullback-leibler"))), x, "does not handle beta_loss")  # cd needs frobenius
+    rejects(NMF[dtype](2, solver="mu", beta_loss=BetaLoss(String("itakura-saito"))), x, "beta_loss <= 0")  # zeros with beta <= 0
+    rejects(NMF[dtype](2, init=Optional[String]("svd")), x, "init must be one of")
+    rejects(NMF[dtype](8, init=Optional[String]("nndsvd")), x, "n_components <= min")  # k > min(n, p)
+    rejects(NMF[dtype](2, init=Optional[String]("custom")), x, "requires both W and H")  # custom needs W and H
+    rejects(NMF[dtype](2, l1_ratio=2.0), x, "l1_ratio must be")
+    rejects(NMF[dtype](2, alpha_W=-1.0), x, "alpha_W must be")
+    rejects(NMF[dtype](2, alpha_H=AlphaH(String("other"))), x, "alpha_H must be")
+    rejects(NMF[dtype](2, max_iter=0), x, "max_iter must be >= 1")
+    with assert_raises(contains="NMF is expecting 5"):
+        _ = model.transform(zeros[dtype](Shape(2, 4)))
     var fixed = non_negative_factorization(x, None, model.components_.copy(), NMFComponents(String("auto")), update_H=False)
     assert_equal(fixed.H.shape[0], 2)
     var mb = MiniBatchNMF[dtype](2, batch_size=5, random_state=0)
@@ -71,7 +74,8 @@ def check[dtype: DType]() raises:
     online.partial_fit(x)
     online.partial_fit(x)
     assert_equal(online.n_steps_, 2)
-    with assert_raises(): online.partial_fit(zeros[dtype](Shape(3, 4)))
+    with assert_raises(contains="MiniBatchNMF is expecting 5"):
+        online.partial_fit(zeros[dtype](Shape(3, 4)))
     assert_equal(online.transform(x).shape[1], 2)
     # sklearn's partial_fit, unlike fit, accepts zeros under beta_loss <= 0.
     var with_zero = x.copy()
@@ -88,7 +92,8 @@ def check[dtype: DType]() raises:
     with assert_raises(contains="Negative values"):
         online_negative.partial_fit(negative_batch)
     var bad = MiniBatchNMF[dtype](2, batch_size=0)
-    with assert_raises(): bad.fit(x)
+    with assert_raises(contains="batch_size must be >= 1"):
+        bad.fit(x)
 
 
 def main() raises:

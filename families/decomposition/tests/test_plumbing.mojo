@@ -1,4 +1,8 @@
 from numojo import NDArray, Shape, Item, NDArrayStrides, arange, zeros
+from moxie.decomposition import (
+    DictionaryLearning, MiniBatchDictionaryLearning, SparsePCA, MiniBatchSparsePCA,
+    dict_learning, dict_learning_online,
+)
 from moxie.decomposition._contracts import (
     validate_matrix, validate_mean, validate_projection, owned_matrix,
     SVDResult, EigenResult, DecompositionEngine,
@@ -77,7 +81,24 @@ def contracts[dtype: DType]() raises:
     var eigen = EigenResult[dtype](values^, vectors^)
     assert_equal(eigen.eigenvectors.shape[1], 2)
 
+def unsupported_apis() raises:
+    with assert_raises(contains="NotImplementedError: DictionaryLearning.__init__"):
+        _ = DictionaryLearning()
+    with assert_raises(contains="NotImplementedError: MiniBatchDictionaryLearning.__init__"):
+        _ = MiniBatchDictionaryLearning()
+    with assert_raises(contains="NotImplementedError: SparsePCA.__init__"):
+        _ = SparsePCA()
+    with assert_raises(contains="NotImplementedError: MiniBatchSparsePCA.__init__"):
+        _ = MiniBatchSparsePCA()
+    var x = zeros[DType.float64](Shape(2, 2))
+    with assert_raises(contains="NotImplementedError: dict_learning is an API scaffold"):
+        _ = dict_learning(x, 2, alpha=1.0)
+    with assert_raises(contains="NotImplementedError: dict_learning_online is an API scaffold"):
+        _ = dict_learning_online(x)
+
+
 def main() raises:
+    unsupported_apis()
     contracts[DType.float32]()
     contracts[DType.float64]()
     var engine = RaisingEngine()

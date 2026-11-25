@@ -38,7 +38,7 @@ The original scaffold documentation is available in the standalone Git history.
 
 ## Current family validation
 
-The current assembled family passed `pixi run test`: package precompilation,
+The family verification baseline passed `pixi run test`: package precompilation,
 all nine algorithm-group contract programs and examples, and two isolated
 consumers exercising the implemented APIs. Differential checks were then run
 without rebuilding those binaries using:
@@ -49,9 +49,9 @@ pixi run python -c 'import sys; sys.path.insert(0,"tools"); import family; famil
 
 All 1,806 cases passed: PCA 349, IncrementalPCA 318, TruncatedSVD 358,
 FactorAnalysis 186, FastICA 180, NMF/MiniBatchNMF 156, LDA 60, KernelPCA 55,
-and threshold sparse coding 144. `pixi run parity` runs these same checks after
-building. Tolerances and coverage limits are in the individual guides. This is
-partial dense coverage; dictionary learning and SparsePCA remain unfinished.
+and threshold sparse coding 144. `pixi run parity` runs the current checks after
+building. See the individual guides for added cases, tolerances and coverage
+limits. Dictionary learning and SparsePCA remain unfinished.
 
 Persistence is not implemented: no decomposition estimator defines a
 `ModelSchema` for the shared `save_model`/`load_model` (see

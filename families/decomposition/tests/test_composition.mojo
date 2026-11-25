@@ -15,8 +15,9 @@ from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
 from moxie.decomposition import PCA, TruncatedSVD, FactorAnalysis
 from moxie.decomposition._pca import ComponentCount
-from moxie.linear_model import Ridge, RidgeClassifier
+from moxie.linear_model import LinearRegression, Ridge, RidgeClassifier
 from moxie.pipeline import Pipeline, make_pipeline, make_union
+from moxie.preprocessing import StandardScaler
 from moxie.model_selection import (
     GridSearchCV, IndexArray, IndexSplit, KFold, SearchAdapter, SearchScorer,
     cross_val_score,
@@ -141,6 +142,50 @@ def union[dtype: DType]() raises:
     assert_equal(names[0], "pca__pca0")
     assert_equal(names[3], "truncatedsvd__truncatedsvd1")
     assert_equal(u.n_features_in_(), 5)
+
+
+def chained_pca[dtype: DType]() raises:
+    var x = low_rank[dtype](30, 5)
+    var y = zeros[dtype](Shape(30))
+    for i in range(30):
+        y.unsafe_set(i, x.unsafe_get(i * 5) + x.unsafe_get(i * 5 + 1))
+    var held_out = low_rank[dtype](4, 5)
+    for i in range(held_out.size):
+        held_out.unsafe_set(i, held_out.unsafe_get(i) + 0.25)
+
+    var scaler = StandardScaler[dtype]()
+    var scaled = scaler.fit_transform(x)
+    var pca = PCA[dtype](2, svd_solver="full")
+    var scores = pca.fit_transform(scaled)
+    var held_scores = pca.transform(scaler.transform(held_out))
+
+    var reduction = make_pipeline(StandardScaler[dtype](), PCA[dtype](2, svd_solver="full"))
+    var reduced = reduction.fit_transform(x)
+    assert_equal(reduced.shape, Shape(30, 2))
+    same(reduced, scores)
+    same(reduction.transform(held_out), held_scores)
+    assert_equal(reduction.transformer.get_n_features_in(), 5)
+    same(reduction.inverse_transform(held_scores),
+        scaler.inverse_transform(pca.inverse_transform(held_scores)))
+    var names = reduction.get_feature_names_out()
+    assert_equal(len(names), 2)
+    assert_equal(names[0], "pca0")
+    assert_equal(names[1], "pca1")
+    var fitted_copy = reduction.copy()
+    same(fitted_copy.transform(held_out), held_scores)
+    var original_component = reduction.estimator.components_.value().unsafe_get(0)
+    reduction.estimator.components_.value().unsafe_set(0, original_component + 1)
+    assert_equal(fitted_copy.estimator.components_.value().unsafe_get(0), original_component)
+    assert_false(clone(reduction).__sklearn_is_fitted__())
+
+    # Typed nesting represents sklearn's three sequential PCR steps.
+    var pcr = make_pipeline(StandardScaler[dtype](),
+        make_pipeline(PCA[dtype](2, svd_solver="full"), LinearRegression[dtype]()))
+    _ = pcr.fit(x, y)
+    var regression = LinearRegression[dtype]()
+    _ = regression.fit(scores, y)
+    same(pcr.predict(held_out), regression.predict(held_scores))
+    assert_equal(pcr.n_features_in_(), 5)
 
 
 struct PCALogLikelihood(SearchScorer):
@@ -299,6 +344,8 @@ def main() raises:
     clone_and_refit()
     pipelines[DType.float32]()
     pipelines[DType.float64]()
+    chained_pca[DType.float32]()
+    chained_pca[DType.float64]()
     union[DType.float32]()
     union[DType.float64]()
     model_selection()

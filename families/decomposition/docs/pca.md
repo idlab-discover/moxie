@@ -90,11 +90,12 @@ use `Float64(0.95)` for a fraction. Omission selects all available components.
   through `.value()`. Counts are zero before fit. Arrays own their data, and
   later caller mutations do not change the model. `get_feature_names_out`
   returns `pca0`, `pca1`, … and validates an optional input-name list's length.
-- `get_params` returns `PCAParams`; `set_params` accepts that record or named
-  partial updates. Its `copy_input` field represents the constructor's `copy`
-  parameter because the record's native `copy()` operation uses that name.
-  Optional update wrappers distinguish omission from clearing a setting.
-  `clone` copies configuration into an unfitted estimator.
+- `get_params` returns `PCAParams`. The constructor and named `set_params` use
+  the `copy` keyword. Read the flag as `copy_input` on either the estimator
+  or its parameters. Mojo reserves `copy()` on these types for owned copies.
+  A fitted PCA copy owns its learned arrays. `clone` copies configuration
+  into an unfitted estimator. Optional update wrappers distinguish omission
+  from clearing a setting.
 
 `copy=False` requires `fit_inplace` or `fit_transform_inplace`, which accept a
 mutable input. The ordinary fit methods reject it rather than mutating an
@@ -171,10 +172,14 @@ and Jacobi/LAPACK rounding; degenerate bases are compared by subspace.
 
 ## Validation record
 
-The runtime backend passed **349 cases** against the pinned local source,
+The runtime backend passed **369 cases** against the pinned local source,
 including 58 dense-ARPACK cases (tall, wide, k from 1 to min-1 and omitted,
-whitening, copy=False) compared with the reference's `scipy.sparse.linalg.svds`. The
-compile-time Numax backend passed **290 cases**, covering eight training shapes
+whitening, copy=False) compared with the reference's `scipy.sparse.linalg.svds`.
+The driver checks output dtypes and exercises public `fit` and `fit_transform`,
+anisotropic and rank-deficient MLE, covariance centering with a large mean,
+and the strict fractional variance threshold.
+
+The compile-time Numax backend passed **290 cases**, covering eight training shapes
 in both dtypes. Both backends pass the native lifecycle/ownership contracts.
 The extra runtime case selects randomized SVD on `(20, 501)`; the static driver
 does not instantiate that shape. Numax validation includes the singleton-product

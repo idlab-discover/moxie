@@ -90,7 +90,9 @@ def _infer_dimension[dtype: DType](spectrum: NDArray[dtype], n_samples: Int) rai
     return best
 
 
-struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend](InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
+struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend](
+    InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount, Copyable,
+):
     """PCA on dense Float32/Float64 matrices; Backend may fix training dimensions.
 
     full, covariance_eigh, arpack and randomized are supported, including auto
@@ -103,7 +105,7 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
     comptime Transformed = NDArray[Self.dtype]
 
     var n_components: ComponentCount
-    var copy: Bool
+    var copy_input: Bool
     var whiten: Bool
     var svd_solver: String
     var tol: Float64
@@ -131,7 +133,7 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
     ):
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64
         self.n_components = n_components.copy()
-        self.copy = copy
+        self.copy_input = copy
         self.whiten = whiten
         self.svd_solver = svd_solver
         self.tol = tol
@@ -152,13 +154,13 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
         self._fit_svd_solver = ""
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.n_components.copy(), self.copy, self.whiten,
+        return Self.Params(self.n_components.copy(), self.copy_input, self.whiten,
             self.svd_solver, self.tol, self.iterated_power.copy(),
             self.n_oversamples, self.power_iteration_normalizer, self.random_state)
 
     def set_params[origin: MutOrigin, params_origin: ImmOrigin](ref[origin] self, ref[params_origin] params: Self.Params) raises -> ref[self] Self:
         self.n_components = params.n_components.copy()
-        self.copy = params.copy_input
+        self.copy_input = params.copy_input
         self.whiten = params.whiten
         self.svd_solver = params.svd_solver
         self.tol = params.tol
@@ -178,7 +180,7 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
         random_state: Optional[Optional[Int]] = None,
     ) raises -> ref[self] Self:
         if n_components: self.n_components = n_components.value().copy()
-        if copy: self.copy = copy.value()
+        if copy: self.copy_input = copy.value()
         if whiten: self.whiten = whiten.value()
         if svd_solver: self.svd_solver = svd_solver.value()
         if tol: self.tol = tol.value()
@@ -189,7 +191,7 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
         return self
 
     def __sklearn_clone__(self) raises -> Self:
-        return Self(self.n_components.copy(), copy=self.copy, whiten=self.whiten,
+        return Self(self.n_components.copy(), copy=self.copy_input, whiten=self.whiten,
             svd_solver=self.svd_solver, tol=self.tol,
             iterated_power=self.iterated_power.copy(), n_oversamples=self.n_oversamples,
             power_iteration_normalizer=self.power_iteration_normalizer, random_state=self.random_state)
@@ -263,7 +265,7 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
         var centered_and_mean = center_matrix(X)
         var centered = centered_and_mean[0].copy()
         var means = centered_and_mean[1].copy()
-        if not self.copy and solver != "covariance_eigh":
+        if not self.copy_input and solver != "covariance_eigh":
             var view = X.view()
             for i in range(n):
                 for j in range(p): _set(view, i, j, _get(centered, i, j))
@@ -320,7 +322,7 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
                         var v = _get(centered, i, j)
                         total_var += v * v / Float64(n - 1)
                 # sklearn's truncated copy=False path leaves squared residuals.
-                if not self.copy:
+                if not self.copy_input:
                     var view = X.view()
                     for i in range(n):
                         for j in range(p):
@@ -375,14 +377,14 @@ struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend
         return transformed^
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
-        if not self.copy:
+        if not self.copy_input:
             raise Error("ValueError: copy=False requires fit_inplace with a mutable input")
         var owned = X.copy()
         _ = self._fit(owned)
         return self
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
-        if not self.copy:
+        if not self.copy_input:
             raise Error("ValueError: copy=False requires fit_transform_inplace with a mutable input")
         var owned = X.copy()
         return self._fit(owned)

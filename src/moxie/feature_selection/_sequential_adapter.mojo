@@ -11,7 +11,7 @@ from moxie._labels import StringTarget
 struct EstimatorCVScore[E: SupervisedScorer & Copyable & Deinitable, dt: DType = DType.float64](TypedScorer, Copyable) where conforms_to(E.Target, Copyable & Deinitable):
     comptime Estimator = Self.E
     comptime Input = nm.NDArray[Self.dt]
-    comptime Target = Self.E.Target
+    comptime Target: Copyable & Deinitable = Self.E.Target
     comptime Metadata = Optional[Self.Input]
 
     def __init__(out self):

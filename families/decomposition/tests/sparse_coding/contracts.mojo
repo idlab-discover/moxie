@@ -35,21 +35,30 @@ def check[dtype: DType]() raises:
     assert_equal(c.transform(x).unsafe_get(1), 0)
     var reversed = x.view_with_layout(Shape(2, 3), NDArrayStrides(-3, 1), 3)
     assert_equal(c.transform(reversed).unsafe_get(2), 3)
-    with assert_raises(): _ = sparse_encode(x, d)  # default lasso_lars unavailable
+    with assert_raises(contains="NotImplementedError: sparse coding requires"):
+        _ = sparse_encode(x, d)  # default lasso_lars unavailable
     var default = SparseCoder[dtype](d)
     default.fit(x)
-    with assert_raises(): _ = default.transform(x)  # default omp unavailable
-    with assert_raises(): _ = model.transform(zeros[dtype](Shape(1, 4)))
-    with assert_raises(): _ = model.inverse_transform(zeros[dtype](Shape(1, 3)))
-    with assert_raises(): _ = sparse_encode(x, d, algorithm="threshold", alpha=-1.0)
-    with assert_raises(): _ = sparse_encode(x, d, algorithm="threshold", cov=zeros[dtype](Shape(1, 1)))
-    with assert_raises(): _ = sparse_encode(zeros[dtype](Shape(0, 3)), d, algorithm="threshold")
+    with assert_raises(contains="NotImplementedError: sparse coding requires"):
+        _ = default.transform(x)  # default omp unavailable
+    with assert_raises(contains="wrong feature count"):
+        _ = model.transform(zeros[dtype](Shape(1, 4)))
+    with assert_raises(contains="wrong code component count"):
+        _ = model.inverse_transform(zeros[dtype](Shape(1, 3)))
+    with assert_raises(contains="alpha must be finite and nonnegative"):
+        _ = sparse_encode(x, d, algorithm="threshold", alpha=-1.0)
+    with assert_raises(contains="cov must have shape"):
+        _ = sparse_encode(x, d, algorithm="threshold", cov=zeros[dtype](Shape(1, 1)))
+    with assert_raises(contains="insufficient samples"):
+        _ = sparse_encode(zeros[dtype](Shape(0, 3)), d, algorithm="threshold")
     x.unsafe_set(0, inf[dtype]())
-    with assert_raises(): _ = model.transform(x)
+    with assert_raises(contains="input must be finite"):
+        _ = model.transform(x)
     x.unsafe_set(0, 3)
     comptime if dtype == DType.float32:
         c.set_params(split_sign=True)
-        with assert_raises(): _ = c.transform(x)
+        with assert_raises(contains="Float32 split_sign requires a Float64 output"):
+            _ = c.transform(x)
 
 
 def main() raises:

@@ -13,15 +13,18 @@ def matrix[dtype: DType](n: Int, p: Int) raises -> NDArray[dtype]:
     return x^
 
 
-def rejects[dtype: DType](var model: FactorAnalysis[dtype], x: NDArray[dtype]) raises:
-    with assert_raises(): model.fit(x)
+def rejects[dtype: DType](var model: FactorAnalysis[dtype], x: NDArray[dtype], message: String) raises:
+    with assert_raises(contains=message):
+        model.fit(x)
 
 
 def check[dtype: DType]() raises:
     var x = matrix[dtype](12, 4)
     var model = FactorAnalysis[dtype](2)
-    with assert_raises(): _ = model.transform(x)
-    with assert_raises(): _ = model.get_covariance()
+    with assert_raises(contains="NotFittedError"):
+        _ = model.transform(x)
+    with assert_raises(contains="NotFittedError"):
+        _ = model.get_covariance()
     var z = model.fit_transform(x)
     assert_equal(z.shape[0], 12)
     assert_equal(z.shape[1], 2)
@@ -40,7 +43,11 @@ def check[dtype: DType]() raises:
     assert_false(copy.__sklearn_is_fitted__())
     copy.set_params(svd_method="lapack", rotation=Optional[String]("varimax"))
     copy.fit(x.view_with_layout(Shape(12, 4), NDArrayStrides(-4, 1), 44))
-    assert_true(copy.score(x) < 0 or copy.score(x) >= 0)
+    var scores = copy.score_samples(x)
+    var total: Float64 = 0
+    for i in range(scores.size):
+        total += scores.unsafe_get(i)
+    assert_true(abs(copy.score(x) - total / Float64(scores.size)) < 1e-12)
     var precision = copy.get_precision()
     var covariance = copy.get_covariance()
     var product = covariance @ precision
@@ -55,17 +62,19 @@ def check[dtype: DType]() raises:
     full.fit(x)
     assert_equal(full.components_.value().shape[0], 4)
     # Invalid settings raise and leave the previous fit intact.
-    rejects(FactorAnalysis[dtype](-1), x)
-    rejects(FactorAnalysis[dtype](2, svd_method="arpack"), x)
-    rejects(FactorAnalysis[dtype](2, rotation=Optional[String]("oblimin")), x)
-    rejects(FactorAnalysis[dtype](2, max_iter=0), x)
-    rejects(FactorAnalysis[dtype](2, tol=-1.0), x)
-    rejects(FactorAnalysis[dtype](2, iterated_power=-1), x)
+    rejects(FactorAnalysis[dtype](-1), x, "n_components must be >= 0")
+    rejects(FactorAnalysis[dtype](2, svd_method="arpack"), x, "svd_method must be")
+    rejects(FactorAnalysis[dtype](2, rotation=Optional[String]("oblimin")), x, "rotation must be")
+    rejects(FactorAnalysis[dtype](2, max_iter=0), x, "max_iter must be >= 1")
+    rejects(FactorAnalysis[dtype](2, tol=-1.0), x, "tol must be")
+    rejects(FactorAnalysis[dtype](2, iterated_power=-1), x, "iterated_power must be >= 0")
     var bad_init: List[Float64] = [1.0, 1.0]
-    rejects(FactorAnalysis[dtype](2, noise_variance_init=bad_init^), x)
-    rejects(FactorAnalysis[dtype](2, copy=False), x)
-    with assert_raises(): _ = model.transform(zeros[dtype](Shape(3, 5)))
-    with assert_raises(): model.fit(zeros[dtype](Shape(0, 4)))
+    rejects(FactorAnalysis[dtype](2, noise_variance_init=bad_init^), x, "noise_variance_init dimension")
+    rejects(FactorAnalysis[dtype](2, copy=False), x, "copy=False requires fit_inplace")
+    with assert_raises(contains="FactorAnalysis is expecting 4"):
+        _ = model.transform(zeros[dtype](Shape(3, 5)))
+    with assert_raises(contains="insufficient samples"):
+        model.fit(zeros[dtype](Shape(0, 4)))
     assert_equal(model.noise_variance_.value().unsafe_get(0), first)
 
 

@@ -446,20 +446,20 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
         sample_weight: Optional[Dense] = None,
     ) raises -> ref[self] Self:
         return self.fit(
-            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+            X._numeric_input(), y, feature_names=X.schema().names, sample_weight=sample_weight
         )
 
     def decision_function[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
-        return self.decision_function(X.values(), feature_names=X.schema().names)
+        return self.decision_function(X._numeric_input(), feature_names=X.schema().names)
 
     def predict[dtype: DType](self, X: ColumnTable[dtype]) raises -> Self.Prediction:
-        return self.predict(X.values(), feature_names=X.schema().names)
+        return self.predict(X._numeric_input(), feature_names=X.schema().names)
 
     def score[dtype: DType](
         self, X: ColumnTable[dtype], y: Self.Target, sample_weight: Optional[Dense] = None,
     ) raises -> Float64:
         return self.score(
-            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+            X._numeric_input(), y, feature_names=X.schema().names, sample_weight=sample_weight
         )
 
     def decision_function[dtype: DType](
@@ -789,17 +789,17 @@ struct LinearSVR(
         sample_weight: Optional[Dense] = None,
     ) raises -> ref[self] Self:
         return self.fit(
-            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+            X._numeric_input(), y, feature_names=X.schema().names, sample_weight=sample_weight
         )
 
     def predict[dtype: DType](self, X: ColumnTable[dtype]) raises -> Self.Prediction:
-        return self.predict(X.values(), feature_names=X.schema().names)
+        return self.predict(X._numeric_input(), feature_names=X.schema().names)
 
     def score[dtype: DType](
         self, X: ColumnTable[dtype], y: Self.Target, sample_weight: Optional[Dense] = None,
     ) raises -> Float64:
         return self.score(
-            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+            X._numeric_input(), y, feature_names=X.schema().names, sample_weight=sample_weight
         )
 
     def predict[dtype: DType](

@@ -12,9 +12,11 @@ def main() raises:
     var reordered: List[String] = ["width", "length"]
     var labels: List[Int] = [1, 1, 2, 2]
     var storage = nm.zeros[DType.float32](nm.Shape(4, 3))
+    var counts = nm.zeros[DType.int64](nm.Shape(4))
     for i in range(4):
         storage.unsafe_set(i * 3 + 1, Float32(i) - 1.5)
         storage.unsafe_set(i * 3 + 2, Float32(i % 2))
+        counts.unsafe_set(i, Int64(i % 2))
     var X = storage.view_with_layout(nm.Shape(4, 2), storage.strides, 1)
     var table = ColumnTable(X, names)
     var reversed_table = ColumnTable(X, reordered)
@@ -29,7 +31,7 @@ def main() raises:
     assert_true(not clone(model).feature_names_in_)
     with assert_raises(contains="same order"):
         _ = model.decision_function(reversed_table)
-    with assert_raises(contains="mixed ColumnTable"):
+    with assert_raises(contains="requires numeric storage"):
         _ = model.fit(mixed_table, labels)
     assert_true(model.feature_names_in_.value() == names)
     assert_true(model.predict(table) == labels)
@@ -37,8 +39,11 @@ def main() raises:
     _ = model.fit(X, labels)
     assert_true(not model.feature_names_in_)
 
+    var first = storage.view_with_layout(nm.Shape(4, 1), storage.strides, 1)
+    var numeric_table = ColumnTable(first, ["length"])
+    numeric_table.add_numeric("width", counts)
     var one_class = OneClassSVM(kernel="linear")
-    var fit_labels = one_class.fit_predict(table)
+    var fit_labels = one_class.fit_predict(numeric_table)
     var predicted = one_class.predict(table)
     assert_equal(fit_labels.shape, predicted.shape)
     for i in range(fit_labels.size):

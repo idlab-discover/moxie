@@ -256,17 +256,17 @@ struct OneClassSVM(OneClassSupportVector, FitPredictor):
         sample_weight: Optional[Dense] = None,
     ) raises -> ref[self] Self:
         return self.fit(
-            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+            X._numeric_input(), y, feature_names=X.schema().names, sample_weight=sample_weight
         )
 
     def predict[dtype: DType](self, X: ColumnTable[dtype]) raises -> Self.Prediction:
-        return self.predict(X.values(), feature_names=X.schema().names)
+        return self.predict(X._numeric_input(), feature_names=X.schema().names)
 
     def decision_function[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
-        return self.decision_function(X.values(), feature_names=X.schema().names)
+        return self.decision_function(X._numeric_input(), feature_names=X.schema().names)
 
     def score_samples[dtype: DType](self, X: ColumnTable[dtype]) raises -> Dense:
-        return self.score_samples(X.values(), feature_names=X.schema().names)
+        return self.score_samples(X._numeric_input(), feature_names=X.schema().names)
 
     def fit_predict[dtype: DType](
         mut self,
@@ -276,7 +276,7 @@ struct OneClassSVM(OneClassSupportVector, FitPredictor):
         sample_weight: Optional[Dense] = None,
     ) raises -> Self.Labels:
         return self.fit_predict(
-            X.values(), y, feature_names=X.schema().names, sample_weight=sample_weight
+            X._numeric_input(), y, feature_names=X.schema().names, sample_weight=sample_weight
         )
 
     def predict[dtype: DType](

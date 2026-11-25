@@ -22,6 +22,21 @@ def strided_float32(X: Dense) raises -> nm.NDArray[DType.float32]:
     return storage.view_with_layout(X.shape, storage.strides, 1)
 
 
+def mixed_numeric_table[dtype: DType](
+    X: Dense, names: List[String],
+) raises -> ColumnTable[dtype]:
+    # The mixed fixture has a real-valued first feature and a Boolean second feature.
+    var rows = X.shape[0]
+    var matrix = nm.zeros[dtype](nm.Shape(rows, 1))
+    var flag = nm.zeros[DType.bool](nm.Shape(rows))
+    for i in range(rows):
+        matrix.unsafe_set(i, X.unsafe_get(2 * i).cast[dtype]())
+        flag.unsafe_set(i, X.unsafe_get(2 * i + 1) != 0)
+    var table = ColumnTable(matrix, [names[0].copy()])
+    table.add_numeric(names[1], flag)
+    return table^
+
+
 def main() raises:
     var args = argv()
     var contents: String
@@ -68,7 +83,8 @@ def main() raises:
             costs.values.append(Float64(t[cursor+1]))
             cursor += 2
     var named = len(args) > 2
-    var table_input = named and args[2] == "table"
+    var table_input = named and args[2] != "named"
+    var mixed_input = table_input and args[2] == "mixed"
     var names = List[String]()
     if named:
         for i in range(p):
@@ -78,14 +94,14 @@ def main() raises:
     var reordered = Optional[ColumnTable[]]()
     var mixed = Optional[ColumnTable[]]()
     if table_input:
-        table = ColumnTable(x, names)
+        table = mixed_numeric_table[DType.float64](x, names) if mixed_input else ColumnTable(x, names)
         var reversed_names: List[String] = [names[1].copy(), names[0].copy()]
         reordered = ColumnTable(x, reversed_names)
         var mixed_table = table.value().copy()
         mixed_table.add_strings("added", List[String](length=n, fill="text"))
         mixed = mixed_table^
         if single:
-            table32 = ColumnTable(strided_float32(x), names)
+            table32 = mixed_numeric_table[DType.float32](x, names) if mixed_input else ColumnTable(strided_float32(x), names)
     if regression:
         var model = LinearSVR(loss=loss, dual=dual.copy(), C=c, epsilon=epsilon, tol=tol, fit_intercept=fit, intercept_scaling=scale, max_iter=limit, random_state=seed)
         # Requests govern parent routing only. Direct weighted calls still work.
@@ -101,7 +117,7 @@ def main() raises:
                 _ = model.fit(table.value(), y, sample_weight=sw.copy())
             with assert_raises(contains="same order"):
                 _ = model.predict(reordered.value())
-            with assert_raises(contains="mixed ColumnTable"):
+            with assert_raises(contains="requires numeric storage"):
                 _ = model.fit(mixed.value(), y)
             assert_true(model.feature_names_in_.value() == names)
             var cloned = clone(model)
@@ -158,7 +174,7 @@ def main() raises:
                 _ = model.fit(table.value(), labels, sample_weight=sw.copy())
             with assert_raises(contains="same order"):
                 _ = model.predict(reordered.value())
-            with assert_raises(contains="mixed ColumnTable"):
+            with assert_raises(contains="requires numeric storage"):
                 _ = model.fit(mixed.value(), labels)
             assert_true(model.feature_names_in_.value() == names)
             var cloned = clone(model)

@@ -50,7 +50,7 @@ def reference():
     load(REF/'sklearn/svm/_classes.py',{'LinearSVC','LinearSVR','_validate_dual_parameter'},classes)
     return classes
 
-def native(x,y,sw,config,regression,*,names=None,table_input=False):
+def native(x,y,sw,config,regression,*,names=None,input_kind='named'):
     c=config.copy();cw=c.get('class_weight');mode='balanced' if cw=='balanced' else 'explicit' if isinstance(cw,dict) else 'none'
     k=len(cw) if isinstance(cw,dict) else 0
     header=[*x.shape,int(regression),c['loss'],c.get('penalty','l2'),str(c['dual']).lower(),c.get('multi_class','ovr'),mode,int(c['fit_intercept']),c['intercept_scaling'],c['C'],c.get('epsilon',0),c['tol'],c['max_iter'],c['random_state'],int(x.dtype==np.float32),k]
@@ -60,7 +60,7 @@ def native(x,y,sw,config,regression,*,names=None,table_input=False):
     case=ROOT/'builds/wrapper-case.txt';case.write_text(' '.join(map(str,values))+'\n')
     args = [str(ROOT/'builds/driver'), str(case)]
     if names is not None:
-        args.append('table' if table_input else 'named')
+        args.append(input_kind)
     proc=subprocess.run(args,text=True,capture_output=True,timeout=60)
     assert proc.returncode==0,proc.stderr
     lines=proc.stdout.splitlines();start=next(i for i,s in enumerate(lines) if s.startswith('RESULT '));_,r,p,it,status=lines[start].split();r,p,it,status=map(int,(r,p,it,status))
@@ -88,12 +88,14 @@ def check_named_inputs(refs):
                 dual=False, C=0.7, tol=1e-10, fit_intercept=True,
                 intercept_scaling=1.0, max_iter=10000, random_state=17,
             )
-            frame = DataFrame(x, columns=['feature_0', 'feature_1'])
-            expected = cls(**config).fit(frame, y, sample_weight=weights)
-            for table_input in (False, True):
+            for input_kind in ('named', 'table', 'mixed'):
+                frame = DataFrame(x, columns=['feature_0', 'feature_1'])
+                if input_kind == 'mixed':
+                    frame['feature_1'] = frame['feature_1'].astype(bool)
+                expected = cls(**config).fit(frame, y, sample_weight=weights)
                 _, _, decision, predicted, score, *_ = native(
                     x, y, weights, config, regression, names=expected.feature_names_in_,
-                    table_input=table_input,
+                    input_kind=input_kind,
                 )
                 expected_decision = (
                     expected.predict(frame) if regression else expected.decision_function(frame)
@@ -108,7 +110,7 @@ def check_named_inputs(refs):
                 expected.predict(frame[frame.columns[::-1]])
             expected.fit(x, y, sample_weight=weights)
             assert not hasattr(expected, 'feature_names_in_')
-    print('PASS 8 named LinearSVC/LinearSVR cases (array/ColumnTable) against pinned sklearn DataFrames')
+    print('PASS 12 named LinearSVC/LinearSVR cases (array/ColumnTable/mixed numeric) against pinned sklearn DataFrames')
 
 
 def main():

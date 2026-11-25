@@ -128,11 +128,13 @@ matching the reference callable path.
 
 All five kernel estimators also take a native
 [`ColumnTable`](../../../../../docs/compose/named-columns.md) on these
-methods and read the names from its schema. Float32 and Float64 tables
-are accepted. The table schema requires unique names. Construct the table
-with all columns in its numeric matrix. Tables with separately added columns
-raise `TypeError`. The same fitted name order is enforced when switching
-between tables and explicit names.
+methods and read the names from its schema. The table schema requires unique
+names. Float32 and Float64 constructor matrices are read directly, including
+strided matrices. Separately added Float32, Float64, Int64, and Bool columns
+are gathered in schema order into a matrix of the table's dtype. Bool values
+become zero or one, and conversion can round floating-point and large integer
+values. Text and categorical columns raise `TypeError`. The same fitted name
+order is enforced when switching between tables and explicit names.
 Classifier fit accepts the same List and numeric array targets as named
 array fit. Classifier score uses the estimator's native List target.
 

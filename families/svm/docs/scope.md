@@ -41,8 +41,10 @@ class/weight handling, and `l1_min_c` bounds. Their restrictions are in the
   SVMs from a typed metadata map. Support for forwarding depends on the parent.
 - [Kernel](../algorithms/c_svm/docs/api.md#feature-names) and
   [linear](../algorithms/linear/docs/api.md#feature-names) estimators accept
-  explicit feature names for dense arrays. Python bindings, reflection, pandas
-  output, and Python callable objects remain separate work.
+  explicit feature names for dense arrays and learn names from native
+  `ColumnTable` inputs, including tables with mixed numeric storage.
+  Python bindings, reflection, pandas output, and Python callable objects
+  remain separate work.
 - All seven estimators support experimental native model files.
   See the [linear schemas](../algorithms/linear/docs/api.md#native-model-files)
   and [kernel schemas](../algorithms/c_svm/docs/api.md#native-model-files).

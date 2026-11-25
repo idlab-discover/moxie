@@ -16,7 +16,10 @@ def check_pipeline(solver: String) raises:
         X.unsafe_set(2 * i + 1, Float64((i * 3) % 5))
         y.unsafe_set(i, Int64(i % 3))
 
-    var model = make_pipeline(StandardScaler(), LogisticRegression(solver=solver.copy(), tol=1e-9))
+    var model = make_pipeline(
+        StandardScaler(),
+        LogisticRegression(solver=solver.copy(), tol=1e-9, random_state=42, max_iter=1000),
+    )
     var probability = model.fit(X, y).predict_proba(X)
     var scores = model.decision_function(X)
     var predictions = model.predict(X)
@@ -70,5 +73,7 @@ def main() raises:
     check_pipeline("lbfgs")
     check_pipeline("newton-cholesky")
     check_pipeline("newton-cg")
+    check_pipeline("sag")
+    check_pipeline("saga")
     check_liblinear_pipeline()
-    print("PASS: dense LogisticRegression with all four solvers through StandardScaler pipeline")
+    print("PASS: six dense LogisticRegression solvers through StandardScaler pipeline")

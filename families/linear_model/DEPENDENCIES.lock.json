@@ -338,6 +338,41 @@
       "id": "mojo-linalg",
       "modules": {},
       "path": "../../../.worktrees/mojo-linalg-covariance"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.svm": {}
+        }
+      },
+      "id": "svm-scaffold",
+      "modules": {
+        "moxie.svm._contracts": {
+          "file": "src/moxie/svm/_contracts.mojo"
+        }
+      },
+      "path": "../../families/svm"
+    },
+    {
+      "assets": {
+        "licenses/svm-liblinear/LIBLINEAR.txt": "LICENSES/LIBLINEAR.txt",
+        "licenses/svm-liblinear/scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie.svm": {}
+        }
+      },
+      "id": "svm-liblinear",
+      "modules": {
+        "moxie.svm._liblinear": {
+          "file": "src/moxie/svm/_liblinear.mojo"
+        }
+      },
+      "path": "../../families/svm/shared/liblinear"
     }
   ],
   "overrides": []

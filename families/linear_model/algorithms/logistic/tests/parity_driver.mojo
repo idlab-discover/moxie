@@ -14,8 +14,15 @@ def run[dtype: DType](fx: Fixture) raises:
         weights[-3] = 2.0
         class_weight = ClassWeight.explicit(weights^)
     var solver = fx.text("solver") if fx.has("solver") else String("lbfgs")
+    var penalty = Optional(String("deprecated"))
+    if fx.has("penalty"):
+        penalty = None if fx.text("penalty") == "None" else Optional(fx.text("penalty"))
+    var ratio = fx.number("ratio") if fx.has("ratio") else 0
+    var scale = fx.number("intercept_scaling") if fx.has("intercept_scaling") else 1
+    var seed = Optional(fx.integer("seed")) if fx.has("seed") else Optional[Int](None)
     var model = LogisticRegression[dtype](
-        C=C, class_weight=class_weight^, fit_intercept=fx.flag("intercept"),
+        penalty^, C=C, class_weight=class_weight^, fit_intercept=fx.flag("intercept"),
+        l1_ratio=ratio, dual=fx.has("dual") and fx.flag("dual"), intercept_scaling=scale, random_state=seed,
         solver=solver^, max_iter=fx.integer("max_iter"), tol=fx.number("tol"), warm_start=fx.has("refit_C"),
     )
     var X = fx.array[dtype]("X")

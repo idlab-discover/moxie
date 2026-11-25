@@ -13,10 +13,11 @@
   all prediction/decision/score methods.
 - Input: dense `numojo.NDArray[DType.float32 | DType.float64]` of shape (n, p), any strides.
   Labels: any `ClassLabel` type (tested with `Int` and `String`).
-- Tested in parity (604 cases, pinned sklearn source): toy data from the sklearn test
+- Tested in parity (638 cases, pinned sklearn source): toy data from the sklearn test
   suite, 1-D data, 2/3/4 classes, string labels, Gaussian blobs (seeds 0-2), features
   scaled by 1..1e4, wide data (p > n), duplicated collinear features, saturated binary
-  probabilities, every shrinkage/solver combination, five covariance estimators, priors,
+  probabilities, multiclass QDA probabilities on a grid extending beyond the training data
+  for both solvers, every shrinkage/solver combination, covariance estimators, priors,
   n_components, tol and all fit-time error branches, in Float64 and Float32.
 
 ## 2. Deferred exports/branches
@@ -38,9 +39,9 @@ Differences in behavior are listed in api.md ("Mojo adaptations").
 
 ```sh
 pixi run build    # verified assembly + compile of all modules, tests, example
-pixi run test     # contracts (13), numerics (11), lifecycle (7), composition, example,
+pixi run test     # contracts (13), numerics (12), lifecycle (10), composition, example,
                   # 4 compile-time negative capability checks
-pixi run parity   # 604 differential cases vs pinned sklearn (60 expected-error cases)
+pixi run parity   # 638 differential cases vs pinned sklearn (60 expected-error cases)
 ```
 
 Negative capability checks: a covariance estimator type without `fit`/`covariance` is
@@ -49,7 +50,7 @@ incremental `partial_fit` is absent, a missing `predict` cannot satisfy the
 shared trait, and `transform` with `solver='lsqr'` raises `NotImplementedError`.
 
 Parity tolerances (norm-wise, relative to each array's largest magnitude, floor 1):
-Float64 1e-8 (both sides double precision; differences come from Jacobi vs LAPACK
+Float64 1e-10 (both sides double precision, with differences due to Jacobi vs LAPACK
 factorizations and summation order); Float32 5e-4 (sklearn evaluates several Float32
 paths in single precision, the port in Float64). Float32 log-probabilities are compared
 through `exp`, because sklearn's single-precision `1 - expit(d)` and FLT_MIN clamping make

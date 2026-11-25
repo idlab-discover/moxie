@@ -2,17 +2,11 @@
 from pathlib import Path
 import subprocess,json
 import numpy as np
-import sklearn
 from sklearn.tree import DecisionTreeClassifier,DecisionTreeRegressor,ExtraTreeClassifier,ExtraTreeRegressor
+from parity import REV, check_reference
 ROOT=Path(__file__).resolve().parents[2]
-REV='4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 def main():
-    assert 'builds/tree/oracle-env' in sklearn.__file__,sklearn.__file__
-    source=ROOT.parent/'scikit-learn'
-    assert subprocess.check_output(['git','-C',str(source),'rev-parse','HEAD'],text=True).strip()==REV
-    for name in ['_classes.py','_criterion.pyx','_splitter.pyx','_partitioner.pyx','_tree.pyx']:
-        data=subprocess.check_output(['git','-C',str(source),'show',f'{REV}:sklearn/tree/{name}'])
-        assert (ROOT/'builds/tree/reference/sklearn/tree'/name).read_bytes()==data
+    check_reference()
     output=subprocess.check_output([ROOT/'builds/tree/mae_driver'],text=True)
     dest=ROOT/'docs/private/tree/absolute_error';dest.mkdir(parents=True,exist_ok=True)
     (dest/'native.txt').write_text(output)
@@ -27,16 +21,20 @@ def main():
         checks+=1
         try:np.testing.assert_allclose(actual[key],want,rtol=0 if exact else 2e-12,atol=0 if exact else 2e-12,equal_nan=True)
         except (AssertionError,KeyError) as e:failures.append({'key':key,'got':actual.get(key),'want':np.asarray(want).tolist()})
+    missing_directions = {"best": set(), "random": set()}
     for tag in (2,6):
       kind=tag%4
-      for case in range(26):
-        n=8+case;p=1+case%4;outputs=1 if case>=18 else 1+case%3
+      for case in range(34):
+        n=8+case;p=1+case%4;outputs=1 if 18 <= case < 26 else 1+case%3
         X=np.array([[((i*(j+3)+j*5+case)%23)/4 for j in range(p)] for i in range(n)],dtype=np.float32)
-        if False:X[::4,:]=np.nan
         if case%7==0:X[:,0]=1
+        if case >= 26:
+            X[(np.arange(n)[:, None] + np.arange(p)) % 4 == 0] = np.nan
+            if case == 32:
+                X[:, 0] = np.nan
         y=np.array([[10+5*((i+i//3+k)%(2+k%2)) if kind<2 else ((i*7+k*3+case)%17)/4 for k in range(outputs)] for i in range(n)],dtype=np.float64)
         weights=np.array([0 if i%7==0 else 1+i%3 for i in range(n)],dtype=float)
-        if case>=24:weights[::7]=-.125
+        if 24 <= case < 26:weights[::7]=-.125
         kw=dict(criterion='absolute_error',random_state=case,max_depth=4,min_samples_leaf=1+case%2,max_features=1+case%p,splitter='random' if case%3==1 else 'best',ccp_alpha=.02 if case%4==2 else 0)
         if tag>=4:
             kw['splitter']='random'
@@ -54,6 +52,8 @@ def main():
         cls=(ExtraTreeClassifier if kind<2 else ExtraTreeRegressor) if tag>=4 else (DecisionTreeClassifier if kind<2 else DecisionTreeRegressor)
         estimator=cls(**kw).fit(X,y,sample_weight=weights)
         t=estimator.tree_
+        if case >= 26 and t.node_count > 1 and np.isnan(X[:, t.feature[0]]).any():
+            missing_directions[kw["splitter"]].add(int(t.missing_go_to_left[0]))
         check(('CASE',tag,case),[t.node_count,estimator.get_depth(),estimator.get_n_leaves()],True)
         for i in range(t.node_count):
             check(('NODE',tag,case,i),[t.children_left[i],t.children_right[i],t.feature[i],t.threshold[i],t.impurity[i],t.n_node_samples[i],t.weighted_n_node_samples[i],t.missing_go_to_left[i]])
@@ -70,4 +70,5 @@ def main():
     (dest/'parity.json').write_text(json.dumps(report,indent=2)+'\n')
     print(json.dumps({'checks':checks,'failures':len(failures),'first':failures[:8]},indent=2))
     assert not failures
+    assert missing_directions == {"best": {0, 1}, "random": {0, 1}}, missing_directions
 if __name__=='__main__':main()

@@ -85,17 +85,17 @@ struct TreeInputEncoder(Copyable, Movable):
         if X.ndim != 2 or X.shape[0] == 0 or X.shape[1] != self.n_features:
             raise Error("ValueError: prediction requires nonempty X with fitted feature count")
 
-    def encode(self, X: Features, reject_missing: Bool, monotonic: Bool) raises -> Features:
+    def encode(self, X: Features, monotonic: Bool) raises -> Features:
         """Validate X and map categorical columns to fitted codes (unknown -> NaN).
 
-        `reject_missing` (absolute_error) and `monotonic` reflect the caller's current parameters.
+        `monotonic` reflects the caller's current parameters.
         """
         for domain in self.string_domains:
             if domain:
                 raise Error("ValueError: model fitted with string columns requires TreeTable input")
-        return self._encode_numeric(X, reject_missing, monotonic)
+        return self._encode_numeric(X, monotonic)
 
-    def encode(self, X: TreeTable, reject_missing: Bool, monotonic: Bool) raises -> Features:
+    def encode(self, X: TreeTable, monotonic: Bool) raises -> Features:
         self.check_feature_names(X.feature_names)
         if X.shape[1] != self.n_features or X.shape[0] == 0:
             raise Error("ValueError: prediction requires nonempty X with fitted feature count")
@@ -113,17 +113,15 @@ struct TreeInputEncoder(Copyable, Movable):
                 ref column = X._columns[j][Features]
                 for i in range(X.shape[0]):
                     matrix.unsafe_set(i * X.shape[1] + j, column.unsafe_get(i * Int(column.strides[0])))
-        return self._encode_numeric(matrix, reject_missing, monotonic)
+        return self._encode_numeric(matrix, monotonic)
 
-    def _encode_numeric(self, X: Features, reject_missing: Bool, monotonic: Bool) raises -> Features:
+    def _encode_numeric(self, X: Features, monotonic: Bool) raises -> Features:
         self.check_encoded(X)
         for i in range(X.shape[0]):
             for j in range(X.shape[1]):
                 var x = X.unsafe_get(i * Int(X.strides[0]) + j * Int(X.strides[1]))
                 if x == x and not isfinite(x):
                     raise Error("ValueError: infinite features")
-                if x != x and reject_missing:
-                    raise Error("ValueError: absolute_error does not support missing features")
                 if x != x and monotonic:
                     raise Error("ValueError: NaN with monotonic constraints")
         if not self.is_categorical:
@@ -570,8 +568,6 @@ struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DTyp
             for j in range(p):
                 var x = X.unsafe_get(i * Int(X.strides[0]) + j * Int(X.strides[1]))
                 if x != x:
-                    if self.params.criterion == "absolute_error":
-                        raise Error("ValueError: absolute_error does not support missing features")
                     missing.unsafe_set(j, 1)
                     if self.params.monotonic_cst:
                         raise Error("ValueError: missing values with monotonic constraints are unsupported")
@@ -769,11 +765,11 @@ struct BaseDecisionTree[classifier: Bool, extra: Bool = False, label_dtype: DTyp
 
     def _encode_X(self, X: TreeTable) raises -> Features:
         self._ready()
-        return self._encoder.encode(X, self.params.criterion == "absolute_error", Bool(self.params.monotonic_cst))
+        return self._encoder.encode(X, Bool(self.params.monotonic_cst))
 
     def _encode_X(self, X: Features) raises -> Features:
         self._ready()
-        return self._encoder.encode(X, self.params.criterion == "absolute_error", Bool(self.params.monotonic_cst))
+        return self._encoder.encode(X, Bool(self.params.monotonic_cst))
 
     def input_encoder(self) raises -> TreeInputEncoder:
         """The fitted encoder; shared by every tree built from the same prepared input."""

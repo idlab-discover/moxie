@@ -14,6 +14,7 @@ from hierarchy_parity import BUILD, REFERENCE, REVISION, SOURCE, build_pinned_ex
 
 DRIVER = BUILD / "hdbscan_tree_driver"
 FIELDS = ("left_node", "right_node", "value")
+TREE_FILES = [REFERENCE / name for name in ("_tree.pyx", "_tree.pxd")]
 
 
 def native(hierarchy, min_size, method, allow_root, epsilon, max_size, layout="strided"):
@@ -57,20 +58,23 @@ def check_case(tree, hierarchy, context, options, *, matrix=None):
     return True
 
 
-def main():
-    tree_files = [REFERENCE / name for name in ("_tree.pyx", "_tree.pxd")]
+def pinned_tree_oracle():
     # NumPy 2.5 rejects implicit scalar conversion of singleton vectors.
     # Pull out the same element explicitly in the epsilon traversal.
     parent = "cluster_tree[cluster_tree['child'] == leaf]['parent']"
     inverse = "1 / cluster_tree[cluster_tree['child'] == parent]['value']"
-    tree = build_pinned_extensions(
+    return build_pinned_extensions(
         ("_tree",),
-        tree_files,
+        TREE_FILES,
         source_edits=(
             (f"parent = {parent}", f"parent = {parent}.item()"),
             (f"parent_eps = {inverse}", f"parent_eps = ({inverse}).item()"),
         ),
     )["_tree"]
+
+
+def main():
+    tree = pinned_tree_oracle()
     oracle, hashes = pinned_oracle()
     rng = np.random.default_rng(26)
     cases = {}
@@ -155,7 +159,7 @@ def main():
         "revision": REVISION,
         "source_hashes": hashes | {
             str(path): hashlib.sha256((SOURCE / path).read_bytes()).hexdigest()
-            for path in tree_files
+            for path in TREE_FILES
         },
         "numpy": np.__version__,
         "oracle_compatibility": "Explicit singleton extraction on two epsilon traversal reads.",

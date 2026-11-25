@@ -1,19 +1,30 @@
 import numojo as nm
 from moxie.linear_model import Lasso
 from moxie.feature_selection._sequential import SequentialFeatureSelector, SequentialCV, SequentialCount
-from moxie.feature_selection._sequential_adapter import DenseSupervisedCV
+from moxie.feature_selection._sequential_adapter import DenseSupervisedCV, EstimatorCVScore
 from std.testing import assert_equal, assert_false, assert_true, assert_raises
 from std.math import nan, inf
 from sequential_support import ProbeEstimator, ProbeAdapter, ProbeScore, Dense
 from moxie.model_selection._split import KFold
 from moxie.model_selection._indices import IndexSplit
 
+def held_out_score(model: Lasso[], X: Dense, y: Dense, weights: Optional[Dense]) raises -> Float64:
+    assert_true(model.__sklearn_is_fitted__())
+    assert_equal(X.shape[0], y.size)
+    assert_true(Bool(weights))
+    ref score_weights = weights.value()
+    assert_equal(score_weights.size, y.size)
+    for i in range(y.size):
+        assert_equal(score_weights.item(i), y.item(i) + 1)
+    return X.item(0, 0)
+
+
 def real_model() raises:
     var X = nm.zeros[DType.float64](nm.Shape(20, 3))
     var y = nm.zeros[DType.float64](nm.Shape(20))
     for i in range(20):
         X.unsafe_set(i * 3, Float64(i))
-        X.unsafe_set(i * 3 + 1, Float64(i % 3))
+        X.unsafe_set(i * 3 + 1, 20)
         X.unsafe_set(i * 3 + 2, Float64(i % 2))
         y.unsafe_set(i, Float64(i * 2))
     var model = Lasso(alpha=0.01)
@@ -22,6 +33,17 @@ def real_model() raises:
     assert_equal(selector.get_support(True)[List[Int]][0], 0)
     assert_false(model.__sklearn_is_fitted__())
     assert_false(selector.estimator.__sklearn_is_fitted__())
+
+    var weights = nm.zeros[DType.float64](nm.Shape(20))
+    for i in range(20):
+        weights.unsafe_set(i, y.unsafe_get(i) + 1)
+    var params = selector.get_params()
+    params.scoring = EstimatorCVScore[Lasso[]](held_out_score)
+    _ = selector.set_params(params)
+    var cloned = selector.__sklearn_clone__()
+    assert_false(cloned.__sklearn_is_fitted__())
+    cloned.fit_named(X, y, ["a", "b", "c"], score_metadata=Optional[Dense](weights^))
+    assert_equal(cloned.get_support(True)[List[Int]][0], 1)
     print("PASS sequential selection")
 
 def controls() raises:

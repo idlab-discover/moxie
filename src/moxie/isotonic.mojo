@@ -1,6 +1,6 @@
 """Pure Mojo weighted isotonic regression and linear interpolation.
 
-Float32/Float64 list interface; see docs/isotonic/api.md for the supported contract.
+Float32/Float64 NDArray trait interface with retained List overloads; see docs/isotonic/api.md.
 Behavior follows sklearn.isotonic (BSD-3-Clause; see docs/isotonic/THIRD_PARTY_NOTICES).
 """
 from std.math import isfinite, isnan
@@ -12,6 +12,7 @@ from moxie.base import (
     WeightedSupervisedEstimator,
 )
 from moxie.utils.validation import check_is_fitted
+from numojo import NDArray, array
 
 
 trait IsotonicRegressorAPI(FitTransformer, RegressorMixin, TransformerMixin):
@@ -27,6 +28,18 @@ struct IsotonicRegressionParams(Copyable, Movable):
     var y_max: Optional[Float64]
     var increasing: Increasing
     var out_of_bounds: String
+
+
+def _vector[dtype: DType](values: NDArray[dtype], name: String) raises -> List[Scalar[dtype]]:
+    if values.ndim != 1:
+        raise Error("ValueError: " + name + " should be a 1d array")
+    return values.tolist()
+
+
+def _feature[dtype: DType](X: NDArray[dtype]) raises -> List[Scalar[dtype]]:
+    if X.ndim != 1 and (X.ndim != 2 or X.shape[1] != 1):
+        raise Error("ValueError: X should be a 1d array or 2d array with 1 feature")
+    return X.tolist()
 
 
 def _validate[dtype: DType = DType.float64](values: List[Scalar[dtype]], name: String) raises:
@@ -234,11 +247,12 @@ struct IsotonicRegression[dtype: DType = DType.float64](
     """
 
     comptime Params = IsotonicRegressionParams
-    comptime Input = List[Scalar[Self.dtype]]
-    comptime Target = List[Scalar[Self.dtype]]
-    comptime Prediction = List[Scalar[Self.dtype]]
-    comptime Transformed = List[Scalar[Self.dtype]]
-    comptime SampleWeight = List[Scalar[Self.dtype]]
+    comptime Input = NDArray[Self.dtype]
+    comptime Target = NDArray[Self.dtype]
+    comptime Prediction = NDArray[Self.dtype]
+    comptime Transformed = NDArray[Self.dtype]
+    comptime SampleWeight = NDArray[Self.dtype]
+    comptime Vector = List[Scalar[Self.dtype]]
 
     var y_min: Optional[Float64]
     var y_max: Optional[Float64]
@@ -319,16 +333,16 @@ struct IsotonicRegression[dtype: DType = DType.float64](
     def __sklearn_is_fitted__(self) -> Bool:
         return self._fitted
 
-    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target) raises -> ref[self] Self:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Vector, ref[y_origin] y: Self.Vector) raises -> ref[self] Self:
         self._fit(X, y, None)
         return self
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, weight_origin: ImmOrigin](
         ref[origin] self,
-        ref[x_origin] X: Self.Input,
-        ref[y_origin] y: Self.Target,
+        ref[x_origin] X: Self.Vector,
+        ref[y_origin] y: Self.Vector,
         *,
-        ref[weight_origin] sample_weight: Self.SampleWeight,
+        ref[weight_origin] sample_weight: Self.Vector,
     ) raises -> ref[self] Self:
         self._fit(X, y, sample_weight.copy())
         return self
@@ -336,18 +350,18 @@ struct IsotonicRegression[dtype: DType = DType.float64](
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self,
         ref[x_origin] X: List[List[Scalar[Self.dtype]]],
-        ref[y_origin] y: Self.Target,
+        ref[y_origin] y: Self.Vector,
         *,
-        sample_weight: Optional[Self.SampleWeight] = None,
+        sample_weight: Optional[Self.Vector] = None,
     ) raises -> ref[self] Self:
         self._fit(_column(X), y, sample_weight)
         return self
 
     def _fit(
         mut self,
-        X: Self.Input,
-        y: Self.Target,
-        sample_weight: Optional[Self.SampleWeight],
+        X: Self.Vector,
+        y: Self.Vector,
+        sample_weight: Optional[Self.Vector],
     ) raises:
         _validate(X, "X")
         _validate(y, "y")
@@ -448,7 +462,7 @@ struct IsotonicRegression[dtype: DType = DType.float64](
         )
         return self.y_thresholds_[left] + slope * (x - self.X_thresholds_[left])
 
-    def f_(self, T: Self.Input) raises -> Self.Prediction:
+    def f_(self, T: Self.Vector) raises -> Self.Vector:
         """Evaluate the fitted interpolator directly (without input clipping).
         """
         check_is_fitted(self)
@@ -458,7 +472,7 @@ struct IsotonicRegression[dtype: DType = DType.float64](
             result.append(self._interpolate(x))
         return result^
 
-    def predict(self, X: Self.Input) raises -> Self.Prediction:
+    def predict(self, X: Self.Vector) raises -> Self.Vector:
         check_is_fitted(self)
         _validate(X, "X")
         var result = List[Scalar[Self.dtype]]()
@@ -469,20 +483,20 @@ struct IsotonicRegression[dtype: DType = DType.float64](
             result.append(self._interpolate(x))
         return result^
 
-    def predict(self, X: List[List[Scalar[Self.dtype]]]) raises -> Self.Prediction:
+    def predict(self, X: List[List[Scalar[Self.dtype]]]) raises -> Self.Vector:
         return self.predict(_column(X))
 
-    def transform(self, X: Self.Input) raises -> Self.Transformed:
+    def transform(self, X: Self.Vector) raises -> Self.Vector:
         return self.predict(X)
 
-    def transform(self, X: List[List[Scalar[Self.dtype]]]) raises -> Self.Transformed:
+    def transform(self, X: List[List[Scalar[Self.dtype]]]) raises -> Self.Vector:
         return self.predict(X)
 
     def fit_transform(
         mut self,
-        X: Self.Input,
-        y: Optional[Self.Target] = None,
-    ) raises -> Self.Transformed:
+        X: Self.Vector,
+        y: Optional[Self.Vector] = None,
+    ) raises -> Self.Vector:
         if not y:
             raise Error("ValueError: IsotonicRegression requires y")
         _ = self.fit(X, y.value())
@@ -490,29 +504,29 @@ struct IsotonicRegression[dtype: DType = DType.float64](
 
     def fit_transform(
         mut self,
-        X: Self.Input,
-        y: Self.Target,
+        X: Self.Vector,
+        y: Self.Vector,
         *,
-        sample_weight: Self.SampleWeight,
-    ) raises -> Self.Transformed:
+        sample_weight: Self.Vector,
+    ) raises -> Self.Vector:
         _ = self.fit(X, y, sample_weight=sample_weight)
         return self.transform(X)
 
     def fit_transform(
         mut self,
         X: List[List[Scalar[Self.dtype]]],
-        y: Self.Target,
+        y: Self.Vector,
         *,
-        sample_weight: Optional[Self.SampleWeight] = None,
-    ) raises -> Self.Transformed:
+        sample_weight: Optional[Self.Vector] = None,
+    ) raises -> Self.Vector:
         self._fit(_column(X), y, sample_weight)
         return self.transform(X)
 
     def score(
         self,
-        X: Self.Input,
-        y: Self.Target,
-        sample_weight: Optional[Self.SampleWeight] = None,
+        X: Self.Vector,
+        y: Self.Vector,
+        sample_weight: Optional[Self.Vector] = None,
     ) raises -> Float64:
         var predicted = self.predict(X)
         _validate(y, "y")
@@ -544,10 +558,74 @@ struct IsotonicRegression[dtype: DType = DType.float64](
     def score(
         self,
         X: List[List[Scalar[Self.dtype]]],
-        y: Self.Target,
-        sample_weight: Optional[Self.SampleWeight] = None,
+        y: Self.Vector,
+        sample_weight: Optional[Self.Vector] = None,
     ) raises -> Float64:
         return self.score(_column(X), y, sample_weight)
+
+    # Dense NDArray trait path: X is (n,) or (n, 1), y and weights are (n,).
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
+    ) raises -> ref[self] Self:
+        self._fit(_feature(X), _vector(y, "y"), None)
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, weight_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[weight_origin] sample_weight: Self.SampleWeight,
+    ) raises -> ref[self] Self:
+        self._fit(_feature(X), _vector(y, "y"), _vector(sample_weight, "sample_weight"))
+        return self
+
+    def f_(self, T: Self.Input) raises -> Self.Prediction:
+        check_is_fitted(self)
+        var predictions = self.f_(_feature(T))
+        return array(predictions, [len(predictions)])
+
+    def predict(self, X: Self.Input) raises -> Self.Prediction:
+        check_is_fitted(self)
+        var predictions = self.predict(_feature(X))
+        return array(predictions, [len(predictions)])
+
+    def transform(self, X: Self.Input) raises -> Self.Transformed:
+        return self.predict(X)
+
+    def fit_transform(
+        mut self, X: Self.Input, y: Optional[Self.Target] = None,
+    ) raises -> Self.Transformed:
+        if not y:
+            raise Error("ValueError: IsotonicRegression requires y")
+        return self.fit_transform(X, y.value())
+
+    def fit_transform(
+        mut self, X: Self.Input, y: Self.Target,
+    ) raises -> Self.Transformed:
+        _ = self.fit(X, y)
+        return self.transform(X)
+
+    def fit_transform(
+        mut self, X: Self.Input, y: Self.Target, *, sample_weight: Self.SampleWeight,
+    ) raises -> Self.Transformed:
+        _ = self.fit(X, y, sample_weight=sample_weight)
+        return self.transform(X)
+
+    def score(
+        self, X: Self.Input, y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> Float64:
+        if sample_weight:
+            return self.score(X, y, sample_weight.value())
+        return self.score(_feature(X), _vector(y, "y"))
+
+    def score(
+        self, X: Self.Input, y: Self.Target, sample_weight: Self.SampleWeight,
+    ) raises -> Float64:
+        return self.score(
+            _feature(X), _vector(y, "y"), _vector(sample_weight, "sample_weight"),
+        )
 
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         check_is_fitted(self)

@@ -7,26 +7,31 @@
 
 ## Data and configuration
 
-Inputs and outputs use `List[Float64]` by default.
-`IsotonicRegression[DType.float32]` uses `List[Float32]` throughout, including
-learned thresholds and predictions. Both helpers infer the list dtype.
-Estimator X also accepts `List[List[Scalar[dtype]]]` with exactly one element
-per row, flattened internally. Predictions and transformations always return
-one-dimensional lists. Integer or mixed-dtype inputs and other containers require explicit
-conversion by the caller to the chosen Float32 or Float64 list type.
-This retains the family List interface and PAVA workspace; no generic storage
-or NuMojo operation is replaced. Float32 PAVA widens to the existing Float64
-solver, then rounds before clipping, matching the SciPy-backed reference.
+The estimator traits use `numojo.NDArray[dtype]` with Float64 by default.
+Use `IsotonicRegression[DType.float32]` for Float32. Pass X as `(n,)` or
+`(n, 1)`, and pass y and sample weights as `(n,)`. Predictions and
+transformations return a new `(n,)` array of the estimator dtype. The
+estimator reads strided views in logical order. It materializes input vectors
+with NuMojo's native `NDArray.tolist()` for the existing List-based solver and
+uses `numojo.array` to construct results.
+
+Concrete List overloads accept `List[Scalar[dtype]]` and, for the applicable
+X arguments, one-column `List[List[Scalar[dtype]]]`. These overloads return
+lists for prediction and transformation. Learned thresholds and both public
+helpers use lists. Integer or mixed-dtype inputs require explicit conversion
+to the chosen Float32 or Float64 dtype.
+Float32 PAVA uses the Float64 solver and rounds before clipping, matching
+the SciPy-backed reference.
 Tie accumulation and interpolation retain input precision; score accumulates
 in Float64 and can differ from reference Float32 reductions in low bits.
 Inputs must be finite and nonempty; X, y, and weights must have matching lengths.
-No input list is mutated or retained by reference.
+No input is mutated or retained by reference.
 
 ```mojo
 var model = IsotonicRegression(
     y_min=0.0, y_max=1.0, increasing="auto", out_of_bounds="clip"
 )
-model.fit(X, y, sample_weight=weights)
+_ = model.fit(X, y, sample_weight=weights)
 var predictions = model.predict(query)
 ```
 
@@ -73,7 +78,7 @@ only when `__sklearn_is_fitted__()` is true. Inference checks fitted state.
 
 `f_(T)` is a method evaluating the fitted interpolator directly. It does not
 apply input clipping. It is not a stored Python callable. It accepts the same
-finite, nonempty list contract as prediction.
+finite, nonempty input contract as prediction.
 
 ## Ordering, ties, and boundaries
 
@@ -128,30 +133,30 @@ results are covered by native and reference-comparison tests.
   matches the reference KFold scores and grid-search results.
 - `moxie.calibration` uses `IsotonicRegression` internally for
   `method="isotonic"`.
-- `moxie.pipeline` is not supported: Moxie transformers produce `NDArray`,
-  while `IsotonicRegression.Input` and `Target` are lists, so
-  `make_pipeline(StandardScaler(), IsotonicRegression())` fails to compile
-  (sklearn accepts the scaler's one-column output). Other NDArray-typed
-  meta-estimators were not verified.
+- `make_pipeline(StandardScaler(), IsotonicRegression())` accepts
+  one-column X and a one-dimensional target array. Instantiate both steps
+  with Float32 to use a Float32 pipeline.
 
 ## Scope and validation
 
 Python bindings, automatic heterogeneous dtype coercion, scalar sample
 weights, pandas output, metadata routing and serialization are not implemented.
-Pass weights as a same-dtype list. `get_feature_names_out(input_features)`
-accepts and ignores the optional names, as the reference does. Sparse inputs
+Pass weights in the same dtype and container type as y.
+`get_feature_names_out(input_features)` accepts and ignores the optional names,
+as the reference does. Sparse inputs
 are unavailable in this typed API; see [dense scope](scope.md). Errors use
 Mojo `Error` with `ValueError`/`NotFittedError` prefixes. See the shared guide
 for in-place fitting and typed configuration differences.
 
-`pixi run test` covers shared contracts, trait conformance of the concrete
-estimator, fixed numerical examples, validation, clone/copy ownership, repeat
-fits, 1d/one-column equivalence, direction, bounds, and weighted R².
-`pixi run parity` generates 623 Float64 and 456 Float32 deterministic cases against the exact reference
-Python module, compiling the pinned local Cython tie engine and using the scikit-learn support wheel and SciPy from
-Moxie's locked Pixi environment. Float64 comparisons use `atol=rtol=2e-12`:
-PAVA block-reduction order can differ from SciPy, so roundoff is allowed;
-Float32 uses `atol=rtol=2e-6` for rounding and reduction-order differences.
+`pixi run python tools/isotonic_checks.py test` covers trait conformance,
+validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
+strided arrays, direction, bounds, and weighted R².
+`pixi run python tools/isotonic_checks.py parity` compares 624 Float64 and
+457 Float32 deterministic cases, including scaler pipeline predictions, against
+the pinned Python module and Cython tie engine. The scikit-learn support wheel
+and SciPy come from the locked Pixi environment. Float64 uses
+`atol=rtol=2e-12` and Float32 uses `atol=rtol=2e-6` to allow for differences
+in rounding and reduction order.
 Threshold counts, X thresholds, domain, direction, and NaN locations must match. Fixture generation
 and subprocess orchestration are test tooling only.
 

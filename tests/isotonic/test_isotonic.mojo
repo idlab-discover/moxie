@@ -1,6 +1,7 @@
 """Numerical, validation, ownership, and concrete estimator contract tests."""
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from std.math import isfinite
+from numojo import array
 from moxie.base import clone, WeightedSupervisedEstimator
 from moxie.isotonic import (
     IsotonicRegression,
@@ -80,7 +81,10 @@ def main() raises:
     var weights: List[Float64] = [1, 2, 3, 4, 5, 6, 7]
     var targets: List[Float64] = [1, 41, 51, 1, 2, 5, 24]
     close(
-        generic_fit(model, X, targets, weights),
+        generic_fit(
+            model, array(X, [len(X)]), array(targets, [len(targets)]),
+            array(weights, [len(weights)]),
+        ).tolist(),
         [1.0, 13.95, 13.95, 13.95, 13.95, 13.95, 24],
     )
     close(weights, [1.0, 2, 3, 4, 5, 6, 7])

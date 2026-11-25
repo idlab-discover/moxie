@@ -81,7 +81,7 @@ See [Covariance](../families/covariance/README.md) for its API and remaining num
 [Discriminant analysis](discriminant_analysis/README.md) is owned by Moxie.
 Its retired sibling is not a build dependency.
 
-[Isotonic regression](isotonic/README.md) is owned by Moxie, with Float32/Float64 List inputs.
+[Isotonic regression](isotonic/README.md) is owned by Moxie, with Float32/Float64 NDArray and List inputs.
 The retired isotonic sibling is not a build dependency.
 
 [Random projection](random_projection/README.md) is owned by Moxie, including Gaussian and sparse

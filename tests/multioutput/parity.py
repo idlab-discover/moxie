@@ -14,6 +14,7 @@ REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 def oracle():
     import numpy as np
     import sklearn.multioutput
+    from sklearn.linear_model import _logistic
     from sklearn.model_selection import _split, _validation
     from sklearn.model_selection import KFold
     from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
@@ -21,6 +22,7 @@ def oracle():
     path = REFERENCE / 'sklearn/multioutput.py'
     for relative, source in [
         ('sklearn/multioutput.py', path),
+        ('sklearn/linear_model/_logistic.py', Path(_logistic.__file__)),
         ('sklearn/model_selection/_split.py', Path(_split.__file__)),
         ('sklearn/model_selection/_validation.py', Path(_validation.__file__)),
     ]:
@@ -86,7 +88,7 @@ def verbose_lines(text):
 def components(module, np):
     """Production-component scenario mirrored by test_components.mojo."""
     import warnings
-    from sklearn.linear_model import Ridge, RidgeClassifier
+    from sklearn.linear_model import LogisticRegression, Ridge, RidgeClassifier
     from sklearn.model_selection import KFold, StratifiedKFold
     i = np.arange(12)
     X = np.array([[((r * (j + 3) + 2 * j) % 7) - 3.0 + 0.1 * r for j in range(3)] for r in i])
@@ -160,6 +162,16 @@ def components(module, np):
             warnings.filterwarnings('ignore', message='The least populated class in y has only')
             warnings.filterwarnings('ignore', message='Number of classes in training fold')
             out['ComponentsForestChain' + suffix] = forest_cv.fit(X32, rare).predict_proba(X32).ravel().tolist()
+    logistic = LogisticRegression(tol=1e-10, max_iter=1000)
+    independent = module.MultiOutputClassifier(logistic).fit(X, multiclass)
+    out['ComponentsLogisticIndependentLabels'] = independent.predict(X).ravel().tolist()
+    out['ComponentsLogisticIndependentProba'] = independent.predict_proba(X)[2].ravel().tolist()
+    for suffix, cv in [('', None), ('CV', 3)]:
+        logistic_chain = module.ClassifierChain(
+            logistic, order=[2, 0, 1], chain_method='predict_proba', cv=cv,
+        ).fit(X, binary)
+        out['ComponentsLogisticChain' + suffix + 'Labels'] = logistic_chain.predict(X).ravel().tolist()
+        out['ComponentsLogisticChain' + suffix + 'Proba'] = logistic_chain.predict_proba(X).ravel().tolist()
     return out
 
 if __name__ == '__main__':
@@ -190,6 +202,11 @@ if __name__ == '__main__':
                 # Float32 Ridge solves: both sides round to float32 (eps 1.2e-7);
                 # values reach ~15, so allow 2e-5 absolute and relative error.
                 matches = all(math.isclose(a, b, rel_tol=2e-5, abs_tol=2e-5)
+                              for a, b in zip(actual[name], reference[name]))
+            elif name.startswith('ComponentsLogistic') and name.endswith('Proba'):
+                # Use the linear-model family's Float64 probability bound for
+                # independently converged L-BFGS fits, including every chain link.
+                matches = all(math.isclose(a, b, rel_tol=0.0, abs_tol=2e-6)
                               for a, b in zip(actual[name], reference[name]))
             elif name.startswith('Components') and not name.endswith(('Labels', 'Order')) and 'Forest' not in name:
                 # Float64 Ridge solves differ from LAPACK in operation order

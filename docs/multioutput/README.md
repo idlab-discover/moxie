@@ -14,15 +14,19 @@ Tests live in `tests/multioutput/`. Run Moxie's root build, test and parity task
 or `pixi run python tools/multioutput_checks.py test` followed by
 `pixi run python tools/multioutput_checks.py parity-only` for focused validation.
 The parity oracle uses scikit-learn revision
-`4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Its 46 comparisons pair an exact
-test component and production `Ridge`, `RidgeClassifier` and
-`RandomForestClassifier` components with the same sklearn estimators; they
-establish wrapper behavior, not parity for every production estimator. Labels,
+`4358542a1bd39af2e7e1cbace8b9fed067473c5b`. Its 54 comparisons cover an exact
+test component and production `Ridge`, `RidgeClassifier`,
+`RandomForestClassifier` and `LogisticRegression` components. Labels,
 one-neighbor and seeded forest probabilities and orders are exact; Float64
-scores and Ridge outputs use 1e-12 and Float32 Ridge outputs 2e-5.
+scores and Ridge outputs use 1e-12 and Float32 Ridge outputs 2e-5. Logistic
+probabilities use a 2e-6 absolute tolerance for differences in L-BFGS iterates.
 Chain CV parity exercises native KFold and integer CV for both chain types,
 including stratified classifier responses and a missing class in a forest fold.
 Side-by-side notebooks for the gallery examples live in `notebooks/multioutput/`.
+The classifier-chain notebook uses dense logistic regression for independent
+fits and the ten-chain probability ensemble, with seeded synthetic count data
+to make the example runnable offline. Run it with
+`pixi run -e notebooks notebooks notebooks/multioutput/plot_classifier_chain_yeast.ipynb`.
 
 Toolchain compatibility remains Mojo 1.0.0 and MAX 26.5.0 through Moxie's Pixi
 lock. Shared numerical and random sources are assembled live.

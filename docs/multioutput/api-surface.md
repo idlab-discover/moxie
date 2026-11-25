@@ -92,10 +92,13 @@ The `ChainResponses` protocol can also be imported from `moxie._multioutput`.
 The weighted `fit` overload is available only for components implementing
 `WeightedSupervisedEstimator`. Tested production components are `DummyRegressor`,
 `Ridge` and `RandomForestRegressor` (regression, independent and chained) and
-`RidgeClassifier` and `RandomForestClassifier` (classification; forests use
-`[Forest, DType.float32, DType.float64]`). DummyClassifier uses List targets and
-the Naive Bayes classifiers use List feature inputs, so they are not direct
-NDArray component substitutes; neither is the tree classifier for
+`RidgeClassifier`, `LogisticRegression` and `RandomForestClassifier`
+(classification; forests use `[Forest, DType.float32, DType.float64]`).
+`LogisticRegression()` supplies the default Float64 features and Int64 labels
+and supports both independent probabilities and chain probability responses.
+DummyClassifier uses List targets and the Naive Bayes classifiers use List
+feature inputs, so they are not direct NDArray component substitutes. The tree
+classifier is also not a direct substitute for
 `predict_proba` (List probabilities). No conversion adapter is supplied by these
 wrappers.
 

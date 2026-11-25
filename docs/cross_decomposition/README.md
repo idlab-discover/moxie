@@ -137,8 +137,7 @@ after serializing and restoring each fitted model. Reports under
 `builds/cross_decomposition/{pls,plssvd}/parity/` record current results and
 runner hashes. The suites retain conditioning-aware tolerances, reference
 perturbation checks, component objectives, score spectra, and null-space
-orthonormality comparisons. Performance has not been
-remeasured during integration.
+orthonormality comparisons.
 
 To validate only the PLS composition, assemble live sources and run the
 following with the locked environment. The composition binary checks the search
@@ -153,6 +152,49 @@ mojo build -O3 --fp-mode=contract=off -I builds/deps tests/cross_decomposition/c
   -o builds/tests/cross_decomposition/composition
 python tests/cross_decomposition/composition_parity.py builds/tests/cross_decomposition/composition
 ```
+
+## Dense fit benchmark
+
+The pyperf benchmark compares repeated Float64 `fit` calls for PLSRegression,
+both PLSCanonical algorithms, CCA and PLSSVD against the pinned scikit-learn
+source. Both backends use the same parity datasets and a seed-42 synthetic
+dataset with 10,000 samples, 100 features and three targets. Each timing
+batch starts with a fresh estimator. Input creation and loading, estimator
+construction and process startup are outside the timed region. The native
+benchmark also compares the fitted weights on the synthetic dataset using
+the parity suite's Float64 tolerance.
+
+Component counts respect the sample rank bound after centering. On the
+constant-target dataset, the pinned PLSCanonical SVD fit reaches a zero
+denominator. The benchmark times the successful fits on that dataset, and
+the parity suite covers the SVD error path.
+
+After the focused parity checks pass, run the following in the locked
+environment. On a shared machine, add pyperf's `--affinity` with the same
+idle CPU for both backends. Use `--dataset NAME` to select one dataset.
+The large workload measures one fit per worker because native CCA fits
+take substantially longer at that size.
+
+```sh
+python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
+mkdir -p builds/tests/cross_decomposition benchmarks/cross_decomposition
+mojo build -O3 --fp-mode=contract=off -I builds/deps tests/cross_decomposition/benchmark.mojo \
+  -o builds/tests/cross_decomposition/benchmark
+out=$(mktemp -d benchmarks/cross_decomposition/run.XXXXXX)
+for backend in sklearn mojo; do
+  python tools/cross_decomposition_benchmark.py --backend "$backend" --parity-datasets \
+    --processes 3 --values 3 --warmups 1 --min-time 0.05 -o "$out/$backend-parity.json"
+  python tools/cross_decomposition_benchmark.py --backend "$backend" --dataset large-10000x100 \
+    --processes 3 --values 1 --warmups 0 --loops 1 -o "$out/$backend-large.json"
+done
+for workload in parity large; do
+  python -m pyperf compare_to "$out/sklearn-$workload.json" "$out/mojo-$workload.json" --table
+done
+```
+
+The benchmark sets OpenBLAS, OpenMP and MKL thread limits to one. Keep the
+raw pyperf JSON and the compiler command alongside each run under ignored
+`benchmarks/`.
 
 ## Numerical dependencies
 

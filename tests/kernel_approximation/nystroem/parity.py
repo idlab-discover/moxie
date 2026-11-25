@@ -19,7 +19,7 @@ import json, subprocess, tempfile, warnings
 from pathlib import Path
 import numpy as np
 from joblib import effective_n_jobs
-from oracle import load, ROOT, REV
+from oracle import load, REF, ROOT, REV
 Nystroem, pairwise = load()
 count = 0
 worst = {'float32': 0.0, 'float64': 0.0}
@@ -138,6 +138,15 @@ for dtype in (np.float32, np.float64):
     for jobs in (2, -1, -2, 50):
         for kernel in ('rbf', 'laplacian', 'linear', 'chi2'):
             compare(kernel, x, y, m=3, n_jobs=jobs)
+
+# Exercise the notebook's RBF basis size using the pinned digits data.
+digits = np.loadtxt(REF / 'sklearn/datasets/data/digits.csv.gz', delimiter=',')
+digits = digits[digits[:, -1] < 9, :-1] / 16
+digits -= digits.mean(axis=0)
+split = len(digits) // 2
+for dtype in (np.float32, np.float64):
+    data = digits.astype(dtype)
+    compare('rbf', data[:split], data[split:split + 7], gamma=0.2, m=270, seed=1)
 
 # Independent analytic accuracy checks through and below sklearn's 1e-12
 # singular-value floor. Diagonal training factors avoid hiding the small

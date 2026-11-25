@@ -38,8 +38,9 @@ complete columns at their initial fill. Optional `n_nearest_features` samples
 predictors without replacement, weighted by their absolute correlations on
 the initially completed training matrix. `random_state` accepts a UInt32-range
 integer seed or `None` for the shared default stream. The fitted
-`random_state_` stores an owned snapshot. Seeded repeat fits continue the
-estimator's stream. Configuration-only clones restart it.
+`random_state_` stores an owned snapshot of the state at the end of fit.
+Seeded repeat fits continue the estimator's stream. Configuration-only clones
+restart it.
 
 Deterministic imputation stops once the largest absolute row sum of the change
 falls strictly below `tol * max(abs(observed_training_values))`, or after
@@ -60,8 +61,24 @@ named updates and clears learned state. Use the record to clear nullable
 settings, or supply an outer `Optional` containing the new optional value.
 Failed fits preserve the previous fitted estimator.
 
-`sample_posterior=True` currently raises on fit. Python metadata routing,
-warning objects and dataframe output are unavailable.
+Set `sample_posterior=True` to draw from the predictive Gaussian truncated to
+the fitted feature bounds. Each missing row with a positive deviation and a
+mean inside the bounds consumes one uniform draw. A nonpositive deviation
+uses the mean, and a mean outside the bounds uses the nearest bound. Posterior
+fitting runs all `max_iter` rounds when more than one feature remains.
+Repeated transforms continue the stream, even with an explicit seed. Copying
+a fitted seeded imputer captures an independent copy of its current stream.
+With `random_state=None`, fits and transforms draw from the process default
+stream.
+
+BayesianRidge supplies uncertainty by default. A custom posterior regressor
+implements `IterativePosteriorRegressor` from `moxie.impute` with
+`predict_std(X)` returning `Tuple[Prediction, Prediction]`
+containing the mean and standard deviation. Each result must be finite and
+rank one with one entry per query row. Deterministic regressors still need
+only their ordinary `predict(X)` method.
+
+Python metadata routing, warning objects and dataframe output are unavailable.
 Verbose diagnostics use Mojo console output. Import directly from
 `moxie.impute` without an experimental opt-in.
 
@@ -76,6 +93,13 @@ normalization in the Gram buffer. The convergence loop combines the row
 reduction and the snapshot update in one pass. Integer promotion uses NuMojo
 `astype` for contiguous inputs and `contiguous` followed by `astype` for
 strided inputs because the cast traverses physical storage.
+Posterior sampling composes Moxie's existing Cephes normal CDF and quantile
+with Float64 inverse-CDF interpolation. The complementary tail avoids
+cancellation near probability one. For intervals contained within
+`1e-8` standard deviations of the mean, the Gaussian density varies below
+Float64 precision and interpolation uses the original bounds. Numax's scalar
+`erfcinv` goes through `1 - p`, which loses the small tail in this sampler.
+The existing normal quantile works directly on scalar probabilities.
 
 From the repository root, with the locked toolchain active:
 
@@ -84,7 +108,7 @@ python families/impute/algorithms/iterative/tests/parity.py
 ```
 
 Parity compares training fills, held-out replay, initial statistics, round
-counts, estimator ordering, sampled predictor indices and feature names
+counts, estimator ordering, sampled predictor indices, RNG draws and feature names
 against the pinned iterative, simple and Bayesian regression sources.
 Integer cases compare signed and unsigned input layouts, mixed integer and
 Float64 fit and replay, and missing-mask equality after Float64 rounding.

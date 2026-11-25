@@ -189,6 +189,11 @@ Binary decisions become `(-score, score)`. Inputs that look like probabilities
 become `log(p + 1e-12)`, following the reference. Stable softmax produces the
 probabilities. The optimizer differs from SciPy's bounded Brent search.
 
+Sigmoid and temperature calibration use Numax's Float64 scalar `exp` and
+`log`. The sigmoid objective uses `std.math.log1p` to preserve small loss
+terms. Numax's array `log1p` calls the same stdlib primitive and would
+materialize an array for this scalar operation.
+
 The pinned sklearn temperature wrapper does not encode nonconsecutive numeric
 labels before its multinomial loss. This implementation always encodes labels
 as consecutive class indices and maps predictions back through `classes_`.

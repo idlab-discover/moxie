@@ -7,14 +7,13 @@ from ._base import (
 
 # Public scikit-learn API scaffold.
 from ._api import (
-    DictionaryLearning,
     MiniBatchDictionaryLearning,
     MiniBatchSparsePCA,
     SparsePCA,
     dict_learning_online,
 )
 
-from ._dictionary import DictionaryLearningResult, dict_learning
+from ._dictionary import DictionaryLearning, DictionaryLearningParams, DictionaryLearningResult, dict_learning
 
 from ._pca import PCA, PCAParams
 

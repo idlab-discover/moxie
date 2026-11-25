@@ -81,6 +81,31 @@ estimator. The default `List[Int]` label type works with the multiclass
 Weighted scoring rejects NaN, infinity, all-zero weights and weights whose sum
 is zero, as in scikit-learn. Signed weights with a nonzero sum are accepted.
 
+## Named dense inputs
+
+Pass a [`ColumnTable`](../compose/named-columns.md) backed by a single Float32
+or Float64 numeric matrix to `fit`, `decision_function`, `predict`,
+`predict_proba`, `predict_log_proba`, or `score`. LDA also accepts it in
+`transform` and `fit_transform`. These are direct estimator overloads.
+The overloads reject tables with individually added columns.
+
+```mojo
+from moxie.compose import ColumnTable
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis
+
+var names: List[String] = ["sepal_length", "sepal_width"]
+var table = ColumnTable(X, names)
+var lda = LinearDiscriminantAnalysis()
+var projected = lda.fit_transform(table, y.copy())
+var components = lda.get_feature_names_out()
+```
+
+The estimator stores an owned `Optional[List[String]]` in `feature_names_in_`.
+Named inference checks the fitted names and order when present. LDA also checks
+an explicit `input_features` against them. Numeric inference arrays are
+positional. Switching between named and positional inputs is silent. A positional refit, failed fit, or unfitted clone has
+`feature_names_in_ = None`. Projection returns an NDArray.
+
 ## Native model persistence
 
 Use the experimental [Moxie archive format](../serialization.md) to save fitted
@@ -106,11 +131,12 @@ including both dtypes, every solver and built-in shrinkage choices. The archive
 saves current configuration separately from learned state. A post-fit setting
 change preserves LDA's fitted projection state and QDA's fitted class factors
 on load. LDA uses version 2 when it saves a prior-renormalization warning,
-including a warning retained after a failed refit. An empty warning list uses
-version 1. The loader accepts both versions.
-QDA archives preserve optional fitted covariances independently of the
-current `store_covariance` setting. Loading validates array shapes, class order
-and the required learned fields.
+including a warning retained after a failed refit. LDA version 3 and QDA
+version 2 preserve fitted feature names. LDA version 3 also preserves the
+warning when present. With neither names nor warnings, archives use version 1.
+Loaders accept earlier versions. QDA archives preserve optional fitted
+covariances independently of the current `store_covariance` setting. Loading
+validates array shapes, class order, feature names and required learned fields.
 
 ## Cross-validation and shrinkage search
 
@@ -236,5 +262,5 @@ QDA: `means_` `(K, p)`, `priors_`, `rotations_` (List of `(p, n_k)`), `scalings_
 - `get_params` returns a typed `LinearDiscriminantAnalysisParams` / `QuadraticDiscriminantAnalysisParams`
   record. `set_params` takes that record, or keyword `Optional` values (a nullable parameter
   such as `n_components` takes `Optional[Optional[Int]]`, e.g. `n_components=Optional[Int](1)`).
-- Python reflection, pickling, pandas feature names (`feature_names_in_`), metadata routing
+- Python reflection, pickling, pandas inputs, metadata routing, transform output configuration
   and array-API dispatch are outside this port.

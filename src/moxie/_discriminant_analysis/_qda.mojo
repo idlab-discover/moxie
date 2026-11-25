@@ -4,6 +4,7 @@
 from std.math import sqrt
 from numojo import NDArray, Shape, zeros
 from moxie.utils.validation import FittedState
+from moxie.compose._table import ColumnTable
 from moxie._feature_metadata import InputFeatureCount
 from moxie._discriminant_analysis_contracts import DiscriminantClassifier
 from ._labels import ClassLabel, sorted_unique, encode_labels, class_counts
@@ -15,6 +16,7 @@ from ._work import (
     matrix,
     vector,
     input_matrix,
+    check_named_input,
     cast_array,
     widen,
     checked_svd,
@@ -158,6 +160,7 @@ struct QuadraticDiscriminantAnalysis[
     var scalings_: List[NDArray[Self.dtype]]
     var classes_: List[Self.L]
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var _state: FittedState
 
     def __init__(
@@ -186,6 +189,7 @@ struct QuadraticDiscriminantAnalysis[
         self.scalings_ = List[NDArray[Self.dtype]]()
         self.classes_ = List[Self.L]()
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self._state = FittedState()
 
     # ----- configuration -------------------------------------------------
@@ -293,6 +297,7 @@ struct QuadraticDiscriminantAnalysis[
         self.scalings_ = List[NDArray[Self.dtype]]()
         self.classes_ = List[Self.L]()
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self._state.reset()
 
     # ----- fitting -------------------------------------------------------
@@ -302,6 +307,21 @@ struct QuadraticDiscriminantAnalysis[
     ) raises -> ref[self] Self:
         """Fit one Gaussian per class; replaces learned state (unfitted on failure)."""
         self._reset()
+        self._fit(X, y)
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: ColumnTable[Self.dtype], ref[y_origin] y: List[Self.L]
+    ) raises -> ref[self] Self:
+        """Fit the numeric table and record its column names in order."""
+        self._reset()
+        ref values = X.values()
+        var names = X.schema().names.copy()
+        self._fit(values, y)
+        self.feature_names_in_ = names^
+        return self
+
+    def _fit(mut self, X: NDArray[Self.dtype], y: List[Self.L]) raises:
         self._validate_params()
         var work = input_matrix(X, ESTIMATOR)
         var n = work.shape[0]
@@ -393,9 +413,37 @@ struct QuadraticDiscriminantAnalysis[
         self.classes_ = classes^
         self.n_features_in_ = p
         self._state.record_fit(n, p, n_targets=len(y))
-        return self
 
     # ----- inference -----------------------------------------------------
+
+    def _check_named_input(self, X: ColumnTable[Self.dtype]) raises:
+        _ = self.get_n_features_in()
+        check_named_input(X, self.feature_names_in_)
+
+    def decision_function(self, X: ColumnTable[Self.dtype]) raises -> NDArray[Self.dtype]:
+        self._check_named_input(X)
+        return self.decision_function(X.values())
+
+    def predict(self, X: ColumnTable[Self.dtype]) raises -> List[Self.L]:
+        self._check_named_input(X)
+        return self.predict(X.values())
+
+    def predict_proba(self, X: ColumnTable[Self.dtype]) raises -> NDArray[Self.dtype]:
+        self._check_named_input(X)
+        return self.predict_proba(X.values())
+
+    def predict_log_proba(self, X: ColumnTable[Self.dtype]) raises -> NDArray[Self.dtype]:
+        self._check_named_input(X)
+        return self.predict_log_proba(X.values())
+
+    def score(
+        self,
+        X: ColumnTable[Self.dtype],
+        y: List[Self.L],
+        sample_weight: Optional[NDArray[Self.dtype]] = None,
+    ) raises -> Float64:
+        self._check_named_input(X)
+        return self.score(X.values(), y, sample_weight)
 
     def _joint_log_likelihood(self, X: NDArray[Self.dtype]) raises -> Work:
         """Log posterior up to a constant (ESL eq. 4.12), shape (n, n_classes)."""

@@ -18,6 +18,7 @@ from sklearn.datasets import make_blobs
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from oracle import load, ROOT, REVISION
+from named_input_parity import check_named_input
 
 ORACLE = load()
 DA = ORACLE['da']
@@ -416,6 +417,7 @@ def main():
     output = subprocess.check_output([str(composition), '--composition-parity'], text=True)
     check_pipeline_projection(output)
     check_lda_search(output)
+    check_named_input(DA, ROOT / 'builds/tests/discriminant_analysis/serialization')
 
 
 if __name__ == '__main__':

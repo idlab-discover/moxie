@@ -223,7 +223,9 @@ changed since the last fit. It restores independent threshold Lists without
 refitting. Constructor values retain their normal fit-time validation.
 Fit diagnostics describe the current instance's last successful fit.
 They start empty after loading an archive.
-Fit and score requests also return to their defaults when loading a native archive.
+Version 2 preserves the fit and score sample-weight requests for both fitted
+and unfitted models. Version 1 archives remain readable and load with the
+default requests.
 Fitted thresholds must be finite, with strictly ascending X, monotone y in
 the fitted direction, and a domain matching the two endpoints.
 
@@ -246,8 +248,8 @@ for in-place fitting and typed configuration differences.
 `pixi run python tools/isotonic_checks.py test` covers trait conformance,
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
 strided arrays, direction, bounds, weighted R², and native persistence.
-`pixi run python tools/isotonic_checks.py parity` compares 712 Float64 and
-545 Float32 deterministic cases, including scaler pipeline predictions,
+`pixi run python tools/isotonic_checks.py parity` compares 720 Float64 and
+553 Float32 deterministic cases, including scaler pipeline predictions,
 interpolator reconstruction, validation edges, warning diagnostics and sample-weight requests,
 against the pinned Python module and Cython tie engine. The scikit-learn
 support wheel and SciPy come from the locked Pixi environment. Float64 uses

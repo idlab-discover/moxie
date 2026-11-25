@@ -29,9 +29,10 @@ verify the assembled module matches the Moxie source.
 The parity runner executes the clean local scikit-learn source at
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`, including its compiled Cython tie
 engine. The installed scikit-learn wheel supplies validation infrastructure.
-It generates 676 Float64 and 509 Float32 cases, including scaler pipeline
-predictions, schema reconstruction, warnings from fit, direct direction checks
-and singleton scores, and validation edges for `check_increasing` and `f_`.
+It generates 720 Float64 and 553 Float32 cases, including scaler pipeline
+predictions, schema reconstruction with sample-weight requests, warnings from
+fit, direct direction checks and singleton scores, and validation edges for
+`check_increasing` and `f_`.
 The respective tolerances are `2e-12` and
 `2e-6`. Threshold counts, X thresholds, domain, direction and NaN locations
 must match exactly. Evidence is written to ignored `builds/isotonic/parity/`.

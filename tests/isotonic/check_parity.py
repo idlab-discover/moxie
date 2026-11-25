@@ -113,6 +113,21 @@ def main():
                         expected = str(resolved.get("sample_weight", "-"))
                     add("routing", method, setting, next(iter(metadata), "-"), expected)
 
+    def serialized_requests():
+        for fitted in (False, True):
+            for fit, score in [(None, None), (False, True), (True, "_score2"), ("_fit2", False)]:
+                with sklearn.config_context(enable_metadata_routing=True):
+                    model = reference.IsotonicRegression().set_fit_request(sample_weight=fit)
+                    model.set_score_request(sample_weight=score)
+                    if fitted:
+                        x = np.asarray([0, 1], dtype=dtype)
+                        model.fit(x, x)
+                    restored = reference.IsotonicRegression()
+                    restored.__setstate__(model.__getstate__())
+                    routing = restored.get_metadata_routing()
+                    add("serialized_requests", fitted, fit, score,
+                        routing.fit.requests["sample_weight"], routing.score.requests["sample_weight"])
+
     def warning_fields(caught):
         return [
             text for item in caught
@@ -285,6 +300,7 @@ def main():
     fit_warnings()
     score_warnings()
     routing_requests()
+    serialized_requests()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(240):
@@ -342,6 +358,7 @@ def main():
     fit_warnings()
     score_warnings()
     routing_requests()
+    serialized_requests()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(150):

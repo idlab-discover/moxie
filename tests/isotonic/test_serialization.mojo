@@ -3,7 +3,14 @@ from std.testing import assert_equal, assert_false, assert_raises, assert_true
 from moxie.base import clone
 from moxie.isotonic import Increasing, IsotonicRegression
 from moxie.isotonic_serialization import IsotonicRegressionSchema
-from moxie.serialization import dumps, load_model, save_model
+from moxie.serialization import (
+    BinaryWriter,
+    ModelArchive,
+    dtype_code,
+    dumps,
+    load_model,
+    save_model,
+)
 from numojo import array
 
 
@@ -20,8 +27,8 @@ def round_trips[dtype: DType]() raises:
     save_model[Schema](model, path)
     var fresh = load_model[Schema](path)
     assert_false(fresh.__sklearn_is_fitted__())
-    assert_true(fresh.get_metadata_routing().fit.value().isa[NoneType]())
-    assert_true(fresh.get_metadata_routing().score.value().isa[NoneType]())
+    assert_equal(fresh.get_metadata_routing().fit.value()[String], "training_weights")
+    assert_true(fresh.get_metadata_routing().score.value()[Bool])
     assert_equal(fresh.y_min.or_else(-1.0), 0.0)
     assert_false(Bool(fresh.y_max))
     assert_equal(fresh.increasing[String], "auto")
@@ -39,8 +46,8 @@ def round_trips[dtype: DType]() raises:
     save_model[Schema](model, path)
     var fitted = load_model[Schema](path)
     assert_true(fitted.__sklearn_is_fitted__())
-    assert_true(fitted.get_metadata_routing().fit.value().isa[NoneType]())
-    assert_true(fitted.get_metadata_routing().score.value().isa[NoneType]())
+    assert_equal(fitted.get_metadata_routing().fit.value()[String], "training_weights")
+    assert_true(fitted.get_metadata_routing().score.value()[Bool])
     assert_equal(fitted.y_min.or_else(-1.0), 0.0)
     assert_equal(fitted.y_max.or_else(-1.0), 0.5)
     assert_true(fitted.increasing[Bool])
@@ -56,6 +63,9 @@ def round_trips[dtype: DType]() raises:
     assert_true(isnan(predictions[0]) and isnan(predictions[1]))
     assert_equal(dumps(Schema.encode(fitted)), dumps(Schema.encode(model)))
     assert_false(clone(fitted).__sklearn_is_fitted__())
+    _ = fitted.set_fit_request(sample_weight=False).set_score_request(sample_weight=None)
+    assert_equal(model.get_metadata_routing().fit.value()[String], "training_weights")
+    assert_true(model.get_metadata_routing().score.value()[Bool])
     fitted.y_thresholds_[0] = 7
     assert_equal(model.y_thresholds_[0], Scalar[dtype](3))
 
@@ -82,6 +92,66 @@ def round_trips[dtype: DType]() raises:
     var restored = load_model[Schema](path)
     assert_equal(len(restored.fit_warnings), 0)
     assert_equal(restored.predict(tied_x), model.predict(tied_x))
+
+
+def version_one[dtype: DType](fitted: Bool) raises -> ModelArchive:
+    comptime Schema = IsotonicRegressionSchema[dtype]
+    var archive = ModelArchive(Schema.TypeId, 1)
+    var writer = BinaryWriter()
+    writer.uint(UInt64(dtype_code[dtype]()))
+    writer.boolean(False)  # y_min absent
+    writer.boolean(False)  # y_max absent
+    writer.boolean(True)  # increasing is Bool
+    writer.boolean(True)
+    writer.string("clip")
+    writer.boolean(fitted)
+    if fitted:
+        writer.scalar[dtype](0)
+        writer.scalar[dtype](1)
+        writer.boolean(True)
+        var shape: List[Int] = [2]
+        var thresholds: List[Scalar[dtype]] = [0, 1]
+        archive.add_array[dtype]("X_thresholds_", shape, thresholds)
+        archive.add_array[dtype]("y_thresholds_", shape, thresholds)
+    archive.manifest = writer^.finish()
+    return archive^
+
+
+def legacy_round_trips[dtype: DType]() raises:
+    comptime Schema = IsotonicRegressionSchema[dtype]
+    for fitted in [False, True]:
+        var model = Schema.decode(version_one[dtype](fitted))
+        assert_equal(model.__sklearn_is_fitted__(), fitted)
+        var routing = model.get_metadata_routing()
+        assert_true(routing.fit.value().isa[NoneType]())
+        assert_true(routing.score.value().isa[NoneType]())
+        if fitted:
+            var query: List[Scalar[dtype]] = [-1, 0.5, 2]
+            var expected: List[Scalar[dtype]] = [0, 0.5, 1]
+            assert_equal(model.predict(query), expected)
+        assert_equal(Schema.encode(model).schema_version, 2)
+
+
+def invalid_requests() raises:
+    comptime Schema = IsotonicRegressionSchema[]
+    var base = version_one[DType.float64](False)
+    base.schema_version = Schema.StateVersion
+    var unknown_tag = base.copy()
+    var writer = BinaryWriter()
+    writer.uint(4)
+    unknown_tag.manifest.extend(writer^.finish())
+    with assert_raises(contains="unknown isotonic sample-weight request"):
+        _ = Schema.decode(unknown_tag)
+
+    for invalid in ["invalid-alias", "$UNCHANGED$", "sample_weight", ""]:
+        var bad = base.copy()
+        var alias_writer = BinaryWriter()
+        alias_writer.uint(3)
+        alias_writer.string(invalid)
+        alias_writer.uint(0)
+        bad.manifest.extend(alias_writer^.finish())
+        with assert_raises(contains="invalid isotonic sample-weight alias"):
+            _ = Schema.decode(bad)
 
 
 def invalid_archives() raises:
@@ -156,5 +226,8 @@ def invalid_archives() raises:
 def main() raises:
     round_trips[DType.float64]()
     round_trips[DType.float32]()
+    legacy_round_trips[DType.float64]()
+    legacy_round_trips[DType.float32]()
+    invalid_requests()
     invalid_archives()
     print("Isotonic serialization contracts passed")

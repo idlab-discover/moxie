@@ -1625,6 +1625,9 @@
         "moxie.model_selection._indices": {
           "file": "src/moxie/model_selection/_indices.mojo"
         },
+        "moxie.model_selection._classification_scoring": {
+          "file": "src/moxie/model_selection/_classification_scoring.mojo"
+        },
         "moxie.model_selection._evaluation": {
           "file": "src/moxie/model_selection/_evaluation.mojo"
         },
@@ -1651,6 +1654,10 @@
             "IndexSplit": "moxie.model_selection._indices",
             "SplitCursor": "moxie.model_selection._indices",
             "validate_indices": "moxie.model_selection._indices",
+            "Accuracy": "moxie.model_selection._classification_scoring",
+            "PrecisionMacro": "moxie.model_selection._classification_scoring",
+            "RecallMacro": "moxie.model_selection._classification_scoring",
+            "F1Macro": "moxie.model_selection._classification_scoring",
             "EstimatorScore": "moxie.model_selection._evaluation",
             "NegMeanSquaredError": "moxie.model_selection._evaluation",
             "NegMeanAbsoluteError": "moxie.model_selection._evaluation",

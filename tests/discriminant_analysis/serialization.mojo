@@ -113,7 +113,7 @@ def invalid_state() raises:
     with assert_raises(contains="label type mismatch"):
         _ = LinearDiscriminantAnalysisSchema[DType.float64, String].decode(archive)
     var bad = archive.copy()
-    bad.schema_version = Schema.StateVersion + 1
+    bad.schema_version = 0xFFFF
     with assert_raises(contains="unsupported estimator"):
         _ = Schema.decode(bad)
     bad = archive.copy()
@@ -259,7 +259,7 @@ def qda_invalid_state() raises:
     with assert_raises(contains="unsupported estimator"):
         _ = LinearDiscriminantAnalysisSchema[].decode(archive)
     bad = archive.copy()
-    bad.schema_version = Schema.StateVersion + 1
+    bad.schema_version = 0xFFFF
     with assert_raises(contains="unsupported estimator"):
         _ = Schema.decode(bad)
     bad = archive.copy()

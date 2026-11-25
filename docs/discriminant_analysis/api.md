@@ -125,18 +125,54 @@ var restored_qda = load_model[QuadraticDiscriminantAnalysisSchema[]]("qda.moxie"
 ```
 
 Choose the same dtype and label type when saving and loading, for example
-`LinearDiscriminantAnalysisSchema[DType.float32, String]`. Version 1 supports
-`Int` and `String` labels and the default `NoCovarianceEstimator` type,
-including both dtypes, every solver and built-in shrinkage choices. The archive
+`LinearDiscriminantAnalysisSchema[DType.float32, String]`. The schemas support
+the default `NoCovarianceEstimator` type, including both dtypes, every solver
+and built-in shrinkage choices. The archive
 saves current configuration separately from learned state. A post-fit setting
 change preserves LDA's fitted projection state and QDA's fitted class factors
 on load. LDA uses version 2 when it saves a prior-renormalization warning,
 including a warning retained after a failed refit. LDA version 3 and QDA
 version 2 preserve fitted feature names. LDA version 3 also preserves the
-warning when present. With neither names nor warnings, archives use version 1.
-Loaders accept earlier versions. QDA archives preserve optional fitted
+warning when present. With built-in `Int` or `String` encoding and neither
+names nor warnings, archives use version 1. Loaders accept earlier versions.
+QDA archives preserve optional fitted
 covariances independently of the current `store_covariance` setting. Loading
 validates array shapes, class order, feature names and required learned fields.
+
+For another native `ClassLabel` type, implement `DiscriminantLabelCodec` and
+pass it as the third schema parameter. Use the same schema for saving and
+loading. QDA uses the same convention.
+
+```mojo
+from moxie.discriminant_analysis_serialization import (
+    DiscriminantLabelCodec,
+    LinearDiscriminantAnalysisSchema,
+)
+from moxie.serialization import BinaryReader, BinaryWriter
+
+struct Int32LabelCodec(DiscriminantLabelCodec):
+    comptime Label = Int32
+    comptime TypeId = "example.int32-label.v1"
+
+    @staticmethod
+    def encode(mut writer: BinaryWriter, label: Int32):
+        writer.scalar[DType.int32](label)
+
+    @staticmethod
+    def decode(mut reader: BinaryReader[_]) raises -> Int32:
+        return reader.scalar[DType.int32]()
+
+comptime Int32LDASchema = LinearDiscriminantAnalysisSchema[
+    DType.float64, Int32, Int32LabelCodec,
+]
+```
+
+Give the codec a stable, versioned `TypeId` that identifies its label type
+and wire encoding. The codec owns validation of individual label values.
+Each label has its own length-prefixed record, and the decoder must consume
+the full record. The archive stores the codec ID in LDA version 4 and QDA
+version 3. Loading requires a matching codec selected by the caller at
+compile time, including for unfitted models.
 
 ## Cross-validation and shrinkage search
 

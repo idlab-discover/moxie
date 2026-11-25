@@ -27,6 +27,17 @@ def validate_matrix[dtype: DType](x: nm.NDArray[dtype]) raises:
         raise Error("ValueError: input must have samples and features")
 
 
+def promote_integer_matrix[dtype: DType](
+    X: nm.NDArray[dtype],
+) raises -> nm.NDArray[DType.float64]:
+    comptime assert dtype.is_integral(), "expected an integer matrix"
+    validate_matrix(X)
+    # NuMojo astype traverses physical storage. Preserve logical row order.
+    if X.is_c_contiguous():
+        return X.astype[DType.float64]()
+    return X.contiguous().astype[DType.float64]()
+
+
 def missing_mask[dtype: DType](
     x: nm.NDArray[dtype], missing: MissingValue[dtype]
 ) raises -> nm.NDArray[DType.bool]:

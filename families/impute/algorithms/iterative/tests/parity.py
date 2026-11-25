@@ -75,19 +75,13 @@ def emit[dtype: DType](X: nm.NDArray[dtype]) raises:
         print(Float64(X.unsafe_get(i)))
 
 @no_inline
-def check[dtype: DType](
-    name: String, X: nm.NDArray[dtype], Z: nm.NDArray[dtype],
-    options: IterativeImputer[dtype].Params, repeat: Bool,
+def report[dtype: DType](
+    name: String, model: IterativeImputer[dtype],
+    fitted: nm.NDArray[dtype], transformed: nm.NDArray[dtype],
 ) raises:
-    var model = IterativeImputer[dtype](options.copy())
-    if not options.random_state:
-        seed_global_random_state(17)
-    var fitted = model.fit_transform(X)
-    if repeat:
-        fitted = model.fit_transform(X)
     print(name)
     emit(fitted)
-    emit(model.transform(Z))
+    emit(transformed)
     print(model.n_iter_, model.n_features_in_, model.n_features_with_missing_)
     for feature_name in model.get_feature_names_out():
         print(feature_name)
@@ -153,8 +147,47 @@ def scalar(x):
     return f"Float64({float(x)!r})"
 
 
-def array(name, values, dtype):
+def integer_cases():
+    X = [[1, 3, 2], [4, 7, 7], [6, -1, 2], [8, 10, 8], [-1, 18, 9]]
+    Z = [[-1, 5, 3], [8, -1, 6], [1, 9, -1]]
+    options = dict(missing_values=-1)
+    yield "integer-contiguous", np.array(X, "int64"), np.array(Z, "int32"), options
+    yield "integer-reversed", np.array(X, "int16")[::-1, ::-1], np.array(Z, "int16")[::-1, ::-1], options
+    padded = np.zeros((len(X), 6), dtype="int32")
+    padded[:, 1::2] = X
+    yield "integer-strided", padded[:, 1::2], np.array(Z, "float64"), options
+    yield "integer-query", np.array(X, "float64"), np.array(Z, "int64"), options
+    yield "integer-nan-marker", np.arange(15, dtype="uint8").reshape(5, 3), np.array(Z, "int64"), {}
+    marker = 2 ** 53
+    # Values that differ in integer storage can share the same Float64 marker.
+    yield "integer-rounded-marker", np.array([
+        [1, 1, marker], [2, 3, marker + 1], [3, 5, marker], [4, 8, marker + 1],
+    ], "uint64"), np.array([[3, 5, marker + 1], [1, 2, marker]], "uint64"), dict(
+        missing_values=float(marker),
+    )
+
+
+def array(name, values):
+    dtype = values.dtype.name
     rows, cols = values.shape
+    if values.dtype.kind in "iu":
+        # Recreate each integer layout with its original element strides and
+        # offset so the native overload sees the same logical matrix.
+        owner = values
+        while isinstance(owner.base, np.ndarray):
+            owner = owner.base
+        lines = [f"    var {name}_owner = nm.zeros[DType.{dtype}](nm.Shape({owner.size}))"]
+        mojo_type = dtype.capitalize().replace("Uint", "UInt")
+        lines += [
+            f"    {name}_owner.unsafe_set({i}, {mojo_type}({int(x)}))"
+            for i, x in enumerate(owner.flat)
+        ]
+        strides = ", ".join(str(s // values.itemsize) for s in values.strides)
+        offset = (values.ctypes.data - owner.ctypes.data) // values.itemsize
+        return lines + [
+            f"    var {name} = {name}_owner.view_with_layout("
+            f"nm.Shape({rows}, {cols}), nm.Strides({strides}), {offset})",
+        ]
     return [
         f"    var {name} = nm.zeros[DType.{dtype}](nm.Shape({rows}, {cols}))",
         *(f"    {name}.unsafe_set({i}, {scalar(x)}.cast[DType.{dtype}]())"
@@ -184,38 +217,45 @@ def main():
     expected = {}
     definitions = []
     calls = []
+    inputs = [
+        (dtype, tag, X.astype(dtype), Z.astype(dtype), overrides)
+        for dtype in ("float64", "float32")
+        for tag, X, Z, overrides in cases()
+    ]
+    inputs.extend(("float64", *case) for case in integer_cases())
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        for dtype in ("float64", "float32"):
-            for tag, X, Z, overrides in cases():
-                name = f"{tag}-{dtype}"
-                X = X.astype(dtype)
-                Z = Z.astype(dtype)
-                options = dict(random_state=17, max_iter=4, add_indicator=True) | overrides
-                reference = iterative(**(options | {
-                    "estimator": bayesian(**options.get("estimator", {})),
-                }))
-                if options["random_state"] is None:
-                    np.random.seed(17)
+        for dtype, tag, X, Z, overrides in inputs:
+            name = f"{tag}-{dtype}"
+            options = dict(random_state=17, max_iter=4, add_indicator=True) | overrides
+            reference = iterative(**(options | {
+                "estimator": bayesian(**options.get("estimator", {})),
+            }))
+            if options["random_state"] is None:
+                np.random.seed(17)
+            fitted = reference.fit_transform(X)
+            repeat = tag == "repeat-random"
+            if repeat:
                 fitted = reference.fit_transform(X)
-                repeat = tag == "repeat-random"
-                if repeat:
-                    fitted = reference.fit_transform(X)
-                expected[name] = (reference, fitted, reference.transform(Z))
-                function = f"case_{len(calls)}"
-                definitions += ["@no_inline", f"def {function}() raises:"]
-                definitions += array("X", X, dtype) + array("Z", Z, dtype)
-                for key in ("min_value", "max_value"):
-                    if isinstance(options.get(key), list):
-                        values = ", ".join(map(scalar, options[key]))
-                        definitions.append(f"    var {key}: List[Float64] = [{values}]")
-                args = ", ".join(f"{k}={value(k, v, dtype)}" for k, v in options.items())
-                definitions += [
-                    f"    var model = IterativeImputer[DType.{dtype}]({args})",
-                    f'    check("{name}", X, Z, model.get_params(), {repeat})',
-                    "",
-                ]
-                calls.append(f"    {function}()")
+            transformed = reference.transform(Z)
+            assert fitted.dtype.name == transformed.dtype.name == dtype, name
+            expected[name] = (reference, fitted, transformed)
+            function = f"case_{len(calls)}"
+            definitions += ["@no_inline", f"def {function}() raises:"]
+            definitions += array("X", X) + array("Z", Z)
+            for key in ("min_value", "max_value"):
+                if isinstance(options.get(key), list):
+                    values = ", ".join(map(scalar, options[key]))
+                    definitions.append(f"    var {key}: List[Float64] = [{values}]")
+            args = ", ".join(f"{k}={value(k, v, dtype)}" for k, v in options.items())
+            definitions.append(f"    var model = IterativeImputer[DType.{dtype}]({args})")
+            if options["random_state"] is None:
+                definitions.append("    seed_global_random_state(17)")
+            definitions.append("    var fitted = model.fit_transform(X)")
+            if repeat:
+                definitions.append("    fitted = model.fit_transform(X)")
+            definitions += [f'    report[DType.{dtype}]("{name}", model, fitted, model.transform(Z))', ""]
+            calls.append(f"    {function}()")
 
     build = FAMILY / "builds" / "iterative"
     build.mkdir(parents=True, exist_ok=True)

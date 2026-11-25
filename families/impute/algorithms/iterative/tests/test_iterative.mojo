@@ -3,10 +3,48 @@ from std.math import abs, isnan
 from std.testing import assert_equal, assert_false, assert_raises, assert_true
 from moxie import clone
 from moxie.impute import IterativeBound, IterativeImputer
+from moxie.impute._plumbing import MissingValue
 from moxie.linear_model import BayesianRidge
 
 
+def check_integer_input() raises:
+    var X = nm.zeros[DType.int32](nm.Shape(4, 2))
+    for i in range(4):
+        X.unsafe_set(2 * i, Int32(i + 1))
+        X.unsafe_set(2 * i + 1, Int32(2 * (i + 1)))
+    X.unsafe_set(3, -1)
+    var reversed = X.view_with_layout(nm.Shape(4, 2), nm.Strides(-2, 1), 6)
+    var model = IterativeImputer(
+        missing_values=MissingValue[DType.float64](-1), add_indicator=True, random_state=42,
+    )
+    with assert_raises():
+        _ = model.transform(X)
+    var filled: nm.NDArray[DType.float64] = model.fit(reversed).transform(X)
+    assert_equal(filled.shape[1], 3)
+    assert_true(abs(filled.unsafe_get(4) - 4) < 1e-5)
+    assert_equal(filled.unsafe_get(5), 1)
+    assert_equal(X.unsafe_get(3), Int32(-1))
+    var names: List[String] = ["distance", "duration"]
+    model.fit_named(reversed, names)
+    var expected_names: List[String] = ["distance", "duration", "missingindicator_duration"]
+    assert_equal(model.get_feature_names_out(), expected_names)
+    with assert_raises():
+        _ = model.fit(nm.zeros[DType.int32](nm.Shape(8)))
+    with assert_raises():
+        _ = model.fit(nm.zeros[DType.int32](nm.Shape(0, 2)))
+    with assert_raises():
+        _ = model.transform(nm.zeros[DType.int32](nm.Shape(4, 3)))
+    assert_equal(model.get_feature_names_out(), expected_names)
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    var complete = nm.ones[DType.uint16](nm.Shape(4, 2))
+    assert_equal(fresh.fit_transform(complete).shape[1], 2)
+    var default_names: List[String] = ["x0", "x1"]
+    assert_equal(fresh.get_feature_names_out(), default_names)
+
+
 def main() raises:
+    check_integer_input()
     var missing = Float64("nan")
     var X = nm.zeros[DType.float64](nm.Shape(4, 2))
     for i in range(4):
@@ -94,4 +132,4 @@ def main() raises:
     var unsupported = IterativeImputer(sample_posterior=True)
     with assert_raises():
         _ = unsupported.fit(X)
-    print("PASS: iterative imputer lifecycle, validation, strided input and named metadata")
+    print("PASS: iterative imputer lifecycle, floating and integer layouts, and named metadata")

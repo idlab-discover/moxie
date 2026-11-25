@@ -4,7 +4,14 @@ from std.math import isnan, isfinite
 from moxie._feature_metadata import FeatureNamesOut
 from moxie.impute._base import Imputer
 from moxie.impute._indicator import MissingIndicator
-from moxie.impute._plumbing import MissingValue, FeatureLayout, missing_mask, select_features, append_indicator, validate_matrix
+from moxie.impute._plumbing import (
+    FeatureLayout,
+    MissingValue,
+    append_indicator,
+    missing_mask,
+    promote_integer_matrix,
+    select_features,
+)
 from moxie.neighbors._contracts import DenseMetric
 from moxie.neighbors._distance import Metric
 from moxie.neighbors._query_engine import BruteForce, NeighborWeights, BuiltinWeights
@@ -254,14 +261,8 @@ struct KNNImputer[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Me
     def _promote_integer_input[int_dtype: DType](
         X: nm.NDArray[int_dtype],
     ) raises -> Self.Input:
-        comptime assert int_dtype.is_integral(), "KNNImputer promotes only integer input"
         comptime assert Self.dtype == DType.float64, "integer input promotes to KNNImputer[DType.float64]"
-        validate_matrix(X)
-        # NuMojo astype traverses physical storage. Materialize strided views
-        # in logical row order before casting.
-        if X.is_c_contiguous():
-            return X.astype[Self.dtype]()
-        return X.contiguous().astype[Self.dtype]()
+        return rebind_var[Self.Input](promote_integer_matrix(X))
 
     def fit[
         int_dtype: DType,

@@ -34,8 +34,9 @@ not implemented. Estimator families document their own modules.
 ## `sklearn.metrics`
 
 [Dense classification metrics](metrics/classification.md) are available from
-`moxie.metrics`. The module exports `accuracy_score`, `zero_one_loss`, and
-`hamming_loss`. Each supports optional sample weights and can be called from a
+`moxie.metrics`. The module exports `accuracy_score`, `zero_one_loss`,
+`hamming_loss`, `confusion_matrix`, and `balanced_accuracy_score`. All five
+support sample weights. Scalar metrics can be called from a
 `moxie.model_selection.TypedScorer`.
 
 Estimator `score` methods provide accuracy for `ClassifierMixin`, R² for

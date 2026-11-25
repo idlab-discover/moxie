@@ -1,10 +1,9 @@
 """Use the public metrics through model_selection's cross-validation scorer seam."""
 from std.testing import assert_false
 
-from moxie.metrics import accuracy_score
+from moxie.metrics import accuracy_score, balanced_accuracy_score
 from moxie.model_selection import CVAdapter, ErrorPolicy, IndexArray, IndexSplit
-from moxie.model_selection import KFold, TypedScorer, cross_val_score
-from moxie.model_selection._split import _rows
+from moxie.model_selection import KFold, TypedScorer, cross_val_score, select_rows
 from moxie.naive_bayes import GaussianNB, NumericDomain
 from numojo import Item, NDArray, Shape
 
@@ -14,7 +13,9 @@ comptime Classifier = GaussianNB[NumericDomain[DType.int64]]
 
 
 @fieldwise_init
-struct Accuracy(TypedScorer):
+struct AgreementScorer(TypedScorer):
+    var balanced: Bool
+
     comptime Estimator = Classifier
     comptime Input = Dense
     comptime Target = Labels
@@ -23,12 +24,15 @@ struct Accuracy(TypedScorer):
     def score(
         self, estimator: Classifier, X: Dense, y: Labels, metadata: Self.Metadata
     ) raises -> Float64:
-        return accuracy_score(y, estimator.predict(X), sample_weight=metadata)
+        var prediction = estimator.predict(X)
+        if self.balanced:
+            return balanced_accuracy_score(y, prediction, sample_weight=metadata)
+        return accuracy_score(y, prediction, sample_weight=metadata)
 
 
 @fieldwise_init
 struct Adapter(CVAdapter):
-    comptime Scorer = Accuracy
+    comptime Scorer = AgreementScorer
 
     def n_samples(self, X: Dense, y: Labels) raises -> Int:
         if X.ndim != 2 or y.ndim != 1 or X.shape[0] != y.shape[0]:
@@ -36,14 +40,14 @@ struct Adapter(CVAdapter):
         return X.shape[0]
 
     def input_rows(self, X: Dense, rows: IndexArray, train: IndexArray) raises -> Dense:
-        return _rows(X, rows)
+        return select_rows(X, rows)
 
     def target_rows(self, y: Labels, rows: IndexArray) raises -> Labels:
-        return _rows(y, rows)
+        return select_rows(y, rows)
 
     def metadata_rows(self, metadata: Optional[Dense], rows: IndexArray) raises -> Optional[Dense]:
         if metadata:
-            return _rows(metadata.value(), rows)
+            return select_rows(metadata.value(), rows)
         return None
 
     def fit(self, mut estimator: Classifier, X: Dense, y: Labels, metadata: Optional[Dense]) raises:
@@ -71,8 +75,15 @@ def main() raises:
         splits.append(split.value().copy())
 
     var scores = cross_val_score[Adapter](
-        model, X, y, Adapter(), Accuracy(), splits, None, weights^,
+        model, X, y, Adapter(), AgreementScorer(balanced=False), splits, None, weights.view(),
         error_score=ErrorPolicy(True, 0),
     )
     assert_false(model.__sklearn_is_fitted__())
     print("cv", scores[Item(0)], scores[Item(1)], scores[Item(2)])
+
+    var balanced_scores = cross_val_score[Adapter](
+        model, X, y, Adapter(), AgreementScorer(balanced=True), splits, None, weights^,
+        error_score=ErrorPolicy(True, 0),
+    )
+    assert_false(model.__sklearn_is_fitted__())
+    print("cv_balanced", balanced_scores[Item(0)], balanced_scores[Item(1)], balanced_scores[Item(2)])

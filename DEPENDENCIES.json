@@ -26,6 +26,9 @@
         "moxie.metrics._classification": {
           "file": "src/moxie/metrics/_classification.mojo"
         },
+        "moxie.metrics._confusion": {
+          "file": "src/moxie/metrics/_confusion.mojo"
+        },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
         },
@@ -571,6 +574,8 @@
           },
           "moxie.metrics": {
             "accuracy_score": "moxie.metrics._classification",
+            "balanced_accuracy_score": "moxie.metrics._confusion",
+            "confusion_matrix": "moxie.metrics._confusion",
             "hamming_loss": "moxie.metrics._classification",
             "zero_one_loss": "moxie.metrics._classification"
           },

@@ -15,12 +15,15 @@ count = 0
 worst = 0.0
 
 
-def native(x, gamma, degree, coef0, m, seed):
+def native(x, gamma, degree, coef0, m, seed, *, narrow=False):
     bits = '32' if x.dtype == np.float32 else '64'
     with tempfile.NamedTemporaryFile('w', suffix='.txt', dir=ROOT / 'builds', delete=False) as f:
         f.write(f'{bits} {gamma!r} {degree} {coef0!r} {m} {seed} {x.shape[0]} {x.shape[1]}\n')
         f.write(' '.join(repr(float(v)) for v in x.ravel()))
-    result = subprocess.run([ROOT / 'builds/tests/kernel_approximation/polynomial/evaluate', f.name], capture_output=True, text=True)
+    command = [ROOT / 'builds/tests/kernel_approximation/polynomial/evaluate', f.name]
+    if narrow:
+        command.append('float32')
+    result = subprocess.run(command, capture_output=True, text=True)
     Path(f.name).unlink()
     return result
 
@@ -34,10 +37,12 @@ def compare(x, gamma=1.0, degree=2, coef0=0.0, m=16, seed=42):
         reference.fit(x)
         want = reference.transform(x)
     result = native(x, gamma, degree, coef0, m, seed)
+    narrowed = native(x, gamma, degree, coef0, m, seed, narrow=True)
     label = (x.dtype, x.shape, gamma, degree, coef0, m, seed)
     if coef0 < 0:
         assert np.isnan(want).all(), label  # sklearn: sqrt(coef0) -> NaN everywhere
         assert result.returncode != 0 and 'coef0' in result.stderr + result.stdout, label
+        assert narrowed.returncode != 0 and 'coef0' in narrowed.stderr + narrowed.stdout, label
         count += 1
         return
     assert result.returncode == 0, (label, result.stderr)
@@ -48,6 +53,12 @@ def compare(x, gamma=1.0, degree=2, coef0=0.0, m=16, seed=42):
     assert np.array_equal(np.array(values[h:2 * h], dtype=np.int64), reference.bitHash_.ravel()), label
     got = np.array(values[2 * h:2 * h + want.size], dtype=float).reshape(want.shape)
     assert float(values[-1]) == rng.random_sample(), (label, 'draw consumption')
+    assert narrowed.returncode == 0, (label, narrowed.stderr)
+    narrow_values = narrowed.stdout.split()
+    assert narrow_values[:2 * h] == values[:2 * h], (label, 'narrow output hashes')
+    assert narrow_values[-1] == values[-1], (label, 'narrow output draw consumption')
+    got_narrow = np.array(narrow_values[2 * h:-1], dtype=float).reshape(want.shape)
+    np.testing.assert_array_equal(got_narrow, got.astype(np.float32), err_msg=str(label))
     augmented = np.sqrt(gamma) * x.astype(np.float64)
     if coef0 != 0:
         augmented = np.hstack([augmented, np.full((x.shape[0], 1), np.sqrt(coef0))])

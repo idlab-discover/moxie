@@ -26,9 +26,10 @@ including `get_feature_names_out()` (sklearn's `<step>__<name>` prefixes) and
 estimators' `n_features_in_` fields stay public. A kernel map followed by a
 classifier with a different target type (for example `RidgeClassifier` or
 `LinearSVC`) is fitted with `y=None`, which sklearn's maps ignore anyway.
-`PolynomialCountSketch` outputs Float64, so in a Float32 union or pipeline its
-successor must accept Float64. `tests/kernel_approximation/test_composition.mojo`
-covers pipelines with `RidgeClassifier`, default RNG use, unions, clone,
+`PolynomialCountSketch` defaults to Float64 output. Select
+`output_dtype=DType.float32` for a Float32 successor or union.
+`tests/kernel_approximation/test_composition.mojo` covers pipelines with
+`RidgeClassifier`, default RNG use, unions, clone,
 nested `set_params` and names. `moxie.model_selection` search and validation
 use typed adapters supplied by the caller.
 
@@ -49,8 +50,8 @@ including inside pipelines and unions. The default stream uses an exclusive
 lease. Overlapping acquisitions raise a `RuntimeError`-prefixed error. Integer
 seeds restart their stream each fit. Use `fit_with_rng` or
 `fit_transform_with_rng` with a mutable `RandomState` for a caller-owned stream.
-Polynomial outputs Float64 for either input dtype and rejects negative `coef0`
-at transform instead of returning NaNs. Sequential Float32 Laplacian Nystroem
+Polynomial rejects negative `coef0` at transform instead of returning NaNs.
+Sequential Float32 Laplacian Nystroem
 requires explicit Float64 output. See each API page for numerical adaptations,
 parameter updates, feature names and conditioning limits.
 

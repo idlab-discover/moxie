@@ -6,8 +6,8 @@ x' = [sqrt(gamma) x, sqrt(coef0)] is the circular convolution of `degree`
 independent count sketches of x', computed as IFFT(prod_d FFT(C_d x')).
 Its inner products approximate (gamma <x, y> + coef0)^degree.
 
-As in sklearn, sketches, FFTs and the output are Float64 for both input
-dtypes (sklearn's count_sketches buffer is np.zeros, i.e. float64).
+Sketches and FFTs use Float64, as in sklearn. The output also defaults to
+Float64, with an explicit Float32 option for typed composition.
 """
 from numojo import NDArray, Shape, zeros
 from std.math import sqrt, isfinite
@@ -49,19 +49,21 @@ struct PolynomialCountSketchParams(Copyable, Movable):
             raise Error("ValueError: PolynomialCountSketch: n_components must be >= 1, got " + String(self.n_components))
 
 
-struct PolynomialCountSketch[dtype: DType = DType.float64](KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
+struct PolynomialCountSketch[
+    dtype: DType = DType.float64, output_dtype: DType = DType.float64,
+](KernelFeatureMap, FeatureNamesOut, InputFeatureCount):
     """Polynomial kernel approximation via Tensor Sketch (dense input).
 
     Learned `indexHash_` and `bitHash_` are Int64 `(degree, p + (coef0 != 0))`
     arrays; `bitHash_` holds -1/+1 (sklearn's `choice([-1, 1])` integers).
-    `transform` returns a Float64 `(n_samples, n_components)` matrix for either
-    input dtype, matching sklearn.
+    `transform` returns an `(n_samples, n_components)` matrix in `output_dtype`.
+    It defaults to Float64 for either input dtype, matching sklearn.
     """
 
     comptime Params = PolynomialCountSketchParams
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
-    comptime Transformed = NDArray[DType.float64]
+    comptime Transformed = NDArray[Self.output_dtype]
     var params: Self.Params
     var _state: FeatureMapState
     var indexHash_: NDArray[DType.int64]
@@ -72,6 +74,7 @@ struct PolynomialCountSketch[dtype: DType = DType.float64](KernelFeatureMap, Fea
         out self, *, gamma: Float64 = 1.0, degree: Int = 2, coef0: Float64 = 0.0,
         n_components: Int = 100, random_state: Optional[Int] = None,
     ) raises:
+        comptime assert Self.output_dtype == DType.float32 or Self.output_dtype == DType.float64, "PolynomialCountSketch output_dtype must be Float32 or Float64"
         self.params = Self.Params(gamma=gamma, degree=degree, coef0=coef0, n_components=n_components, random_state=random_state)
         self._state = FeatureMapState()
         self.indexHash_ = NDArray[DType.int64](Shape(0, 0))
@@ -162,7 +165,7 @@ struct PolynomialCountSketch[dtype: DType = DType.float64](KernelFeatureMap, Fea
         var row_stride = Int(X.strides[0])
         var col_stride = Int(X.strides[1])
         var plan = fft_plan[DType.float64](width)
-        var result = zeros[DType.float64](Shape(rows, width))
+        var result = zeros[Self.output_dtype](Shape(rows, width))
         var sketch_re = List[Float64](length=width, fill=0)
         var sketch_im = List[Float64](length=width, fill=0)
         var prod_re = List[Float64](length=width, fill=0)
@@ -195,7 +198,7 @@ struct PolynomialCountSketch[dtype: DType = DType.float64](KernelFeatureMap, Fea
                         prod_re[k] = re
             plan.execute(prod_re, prod_im, inverse=True)
             for k in range(width):
-                result.unsafe_set(i * width + k, prod_re[k] * inverse_n)
+                result.unsafe_set(i * width + k, (prod_re[k] * inverse_n).cast[Self.output_dtype]())
         return result^
 
     def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:

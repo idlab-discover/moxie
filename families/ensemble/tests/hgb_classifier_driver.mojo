@@ -57,12 +57,11 @@ def _run_case[origin: ImmOrigin](fields: List[StringSpan[origin]]) raises:
         tol=0.02,
     )
     var params = model.get_params()
-    if scoring == 1:
-        params.scoring = None
-    elif scoring == 2:
-        params.scoring = String("accuracy")
-    elif scoring == 3:
-        params.scoring = String("balanced_accuracy")
+    var scorers: List[Optional[String]] = [
+        String("loss"), None, String("accuracy"), String("balanced_accuracy"),
+        String("neg_log_loss"), String("neg_brier_score"),
+    ]
+    params.scoring = scorers[scoring].copy()
     if categories:
         var mask = List[Bool](capacity=cols)
         for col in range(cols):

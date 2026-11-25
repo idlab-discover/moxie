@@ -38,11 +38,21 @@ are used as supplied. Binary fits support monotonic constraints by feature
 position. All fits support per-node feature subsampling, interaction constraints,
 and [explicit categorical columns](hgb-categorical.md).
 
-Early stopping monitors negative log loss by default. The optional string
-`scoring` also accepts `"accuracy"` or `"balanced_accuracy"`. Set
-`scoring=None` to use the classifier's default accuracy score. These two
-metrics score the predicted classes and account for training and validation
-weights.
+Early stopping defaults to `"loss"`, the negative training objective
+computed from raw margins. The optional string
+`scoring` accepts `"accuracy"`, `"balanced_accuracy"`, `"neg_log_loss"`,
+and `"neg_brier_score"`. Set `scoring=None` for the classifier's default
+accuracy score. Each metric uses the supplied training and validation weights.
+The probability scorers use `predict_proba`. Log loss clips probabilities at
+Float64 epsilon, and Brier scoring uses the binary half-scale convention.
+Log-loss scoring and multiclass Brier scoring require every fitted class to
+appear in the targets of each scored split. Binary Brier scoring accepts a
+holdout with one of the two classes. For a numeric split with one observed
+label, Brier scoring infers the positive label from that value. A one-class
+model uses its first probability column as the positive response. Binary
+Brier scoring with string labels raises because the scorer requires an
+explicit positive label for strings.
+
 The classifier uses a seeded, stratified sample of 10,000 rows to calculate
 training scores when the training split exceeds that size. Loss scoring uses
 the entire training split, and all scorers use the entire holdout.
@@ -97,6 +107,12 @@ column without copying it. Training updates each margin column directly from
 leaf partitions. NuMojo's eager gather and arithmetic on a materialized column
 would copy the input or allocate an intermediate per tree. Traversal, class
 selection and margin updates operate directly on the existing storage.
+Probability scoring reuses the classifier's probability conversion on the
+scored rows. It gathers raw margins only for the 10,000-row subsample when
+one is needed, then reduces per-row scores with the existing weighted mean.
+Log-loss clipping and the Numax Float64 logarithm operate on one probability
+per row. Brier scoring compares each probability to the corresponding target
+indicator as it accumulates the row score.
 
 Continuation replays retained raw-tree predictions to initialize training and
 validation margins. The tree snapshots retain their fitted thresholds, and the

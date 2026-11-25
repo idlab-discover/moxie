@@ -222,5 +222,55 @@ def test_categorical_float32_with_strided_input() raises:
     assert_equal(stages[2].unsafe_get(1), scores.unsafe_get(1))
 
 
+def test_probability_scorers_validate_class_coverage() raises:
+    var X = full[DType.float64](Shape(12, 1), 0.0)
+    var y = NDArray[DType.float64](Shape(12))
+    for i in range(y.size):
+        y.unsafe_set(i, Float64(i % 2))
+    var X_val = full[DType.float64](Shape(2, 1), 0.0)
+    var y_val = full[DType.float64](Shape(2), 0.0)
+    var model = HistGradientBoostingClassifier(
+        max_iter=1, early_stopping=True, random_state=4, scoring=String("neg_log_loss"),
+    )
+    _ = model.fit(X, y)
+    with assert_raises(contains="requires all fitted classes"):
+        _ = model.fit(X, y, X_val=X_val.view(), y_val=y_val.view())
+    assert_equal(model.n_iter_, 1)
+    assert_equal(model.classes_.size, 2)
+
+    var params = model.get_params()
+    params.scoring = String("neg_brier_score")
+    _ = model.set_params(params)
+    _ = model.fit(X, y, X_val=X_val.view(), y_val=y_val.view())
+    assert_equal(model.validation_score_.unsafe_get(0), -0.25)
+
+    for i in range(y.size):
+        y.unsafe_set(i, Float64(i % 3))
+    with assert_raises(contains="requires all fitted classes"):
+        _ = model.fit(X, y, X_val=X_val^, y_val=y_val^)
+    assert_equal(model.classes_.size, 2)
+
+
+def test_neg_log_loss_clips_saturated_probabilities() raises:
+    var X = NDArray[DType.float64](Shape(12, 1))
+    var y = NDArray[DType.float64](Shape(12))
+    var reversed = NDArray[DType.float64](Shape(12))
+    for i in range(y.size):
+        X.unsafe_set(i, Float64(i))
+        y.unsafe_set(i, Float64(i >= 6))
+        reversed.unsafe_set(i, Float64(i < 6))
+    var model = HistGradientBoostingClassifier(
+        max_iter=1,
+        min_samples_leaf=1,
+        learning_rate=100,
+        random_state=4,
+        early_stopping=True,
+        scoring=String("neg_log_loss"),
+    )
+    _ = model.fit(X, y, X_val=X.view(), y_val=reversed^)
+    assert_true(abs(model.train_score_.unsafe_get(1)) < 3e-16)
+    assert_true(abs(model.validation_score_.unsafe_get(1) + 36.04365338911715) < 1e-12)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

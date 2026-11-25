@@ -569,23 +569,31 @@ pipeline.fit(X, -y)
 compare("pipe.estimator.classes_", pipeline.classes_, labels=True)
 compare("pipe.predict_proba(Q)", pipeline.predict_proba(Q))
 
-# Narrow features keep Float32 scaling and use Float64 count-model outputs.
-for name, dtype, norm in (("MultinomialNB", "float64", False),
-                          ("MultinomialNB", "float32", False),
-                          ("ComplementNB", "float64", True)):
+# Narrow features keep Float32 scaling and use Float64 discrete-model outputs.
+# CategoricalNB truncates scaled features to categories 0 and 1 on these rows.
+for name, dtype, options in (
+    ("MultinomialNB", "float64", {}),
+    ("MultinomialNB", "float32", {}),
+    ("ComplementNB", "float64", {"norm": True}),
+    ("BernoulliNB", "float64", {"binarize": 0.5}),
+    ("BernoulliNB", "float32", {"binarize": 0.5}),
+    ("CategoricalNB", "float64", {}),
+    ("CategoricalNB", "float32", {}),
+):
     ident = f"case_{len(case_names)}"
     case_names.append(ident)
-    params = "norm=True" if norm else ""
+    params = ", ".join(f"{key}={value!r}" for key, value in options.items())
+    model = name if dtype == "float64" else f"{name}[dtype=DType.{dtype}]"
     lines.extend([f"\n@no_inline\ndef {ident}() raises:",
                   f"    var X = dense_from_lists({literal(X)}).astype[DType.{dtype}]()",
                   f"    var Q = dense_from_lists({literal(Q)}).astype[DType.{dtype}]()",
                   f"    var y: List[Int] = {literal(y)}",
-                  f"    var pipe = make_pipeline(MinMaxScaler[DType.{dtype}](), {name}[dtype=DType.{dtype}]({params}))",
+                  f"    var pipe = make_pipeline(MinMaxScaler[DType.{dtype}](), {model}({params}))",
                   "    with assert_raises():",
                   "        _ = pipe.predict_proba(Q)",
                   "    _ = pipe.fit(X, y)"])
     data, query = X.astype(dtype), Q.astype(dtype)
-    estimator = getattr(nb, name)(**({"norm": True} if norm else {}))
+    estimator = getattr(nb, name)(**options)
     pipeline = make_pipeline(MinMaxScaler(), estimator).fit(data, y)
     compare("pipe.estimator.classes_", pipeline.classes_, labels=True)
     compare("pipe.predict(Q)", pipeline.predict(query), labels=True)

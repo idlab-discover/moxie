@@ -274,16 +274,18 @@ to the same estimator, following the [shared native contract](../interfaces.md).
   `StandardScaler[DType.float32]()` and `GaussianNB[dtype=DType.float32]()`.
   The scaler output must match the estimator's compile-time `Input` type.
   Direct Gaussian calls also accept Lists and other supported NDArray dtypes.
-- `make_pipeline(MinMaxScaler(), MultinomialNB())` and the corresponding
-  `ComplementNB()` pipeline take Float64 NDArrays. To match a
-  `MinMaxScaler[DType.float32]()`, use `MultinomialNB[dtype=DType.float32]()`
-  or `ComplementNB[dtype=DType.float32]()`. For these classifiers, `dtype`
-  selects the trait input type. The count statistics and array probabilities
-  use Float64, and direct calls accept all supported feature dtypes.
-  Direct array overloads infer the dtype from `X`. Use `input_dtype` when
-  naming that method parameter explicitly.
-- BernoulliNB and CategoricalNB expose `List[List[Float64]]` as their trait
-  `Input`. Pass a transformer's NDArray result to their direct array overloads.
+- All four discrete classifiers use `NDArray[dtype]` as their trait input,
+  with Float64 by default. For example,
+  `make_pipeline(MinMaxScaler(), MultinomialNB())` consumes Float64 arrays.
+  For a Float32 transformer, use the matching classifier specialization,
+  such as `BernoulliNB[dtype=DType.float32]()`. Array probabilities and
+  count statistics use Float64. Transformer outputs must satisfy the
+  classifier's feature requirements, including valid category codes after
+  integer conversion for CategoricalNB.
+- Direct discrete-classifier calls accept Lists and arrays of all supported
+  feature dtypes. List queries produce nested List probabilities. Direct
+  array overloads infer the dtype from `X`. Use `input_dtype` when naming
+  that method parameter explicitly.
 - `moxie.model_selection.learning_curve` (like the other CV helpers built on
   the same trait) takes an explicit `CVAdapter` / `TypedScorer`; `GaussianNB` with
   `exploit_incremental_learning=True` drives `partial_fit` through an

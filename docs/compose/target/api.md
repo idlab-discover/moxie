@@ -66,11 +66,28 @@ not the transformer, as in sklearn), `predict(X)`, `score(X, y, sample_weight=No
   matrix (sklearn reads `regressor_.n_features_in_`). For matrix regressors,
   `fit`, weighted `fit`, `predict` and `score` also accept native `ColumnTable`.
   These overloads retain `feature_names_in_` and require matching names/order
-  at prediction. An array refit clears names. Metadata routing and sparse `X`
-  remain unavailable; pandas/polars integration is excluded.
+  at prediction. An array refit clears names. The shared `get_n_features_in()`
+  capability lets dense meta-estimators such as `GridSearchCV` expose the
+  fitted width. The Mojo getter raises `NotFittedError` before fit. Metadata
+  routing and sparse `X` remain unavailable; pandas/polars integration is excluded.
 - `score` accumulates R² in Float64 (sklearn uses the input floating dtype).
 - A failed fit leaves the previous learned state untouched (sklearn may leave
   a new `transformer_` behind).
+
+## Cross-validation and search
+
+For dense Float64 features and targets, construct a
+`DenseSupervisedAdapter[type_of(model)]` for `cross_val_score` and
+`GridSearchCV`. The adapter slices dense matrices and arrays automatically.
+Each fold fits its own clone, and default R² scoring uses predictions after
+the inverse target transform.
+
+For a Ridge grid, pass the adapter a typed parameter callback that reads the
+configured Ridge's parameter record, updates `alpha` and calls
+`model.set_params(regressor_params=config^)`. A grid key such as
+`"regressor__alpha"` is interpreted by this callback. The
+[native example](../../../tests/compose/target/ridge_search.mojo) shows the
+complete adapter, grid and refitted prediction calls.
 
 ## Evidence
 
@@ -80,3 +97,6 @@ components, weights, Float32) and the example. `pixi run parity` compares 38
 Float32/Float64 cases with the pinned `_target.py`, `_function_transformer.py`
 and `linear_model/_base.py`; tolerances and the documented warning/message
 exemptions are stated in `tests/compose/target/parity.py`.
+The [Ridge search comparison](../../../tests/compose/target/ridge_search_parity.py)
+checks fold scores, grid selection and refitted predictions against the same
+revision with Float64 absolute and relative tolerances of `1e-12`.

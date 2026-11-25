@@ -126,6 +126,50 @@ def main() raises:
     print(f1_score(truth, predicted, average="macro"))  # 0.4
 ```
 
+## Classification reports
+
+`classification_report` returns a text table with precision, recall, F1,
+and support for each class. `digits` defaults to 2 and controls the printed
+precision of the scores. Use `classification_report_dict` for unrounded
+values. It returns a `ClassificationReport` whose `rows` map names to
+`ClassificationReportRow` records with `precision`, `recall`, `f1_score`, and
+`support` fields. Its scalar `accuracy` is an `Optional[Float64]`. Separate
+entry points give text and dictionary callers concrete return types.
+
+```mojo
+from moxie.metrics import classification_report, classification_report_dict
+
+def main() raises:
+    var truth: List[String] = ["cat", "dog", "cat"]
+    var predicted: List[String] = ["cat", "cat", "dog"]
+    print(classification_report(truth, predicted), end="")
+    var report = classification_report_dict(truth, predicted)
+    print(report.rows["cat"].f1_score, report.accuracy.value())
+```
+
+Reports accept the target representations, sample weights, and
+`zero_division` described above. Label order defaults to the sorted union of
+the targets, or column order for multilabel indicators. Explicit `labels`
+can select, reorder, or repeat classes. Unobserved single labels have zero
+support. `target_names` supplies display names in selected label order.
+If names and explicitly supplied labels have different lengths, the report
+prints a warning on stderr and renders the paired rows. The averages still
+use all selected labels. With inferred labels, a length mismatch raises.
+
+Macro and weighted averages appear in every report. Single-label reports
+display accuracy when the selection covers every observed label and the
+micro average when it covers a subset. Multilabel reports include both
+micro and samples averages. Repeated display names occupy separate text
+rows. In the dictionary the last row with a given name wins, and the name
+`accuracy` maps to its scalar precision, mirroring scikit-learn's reserved
+key. An empty label selection can produce a dictionary of averages. Text
+output requires at least one available display name.
+
+The native text path uses the shared fixed-decimal formatter for scores and
+Mojo's numeric spelling for label names and weighted support. Inferred
+numeric labels canonicalize signed zero. Explicit floating-point label
+names retain the sign of zero.
+
 ## Model selection
 
 A `TypedScorer` can use metrics directly on the estimator's predictions.
@@ -153,13 +197,15 @@ mkdir -p builds/metrics
 mojo build -I builds/deps tests/metrics/classification.mojo -o builds/metrics/classification
 mojo build -I builds/deps tests/metrics/scorer.mojo -o builds/metrics/scorer
 mojo build -I builds/deps tests/metrics/precision_recall.mojo -o builds/metrics/precision_recall
-"$SKLEARN_PYTHON" tests/metrics/parity.py builds/metrics/classification builds/metrics/scorer builds/metrics/precision_recall
+mojo build -I builds/deps tests/metrics/classification_report.mojo -o builds/metrics/classification_report
+"$SKLEARN_PYTHON" tests/metrics/parity.py builds/metrics/classification builds/metrics/scorer builds/metrics/precision_recall builds/metrics/classification_report
 ```
 
-The comparison runs the three native contract binaries, checks the installed
+The comparison runs the four native contract binaries, checks the installed
 oracle sources against the committed reference bytes, and compares results
 with a Float64 absolute tolerance of `1e-14` for the tested inputs. The
-tolerance allows for different reduction order.
+tolerance allows for different reduction order. Report tests also compare
+complete text output and warning categories and messages.
 
 The implementation reuses `moxie._labels.type_of_target` for numeric target
 validation. Numax `not_equal` produces a separate mask on its row-major
@@ -184,3 +230,7 @@ subset. For multilabel targets the corresponding counts are fused over
 logical NuMojo indices. The existing Numax `count_nonzero` folds the entire
 tensor; combining elementwise masks and reductions would require
 indicator-sized temporaries for the weighted row or column counts.
+
+Reports reuse those counts for the per-label, micro, macro, and weighted
+scores. Multilabel reports also reuse the existing samplewise reduction.
+Report formatting uses the same fixed-decimal operation as the tree exporter.

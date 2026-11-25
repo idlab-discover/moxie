@@ -59,17 +59,12 @@ def _weight(weights: _Weights, row: Int) raises -> Float64:
     return weights.value()[Item(row)] if weights else 1.0
 
 
-def _single_label_counts[Label: _Label](
+def _single_label_tallies[Label: _Label](
     y_true: List[Label],
     y_pred: List[Label],
-    labels: Optional[List[Label]],
-    pos_label: Optional[Label],
-    average: String,
     sample_weight: _Weights,
-) raises -> List[_Counts]:
+) raises -> Dict[Label, _Counts]:
     _check_rows(len(y_true), len(y_pred))
-    if average == "samples":
-        raise Error("ValueError: samples averaging requires multilabel targets")
     _validate_weights(sample_weight, len(y_true))
     var counts = Dict[Label, _Counts]()
     for row in range(len(y_true)):
@@ -87,6 +82,29 @@ def _single_label_counts[Label: _Label](
             var predicted_tally = counts.get(predicted, _Counts())
             predicted_tally.add(False, True, weight)
             counts[predicted.copy()] = predicted_tally
+    return counts^
+
+
+def _sorted_labels[Label: _Label](counts: Dict[Label, _Counts]) -> List[Label]:
+    var order = List[Label](capacity=len(counts))
+    for label in counts.keys():
+        order.append(label.copy())
+    sort(Span(order))
+    return order^
+
+
+def _single_label_counts[Label: _Label](
+    y_true: List[Label],
+    y_pred: List[Label],
+    labels: Optional[List[Label]],
+    pos_label: Optional[Label],
+    average: String,
+    sample_weight: _Weights,
+) raises -> List[_Counts]:
+    if average == "samples":
+        _check_rows(len(y_true), len(y_pred))
+        raise Error("ValueError: samples averaging requires multilabel targets")
+    var counts = _single_label_tallies(y_true, y_pred, sample_weight)
 
     var result = List[_Counts]()
     if average == "binary":
@@ -100,11 +118,7 @@ def _single_label_counts[Label: _Label](
         for label in labels.value():
             result.append(counts.get(label, _Counts()))
     else:
-        var order = List[Label](capacity=len(counts))
-        for label in counts.keys():
-            order.append(label.copy())
-        sort(Span(order))
-        for label in order:
+        for label in _sorted_labels(counts):
             result.append(counts.get(label, _Counts()))
     return result^
 

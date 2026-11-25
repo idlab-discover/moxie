@@ -10,6 +10,7 @@ from sklearn import config_context
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
+    classification_report,
     confusion_matrix,
     f1_score,
     fbeta_score,
@@ -400,6 +401,117 @@ def precision_recall_warnings():
     ]
 
 
+def check_reports(executable):
+    truth = [0, 1, 2, 2, 0, 1]
+    predicted = [0, 0, 2, 1, 0, 1]
+    weights = [0.5, 1.0, 2.0, 4.25, 0.0, -0.25]
+    strings = ["Ω", "chat", "Ω", "chat"]
+    predictions = ["chat", "chat", "Ω", "Ω"]
+    extremes = np.array([2**63 - 2, 2**63 - 1, 2**63 - 2], dtype=np.int64)
+    indicators = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 0], [1, 0, 0]])
+    predicted_indicators = np.array([[1, 0, 0], [0, 0, 1], [0, 0, 0], [1, 0, 1]])
+    subset = dict(labels=[2, 0, 2, 3], target_names=["left", "right", "left", "unseen"],
+                  sample_weight=weights, zero_division=np.nan)
+    cases = [
+        ("TEXT", "multiclass", truth, predicted, {}),
+        ("DICT", "multiclass", truth, predicted, {}),
+        ("TEXT", "subset", truth, predicted, dict(subset, digits=5)),
+        ("DICT", "subset", truth, predicted, subset),
+        ("TEXT", "short_names", truth, predicted,
+         dict(labels=[3, 2, 1, 0], target_names=["unseen", "second"], zero_division=1)),
+        ("TEXT", "long_names", truth, predicted,
+         dict(labels=[3, 2, 1, 0], target_names=["a", "b", "c", "d", "a long unused heading"],
+              zero_division=0)),
+        ("DICT", "superset", truth, predicted, dict(labels=[3, 2, 1, 0], zero_division=0)),
+        ("DICT", "empty_selection", truth, predicted, dict(labels=[], zero_division=0)),
+        ("DICT", "warnings", [0, 1], [0, 2], {}),
+        ("TEXT", "ties", [0, 0], [0, 1], dict(digits=0, zero_division=0)),
+        ("DICT", "cancelled_weights", [0, 1], [0, 0],
+         dict(sample_weight=[1.0, -1.0], zero_division=1)),
+        ("TEXT", "string_column", np.array(strings)[:, None], predictions,
+         dict(target_names=["🙂é very_long_label", "Ω"])),
+        ("DICT", "strings", strings, predictions, {}),
+        ("DICT", "string_target", np.array(strings)[:, None], predictions, {}),
+        ("DICT", "reserved_name", strings, predictions,
+         dict(labels=["Ω"], target_names=["accuracy"])),
+        ("DICT", "strided_numeric", np.array([1, 99, -0.0, 99, 2, 99, 0.0])[6::-2],
+         [1.0, 2.0, 0.0, 1.0], dict(labels=[-0.0, 2.0, 1.0],
+                                   sample_weight=[4.0, 2.0, 1.0, 0.5], zero_division=0)),
+        ("TEXT", "float32_column", np.array([[1], [2], [1]], dtype=np.float32),
+         np.array([2, 2, 1], dtype=np.float32), {}),
+        ("DICT", "int64_identity", extremes, extremes[[1, 0, 2]], {}),
+        ("TEXT", "multilabel", indicators, predicted_indicators, dict(zero_division=0)),
+        ("DICT", "multilabel", indicators, predicted_indicators, dict(zero_division=0)),
+        ("DICT", "multilabel_selected", indicators, predicted_indicators,
+         dict(labels=[2, 0, 2], sample_weight=[0.5, 1.0, 2.0, 4.25], zero_division=np.nan)),
+        ("DICT", "multilabel_empty", indicators, predicted_indicators,
+         dict(labels=[], zero_division=0)),
+    ]
+
+    result = subprocess.run([executable.resolve()], text=True, capture_output=True, check=True)
+    blocks = result.stdout.split("END\n")
+    assert blocks.pop() == ""
+    assert len(blocks) == len(cases)
+    with warnings.catch_warnings(record=True) as log:
+        warnings.simplefilter("always")
+        for block, (kind, name, y_true, y_pred, kwargs) in zip(blocks, cases, strict=True):
+            heading, actual = block.split("\n", 1)
+            assert heading == f"{kind} {name}"
+            expected = classification_report(y_true, y_pred, output_dict=kind == "DICT", **kwargs)
+            if kind == "TEXT":
+                np.testing.assert_equal(actual, expected, err_msg=name)
+                continue
+            rows = {}
+            for line in actual.splitlines():
+                label, *values = line.split("\t")
+                assert label not in rows
+                rows[label] = list(map(float, values))
+            expected_rows = {
+                label: [value] if label == "accuracy" else [
+                    value[key] for key in ("precision", "recall", "f1-score", "support")
+                ]
+                for label, value in expected.items()
+            }
+            compare(rows, expected_rows)
+    expected_warnings = []
+    for entry in log:
+        category = entry.category.__name__
+        message = str(entry.message)
+        if category == "UndefinedMetricWarning":
+            prefix, _ = message.split(" and being set to 0.0", 1)
+            message = prefix + " and being set to 0.0"
+        expected_warnings.append(f"{category}: {message}")
+    np.testing.assert_equal(result.stderr.splitlines(), expected_warnings)
+    return len(cases), len(expected_warnings)
+
+
+def check_report_reference_errors():
+    binary = [0, 1]
+    indicators = np.array([[0, 1], [1, 0]])
+    continuous = [0.1, 1.5]
+    multioutput = [[0, 1], [1, 2]]
+    cases = [
+        (binary, binary, {"target_names": ["only"]}),
+        (binary, binary, {"labels": [], "zero_division": 0}),
+        (binary, binary, {"digits": -1}),
+        (binary, binary, {"zero_division": 2.0, "output_dict": True}),
+        ([], [], {"output_dict": True}),
+        (binary, [0], {"output_dict": True}),
+        (binary, binary, {"sample_weight": [1], "output_dict": True}),
+        (binary, binary, {"sample_weight": [0, 0], "output_dict": True}),
+        (binary, binary, {"sample_weight": [1, np.inf], "output_dict": True}),
+        (indicators, indicators, {"labels": [2], "output_dict": True}),
+        (indicators, [[0, 1, 0], [1, 0, 0]], {"output_dict": True}),
+        (indicators, binary, {"output_dict": True}),
+        (multioutput, multioutput, {"output_dict": True}),
+        (continuous, continuous, {"output_dict": True}),
+    ]
+    for truth, predicted, kwargs in cases:
+        with np.testing.assert_raises(ValueError):
+            classification_report(truth, predicted, **kwargs)
+    return len(cases)
+
+
 def compare(actual, expected):
     if actual.keys() != expected.keys():
         raise AssertionError(f"Native cases {actual.keys()} differ from {expected.keys()}")
@@ -415,6 +527,7 @@ def main():
     parser.add_argument("classification", type=Path)
     parser.add_argument("scorer", type=Path)
     parser.add_argument("precision_recall", type=Path)
+    parser.add_argument("classification_report", type=Path, nargs="?")
     args = parser.parse_args()
     verify_oracle()
     cases = classification_cases() | confusion_cases()
@@ -431,6 +544,11 @@ def main():
         "cv_f1": cv_scores(f1_score),
     }
     compare(native_output(args.scorer), scores)
+    if args.classification_report is not None:
+        reports, report_warnings = check_reports(args.classification_report)
+        report_errors = check_report_reference_errors()
+        print(f"Matched {reports} classification reports, {report_errors} report errors, "
+              f"and {report_warnings} report warnings against sklearn {REVISION}")
     print(
         f"Matched {sum(map(len, (cases | prf_cases).values()))} metric values, {errors} error cases "
         f"and {sum(map(len, scores.values()))} CV scores against sklearn {REVISION}"

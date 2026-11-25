@@ -20,6 +20,7 @@ import scipy
 from scipy.optimize import isotonic_regression as scipy_isotonic
 import sklearn
 from sklearn.exceptions import UnsetMetadataPassedError
+from sklearn.model_selection import GridSearchCV, cross_val_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -110,6 +111,22 @@ def main():
             tags = model.__sklearn_tags__()
             add("tags", fitted, tags.input_tags.one_d_array, tags.input_tags.two_d_array,
                 tags._skip_test)
+
+    def model_selection_rejects_misaligned_weights():
+        x = np.arange(10, dtype=dtype)
+        with sklearn.config_context(enable_metadata_routing=True):
+            for weight_count in (1, 11):
+                metadata = {"sample_weight": np.ones(weight_count, dtype=dtype)}
+                for fit_request in (True, False):
+                    model = reference.IsotonicRegression(out_of_bounds="clip")
+                    model.set_fit_request(sample_weight=fit_request)
+                    model.set_score_request(sample_weight=not fit_request)
+                    with np.testing.assert_raises_regex(ValueError, "inconsistent numbers of samples"):
+                        cross_val_score(model, x, x, params=metadata, error_score="raise")
+                    search = GridSearchCV(model, {"y_max": [4.0]}, error_score="raise")
+                    with np.testing.assert_raises_regex(ValueError, "inconsistent numbers of samples"):
+                        search.fit(x, x, **metadata)
+        print(f"PASS: pinned isotonic rejects misaligned CV and search weights ({dtype.__name__})")
 
     def routing_requests():
         source = args.sklearn_checkout / "sklearn/utils/_metadata_requests.py"
@@ -337,6 +354,7 @@ def main():
     routing_requests()
     serialized_requests()
     estimator_tags()
+    model_selection_rejects_misaligned_weights()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(240):
@@ -397,6 +415,7 @@ def main():
     routing_requests()
     serialized_requests()
     estimator_tags()
+    model_selection_rejects_misaligned_weights()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         for i in range(150):

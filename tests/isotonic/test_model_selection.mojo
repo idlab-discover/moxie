@@ -82,6 +82,33 @@ def test_search[dtype: DType, list_inputs: Bool](
     assert_false(model.__sklearn_is_fitted__())
 
 
+def test_metadata_length[list_inputs: Bool](
+    X: IsotonicCVAdapter[DType.float64, list_inputs].Scorer.Input,
+    y: IsotonicCVAdapter[DType.float64, list_inputs].Scorer.Target,
+    oversized: IsotonicCVAdapter[DType.float64, list_inputs].Scorer.Metadata,
+    undersized: IsotonicCVAdapter[DType.float64, list_inputs].Scorer.Metadata,
+) raises:
+    comptime Adapter = IsotonicCVAdapter[DType.float64, list_inputs]
+    var adapter = Adapter()
+    var model = IsotonicRegression(out_of_bounds="clip")
+    var grid = Dict[String, List[IsotonicSearchValue]]()
+    grid["y_max"] = [IsotonicSearchValue(4.0)]
+    var search = GridSearchCV[Adapter](model, grid, adapter)
+    for weights in [oversized.copy(), undersized.copy()]:
+        with assert_raises(contains="one value per sample"):
+            _ = cross_val_score[Adapter](
+                model, X, y, adapter, fit_metadata=weights, score_metadata=None,
+            )
+        with assert_raises(contains="one value per sample"):
+            _ = cross_val_score[Adapter](
+                model, X, y, adapter, fit_metadata=None, score_metadata=weights,
+            )
+        with assert_raises(contains="one value per sample"):
+            _ = search.fit(X, y, weights, None)
+        with assert_raises(contains="one value per sample"):
+            _ = search.fit(X, y, None, weights)
+
+
 def test_validation() raises:
     var adapter = IsotonicCVAdapter()
     var X = zeros[DType.float64](Shape(5, 1))
@@ -95,6 +122,10 @@ def test_validation() raises:
     var folds = adapter.default_cv(X, y)
     with assert_raises(contains="sample_weight should be a 1d array"):
         _ = adapter.metadata_rows(X.copy(), folds[0].train)
+    with assert_raises(contains="sample_weight should be a 1d array"):
+        _ = cross_val_score[IsotonicCVAdapter[]](
+            IsotonicRegression(), X, y, adapter, fit_metadata=None, score_metadata=X.copy(),
+        )
     with assert_raises(contains="sample index out of bounds"):
         _ = adapter.metadata_rows(zeros[DType.float64](Shape(1)), folds[0].train)
 
@@ -133,6 +164,10 @@ def main() raises:
     test_search[DType.float64, False](
         X, array(y, [10]), array(fit_weights, [10]), array(score_weights, [10]),
     )
+    var oversized: List[Float64] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    var undersized: List[Float64] = [1]
+    test_metadata_length[False](X, array(y, [10]), array(oversized, [11]), array(undersized, [1]))
+    test_metadata_length[True](X.tolist(), y, oversized^, undersized^)
 
     var xs: List[Float32] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     var ys: List[Float32] = [0, 2, 1, 4, 3, 6, 5, 8, 7, 9]

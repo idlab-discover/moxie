@@ -97,6 +97,21 @@ struct IsotonicCVAdapter[dtype: DType = DType.float64, list_inputs: Bool = False
     ) raises -> Self.Scorer.Target:
         return self.input_rows(y, rows, rows)
 
+    def validate_metadata(self, metadata: Self.Scorer.Metadata, n_samples: Int) raises:
+        if not metadata:
+            return
+        ref weights = metadata.value()
+        var count: Int
+        comptime if Self.list_inputs:
+            count = len(rebind[Self._Vector](weights))
+        else:
+            ref dense = rebind[Self._Dense](weights)
+            if dense.ndim != 1:
+                raise Error("ValueError: sample_weight should be a 1d array")
+            count = dense.shape[0]
+        if count != n_samples:
+            raise Error("ValueError: sample weights require one value per sample")
+
     def metadata_rows(
         self, metadata: Self.Scorer.Metadata, rows: IndexArray
     ) raises -> Self.Scorer.Metadata:

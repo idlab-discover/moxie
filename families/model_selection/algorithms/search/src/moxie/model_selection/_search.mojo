@@ -1,16 +1,17 @@
 # Adapted from scikit-learn; SPDX-License-Identifier: BSD-3-Clause
 """Serial typed grid/random search, shared candidate evaluation and refitting."""
-from moxie.base import SupervisedEstimator, SupervisedScorer, ClassifierMixin, RegressorMixin, BaseEstimator, InputEstimator, clone, Predictor, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, TransformerMixin, InverseTransformer, SampleScorer
+from moxie.base import SupervisedEstimator, SupervisedScorer, ClassifierMixin, RegressorMixin, BaseEstimator, InputEstimator, clone, Predictor, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, TransformerMixin, InverseTransformer, SampleScorer, WeightedSupervisedEstimator
 from moxie.model_selection._base import SearchEstimator
-from moxie.model_selection._evaluation import TypedScorer, ParameterAdapter
-from moxie.model_selection._validation import CVAdapter, _cross_validate
-from moxie.model_selection._indices import IndexSplit
+from moxie.model_selection._evaluation import EstimatorScore, TypedScorer, ParameterAdapter
+from moxie.model_selection._validation import DefaultCVAdapter, _cross_validate
+from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
+from moxie.model_selection._split import KFold, SplitLabels, check_cv, select_rows
 from moxie.model_selection._results import ScoreTable, FitStatus, ErrorPolicy, RefitSelector, validate_refit_index, require_refit
 from moxie.model_selection._search_parameters import ParameterGrid, ParameterSampler, ParameterDomain, DiscreteDistribution
 from moxie.model_selection._candidates import ParameterDistribution
 from moxie._dense import sum_axis2d
 from moxie._random import RandomState
-from numojo import NDArray, Shape, Item
+from numojo import NDArray, Shape, Item, array
 from std.math import sqrt, isnan
 from std.memory import bitcast
 from std.time import perf_counter_ns
@@ -20,15 +21,155 @@ trait SearchScorer(TypedScorer, Copyable):
     pass
 
 
-trait SearchAdapter(CVAdapter, ParameterAdapter, Copyable, Deinitable):
-    """Extend CV with typed partial parameter application and default policies."""
+trait SearchAdapter(DefaultCVAdapter, ParameterAdapter, Copyable, Deinitable):
+    """Extend CV with typed partial parameter application."""
+    pass
 
-    def default_scorer(self) raises -> Self.Scorer:
-        ...
 
-    def default_cv(self, X: Self.Scorer.Input, y: Self.Scorer.Target) raises -> List[IndexSplit]:
-        """Return sklearn's five unshuffled folds, stratified for classification."""
-        ...
+comptime _ParameterApplier[E: SupervisedScorer, V: Copyable & Deinitable] = def(
+    mut E, Dict[String, V]
+) thin raises
+
+
+def _collect_splits[C: SplitCursor & Deinitable](var cursor: C) raises -> List[IndexSplit]:
+    var splits = List[IndexSplit]()
+    while True:
+        var pair = cursor.next()
+        if not pair:
+            return splits^
+        splits.append(pair.take())
+
+
+struct DenseSupervisedAdapter[
+    E: SupervisedScorer & Deinitable,
+    Y: Copyable & Deinitable = NDArray[DType.float64],
+    dtype: DType = DType.float64,
+    V: Copyable & Deinitable = Float64,
+    weight_dtype: DType = dtype,
+](SearchAdapter):
+    """Ordinary dense samples with array or list targets and optional weights."""
+
+    comptime X = NDArray[Self.dtype]
+    comptime Weight = NDArray[Self.weight_dtype]
+    comptime Scorer = EstimatorScore[Self.E, Self.X, Self.Y, Self.Weight]
+    comptime Value = Self.V
+    comptime _IsArray = (
+        Self.Y == NDArray[DType.float32] or Self.Y == NDArray[DType.float64]
+        or Self.Y == IndexArray
+    )
+    comptime _ArrayDType = (
+        DType.float32 if Self.Y == NDArray[DType.float32] else
+        DType.int64 if Self.Y == IndexArray else DType.float64
+    )
+    comptime _Label = (
+        String if Self.Y == List[String] else
+        Int if Self.Y == List[Int] else
+        Int64 if Self.Y == List[Int64] else
+        Float32 if Self.Y == List[Float32] else Float64
+    )
+
+    var _apply_params: Optional[_ParameterApplier[Self.E, Self.V]]
+    var _classifier: Bool
+
+    def __init__(
+        out self,
+        apply_params: Optional[_ParameterApplier[Self.E, Self.V]] = None,
+        *,
+        classifier: Bool = conforms_to(Self.E, ClassifierMixin),
+    ):
+        comptime assert Self.X == Self.E.Input, "Dense input must match the estimator"
+        comptime assert Self.Y == Self.E.Target, "Target must match the estimator"
+        comptime assert Self.Weight == Self.E.SampleWeight, "Weight must match the estimator"
+        comptime assert Self._IsArray or Self.Y == List[Self._Label], (
+            "Expected Float32, Float64 or Int64 arrays, or String, Int, Int64, Float32 or Float64 lists"
+        )
+        self._apply_params = apply_params
+        self._classifier = classifier
+
+    def n_samples(self, X: Self.X, y: Self.Y) raises -> Int:
+        if X.ndim != 2:
+            raise Error("ValueError: dense CV expects a rank-two feature matrix")
+        var n: Int
+        comptime if Self._IsArray:
+            ref target = rebind[NDArray[Self._ArrayDType]](y)
+            if target.ndim != 1 and target.ndim != 2:
+                raise Error("ValueError: dense CV expects rank-one or rank-two targets")
+            n = target.shape[0]
+        else:
+            n = len(rebind[List[Self._Label]](y))
+        if X.shape[0] != n:
+            raise Error("ValueError: inconsistent sample counts")
+        return n
+
+    def input_rows(self, X: Self.X, rows: IndexArray, train: IndexArray) raises -> Self.X:
+        return select_rows(X, rows)
+
+    def target_rows(self, y: Self.Y, rows: IndexArray) raises -> Self.Y:
+        comptime if Self._IsArray:
+            return rebind_var[Self.Y](select_rows(rebind[NDArray[Self._ArrayDType]](y), rows))
+        else:
+            return rebind_var[Self.Y](select_rows(rebind[List[Self._Label]](y), rows))
+
+    def validate_metadata(self, metadata: Optional[Self.Weight], n_samples: Int) raises:
+        if metadata:
+            ref weights = metadata.value()
+            if weights.ndim != 1 or weights.shape[0] != n_samples:
+                raise Error("ValueError: sample weights require one value per sample")
+
+    def metadata_rows(self, metadata: Optional[Self.Weight], rows: IndexArray) raises -> Optional[Self.Weight]:
+        if metadata:
+            return select_rows(metadata.value(), rows)
+        return None
+
+    def fit(self, mut estimator: Self.E, X: Self.X, y: Self.Y, metadata: Optional[Self.Weight]) raises:
+        if metadata:
+            self.validate_metadata(metadata, self.n_samples(X, y))
+            comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
+                comptime assert Self.Weight == Self.E.SampleWeight
+                _ = estimator.fit(
+                    rebind[Self.E.Input](X), rebind[Self.E.Target](y),
+                    sample_weight=rebind[Self.E.SampleWeight](metadata.value()),
+                )
+            else:
+                raise Error("ValueError: estimator does not support weighted fit")
+        else:
+            _ = estimator.fit(rebind[Self.E.Input](X), rebind[Self.E.Target](y))
+
+    def configure(self, mut estimator: Self.E, params: Dict[String, Self.V]) raises:
+        if self._apply_params:
+            self._apply_params.value()(estimator, params)
+        elif len(params) != 0:
+            raise Error("ValueError: nonempty parameters require an apply_params function")
+
+    def default_scorer(self) -> Self.Scorer:
+        return Self.Scorer()
+
+    def default_cv(self, X: Self.X, y: Self.Y) raises -> List[IndexSplit]:
+        var n = self.n_samples(X, y)
+        if not self._classifier:
+            return _collect_splits(KFold(5).split(n))
+        var labels = self._split_labels(y)
+        return _collect_splits(check_cv(None, labels, classifier=True).split(n, labels))
+
+    @staticmethod
+    def _split_labels(y: Self.Y) raises -> SplitLabels:
+        comptime if Self._IsArray:
+            return SplitLabels._numeric(rebind[NDArray[Self._ArrayDType]](y))
+        elif Self._Label == String:
+            return SplitLabels(rebind[List[String]](y))
+        elif Self._Label == Int:
+            ref target = rebind[List[Int]](y)
+            var labels = IndexArray(Shape(len(target)))
+            for i in range(len(target)):
+                labels[Item(i)] = Int64(target[i])
+            return SplitLabels(labels)
+        else:
+            comptime dtype = (
+                DType.float32 if Self._Label == Float32 else
+                DType.int64 if Self._Label == Int64 else DType.float64
+            )
+            ref target = rebind[List[Scalar[dtype]]](y)
+            return SplitLabels._numeric(array[dtype](target, [len(target)]))
 
 
 @fieldwise_init

@@ -12,6 +12,7 @@ Dense Float64 and Float32 NDArrays and lists support weighted PAVA, increasing/d
 fits, automatic direction, predictor tie consolidation, threshold compression,
 linear interpolation, lower/upper bounds and all three out-of-bounds modes.
 The estimator accepts 1-D and one-column X and returns 1-D predictions.
+Both public helpers accept 1-D NDArrays and Lists.
 Fit, predict, transform, fit_transform, weighted R², clone, parameter updates,
 feature names and repeated fitting are covered by native contracts. Failed
 refits preserve the previous fitted state, an explicit transactional adaptation.
@@ -52,11 +53,11 @@ assembled isotonic bytes with the Moxie-owned source. Native
 tests cover invalid shapes, empty/nonfinite inputs, weight errors, unfitted
 access and failed refits; compile-failure checks reject missing predictor
 capability and implicit mixed-dtype conversion. Parity executes the pinned
-local Python module and a locally compiled copy of its Cython tie engine:
-722 Float64 cases and 555 Float32 cases, including weighted scores, scaler
-pipeline predictions, interpolator reconstruction, validation edges and
-diagnostics from automatic fit, direct direction checks and singleton scores,
-as well as sample-weight request resolution, persistence and input tags.
+local Python module and a locally compiled copy of its Cython tie engine.
+Float64 and Float32 cases cover both public helpers with NDArrays and Lists,
+weighted scores, scaler pipeline predictions, interpolator reconstruction,
+validation edges and diagnostics. They also cover sample-weight request
+resolution, persistence and input tags.
 Threshold counts, X thresholds, domain and direction must match exactly. Value tolerances
 are `2e-12` for Float64 and `2e-6` for Float32, allowing pooling/reduction order
 and rounding differences. Python and SciPy are validation tools only.

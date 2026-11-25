@@ -1,7 +1,7 @@
 """Read oracle fixtures produced by check_parity.py; no Python runtime."""
 from std.sys import argv
 from std.testing import assert_equal, assert_raises, assert_true
-from numojo import array
+from numojo import NDArray, array
 from moxie.base import get_tags
 from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
@@ -172,14 +172,26 @@ def run_cases[dtype: DType]() raises:
             check_serialized_request(routing.score, String(fields[5]))
         elif kind == "kernel":
             var y = vector[dtype](String(fields[1]))
+            var weights = optional_vector[dtype](String(fields[2]))
+            var lower = optional_number(String(fields[3]))
+            var upper = optional_number(String(fields[4]))
+            var increasing = fields[5] == "true"
+            var expected = vector[dtype](String(fields[6]))
             var result = isotonic_regression(
-                y,
-                sample_weight=optional_vector[dtype](String(fields[2])),
-                y_min=optional_number(String(fields[3])),
-                y_max=optional_number(String(fields[4])),
-                increasing=fields[5] == "true",
+                y, sample_weight=weights, y_min=lower, y_max=upper,
+                increasing=increasing,
             )
-            compare(result, vector[dtype](String(fields[6])), context)
+            compare(result, expected, context + " List")
+            var dense_weights: Optional[NDArray[dtype]] = None
+            if weights:
+                ref values = weights.value()
+                dense_weights = array(values, [len(values)])
+            var dense_result: NDArray[dtype] = isotonic_regression(
+                array(y, [len(y)]), sample_weight=dense_weights,
+                y_min=lower, y_max=upper, increasing=increasing,
+            )
+            assert_equal(dense_result.ndim, 1, context)
+            compare(dense_result.tolist(), expected, context + " NDArray")
         elif kind == "direction":
             var x = vector[dtype](String(fields[1]))
             var y = vector[dtype](String(fields[2]))
@@ -188,6 +200,16 @@ def run_cases[dtype: DType]() raises:
                     _ = check_increasing(x, y)
             else:
                 assert_equal(check_increasing(x, y), fields[3] == "true")
+        elif kind == "dense_direction":
+            var x = vector[dtype](String(fields[1]))
+            var y = vector[dtype](String(fields[2]))
+            var features = array(x, [len(x)])
+            var target = array(y, [len(y)])
+            if fields[3] == "error":
+                with assert_raises(contains="inconsistent numbers of samples"):
+                    _ = check_increasing(features, target)
+            else:
+                assert_equal(check_increasing(features, target), fields[3] == "true")
         elif kind == "score_warnings":
             var model = IsotonicRegression[dtype]()
             var train_x: List[Scalar[dtype]] = [0, 1]

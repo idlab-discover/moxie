@@ -125,6 +125,43 @@ def exercise_metadata() raises:
     assert_equal(cloned.get_metadata_routing().score.requested_name().or_else(""), "score_weights")
 
 
+def exercise_dense_helpers[dtype: DType]() raises:
+    var buffer: List[Scalar[dtype]] = [0, 99, 1, 99, 2, 99]
+    var backing = array(buffer, [6])
+    var ascending = backing.view_with_layout(Shape(3), NDArrayStrides(2), 0)
+    var descending = backing.view_with_layout(Shape(3), NDArrayStrides(-2), 4)
+    assert_true(check_increasing(ascending, ascending))
+    assert_false(check_increasing(ascending, descending))
+    var weight_data: List[Scalar[dtype]] = [1, -1, 1, -1, 2]
+    var weight_backing = array(weight_data, [5])
+    var weights = weight_backing.view_with_layout(Shape(3), NDArrayStrides(-2), 4)
+    var fitted = isotonic_regression(descending, sample_weight=weights)
+    var expected: List[Scalar[dtype]] = [1.25, 1.25, 1.25]
+    assert_equal(fitted.ndim, 1)
+    assert_equal(fitted.tolist(), expected)
+    fitted.unsafe_set(0, 42)
+    assert_equal(backing.tolist(), buffer)
+    assert_equal(weight_backing.tolist(), weight_data)
+
+    var column = backing.view_with_layout(Shape(3, 1), NDArrayStrides(2, 1), 0)
+    with assert_raises(contains="x should be a 1d array"):
+        _ = check_increasing(column, ascending)
+    with assert_raises(contains="y should be a 1d array"):
+        _ = check_increasing(ascending, column)
+    with assert_raises(contains="y should be a 1d array"):
+        _ = isotonic_regression(column)
+    with assert_raises(contains="sample_weight should be a 1d array"):
+        _ = isotonic_regression(ascending, sample_weight=column)
+    var empty = zeros[dtype](Shape(0))
+    assert_false(check_increasing(empty, empty))
+    with assert_raises(contains="at least one sample"):
+        _ = isotonic_regression(empty)
+    with assert_raises(contains="inconsistent number of sample weights"):
+        _ = isotonic_regression(ascending, sample_weight=empty)
+    with assert_raises(contains="weights must be positive"):
+        _ = isotonic_regression(ascending, sample_weight=ascending)
+
+
 def exercise_output[dtype: DType]() raises:
     var model = IsotonicRegression[dtype]()
     var x: List[Scalar[dtype]] = [0, 1, 2]
@@ -145,6 +182,8 @@ def main() raises:
     exercise[DType.float64]()
     exercise_views[DType.float32]()
     exercise_views[DType.float64]()
+    exercise_dense_helpers[DType.float32]()
+    exercise_dense_helpers[DType.float64]()
     exercise_output[DType.float32]()
     exercise_output[DType.float64]()
     exercise_metadata()

@@ -138,6 +138,16 @@ def cases():
         estimator=dict(fit_intercept=False), skip_complete=True,
         max_iter=2, tol=(2 + 2**-22) / 8,
     )
+    for bits in (23, 52):
+        # Each small change is half an ULP at 2 in the tested dtype.
+        # A sequential sum loses all seven terms. NumPy's contiguous
+        # reduction groups them and exceeds the chosen tolerance.
+        diagonal = [16] + [8 * 2.0**-bits] * 7
+        wide = np.vstack([np.diag(diagonal), [np.nan] * 8])
+        yield f"pairwise-row-sum-{bits}", wide, wide, dict(
+            estimator=dict(fit_intercept=False), skip_complete=True,
+            max_iter=2, tol=(2 + 2.0**(1 - bits)) / 16,
+        )
     yield "scalar-bounds", X, Z, dict(min_value=-0.1, max_value=0.2)
     yield "all-missing-transform", X, np.full_like(Z, np.nan), {}
     yield "one-feature", X[:, :1], Z[:, :1], {}

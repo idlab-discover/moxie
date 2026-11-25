@@ -12,7 +12,7 @@ from moxie.base import Predictor, SupervisedEstimator
 from moxie._feature_metadata import FeatureNamesOut
 from moxie._random import RandomState, check_random_state
 from moxie.linear_model._bayes import BayesianRidge
-from moxie.preprocessing._special_math import ndtr, ndtri
+from moxie.preprocessing._special_math import ndtr, ndtri, pairwise_sum_in
 from moxie.impute._base import Imputer
 from moxie.impute._simple import SimpleImputer
 from moxie.impute._indicator import MissingIndicator
@@ -562,11 +562,13 @@ struct IterativeImputer[
             weights = _correlations(filled)
         var scale = Scalar[Self.dtype](0)
         var previous = Optional[Self.Input]()
+        var row_changes = Optional[Self.Input]()
         if not self._params.sample_posterior:
             for i in range(filled.size):
                 if not mask.unsafe_get(i):
                     scale = max(scale, abs(filled.unsafe_get(i)))
             previous = filled.copy()
+            row_changes = nm.zeros[Self.dtype](nm.Shape(width))
         var tolerance = self._params.tol.cast[Self.dtype]() * scale
         if self._params.verbose > 0:
             print("[IterativeImputer] Completing matrix with shape", filled.shape)
@@ -585,17 +587,18 @@ struct IterativeImputer[
                 print("[IterativeImputer] Ending imputation round", self.n_iter_, "/", self._params.max_iter)
             if not previous:
                 continue
-            # Match the reference's input-dtype row sums before comparing.
+            # The reference takes the matrix infinity norm of a contiguous
+            # difference. Reuse one row of scratch for its pairwise sums.
             ref snapshot = previous.value()
+            ref changes = row_changes.value()
             var change = Scalar[Self.dtype](0)
             for i in range(filled.shape[0]):
-                var row_change = Scalar[Self.dtype](0)
                 for j in range(width):
                     var offset = i * width + j
                     var updated = filled.unsafe_get(offset)
-                    row_change += abs(updated - snapshot.unsafe_get(offset))
+                    changes.unsafe_set(j, abs(updated - snapshot.unsafe_get(offset)))
                     snapshot.unsafe_set(offset, updated)
-                change = max(change, row_change)
+                change = max(change, pairwise_sum_in(changes, 0, width))
             if self._params.verbose > 0:
                 print("[IterativeImputer] Change:", change, "scaled tolerance:", tolerance)
             if change < tolerance:

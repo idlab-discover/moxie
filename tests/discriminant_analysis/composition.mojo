@@ -154,6 +154,60 @@ def lda_then_qda[dtype: DType]() raises:
     assert_equal(pipe.estimator.get_n_features_in(), 2)
 
 
+def score_weights[dtype: DType](n: Int) raises -> NDArray[dtype]:
+    var weights = zeros[dtype](Shape(n))
+    for i in range(n):
+        weights.unsafe_set(i, Scalar[dtype](1 + i % 7))
+    return weights^
+
+
+def routed_scores[dtype: DType](emit: Bool) raises:
+    var pipe = make_pipeline(StandardScaler[dtype](), LinearDiscriminantAnalysis[dtype]())
+    var x = blobs[dtype](45, 4)
+    var y = labels(45)
+    var weights = score_weights[dtype](45)
+    var standard = {"sample_weight": weights.copy()}
+    with assert_raises(contains="NotFittedError"):
+        _ = pipe.score(x, y, metadata=standard)
+
+    _ = pipe.fit(x, y)
+    # Use the same labels on both reference and native sides, with one flipped.
+    y[0] = 1
+    var plain = pipe.score(x, y)
+    var weighted = pipe.score(x, y, sample_weight=weights.copy())
+    assert_true(plain != weighted)
+    assert_equal(pipe.score(x, y, metadata=Dict[String, NDArray[dtype]]()), plain)
+    with assert_raises(contains="UnsetMetadataPassedError"):
+        _ = pipe.score(x, y, metadata=standard)
+
+    _ = pipe.estimator.set_score_request(sample_weight=False)
+    with assert_raises(contains="unexpected metadata"):
+        _ = pipe.score(x, y, metadata=standard)
+    _ = pipe.estimator.set_score_request(sample_weight=True)
+    assert_equal(pipe.score(x, y, metadata=standard), weighted)
+
+    _ = pipe.estimator.set_score_request(sample_weight=String("validation_weight"))
+    var aliased = {"validation_weight": weights.copy()}
+    var routed = pipe.score(x, y, metadata=aliased)
+    assert_equal(routed, weighted)
+    with assert_raises(contains="unexpected metadata"):
+        _ = pipe.score(x, y, metadata=standard)
+
+    var qda = make_pipeline(StandardScaler[dtype](), QuadraticDiscriminantAnalysis[dtype]())
+    _ = qda.estimator.set_score_request(sample_weight=String("validation_weight"))
+    _ = qda.fit(x, labels(45))
+    var qda_routed = qda.score(x, y, metadata=aliased)
+    assert_equal(qda_routed, qda.score(x, y, sample_weight=weights.copy()))
+    assert_true(qda_routed != qda.score(x, y))
+
+    aliased["unexpected"] = weights.copy()
+    with assert_raises(contains="unexpected metadata"):
+        _ = pipe.score(x, y, metadata=aliased)
+    if emit:
+        print("routed_score", String(dtype), "lda", routed)
+        print("routed_score", String(dtype), "qda", qda_routed)
+
+
 def cloned_pipeline() raises:
     var x = blobs[DType.float64](45, 4)
     var y = labels(45)
@@ -263,6 +317,8 @@ def main() raises:
     scaled_lda_projection[DType.float32](emit)
     lda_then_qda[DType.float64]()
     lda_then_qda[DType.float32]()
+    routed_scores[DType.float64](emit)
+    routed_scores[DType.float32](emit)
     cloned_pipeline()
     cross_validation_and_search[DType.float64](emit)
     cross_validation_and_search[DType.float32](emit)

@@ -179,6 +179,21 @@ or R², validation, and configuration-dependent errors. Pipeline conforms to
 `ClassifierMixin` when its final estimator does, including through nesting.
 This lets classifier adapters consume the entire pipeline.
 
+For a final scorer that implements `FitScoreMetadataRequestProvider` and has
+a copyable weight type, use the explicit routing overload:
+
+```mojo
+_ = pipe.estimator.set_score_request(sample_weight=String("validation_weight"))
+var score = pipe.score(X_test, y_test, metadata={"validation_weight": weights.copy()})
+```
+
+The dictionary uses the final scorer's weight type. An empty dictionary uses
+ordinary unweighted scoring. The pipeline validates supplied keys before
+transforming `X`. The standard key raises `UnsetMetadataPassedError` for an
+unset request. Declined, unknown, or extra keys raise `TypeError`. The explicit
+dictionary carries only supplied keys, so an alias works without an implicit
+`sample_weight=None` argument. Routing covers the final supervised scorer.
+
 Unsupported final estimators fail at compile time; ordinary fit/predict remains
 available. The foundation scoring trait includes optional weights, so a native
 scorer that cannot accept them must reject nonempty weights explicitly. Python
@@ -502,7 +517,8 @@ API is **deferred** (absent from the typed API, so use fails at compile time):
 
 - `passthrough`/`None` steps and a heterogeneous `named_steps` mapping;
 - constructor options `memory`, `verbose` and `transform_input`;
-- arbitrary fit parameter routing, metadata routing, callbacks,
+- arbitrary fit parameter routing, metadata routing outside final supervised
+  scoring, callbacks,
   `set_output` and `feature_names_in_`.
 
 [Dense FeatureUnion](feature-union.md) is implemented and can be a Pipeline

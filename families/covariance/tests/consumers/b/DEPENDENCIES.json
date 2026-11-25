@@ -62,6 +62,9 @@
         "moxie._pipeline_sequential": {
           "file": "src/moxie/_pipeline_sequential.mojo"
         },
+        "moxie.metadata_routing": {
+          "file": "src/moxie/metadata_routing.mojo"
+        },
         "moxie._pipeline_union": {
           "file": "src/moxie/_pipeline_union.mojo"
         },

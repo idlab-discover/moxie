@@ -12,6 +12,7 @@ from moxie.base import (
 from moxie._pipeline import validate_names
 from moxie._pipeline_contracts import PipelineEstimator, PredictivePipeline, SliceablePipeline, TransformingPipeline
 from moxie._pipeline_union import UnionFeatureNames, UnionInputFeatures
+from moxie.metadata_routing import FitScoreMetadataRequestProvider
 from moxie.utils.validation import check_is_fitted
 
 
@@ -317,6 +318,23 @@ struct Pipeline[
                                         rebind[Optional[Self.E.SampleWeight]](sample_weight))
         else:
             comptime assert False, "pipeline needs destructible intermediate values"
+
+    def score(
+        self, X: Self.Input, y: Self.Target,
+        *, metadata: Dict[String, Self.SampleWeight],
+    ) raises -> Float64 where conforms_to(Self.E, SupervisedScorer & FitScoreMetadataRequestProvider) and conforms_to(
+        Self.SampleWeight, Copyable & Deinitable
+    ):
+        """Route weights requested by the final estimator before transforming X."""
+        if len(metadata) == 0:
+            return self.score(X, y)
+        check_is_fitted(self)
+        if len(metadata) == 1:
+            var requests = self.estimator.get_metadata_routing()
+            var weights = requests.score.route(metadata)
+            if weights:
+                return self.score(X, y, sample_weight=weights^)
+        raise Error("TypeError: Pipeline.score got unexpected metadata keys")
 
     def predict_proba(self, X: Self.Input) raises -> Self.Probabilities where conforms_to(Self.E, ProbabilityPredictor):
         check_is_fitted(self)

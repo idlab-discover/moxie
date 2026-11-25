@@ -296,6 +296,9 @@
         "moxie.calibration": {
           "file": "src/moxie/calibration.mojo"
         },
+        "moxie.calibration_serialization": {
+          "file": "src/moxie/calibration_serialization.mojo"
+        },
         "moxie._calibration_adapter": {
           "file": "src/moxie/_calibration_adapter.mojo"
         },
@@ -431,11 +434,17 @@
         "moxie.feature_selection._sequential_adapter": {
           "file": "src/moxie/feature_selection/_sequential_adapter.mojo"
         },
+        "moxie.feature_selection._ridge_classifier_importance": {
+          "file": "src/moxie/feature_selection/_ridge_classifier_importance.mojo"
+        },
         "moxie.feature_selection._logistic_importance": {
           "file": "src/moxie/feature_selection/_logistic_importance.mojo"
         },
         "moxie.feature_selection._linear_svc_importance": {
           "file": "src/moxie/feature_selection/_linear_svc_importance.mojo"
+        },
+        "moxie.feature_selection._svc_importance": {
+          "file": "src/moxie/feature_selection/_svc_importance.mojo"
         },
         "moxie.feature_selection._tree_importance": {
           "file": "src/moxie/feature_selection/_tree_importance.mojo"
@@ -580,6 +589,12 @@
         },
         "moxie.ensemble._hist_gradient_boosting.histogram": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/histogram.mojo"
+        },
+        "moxie.ensemble._hist_gradient_boosting.losses": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/losses.mojo"
+        },
+        "moxie.ensemble._hist_gradient_boosting.predictor": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/predictor.mojo"
         },
         "moxie.ensemble._hist_gradient_boosting.splitting": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/splitting.mojo"
@@ -767,9 +782,12 @@
             "ConfiguredScorer": "moxie.feature_selection._univariate_selection",
             "DecisionTreeClassifierImportance": "moxie.feature_selection._tree_importance",
             "LinearSVCImportance": "moxie.feature_selection._linear_svc_importance",
+            "SVCImportance": "moxie.feature_selection._svc_importance",
+            "RidgeClassifierImportance": "moxie.feature_selection._ridge_classifier_importance",
             "LogisticRegressionImportance": "moxie.feature_selection._logistic_importance",
             "DenseSupervisedCV": "moxie.feature_selection._sequential_adapter",
             "DiscreteFeatures": "moxie.feature_selection._mutual_info",
+            "BayesianRidgeImportance": "moxie.feature_selection._linear_model_importance",
             "ElasticNetImportance": "moxie.feature_selection._linear_model_importance",
             "EstimatorCVScore": "moxie.feature_selection._sequential_adapter",
             "FeatureCount": "moxie.feature_selection._rfe",
@@ -1593,6 +1611,9 @@
         "moxie.model_selection._evaluation": {
           "file": "src/moxie/model_selection/_evaluation.mojo"
         },
+        "moxie.model_selection._classification_threshold": {
+          "file": "src/moxie/model_selection/_classification_threshold.mojo"
+        },
         "moxie.model_selection._api": {
           "file": "src/moxie/model_selection/_api.mojo"
         },
@@ -1614,6 +1635,7 @@
             "SplitCursor": "moxie.model_selection._indices",
             "validate_indices": "moxie.model_selection._indices",
             "EstimatorScore": "moxie.model_selection._evaluation",
+            "NegMeanSquaredError": "moxie.model_selection._evaluation",
             "TypedScorer": "moxie.model_selection._evaluation",
             "FitAdapter": "moxie.model_selection._evaluation",
             "clone_fit_score": "moxie.model_selection._evaluation",
@@ -1626,7 +1648,8 @@
             "Candidate": "moxie.model_selection._candidates",
             "ParameterCandidates": "moxie.model_selection._candidates",
             "ParameterDistribution": "moxie.model_selection._candidates",
-            "FixedThresholdClassifier": "moxie.model_selection._api",
+            "FixedThresholdClassifier": "moxie.model_selection._classification_threshold",
+            "FixedThresholdParams": "moxie.model_selection._classification_threshold",
             "HalvingGridSearchCV": "moxie.model_selection._api",
             "HalvingRandomSearchCV": "moxie.model_selection._api",
             "TunedThresholdClassifierCV": "moxie.model_selection._api",
@@ -2119,6 +2142,7 @@
             "SimpleImputer": "moxie.impute._simple",
             "StringImputationResult": "moxie.impute._string",
             "StringMatrix": "moxie.impute._string",
+            "CategoricalStringImputer": "moxie.impute._string",
             "StringSimpleImputer": "moxie.impute._string",
             "StringMissingIndicator": "moxie.impute._string",
             "IterativeBound": "moxie.impute._iterative",
@@ -2756,7 +2780,8 @@
             "MLPRegressorAPI": "moxie.neural_network._base",
             "RBMTransformer": "moxie.neural_network._base",
             "MLPClassifier": "moxie.neural_network._api",
-            "MLPRegressor": "moxie.neural_network._api"
+            "MLPRegressor": "moxie.neural_network._api",
+            "MLPParams": "moxie.neural_network._mlp_model"
           }
         },
         "schema": 1
@@ -2775,8 +2800,8 @@
         "moxie.neural_network._api": {
           "file": "src/moxie/neural_network/_api.mojo"
         },
-        "moxie.neural_network._api_types": {
-          "file": "src/moxie/neural_network/_api_types.mojo"
+        "moxie.neural_network._mlp_model": {
+          "file": "src/moxie/neural_network/_mlp_model.mojo"
         }
       },
       "path": "families/neural_network"
@@ -2885,12 +2910,6 @@
       "id": "manifold",
       "path": "families/manifold",
       "modules": {
-        "moxie.manifold._api": {
-          "file": "src/moxie/manifold/_api.mojo"
-        },
-        "moxie.manifold._api_types": {
-          "file": "src/moxie/manifold/_api_types.mojo"
-        },
         "moxie.manifold._barnes_hut_tsne": {
           "file": "src/moxie/manifold/_barnes_hut_tsne.mojo"
         },
@@ -2903,11 +2922,26 @@
         "moxie.manifold._isomap": {
           "file": "src/moxie/manifold/_isomap.mojo"
         },
+        "moxie.manifold._mds": {
+          "file": "src/moxie/manifold/_mds.mojo"
+        },
+        "moxie.manifold._smacof": {
+          "file": "src/moxie/manifold/_smacof.mojo"
+        },
         "moxie.manifold._plumbing": {
           "file": "src/moxie/manifold/_plumbing.mojo"
         },
         "moxie.manifold._t_sne": {
           "file": "src/moxie/manifold/_t_sne.mojo"
+        },
+        "moxie.manifold._lle_reconstruction": {
+          "file": "src/moxie/manifold/_lle_reconstruction.mojo"
+        },
+        "moxie.manifold._locally_linear": {
+          "file": "src/moxie/manifold/_locally_linear.mojo"
+        },
+        "moxie.manifold._spectral_embedding": {
+          "file": "src/moxie/manifold/_spectral_embedding.mojo"
         }
       },
       "assets": {
@@ -2920,19 +2954,27 @@
           "moxie.manifold": {
             "EmbeddingEstimator": "moxie.manifold._base",
             "OutOfSampleEmbedding": "moxie.manifold._base",
-            "MDS": "moxie.manifold._api",
+            "MDS": "moxie.manifold._mds",
+            "MDSMetric": "moxie.manifold._mds",
+            "MDSMetricParams": "moxie.manifold._mds",
+            "MDSParams": "moxie.manifold._mds",
+            "NormalizedStress": "moxie.manifold._smacof",
+            "SMACOFResult": "moxie.manifold._smacof",
             "TSNE": "moxie.manifold._t_sne",
             "TSNEParams": "moxie.manifold._t_sne",
             "TSNEMetricParams": "moxie.manifold._t_sne",
             "ClassicalMDS": "moxie.manifold._classical_mds",
             "Isomap": "moxie.manifold._isomap",
             "IsomapParams": "moxie.manifold._isomap",
-            "LocallyLinearEmbedding": "moxie.manifold._api",
-            "SpectralEmbedding": "moxie.manifold._api",
-            "locally_linear_embedding": "moxie.manifold._api",
-            "smacof": "moxie.manifold._api",
-            "spectral_embedding": "moxie.manifold._api",
-            "trustworthiness": "moxie.manifold._t_sne"
+            "LocallyLinearEmbedding": "moxie.manifold._locally_linear",
+            "SpectralEmbedding": "moxie.manifold._spectral_embedding",
+            "locally_linear_embedding": "moxie.manifold._locally_linear",
+            "smacof": "moxie.manifold._smacof",
+            "spectral_embedding": "moxie.manifold._spectral_embedding",
+            "trustworthiness": "moxie.manifold._t_sne",
+            "LocallyLinearEmbeddingParams": "moxie.manifold._locally_linear",
+            "LocallyLinearEmbeddingResult": "moxie.manifold._locally_linear",
+            "SpectralEmbeddingParams": "moxie.manifold._spectral_embedding"
           }
         }
       }

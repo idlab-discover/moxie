@@ -41,6 +41,43 @@ unfitted estimator. The
 compares OvR and OvO class order and predictions exactly and Float64 decision
 values within the family solver tolerance against scikit-learn.
 
+## LinearSVC composition
+
+Calibration accepts `CalibratedClassifierCV(adapt_classifier(LinearSVC()))`
+with a Float64 vector of integer-valued labels. For coefficient-based
+selection, use `SelectFromModel(LinearSVCImportance(LinearSVC()))` with the
+classifier's native `List[Float64]` target. In a univariate selection pipeline,
+configure the scorer to accept that same label list.
+
+```mojo
+from moxie.feature_selection import BuiltinScorer, SelectKBest
+from moxie.pipeline import make_pipeline
+from moxie.svm import LinearSVC
+
+comptime Scorer = BuiltinScorer[DType.float64, DType.float64, List[Float64]]
+var model = make_pipeline(SelectKBest(Scorer("f_classif"), k=2), LinearSVC())
+_ = model.fit(X, y)
+```
+
+The focused `test_linear_composition.mojo` contract runs with the SVM native
+tests. Its pinned sklearn comparison checks class order, predictions, selected
+features, and transformed values exactly. It allows `rtol=2e-6` and
+`atol=2e-7` for margins and sigmoid probabilities because solvers can stop on
+different iterations. From the repository root, after building the contract
+binary with locked Mojo 1.0.0, run the comparison with scikit-learn built from
+revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b` on the Python import path.
+
+```shell
+python - <<'PY'
+from families.svm.tools.check import ROOT, assemble, compile_file
+
+assemble(ROOT)
+source = ROOT / "tests/test_linear_composition.mojo"
+compile_file(source, ROOT / "builds" / source.stem)
+PY
+python families/svm/tests/linear_composition_parity.py
+```
+
 ## SVC cross-validation and grid search
 
 `cross_val_score` and `GridSearchCV` accept a pipeline built with

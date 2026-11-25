@@ -30,7 +30,8 @@ def check_dtype[dtype: DType]() raises:
     assert_equal(model.classes_, List[Int]([-2, 9]))
     assert_equal(model.class_count_.item(0), 5.0)
     assert_equal(model.class_count_.item(1), 1.5)
-    assert_equal(model.n_categories_, List[Int]([4, 5]))
+    assert_equal(model.n_categories_.item(0), Int64(4))
+    assert_equal(model.n_categories_.item(1), Int64(5))
     assert_equal(model.category_count_[0].shape[0], 2)
     assert_equal(model.category_count_[0].shape[1], 4)
     assert_equal(model.category_count_[0].item(0, 1), 2.0)
@@ -46,6 +47,10 @@ def check_dtype[dtype: DType]() raises:
             assert_equal(p.item(i, c), list_p[i][c])
     var copied = model.copy()
     copied.category_count_[0][Item(0, 1)] = 100.0
+    copied.n_categories_[Item(0)] = 7
+    copied.class_log_prior_[Item(0)] = 1.0
+    assert_equal(model.n_categories_.item(0), Int64(4))
+    assert_true(model.class_log_prior_.item(0) < 0.0)
     copied.feature_log_prob_[0][Item(0, 1)] = 100.0
     copied.class_count_[Item(0)] = 100.0
     assert_equal(model.category_count_[0].item(0, 1), 2.0)
@@ -54,12 +59,17 @@ def check_dtype[dtype: DType]() raises:
     var fresh = clone(model)
     assert_false(fresh.__sklearn_is_fitted__())
     assert_equal(len(fresh.category_count_), 0)
+    assert_equal(fresh.n_categories_.ndim, 1)
+    assert_equal(fresh.n_categories_.size, 0)
+    assert_equal(fresh.class_log_prior_.ndim, 1)
+    assert_equal(fresh.class_log_prior_.size, 0)
     var first = X.view_with_layout(Shape(2, 2), nm.NDArrayStrides(2, 1), 0)
     var second = X.view_with_layout(Shape(2, 2), nm.NDArrayStrides(2, 1), 4)
     _ = fresh.partial_fit(first, List[Int]([9, -2]), classes=List[Int]([9, -2]),
                       sample_weight=List[Float64]([0.5, 2.0]))
     _ = fresh.partial_fit(second, List[Int]([9, -2]), sample_weight=List[Float64]([1.0, 3.0]))
-    assert_equal(fresh.n_categories_, List[Int]([1, 5]))
+    assert_equal(fresh.n_categories_.item(0), Int64(1))
+    assert_equal(fresh.n_categories_.item(1), Int64(5))
     assert_equal(fresh.category_count_[0].shape[1], 4)
     for f in range(2):
         for c in range(2):
@@ -123,7 +133,8 @@ def check_conversion[dtype: DType]() raises:
     var y: List[Int] = [0, 1]
     var model = CategoricalNB(min_categories_values=List[Int]([3]))
     _ = model.fit(X, y)
-    assert_equal(model.n_categories_, List[Int]([3, 3]))
+    assert_equal(model.n_categories_.item(0), Int64(3))
+    assert_equal(model.n_categories_.item(1), Int64(3))
     assert_equal(model.category_count_[0].item(0, 0), 1.0)
     assert_equal(model.category_count_[1].item(1, 0), 1.0)
     assert_equal(model.predict(X), y)
@@ -156,7 +167,8 @@ def main() raises:
     var X: List[List[Float64]] = [[0.0, 1.0], [1.0, 0.0]]
     var y: List[Int] = [0, 1]
     _ = list_model.fit(X, y)
-    assert_equal(list_model.n_categories_, List[Int]([3, 3]))
+    assert_equal(list_model.n_categories_.item(0), Int64(3))
+    assert_equal(list_model.n_categories_.item(1), Int64(3))
     _ = list_model.partial_fit(X, y)
     assert_equal(list_model.category_count_[1].item(0, 1), 2.0)
     assert_equal(list_model.predict(X), y)

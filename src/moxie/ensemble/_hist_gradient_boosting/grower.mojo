@@ -76,6 +76,7 @@ struct _GrownTree(Movable):
     var tree: _BinnedTree
     var partition: List[Int]
     var leaves: List[Int]
+    var shrinkage: Float64
 
     def take_tree(deinit self) -> _BinnedTree:
         return self.tree^
@@ -398,4 +399,4 @@ def grow_tree[gradient_origin: ImmOrigin, hessian_origin: ImmOrigin, //](
             growth.nodes[index].value *= shrinkage
             leaves.append(index)
     var tree = _BinnedTree(growth^.take_nodes(), n_features, missing_bin)
-    return _GrownTree(tree^, partition^, leaves^)
+    return _GrownTree(tree^, partition^, leaves^, shrinkage)

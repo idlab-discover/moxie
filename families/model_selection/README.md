@@ -16,9 +16,11 @@ Implemented groups:
 - Serial `validation_curve` and `learning_curve`, including
   weighted evaluation and optional learning-curve timings.
 - Serial `permutation_test_score`, with grouped shuffling and target-dependent CV.
+- `FixedThresholdClassifier` over fitted, frozen or clone-fitted dense binary
+  classifiers. See the [threshold contract](docs/fixed-threshold.md).
 
 Native SVG learning/validation displays and explicit incremental CV adapters are
-also implemented. Thresholds and halving remain queued. See [scope](docs/scope.md);
+also implemented. Threshold tuning and halving remain queued. See [scope](docs/scope.md);
 exported API placeholders are not working algorithms.
 
 From the Moxie root:
@@ -31,7 +33,7 @@ pixi run python families/model_selection/tools/check.py test
 Moxie owns all source, child projects, examples and tests here. Live manifests
 resolve shared contracts to Moxie and preserve the copied compatible Pixi locks.
 The retired sibling is not a build input. `tools/completeness.py` deliberately
-fails for the four threshold/halving placeholders.
+fails for the three threshold-tuning and halving placeholders.
 
 - [Splitter interfaces and exact-index checks](algorithms/splitters/docs/scope.md)
 - [Search estimators and runnable example](algorithms/search/docs/search.md)
@@ -49,5 +51,5 @@ all examples. Reference evidence and raw logs stay under ignored `docs/private/`
 cloning the repository does not copy them. No Python executes in library code.
 
 [Provenance](PROVENANCE.json) records the original revision, pre-existing edits,
-lock hashes and archived source. Unvalidated threshold/halving drafts remain
+lock hashes and archived source. Unvalidated threshold-tuning and halving drafts remain
 explicit deferrals in [scope](docs/scope.md).

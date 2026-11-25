@@ -5,7 +5,8 @@
 from std.math import exp, inf, isfinite, log
 from numojo import NDArray, Shape, full, zeros
 from moxie._random import check_random_state
-from moxie.base import WeightedSupervisedEstimator
+from moxie._feature_metadata import InputFeatureCount
+from moxie.base import NumericClassifierClasses, WeightedSupervisedEstimator
 from moxie.linear_model._base import ProbabilisticLinearClassifier
 from moxie.linear_model._contracts import validate_weights
 from moxie.linear_model._linear_base import (
@@ -13,7 +14,9 @@ from moxie.linear_model._linear_base import (
     linear_decision, public_prediction,
 )
 from moxie.linear_model._linear_loss import LogisticLoss, logistic_probability
-from moxie.linear_model._logistic_solver import LogisticSolution, logistic_lbfgs, logistic_newton, logistic_newton_cg
+from moxie.linear_model._logistic_solver import (
+    LogisticSolution, logistic_lbfgs, logistic_newton, logistic_newton_cg, logistic_sag,
+)
 from moxie.linear_model._ridge_labels import (
     ClassWeight, LabelEncoding, _label, accuracy, fit_labels,
 )
@@ -114,11 +117,13 @@ struct LogisticRegressionParams(Copyable, Movable):
 
 
 struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DType.int64](
-    Copyable, ProbabilisticLinearClassifier, WeightedSupervisedEstimator,
+    Copyable, InputFeatureCount, NumericClassifierClasses,
+    ProbabilisticLinearClassifier, WeightedSupervisedEstimator,
 ):
     """Dense logistic regression with sorted integer-valued numeric labels."""
 
     comptime Input = NDArray[Self.dtype]
+    comptime ClassLabelDType = Self.label_dtype
     comptime Target = NDArray[Self.label_dtype]
     comptime Prediction = Self.Target
     comptime Decision = Self.Input
@@ -262,6 +267,14 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._encoding)
 
+    def get_classes(self) raises -> Self.Target:
+        check_is_fitted(self)
+        return self.classes_.copy()
+
+    def get_n_features_in(self) raises -> Int:
+        check_is_fitted(self)
+        return self.n_features_in_
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,
     ) raises -> ref[self] Self:
@@ -285,7 +298,7 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
         self._fit(X, y, Optional(weights^))
         return self
 
-    def _regularization(self) raises -> Tuple[Float64, Bool]:
+    def _regularization(self) raises -> Tuple[Float64, Float64]:
         if not (self.C > 0) or not (self.tol >= 0 and isfinite(self.tol)):
             raise Error("ValueError: LogisticRegression requires C > 0 and finite tol >= 0")
         if self.max_iter < 0 or self.verbose < 0:
@@ -297,7 +310,11 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             if seed < 0 or seed > 4294967295:
                 raise Error("ValueError: random_state must be in [0, 2**32 - 1]")
         var liblinear = self.solver == "liblinear"
-        if not liblinear and self.solver != "lbfgs" and self.solver != "newton-cholesky" and self.solver != "newton-cg":
+        var saga = self.solver == "saga"
+        if not (
+            liblinear or saga or self.solver == "sag" or self.solver == "lbfgs"
+            or self.solver == "newton-cholesky" or self.solver == "newton-cg"
+        ):
             raise Error(String("NotImplementedError: LogisticRegression solver ", self.solver))
         if self.dual and not liblinear:
             raise Error("ValueError: LogisticRegression requires dual=False for the selected solver")
@@ -324,12 +341,18 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
                 raise Error("ValueError: liblinear requires L2 regularization when dual=True")
         elif unpenalized:
             C = inf[DType.float64]()
+        elif saga and penalty == "elasticnet":
+            if not self.l1_ratio:
+                raise Error("ValueError: elasticnet requires l1_ratio")
+            return C, ratio
+        elif saga and penalty == "l1":
+            return C, 1.0
         elif penalty != "l2":
             raise Error("ValueError: LogisticRegression supports L2 or no penalty for the selected solver")
-        return C, penalty == "l1"
+        return C, 1.0 if penalty == "l1" else 0.0
 
     def _fit(mut self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight]) raises:
-        var C, l1 = self._regularization()
+        var C, ratio = self._regularization()
         if X.ndim != 2 or X.shape[0] == 0 or X.shape[1] == 0:
             raise Error("ValueError: LogisticRegression requires a nonempty feature matrix")
         if (y.ndim != 1 and (y.ndim != 2 or y.shape[1] != 1)) or y.shape[0] != X.shape[0]:
@@ -350,9 +373,9 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
         _fit_weights(targets, encoding, sample_weight, self.class_weight, weights)
         var fitted: _FittedCoefficients[Self.dtype]
         if liblinear:
-            fitted = self._fit_liblinear(X, targets, weights, C, l1)
+            fitted = self._fit_liblinear(X, targets, weights, C, ratio == 1)
         else:
-            fitted = self._fit_smooth(X, targets^, weights^, classes, C)
+            fitted = self._fit_native(X, targets^, weights^, classes, C, ratio)
         var iterations = full[DType.int32](Shape(1), Int32(fitted.iterations))
         var labels = encoding.classes_array()
         check_finite(fitted.coef, "coef_", "LogisticRegression")
@@ -402,22 +425,14 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             Int(model.iterations.unsafe_get(0)),
         )
 
-    def _fit_smooth(
+    def _fit_native(
         self, X: Self.Input, var targets: List[Int], var weights: NDArray[DType.float64],
-        classes: Int, C: Float64,
+        classes: Int, C: Float64, ratio: Float64,
     ) raises -> _FittedCoefficients[Self.dtype]:
-        var mass = Float64(0)
-        for i in range(len(targets)):
-            mass += weights.unsafe_get(i)
-        if not isfinite(mass) or mass <= 0:
-            raise Error("ValueError: logistic regression requires finite positive total weight")
-        for i in range(len(targets)):
-            weights.unsafe_set(i, weights.unsafe_get(i) / mass)
-        var l2 = (1 / mass) / C if C < 1 else (1 / C) / mass
-        if not isfinite(l2):
-            raise Error("ValueError: LogisticRegression L2 strength overflows")
         var features = X.shape[1]
         var outputs = 1 if classes == 2 else classes
+        if features + Int(self.fit_intercept) > Int.MAX // 8 // outputs:
+            raise Error("ValueError: LogisticRegression coefficient size overflows")
         var intercept_start = features * outputs
         var size = intercept_start + (outputs if self.fit_intercept else 0)
         var initial = zeros[DType.float64](Shape(size))
@@ -434,18 +449,40 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
                     initial.unsafe_set(intercept_start + k, Float64(_vector_entry(self.intercept_, k)))
 
         var newton = self.solver == "newton-cholesky"
-        var objective = LogisticLoss(
-            compact_matrix(X), targets^, weights^, outputs, l2, self.fit_intercept, newton and self.max_iter > 0,
-        )
+        var saga = self.solver == "saga"
+        var stochastic = saga or self.solver == "sag"
+        var l2 = Float64(0)
         var solution: LogisticSolution
-        if newton:
-            solution = logistic_newton(
-                objective, initial^, outputs, features, self.fit_intercept, l2, self.max_iter, self.tol,
+        if stochastic:
+            var seed: UInt32
+            with check_random_state(self.random_state) as rng:
+                seed = UInt32(rng[].randint(1, 2147483647))
+            solution = logistic_sag(
+                compact_matrix(X), targets, weights, initial^, outputs, self.fit_intercept,
+                (1 - ratio) / C, ratio / C, self.max_iter, self.tol, seed, saga,
             )
-        elif self.solver == "newton-cg":
-            solution = logistic_newton_cg(objective, initial^, outputs, self.max_iter, self.tol)
         else:
-            solution = logistic_lbfgs(objective, initial, self.max_iter, self.tol)
+            var mass = Float64(0)
+            for i in range(len(targets)):
+                mass += weights.unsafe_get(i)
+            if not isfinite(mass) or mass <= 0:
+                raise Error("ValueError: logistic regression requires finite positive total weight")
+            for i in range(len(targets)):
+                weights.unsafe_set(i, weights.unsafe_get(i) / mass)
+            l2 = (1 / mass) / C if C < 1 else (1 / C) / mass
+            if not isfinite(l2):
+                raise Error("ValueError: LogisticRegression L2 strength overflows")
+            var objective = LogisticLoss(
+                compact_matrix(X), targets^, weights^, outputs, l2, self.fit_intercept, newton and self.max_iter > 0,
+            )
+            if newton:
+                solution = logistic_newton(
+                    objective, initial^, outputs, features, self.fit_intercept, l2, self.max_iter, self.tol,
+                )
+            elif self.solver == "newton-cg":
+                solution = logistic_newton_cg(objective, initial^, outputs, self.max_iter, self.tol)
+            else:
+                solution = logistic_lbfgs(objective, initial, self.max_iter, self.tol)
 
         ref fitted = solution.coefficients
         var coef = zeros[Self.dtype](Shape(outputs, features))
@@ -460,7 +497,7 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
                 coef.unsafe_set(k * features + j, value.cast[Self.dtype]())
         if self.fit_intercept:
             var mean = Float64(0)
-            if outputs > 1:
+            if outputs > 1 and not stochastic:
                 for k in range(outputs):
                     mean += fitted.unsafe_get(intercept_start + k) / Float64(outputs)
             for k in range(outputs):

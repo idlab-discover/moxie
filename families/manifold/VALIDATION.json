@@ -36,7 +36,19 @@
     {
       "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python -u families/manifold/tools/isomap_parity.py --notebook",
       "result": "Passed five focused digits comparisons on 200 training and 20 held-out rows. One held-out query selected different tied neighbors at the cutoff and matched the stable-tie reference."
+    },
+    {
+      "command": "python -u families/manifold/tools/check.py spectral",
+      "result": "Passed Float32 and Float64 spectral contracts in the integrated assembly and two isolated consumers, plus manifold source package precompilation."
+    },
+    {
+      "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python -u families/manifold/tools/spectral_parity.py",
+      "result": "Passed 26 comparisons against pinned sklearn, including signed coordinates, degenerate eigenspaces, and independent eigenpair residuals."
+    },
+    {
+      "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 python -u families/manifold/tools/spectral_parity.py --notebook",
+      "result": "Passed dense RBF affinity and coordinate checks for the spectral digits cells. The gallery's sparse nearest-neighbor affinity remains deferred."
     }
   ],
-  "scope": "Dense exact and Barnes–Hut TSNE, Isomap, ClassicalMDS, trustworthiness, and dense helpers. MDS, LLE and spectral embedding remain scaffold declarations."
+  "scope": "Dense exact and Barnes–Hut TSNE, Isomap, MDS, LLE, spectral embedding, ClassicalMDS, trustworthiness, and dense helpers."
 }

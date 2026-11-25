@@ -59,6 +59,22 @@ Their original tolerances remain unchanged: the main and count suites use
 for explicit Float32 arithmetic. Exact shape, label, count and lifecycle checks
 supplement approximate floating comparisons.
 
+To run the focused weighted sigmoid and isotonic calibration comparison
+using the same reference, assemble and compile only its fixture:
+
+```sh
+python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
+mojo build -O3 --fp-mode=contract=off -I builds/deps -I tests/compose/support \
+  tests/naive_bayes/calibration/parity_runner.mojo -o builds/nb-calibration-parity
+"${SKLEARN_PYTHON:-builds/naive-bayes-reference-env/bin/python}" \
+  tests/naive_bayes/calibration/parity.py builds/nb-calibration-parity
+```
+
+The fixture covers the five default classifiers with `cv=2`, both fitted
+per fold and frozen on separate training data. Class order and predictions
+are exact. Probability tolerances allow sigmoid optimizer differences and
+rounding in Naive Bayes and isotonic interpolation.
+
 The pre-migration family baseline failed at compilation against current Moxie
 traits, so no passing native or parity baseline is claimed. The implementations
 now return a mutable reference from `fit`, `partial_fit` and `set_params` and

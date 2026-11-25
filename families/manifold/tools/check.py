@@ -14,7 +14,7 @@ from compiler_limits import compiler_command
 CONSUMERS = [ROOT / 'tests/consumers' / name for name in ('a', 'b')]
 FLAGS = ['-O3', '--fp-mode=contract=off']
 CONTRACTS = ('contracts', 'capabilities', 'family', 'plumbing', 'trustworthiness',
-             'classical_mds', 'deferred', 'tsne', 'isomap')
+             'classical_mds', 'tsne', 'isomap', 'mds', 'lle', 'spectral')
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -50,10 +50,15 @@ def assemble(consumer, lock=None, check=True):
                 for path in (ROOT / 'src/moxie/manifold').glob('*.mojo')
                 if path.stem != '__init__'}
             project['exports'] = json.loads((ROOT / 'EXPORTS.json').read_text())
-    # Keep standalone probes on the integrated numerical backends.
+    # Use the integrated numerical backends and isotonic owner in standalone probes.
     core_projects = json.loads((CORE / 'DEPENDENCIES.json').read_text())['projects']
     for project in core_projects:
-        if project['id'] in ('mojo-linalg', 'numax'):
+        if project['id'] == 'moxie':
+            foundation = next(item for item in data['projects'] if item['id'] == 'moxie')
+            for module in ('moxie.isotonic', 'moxie._isotonic_adapters'):
+                foundation['modules'][module] = project['modules'][module]
+        if project['id'] in ('mojo-linalg', 'numax', 'model_selection', 'splitters',
+                             'search', 'validation', 'labels'):
             project['path'] = str((CORE / project['path']).resolve())
             data['projects'].append(project)
     for project in json.loads((ROOT / 'NUMERICAL-DEPENDENCIES.json').read_text())['projects']:
@@ -175,15 +180,12 @@ if __name__ == '__main__':
         target = ROOT / 'builds/test_trustworthiness'
         compile_file(ROOT / 'tests/test_trustworthiness.mojo', target)
         run(target)
-    elif action == 'isomap':
+    elif action in ('isomap', 'mds', 'lle', 'spectral'):
         for consumer in (ROOT, *CONSUMERS):
             assemble(consumer)
-            target = consumer / 'builds/test_isomap'
-            compile_file(ROOT / 'tests/test_isomap.mojo', target, consumer=consumer)
+            target = consumer / f'builds/test_{action}'
+            compile_file(ROOT / f'tests/test_{action}.mojo', target, consumer=consumer)
             run(target, consumer=consumer)
-        target = ROOT / 'builds/test_deferred'
-        compile_file(ROOT / 'tests/test_deferred.mojo', target)
-        run(target)
         run('mojo', 'precompile', ROOT / 'src/moxie/manifold',
             '-I', ROOT / 'builds/deps', '-o', ROOT / 'builds/manifold.mojoc')
     else:

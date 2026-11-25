@@ -6,7 +6,7 @@ inner estimator's feature metadata.
 """
 import numojo as nm
 from std.testing import assert_equal, assert_false, assert_true, assert_raises
-from moxie.base import clone, BaseEstimator
+from moxie.base import clone, BaseEstimator, ClassifierMixin
 from moxie._feature_metadata import InputFeatureCount
 from moxie.frozen import FrozenEstimator
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
@@ -14,7 +14,8 @@ from moxie.preprocessing import StandardScaler
 from moxie.pipeline import Pipeline, FeatureUnion, make_pipeline, union_step
 from moxie.compose import ColumnTransformer, ColumnEntry
 from moxie.model_selection import (
-    CVAdapter, TypedScorer, IndexArray, IndexSplit, KFold, cross_val_score,
+    DenseSupervisedAdapter, ErrorPolicy, GridSearchCV, IndexSplit, KFold,
+    ParameterGrid, RandomizedSearchCV, cross_val_score, cross_validate,
 )
 
 comptime LDA = LinearDiscriminantAnalysis[DType.float64, Int]
@@ -48,53 +49,6 @@ struct WidthProbe(BaseEstimator, InputFeatureCount):
         if self.width < 0:
             raise Error("NotFittedError: probe is not fitted")
         return self.width
-
-
-comptime Frozen = FrozenEstimator[LinearDiscriminantAnalysis[DType.float64, Int]]
-
-
-def take_rows(X: nm.NDArray[DType.float64], rows: IndexArray) raises -> nm.NDArray[DType.float64]:
-    var out = nm.NDArray[DType.float64](nm.Shape(rows.size, X.shape[1]))
-    for i in range(rows.size):
-        for j in range(X.shape[1]):
-            out[nm.Item(i, j)] = X[nm.Item(Int(rows[nm.Item(i)]), j)]
-    return out^
-
-
-struct FrozenAccuracy(TypedScorer):
-    comptime Estimator = Frozen
-    comptime Input = nm.NDArray[DType.float64]
-    comptime Target = List[Int]
-    comptime Metadata = NoneType
-
-    def __init__(out self):
-        pass
-
-    def score(self, estimator: Frozen, X: Self.Input, y: List[Int], metadata: NoneType) raises -> Float64:
-        return estimator.score(X, y)
-
-
-@fieldwise_init
-struct FrozenCV(CVAdapter):
-    comptime Scorer = FrozenAccuracy
-
-    def n_samples(self, X: nm.NDArray[DType.float64], y: List[Int]) raises -> Int:
-        return len(y)
-
-    def input_rows(self, X: nm.NDArray[DType.float64], rows: IndexArray, train: IndexArray) raises -> nm.NDArray[DType.float64]:
-        return take_rows(X, rows)
-
-    def target_rows(self, y: List[Int], rows: IndexArray) raises -> List[Int]:
-        var out = List[Int]()
-        for i in range(rows.size):
-            out.append(y[Int(rows[nm.Item(i)])])
-        return out^
-
-    def metadata_rows(self, metadata: NoneType, rows: IndexArray) raises -> NoneType:
-        return None
-
-    def fit(self, mut estimator: Frozen, X: nm.NDArray[DType.float64], y: List[Int], metadata: NoneType) raises:
-        _ = estimator.fit(X, y)
 
 
 def dataset(n: Int, shift: Float64) raises -> Dense:
@@ -234,33 +188,85 @@ def kfold_splits(n: Int) raises -> List[IndexSplit]:
     while True:
         var pair = cursor.next()
         if not pair:
-            break
-        splits.append(pair.value().copy())
-    return splits^
+            return splits^
+        splits.append(pair.take())
 
 
-def frozen_cross_validation() raises:
-    # sklearn: cross_val_score(FrozenEstimator(clf), X, y) clones the frozen
-    # wrapper (keeping clf) and its fit is a no-op, so each fold scores clf.
+def check_fitted_cv_and_search[E: ClassifierMixin & Deinitable](
+    frozen: FrozenEstimator[E], X: Dense, y: List[Int], name: String,
+) raises:
+    comptime assert E.Prediction == List[Int]
+    comptime Adapter = DenseSupervisedAdapter[FrozenEstimator[E], List[Int]]
+    var adapter = Adapter()
+    var original = rebind_var[List[Int]](frozen.predict(rebind[E.Input](X)))
+    var scores = cross_val_score[Adapter](frozen, X, y, adapter)
+    var evaluation = cross_validate[Adapter](
+        frozen, X, y, adapter, return_estimator=True,
+    )
+    assert_equal(scores.ndim, 1)
+    assert_equal(scores.size, 5)
+    assert_equal(len(evaluation.estimators.value()), 5)
+    for fold in range(scores.size):
+        assert_equal(scores.item(fold), evaluation.scores.test_scores.item(0, fold, 0))
+        ref fitted = evaluation.estimators.value()[fold]
+        assert_true(fitted.__sklearn_is_fitted__())
+        assert_equal(rebind_var[List[Int]](fitted.predict(rebind[E.Input](X))), original)
+        print("frozen_cv", name, "default", fold, scores.item(fold))
+
+    var explicit = cross_val_score[Adapter](
+        frozen, X, y, adapter, cv=kfold_splits(len(y)),
+    )
+    assert_equal(explicit.size, 3)
+    for fold in range(explicit.size):
+        print("frozen_cv", name, "kfold", fold, explicit.item(fold))
+
+    var grid = Dict[String, List[Float64]]()
+    var search = GridSearchCV[Adapter](frozen, grid, adapter)
+    var random = RandomizedSearchCV[Adapter](
+        frozen, ParameterGrid[Float64](grid), adapter, n_iter=1, random_state=42,
+    )
+    _ = search.fit(X, y)
+    _ = random.fit(X, y)
+    assert_equal(search.n_splits_(), 5)
+    assert_equal(random.n_splits_(), 5)
+    assert_equal(len(search.best_params_()), 0)
+    assert_equal(len(random.best_params_()), 0)
+    var grid_results = search.cv_results_()
+    var random_results = random.cv_results_()
+    for fold in range(scores.size):
+        assert_equal(grid_results.scores.test_scores.item(0, fold, 0), scores.item(fold))
+        assert_equal(random_results.scores.test_scores.item(0, fold, 0), scores.item(fold))
+    var grid_predictions = rebind_var[List[Int]](search.predict(X))
+    var random_predictions = rebind_var[List[Int]](random.predict(X))
+    assert_equal(grid_predictions, original)
+    assert_equal(random_predictions, original)
+    assert_equal(rebind_var[List[Int]](frozen.predict(rebind[E.Input](X))), original)
+    assert_equal(search.best_score_(), random.best_score_())
+    print("frozen_search", name, "grid", search.best_score_())
+    print("frozen_search", name, "random", random.best_score_())
+    print("frozen_refit", name, grid_predictions)
+
+
+def frozen_cv_and_search() raises:
     var X_train = dataset(20, 0.0)
     var y_train = labels(20)
     var X = dataset(24, 1.5)
     var y = List[Int]()
     for i in range(24):
         y.append((i // 3) % 2)
+    comptime Adapter = DenseSupervisedAdapter[FrozenEstimator[LDA], List[Int]]
+    with assert_raises(contains="NotFittedError"):
+        _ = cross_val_score[Adapter](
+            FrozenEstimator(LDA()), X, y, Adapter(), error_score=ErrorPolicy(True, 0),
+        )
+
     var model = LDA()
     _ = model.fit(X_train, y_train)
-    var frozen = FrozenEstimator(model^)
-    var splits = kfold_splits(24)
-    var scores = cross_val_score[FrozenCV](frozen, X, y, FrozenCV(), FrozenAccuracy(), kfold_splits(24), None, None)
-    assert_equal(scores.size, 3)
-    var adapter = FrozenCV()
-    for k in range(3):
-        var test = splits[k].test.copy()
-        var expected = frozen.score(adapter.input_rows(X, test, splits[k].train), adapter.target_rows(y, test))
-        assert_equal(scores.item(k), expected)
-    var original = frozen.predict_proba(X_train)
-    assert_same(frozen.predict_proba(X_train), original)
+    check_fitted_cv_and_search(FrozenEstimator(model^), X, y, "lda")
+
+    var pipe = make_pipeline(StandardScaler(), LDA())
+    _ = pipe.fit(X_train, y_train)
+    check_fitted_cv_and_search(FrozenEstimator(pipe^), X, y, "pipeline")
 
 
 def frozen_union_and_columns() raises:
@@ -307,7 +313,7 @@ def main() raises:
     frozen_pipeline_prefix()
     frozen_pipeline_final()
     frozen_composition_width()
-    frozen_cross_validation()
+    frozen_cv_and_search()
     frozen_union_and_columns()
     frozen_float32()
     print("Frozen composition contracts passed")

@@ -24,7 +24,7 @@ var result = fast_mcd(X, None, 0)            # FastMCDResult: location, covarian
 | `EllipticEnvelope(*, ..., contamination=0.1, random_state=None)` | same; `offset_()` |
 | `predict`, `decision_function`, `score_samples`, `score(X, y, sample_weight=None)` | same; labels are Int64, score is (weighted) accuracy |
 | `fit_predict(X, y=None, **kwargs)` | fits and returns Int64 labels `(n_samples,)`; ignores typed optional y; an explicit `fit_predict(X, mut random_state)` overload forwards the caller stream to fit; no dynamic kwargs |
-| `fast_mcd(X, support_fraction=None, cov_computation_method=..., random_state=None)` | returns `FastMCDResult[dtype]`; the covariance method is fixed to the empirical MLE |
+| `fast_mcd(X, support_fraction=None, cov_computation_method=..., random_state=None)` | returns `FastMCDResult[dtype]`; omit the keyword-only `cov_computation_method` to use empirical MLE |
 
 Behavior follows the pinned sklearn revision, including its consistency
 correction (#32117): the raw FastMCD distances are divided by
@@ -50,7 +50,27 @@ error with a `ZeroDivisionError` prefix. Labels remain a 1D Int64 array.
 - Rank-deficient data and determinant increases emit category-prefixed warnings
   on stderr; Python warning objects and filters are not provided.
 - Arrays keep the estimator dtype; computation is Float64 (sklearn's np.cov path).
-- `cov_computation_method` callables are not supported.
+
+## Custom FastMCD covariance
+
+Pass a native function or closure with signature
+`def(NDArray[DType.float64]) raises -> NDArray[DType.float64]`:
+
+```mojo
+var result = fast_mcd(X, random_state=0, cov_computation_method=my_covariance)
+```
+
+The callable receives the current uncentered support as a contiguous Float64
+matrix, including for Float32 input. It must return a finite Float64
+covariance of shape `(n_features, n_features)`. Strided results are accepted and
+copied into independent contiguous candidate storage. Callable errors
+propagate to the caller. The result arrays retain the input dtype (and the
+support mask is Bool). To use a caller-owned RNG stream, pass it as the third
+argument after the support fraction and use the same callable keyword.
+
+For multivariate input the callable runs at each concentration step, including
+the subset and merged stages. For one feature FastMCD uses its direct variance
+calculation, as in scikit-learn.
 
 ## Public correction and reweighting
 

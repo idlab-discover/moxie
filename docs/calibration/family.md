@@ -74,15 +74,17 @@ are implementation details, not additional public sklearn estimators.
 ## Classifier adapter
 
 Use `adapt_classifier(estimator)` with the default type specializations of
-`GaussianNB`, `LinearDiscriminantAnalysis`, `QuadraticDiscriminantAnalysis`,
+`GaussianNB`, `MultinomialNB`, `ComplementNB`, `BernoulliNB`, `CategoricalNB`,
+`LinearDiscriminantAnalysis`, `QuadraticDiscriminantAnalysis`,
 `LogisticRegression` and `LinearSVC`. Pass the result to `CalibratedClassifierCV`.
 Adapters with `predict_proba` also support direct use with
 `CalibrationDisplay.from_estimator` after fitting. The adapter prefers
 `decision_function` for calibration and uses `predict_proba` for displays.
-With GaussianNB it uses probabilities for both. The adapter converts Float64
+With Naive Bayes it uses probabilities for both. The adapter converts Float64
 calibration targets to the classifier's native numeric list or Int64 array and
 returns its fitted classes in column order. It forwards explicit weights to
-GaussianNB, LogisticRegression and LinearSVC. LDA and QDA reject explicit weights.
+all five Naive Bayes classifiers, LogisticRegression and LinearSVC. LDA and QDA
+reject explicit weights.
 
 For a Float64 pipeline ending in `SVC[]`, pass the entire pipeline to
 `adapt_classifier`. Each calibration fold fits its own preprocessing and
@@ -115,9 +117,10 @@ a Float64 vector. `estimator()` borrows the fitted classifier for inspection.
 Copies share a read-only snapshot, and fitting replaces the snapshot on
 success. For classifiers without fitted copying, such as QDA, updating adapter
 parameters creates an unfitted snapshot. Ordinary clones are unfitted.
-For fitted `GaussianNB[]`, `LinearDiscriminantAnalysis[]`,
-`QuadraticDiscriminantAnalysis[]` and `LogisticRegression[]`, pass the
-`FrozenEstimator` handle directly to `adapt_classifier`.
+For all five fitted default Naive Bayes specializations,
+`LinearDiscriminantAnalysis[]`, `QuadraticDiscriminantAnalysis[]` and
+`LogisticRegression[]`, pass the `FrozenEstimator` handle directly to
+`adapt_classifier`.
 
 ```mojo
 var calibrated = CalibratedClassifierCV(adapt_classifier(frozen.copy()))
@@ -127,6 +130,7 @@ _ = calibrated.fit(X_calibration, y_calibration)
 The calibration targets use a Float64 array. Copying the frozen handle shares
 the fitted estimator. Cloning the adapter preserves that handle, fitting keeps
 the base estimator frozen, and `ensemble="auto"` fits one pooled calibrator.
+Explicit sample weights affect only the calibration fit for a frozen model.
 
 `CalibrationEstimator` extends the shared configuration/clone contract. It
 requires `fit(X, y, sample_weight=None)`, `class_labels()`, `response(X)`, and
@@ -263,13 +267,39 @@ figure. This ownership model replaces Matplotlib's shared mutable artists.
 returns nothing. Matplotlib axes, arbitrary plot
 kwargs, interactive windows and other image formats are not supported.
 
+## Native model files
+
+Persist a fitted or unfitted calibrator whose base estimator is the built-in
+dense LinearSVC adapter. This includes the default constructor and
+`adapt_classifier(LinearSVC(...))`.
+
+```mojo
+from moxie.calibration import CalibratedClassifierCV
+from moxie.calibration_serialization import CalibratedClassifierCVSchema
+from moxie.serialization import load_model, save_model
+
+var model = CalibratedClassifierCV(method="isotonic", cv=3)
+_ = model.fit(X, y)
+save_model[CalibratedClassifierCVSchema](model, "calibrated.moxie")
+var restored = load_model[CalibratedClassifierCVSchema]("calibrated.moxie")
+var probabilities = restored.predict_proba(X)
+```
+
+The experimental schema stores current constructor settings, learned class
+order and feature count, and every fitted estimator and calibrator for the
+sigmoid, isotonic and temperature methods. Loading reconstructs independent
+fitted state without refitting. Parameters changed after fit apply to the next
+fit. A custom class reader on a LinearSVC adapter is rejected because it
+has no representation in the file. Other base estimator types require their
+own calibration schema support. See [native model files](../serialization.md)
+for format and load limits.
+
 ## Limits and validation
 
 Remaining gaps include sparse estimators, typed estimator labels, arbitrary fit
-metadata, parallel jobs, metadata routing, persistence, feature names and
-Matplotlib object interoperability. Temperature ensemble folds with missing
-training classes are rejected explicitly. These are scope limits, not claims
-of complete sklearn compatibility.
+metadata, parallel jobs, metadata routing, persistence for other base
+estimators, feature names and Matplotlib object interoperability. Temperature
+ensemble folds with missing training classes are rejected explicitly.
 
 From the Moxie root run `pixi run build`, `pixi run test`, and `pixi run parity`.
 For calibration alone run `pixi run python tools/calibration_checks.py test`

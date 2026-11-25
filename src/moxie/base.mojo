@@ -97,6 +97,15 @@ trait ClassifierMixin(Predictor, SupervisedScorer):
     pass
 
 
+trait NumericClassifierClasses(ClassifierMixin):
+    """Read ordered numeric classes using the same storage as the target."""
+
+    comptime ClassLabelDType: DType
+
+    def get_classes(self) raises -> Self.Target:
+        ...
+
+
 trait RegressorMixin(Predictor, SupervisedScorer):
     """Score is R2 with uniform averaging for multioutput, unless documented."""
 

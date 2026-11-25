@@ -95,7 +95,8 @@ def test(run, executable):
 
 def parity(run):
     for name in ('parity.py', 'union_parity.py', 'compose_parity.py',
-                 'transforming_parity.py', 'weighted_fit_parity.py'):
+                 'transforming_parity.py', 'weighted_fit_parity.py',
+                 'select_k_best_cv_parity.py'):
         run(sys.executable, TESTS / name)
     run(sys.executable, ROOT / 'tests/compose/pipeline/parity.py')
 

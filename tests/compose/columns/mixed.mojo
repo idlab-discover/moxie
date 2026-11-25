@@ -82,7 +82,7 @@ def main() raises:
     invalid.add_categorical("color", test_colors)
     with assert_raises():
         _ = model.fit_transform(invalid)
-    with assert_raises(contains="requires float64 storage"):
+    with assert_raises(contains="requires float32 or float64 storage"):
         _ = model.transform(wrong_kind)
     line.add("after_failed_refit", model.transform(test_table))
     line.emit()

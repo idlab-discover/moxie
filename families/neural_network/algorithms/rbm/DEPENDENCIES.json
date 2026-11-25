@@ -2,11 +2,32 @@
   "schema": 1,
   "projects": [
     {
+      "id": "labels",
+      "path": "../../../../shared/labels",
+      "modules": {
+        "moxie._labels": {
+          "file": "src/moxie/_labels.mojo"
+        }
+      },
+      "assets": {
+        "licenses/labels-sklearn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "schema": 1,
+        "packages": {
+          "moxie": {}
+        }
+      }
+    },
+    {
       "id": "moxie",
       "path": "../../../..",
       "modules": {
         "moxie._feature_metadata": {
           "file": "src/moxie/_feature_metadata.mojo"
+        },
+        "moxie.warnings": {
+          "file": "src/moxie/warnings.mojo"
         },
         "moxie.base": {
           "file": "src/moxie/base.mojo"
@@ -185,7 +206,8 @@
             "MLPRegressorAPI": "moxie.neural_network._base",
             "RBMTransformer": "moxie.neural_network._base",
             "MLPClassifier": "moxie.neural_network._api",
-            "MLPRegressor": "moxie.neural_network._api"
+            "MLPRegressor": "moxie.neural_network._api",
+            "MLPParams": "moxie.neural_network._mlp_model"
           }
         },
         "schema": 1
@@ -204,8 +226,8 @@
         "moxie.neural_network._api": {
           "file": "src/moxie/neural_network/_api.mojo"
         },
-        "moxie.neural_network._api_types": {
-          "file": "src/moxie/neural_network/_api_types.mojo"
+        "moxie.neural_network._mlp_model": {
+          "file": "src/moxie/neural_network/_mlp_model.mojo"
         }
       },
       "path": "../.."

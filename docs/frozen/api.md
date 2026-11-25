@@ -86,6 +86,39 @@ preserved. There are no conversions or numerical kernels in the wrapper.
 
 `fit_predict` and `fit_transform` are not exposed.
 
+### Dense cross-validation and search
+
+Use the built-in [dense supervised adapter](../../families/model_selection/algorithms/search/docs/search.md)
+with a frozen classifier or a frozen classifier pipeline. For a fitted Float64
+LDA with `List[Int]` targets:
+
+```mojo
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis
+from moxie.frozen import FrozenEstimator
+from moxie.model_selection import DenseSupervisedAdapter, GridSearchCV, cross_val_score
+
+comptime Classifier = LinearDiscriminantAnalysis[DType.float64, Int]
+comptime Adapter = DenseSupervisedAdapter[FrozenEstimator[Classifier], List[Int]]
+var frozen = FrozenEstimator(fitted_lda^)
+var scores = cross_val_score[Adapter](frozen, X, y, Adapter())
+var grid = GridSearchCV[Adapter](frozen, Dict[String, List[Float64]](), Adapter())
+_ = grid.fit(X, y)
+```
+
+The adapter selects five unshuffled stratified folds by default for binary and
+multiclass classifiers. Pass `cv=` with a `List[IndexSplit]` to supply folds.
+Each fold scores the originally fitted estimator through a frozen clone. An
+empty grid evaluates that configuration once. The same adapter works with
+`RandomizedSearchCV`. Nonempty parameter spaces need a typed parameter applier,
+and the frozen wrapper accepts only same-type estimator replacement.
+
+At the pinned scikit-learn revision, both search classes assign the result of
+`FrozenEstimator.set_params`, which returns `None` and causes an
+`AttributeError` before scoring. Native search preserves the fitted estimator
+through fold evaluation and refit. `tests/frozen/compare_cv_search.py` checks
+that reference error and compares native search scores with the mean of pinned
+`cross_val_score` outputs and refit predictions with the pinned frozen model.
+
 ### Incremental fitting
 
 Like the pinned Python implementation, freezing disables `fit` but does **not**
@@ -223,10 +256,11 @@ probabilities, decisions, transform and score, fitted clone) and a fitted
 `moxie.pipeline.Pipeline`, including pipeline clone, feature-name forwarding,
 frozen branches in `FeatureUnion` and `ColumnTransformer` (training statistics
 and `frozen__name` feature names, as in sklearn),
-`moxie.model_selection.cross_val_score` (each fold scores the frozen model, as
-in sklearn, because clone keeps it and fit is a no-op) and Float32 transforms. The notebook
+cross-validation and search with the built-in dense adapter, and Float32
+transforms. The notebook
 `notebooks/frozen/plot_frozen_examples.ipynb` compares a frozen dense
-`LogisticRegression`, calibration of its fitted state through
+`LogisticRegression`, its predictions at a cutoff of 0.9 through
+`FixedThresholdClassifier`, calibration of its fitted state through
 `moxie.calibration.adapt_classifier(frozen.copy())`, and a pipeline with a
 frozen `StandardScaler` followed by logistic regression. Run it with
 `pixi run -e notebooks notebooks notebooks/frozen/plot_frozen_examples.ipynb`.

@@ -30,7 +30,7 @@ pixi run mojo precompile builds/api-surface/imports/moxie \
   -I builds/api-surface/imports -o builds/api-surface/moxie.mojoc
 ```
 
-`tests/test_deferred.mojo` checks that the threshold and successive-halving
+`tests/test_deferred.mojo` checks that threshold tuning and successive-halving
 declarations raise a `NotImplementedError` prefix at construction; no other
 declaration-only behavior is tested.
 

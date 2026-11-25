@@ -120,7 +120,7 @@ with warnings.catch_warnings(),np.errstate(all='ignore'):
         body.append('    model.partial_fit(X, y, sample_weight=weights.copy())')
     else: body.append('    model.fit(X, y, sample_weight=weights.copy())')
     for k,v in enumerate(oracle.class_count_): body.append(f'    close(model.class_count_.item({k}), {literal(v)})')
-    for k,v in enumerate(oracle.class_log_prior_): body.append(f'    close(model.class_log_prior_[{k}], {literal(v)})')
+    for k,v in enumerate(oracle.class_log_prior_): body.append(f'    close(model.class_log_prior_.item({k}), {literal(v)})')
     for field in ['feature_count_','feature_log_prob_']:
         for k,row in enumerate(getattr(oracle,field)):
             for j,v in enumerate(row): body.append(f'    close(model.{field}.item({k}, {j}), {literal(v)})')

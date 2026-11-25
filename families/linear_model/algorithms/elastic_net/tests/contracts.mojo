@@ -211,6 +211,43 @@ def path_contracts[dtype: DType]() raises:
         )
     assert_equal(initial_storage.unsafe_get(1), Scalar[dtype](0.5))
 
+    var gram_storage = zeros[dtype](Shape(4))
+    gram_storage.unsafe_set(0, 2)
+    gram_storage.unsafe_set(1, 4)
+    gram_storage.unsafe_set(2, 4)
+    gram_storage.unsafe_set(3, 30)
+    var gram = gram_storage.view_with_layout(Shape(2, 2), NDArrayStrides(-2, -1), 3)
+    var cross_storage = zeros[dtype](Shape(2))
+    cross_storage.unsafe_set(0, 10)
+    cross_storage.unsafe_set(1, 70)
+    var cross = cross_storage.view_with_layout(Shape(2), NDArrayStrides(-1), 1)
+    var computed = lasso_path(X, y, precompute=True, n_alphas=5, return_n_iter=True)
+    var supplied = Lasso[dtype].path(
+        reverse_X, reverse_y, gram=gram.view(), Xy=cross.view(),
+        n_alphas=5, return_n_iter=True,
+    )
+    var automatic = lasso_path(X, y, precompute=None, n_alphas=5, return_n_iter=True)
+    assert_equal(computed.alphas.unsafe_get(0), 14.0)
+    assert_equal(computed.n_iters.value()[0], 0)
+    for i in range(computed.coefs.size):
+        assert_equal(supplied.coefs.unsafe_get(i), computed.coefs.unsafe_get(i))
+        assert_equal(automatic.coefs.unsafe_get(i), computed.coefs.unsafe_get(i))
+    assert_equal(gram_storage.unsafe_get(3), Scalar[dtype](30))
+    assert_equal(cross_storage.unsafe_get(1), Scalar[dtype](70))
+    var force_sweep = lasso_path(
+        X, y, gram=gram.view(), n_alphas=1, early_stopping=False, return_n_iter=True,
+    )
+    assert_equal(force_sweep.n_iters.value()[0], 1)
+    with assert_raises(contains="gram must have shape"):
+        _ = lasso_path(X, y, gram=zeros[dtype](Shape(1, 1)))
+    with assert_raises(contains="gram does not match"):
+        _ = enet_path(X, y, gram=zeros[dtype](Shape(2, 2)))
+    with assert_raises(contains="Xy must have shape"):
+        _ = lasso_path(X, y, gram=gram.view(), Xy=zeros[dtype](Shape(3)))
+    cross_storage.unsafe_set(1, nan[dtype]())
+    with assert_raises(contains="contains NaN"):
+        _ = enet_path(X, y, gram=gram.view(), Xy=cross.view())
+
     var model = ElasticNet[dtype](l1_ratio=0.8)
     _ = model.set_params(alpha=0.25, l1_ratio=0.5, fit_intercept=False).fit(X, y)
     assert_equal(model.get_params().l1_ratio, 0.5)

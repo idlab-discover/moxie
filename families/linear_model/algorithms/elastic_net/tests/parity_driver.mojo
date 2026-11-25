@@ -114,6 +114,15 @@ def run_path[dtype: DType](fx: Fixture) raises:
     var alphas = Optional[NDArray[DType.float64]](None)
     if fx.has("alphas"):
         alphas = fx.array[DType.float64]("alphas")
+    var precompute = Optional[Bool](fx.has("precompute"))
+    if fx.has("auto"):
+        precompute = None
+    var gram = Optional[NDArray[dtype]]()
+    if fx.has("gram"):
+        gram = fx.array[dtype]("gram")
+    var cross = Optional[NDArray[dtype]]()
+    if fx.has("Xy"):
+        cross = fx.array[dtype]("Xy")
     var ratio = fx.number("ratio")
     var count = fx.integer("count")
     var max_iter = fx.integer("max_iter")
@@ -124,13 +133,15 @@ def run_path[dtype: DType](fx: Fixture) raises:
     if ratio == 1:
         result = Lasso[dtype].path(
             X, y, eps=eps, n_alphas=count, alphas=alphas, coef_init=initial,
+            precompute=precompute, gram=gram, Xy=cross,
             max_iter=max_iter, positive=positive, return_n_iter=True,
             selection=selection, random_state=random_state(fx),
         )
     else:
         result = ElasticNet[dtype].path(
             X, y, l1_ratio=ratio, eps=eps, n_alphas=count, alphas=alphas,
-            coef_init=initial, max_iter=max_iter, positive=positive,
+            precompute=precompute, gram=gram, Xy=cross, coef_init=initial,
+            max_iter=max_iter, positive=positive,
             return_n_iter=True,
             selection=selection, random_state=random_state(fx),
         )

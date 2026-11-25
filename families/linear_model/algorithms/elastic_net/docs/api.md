@@ -78,14 +78,25 @@ Import `enet_path` and `lasso_path` from `moxie.linear_model`, or call
 `ElasticNet[dtype].path` and `Lasso[dtype].path`. The path takes a dense
 Float32 or Float64 feature matrix and a same-dtype target vector. It uses the
 data as supplied. Center the inputs first when a fit with an intercept is
-required. The residual solver starts each alpha from the preceding solution.
+required. Each solver starts an alpha from the preceding solution.
 The default selection is cyclic. For random selection, the path uses one
 MT19937 stream and takes a fresh solver seed at each alpha, including points
 that converge without a sweep. Optional `coef_init` is a same-dtype vector
 with one entry per feature. Pass a view (for example, `coef_init=initial.view()`)
 to supply an optional array while retaining the original handle. The path
-preserves caller inputs. It packs the feature
-matrix by column once and reuses that buffer for the full path.
+preserves caller inputs. The residual solver packs the feature matrix by
+column once and reuses that buffer for the full path.
+
+The default `precompute=False` retains Moxie's residual path behavior.
+Set `precompute=True` to compute `X.T @ X` once for the whole path.
+Set `precompute=None` for scikit-learn's `"auto"` selection, which uses
+the Gram solver when there are more samples than features.
+Pass `gram=G.view()` to use a same-dtype, symmetric
+`(n_features, n_features)` matrix in any mode. The path checks its shape,
+finiteness and one design entry. With a Gram solve, pass `Xy=cross.view()`
+to reuse a same-dtype `X.T @ y` vector of length `n_features`. When supplied,
+`Xy` is checked for shape and finiteness. The residual solver computes
+correlations from the input data.
 
 Use `n_alphas` for the automatic grid count (default 100). Its first point
 is the maximum absolute feature–target correlation divided by
@@ -105,5 +116,4 @@ The native `CoordinatePathResult[dtype]` always contains `alphas` (Float64,
 meet the gap criterion. Each gap uses the average-loss scale of the public
 objective.
 
-The native path uses the residual engine and always validates inputs.
-The dense multi-task and Gram path engines remain open.
+The native path always validates inputs. Dense multi-task paths remain open.

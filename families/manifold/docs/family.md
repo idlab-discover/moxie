@@ -50,5 +50,5 @@ The extension and ownership contract is [plumbing.md](plumbing.md); the authoriz
 exclusions and required explicit dense settings are [scope.md](scope.md).
 The verified public reference roster is the ten exports in sklearn.manifold's
 `__all__`, including ClassicalMDS, smacof, locally_linear_embedding,
-spectral_embedding and trustworthiness. SpectralEmbedding and spectral_embedding
-remain explicit unsupported declarations.
+spectral_embedding and trustworthiness. See [dense spectral embedding](spectral.md)
+for the supported affinities and solver.

@@ -1,14 +1,15 @@
 # Dense-only scope
 
 This project implements dense contracts, validation, owned snapshots,
-dense TSNE, Isomap, MDS, LLE, ClassicalMDS and trustworthiness. See [dense t-SNE](tsne.md),
-[dense Isomap](isomap.md), [dense MDS and SMACOF](mds.md), [dense LLE](lle.md), and [algorithm support](algorithms.md) for settings,
+dense TSNE, Isomap, MDS, LLE, spectral embedding, ClassicalMDS and trustworthiness.
+See [dense t-SNE](tsne.md),
+[dense Isomap](isomap.md), [dense MDS and SMACOF](mds.md), [dense LLE](lle.md),
+[dense spectral embedding](spectral.md), and [algorithm support](algorithms.md) for settings,
 native API differences and parity coverage. Tests cover Float32 and Float64,
 finite nonempty rank-two inputs, contiguous and offset or negative-stride
 views, square pairwise matrices, dense fixed-k neighbor tables, signed
 symmetric spectral operators and coordinate shape checks.
 
-Dense work remains open for SpectralEmbedding and spectral_embedding.
 See [plumbing.md](plumbing.md) for ownership and dependencies.
 
 Sparse containers, conversions, arithmetic, graph-returning APIs and solvers
@@ -27,19 +28,17 @@ operator directly where sklearn constructs a sparse intermediate; a child must
 validate the mathematical equivalence, not call that intermediate a sparse API.
 
 Dense TSNE supports the default `method="barnes_hut"` and `method="exact"`.
-Spectral defaults to
-`affinity="nearest_neighbors"`, so select dense `"rbf"`, `"precomputed"` or a
-native dense callable. LLE uses a dense operator and eigensolve for both `"dense"` and `"auto"`. Spectral's default `eigen_solver=None` resolves to ARPACK: the child
-must expose and document supported dense solver selection and reject excluded
-solver settings; this scaffold supplies no solver under any name. Never silently
-change defaults or treat missing dense branches as sparse exclusions.
+Select `affinity="rbf"` or `affinity="precomputed"` and
+`eigen_solver="dense"` for SpectralEmbedding. The default affinity selects
+nearest neighbors, and the default solver selects ARPACK. Both require an
+explicit dense setting in this implementation. LLE uses a dense operator
+and eigensolve for both `"dense"` and `"auto"`.
 
 Validation commands: `pixi run build`, `pixi run test`. These compile all owned
 modules and two independent assembled consumers; native tests check ownership,
 shape/rank/nonfinite/negative/asymmetry failures and extension signatures.
-Negative capability checks reject deferred estimator construction and missing
+Negative capability checks reject unsupported spectral settings and missing
 required trait methods. Assembly tests reject missing source files and module/export
-collisions. The `pixi run parity` task checks implemented algorithms against
-the local reference; compilation and raising probes are not estimator parity.
+collisions. Each algorithm guide records its focused scikit-learn parity command.
 Python reflection, metadata routing, serialization and plotting remain binding
 work under the inherited contract.

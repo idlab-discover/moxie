@@ -14,7 +14,7 @@ from compiler_limits import compiler_command
 CONSUMERS = [ROOT / 'tests/consumers' / name for name in ('a', 'b')]
 FLAGS = ['-O3', '--fp-mode=contract=off']
 CONTRACTS = ('contracts', 'capabilities', 'family', 'plumbing', 'trustworthiness',
-             'classical_mds', 'deferred', 'tsne', 'isomap', 'mds', 'lle')
+             'classical_mds', 'tsne', 'isomap', 'mds', 'lle', 'spectral')
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -180,15 +180,12 @@ if __name__ == '__main__':
         target = ROOT / 'builds/test_trustworthiness'
         compile_file(ROOT / 'tests/test_trustworthiness.mojo', target)
         run(target)
-    elif action in ('isomap', 'mds', 'lle'):
+    elif action in ('isomap', 'mds', 'lle', 'spectral'):
         for consumer in (ROOT, *CONSUMERS):
             assemble(consumer)
             target = consumer / f'builds/test_{action}'
             compile_file(ROOT / f'tests/test_{action}.mojo', target, consumer=consumer)
             run(target, consumer=consumer)
-        target = ROOT / 'builds/test_deferred'
-        compile_file(ROOT / 'tests/test_deferred.mojo', target)
-        run(target)
         run('mojo', 'precompile', ROOT / 'src/moxie/manifold',
             '-I', ROOT / 'builds/deps', '-o', ROOT / 'builds/manifold.mojoc')
     else:

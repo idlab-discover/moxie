@@ -1,7 +1,7 @@
 # Manifold plumbing
 
-This directory owns manifold contracts, validation, dense TSNE, Isomap, MDS, LLE, ClassicalMDS
-and trustworthiness.
+This directory owns manifold contracts, validation, dense TSNE, Isomap, MDS, LLE, spectral
+embedding, ClassicalMDS and trustworthiness.
 Existing `EmbeddingEstimator` and `OutOfSampleEmbedding` remain unchanged.
 Public imports follow sklearn.manifold; `_plumbing` is a private native exchange
 module. Its records are not new sklearn public exports.
@@ -12,7 +12,7 @@ module. Its records are not new sklearn public exports.
 | --- | --- | --- |
 | manifold.scaffold (this project) | `_base`, `_plumbing`, dense ownership and exchange validation | foundation.readiness, numerics, random, assembly |
 | `algorithms/mds/` | MDS, ClassicalMDS, smacof; stress/disparities and classical scaling | scaffold, isotonic.regression, decomposition.svd_engine |
-| `algorithms/spectral/` | SpectralEmbedding, spectral_embedding; affinities, Laplacians, connectivity diagnostics | scaffold, neighbors.nearest, decomposition.svd_engine |
+| `_spectral_embedding.mojo` | SpectralEmbedding, spectral_embedding; affinities, Laplacians, connectivity diagnostics | shared numerics, kernel-ridge pairwise kernels, mojo-linalg |
 | `_locally_linear.mojo`, `_lle_reconstruction.mojo` | LocallyLinearEmbedding, locally_linear_embedding; local reconstruction and held-out projection | neighbors.nearest, shared linalg, decomposition.svd_engine, mojo-linalg |
 | `algorithms/tsne/` | TSNE, trustworthiness; exact and fixed-k probabilities, Barnes–Hut forces, KL optimization and rank diagnostics | scaffold, neighbors.nearest, decomposition.pca |
 | `_isomap.mojo` | Isomap; graph shortest paths and held-out projection | neighbors.nearest, decomposition.kernel_pca, preprocessing.KernelCenterer |
@@ -72,11 +72,10 @@ nonmetric MDS missing-pair semantics belong to MDS, not this validator.
 The spectral seam accepts an already-constructed symmetric operator, requests the
 smallest algebraic eigenvectors in ascending eigenvalue order, discards `skip`,
 and returns the next `n_components` columns in `EmbeddingResult`. Columns are
-orthonormal before any algorithm-specific normalization. The decomposition
-adapter owns solver selection, residual/convergence checks, degeneracy and sign
-conventions; its configuration is separate from the problem. The caller owns
-Laplacian construction, degree normalization, isolated vertices and dropping the
-trivial mode. This seam does not implement an eigensolver or silently translate
+orthonormal before any algorithm-specific normalization. The dense spectral
+adapter uses the mojo-linalg solver with its convergence checks. The embedding
+code constructs the Laplacian, handles isolated vertices, chooses whether to
+drop the first mode, undoes degree scaling, and fixes the column signs. This seam does not implement an eigensolver or silently translate
 an unsupported solver name. Classical MDS's largest-eigenvalue ordering and
 scaling belong to its child and decomposition integration, not this smallest-mode
 seam. Sparse spectral operators are deferred.

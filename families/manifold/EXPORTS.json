@@ -18,13 +18,14 @@
       "Isomap": "moxie.manifold._isomap",
       "IsomapParams": "moxie.manifold._isomap",
       "LocallyLinearEmbedding": "moxie.manifold._locally_linear",
-      "SpectralEmbedding": "moxie.manifold._api",
+      "SpectralEmbedding": "moxie.manifold._spectral_embedding",
       "locally_linear_embedding": "moxie.manifold._locally_linear",
       "smacof": "moxie.manifold._smacof",
-      "spectral_embedding": "moxie.manifold._api",
+      "spectral_embedding": "moxie.manifold._spectral_embedding",
       "trustworthiness": "moxie.manifold._t_sne",
       "LocallyLinearEmbeddingParams": "moxie.manifold._locally_linear",
-      "LocallyLinearEmbeddingResult": "moxie.manifold._locally_linear"
+      "LocallyLinearEmbeddingResult": "moxie.manifold._locally_linear",
+      "SpectralEmbeddingParams": "moxie.manifold._spectral_embedding"
     }
   }
 }

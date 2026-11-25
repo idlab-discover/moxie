@@ -13,6 +13,7 @@ import warnings
 from pathlib import Path
 
 import numpy as np
+from sklearn.datasets import make_blobs
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from oracle import load, ROOT, REVISION
@@ -195,6 +196,17 @@ def main():
     grid = [('svd', None), ('lsqr', None), ('eigen', None), ('lsqr', 'auto'), ('lsqr', 0),
             ('lsqr', 0.43), ('eigen', 'auto'), ('eigen', 0), ('eigen', 0.43)]
     for dtype in [np.float64, np.float32]:
+        # The plot_lda gallery example has one informative feature plus noise.
+        # With 20 training rows and two classes, the covariance rank is at most 18.
+        rng = np.random.RandomState(0)
+        for width in [33, 49, 73]:
+            X_train, y_train = make_blobs(20, centers=[[-2], [2]], random_state=rng)
+            X_train = np.column_stack((X_train, rng.normal(size=(20, width - 1))))
+            X_test, _ = make_blobs(200, centers=[[-2], [2]], random_state=rng)
+            X_test = np.column_stack((X_test, rng.normal(size=(200, width - 1))))
+            for shrinkage in [None, 0]:
+                add_case('lda', f'rank-deficient-{width}-lsqr-{shrinkage}',
+                         X_train, y_train, X_test, dtype, solver='lsqr', shrinkage=shrinkage)
         for labels in ['int', 'str']:
             for solver, shrinkage in grid:
                 for name, Xa, ya in [('toy', X, y), ('toy1d', X1, y), ('toy3', X, y3), ('toy6', X6, y6), ('toy7', X6, y7)]:

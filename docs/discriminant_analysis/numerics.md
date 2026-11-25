@@ -7,6 +7,12 @@ Mojo-linalg supplies SVD, least squares, symmetric eigendecomposition,
 Cholesky and triangular solves. Those dependencies already belong to Moxie's
 assembly. No new numerical runtime dependency is introduced.
 
+LDA's `lsqr` uses mojo-linalg's `least_squares(a, b, rtol=..., atol=0.0)`
+to apply a rank cutoff to one covariance factorization with all class means
+as right-hand sides. Numax's `linalg.lstsq[method="svd"]` requires
+compile-time dimensions and a vector right-hand side. Its `linalg.pinv`
+forms a dense pseudoinverse, which this solve does not need.
+
 Empirical covariance, fixed shrinkage, column means, and Ledoit-Wolf now
 reuse `moxie.covariance` and its existing helpers on Float64 work arrays.
 The family keeps row-major centering because the covariance helper returns

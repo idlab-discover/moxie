@@ -225,7 +225,11 @@ BayesianRidge contracts. The standalone checkout is not a build dependency;
 remaining dense algorithms and sparse support are explicitly unfinished.
 
 [Neighbors](../families/neighbors/README.md) is owned by Moxie, including its dense estimators, NCA,
-query engine and spatial trees. Sparse graph APIs remain deferred.
+query engine and spatial trees. The typed estimator and spatial-tree query
+records retain the feature dtype for distances. Spatial trees also retain that
+dtype for fitted data and bounds. The pinned scikit-learn public queries and
+tree storage use Float64. Both Moxie trees return Float64 kernel densities,
+including in log space. Sparse graph APIs remain deferred.
 
 [Imputation](../families/impute/README.md) is owned by Moxie, including dense simple, integer,
 string and KNN imputers, numeric/string indicators, and dense deterministic

@@ -47,7 +47,8 @@ Methods follow the reference names/defaults:
 - `kernel_density(X, h, kernel="gaussian", atol=0, rtol=1e-8,
   breadth_first=True, return_log=False)` supports Gaussian, tophat,
   Epanechnikov, exponential, linear and cosine kernels. It returns an
-  **unnormalized weighted sum**, shape `(n_queries,)`, retaining tree dtype.
+  **unnormalized weighted sum** as a Float64 NDArray of shape `(n_queries,)`
+  for either tree dtype, including when `return_log=True`.
   All supported metrics can be used; probability-density normalization is valid
   only for Euclidean distance, as in sklearn. Exact log-domain summation meets
   nonnegative error tolerances without approximation. Compact-support kernels
@@ -73,7 +74,10 @@ rather than exposing mutable backing views. Direct mutation of inspectable tree
 fields is unsupported. Input matrices are rank two and nonempty; general leading
 batch axes, Python object arrays, pickling/joblib, reflection and Python metric
 objects are not represented. These language adaptations are tested explicitly.
-Float32 point arithmetic widens through the family metric, then casts output.
+Fitted data, bounds and distances in query records retain the tree's feature
+dtype. The pinned scikit-learn public trees use Float64 for those arrays.
+Float32 point arithmetic widens through the family metric before distances are
+stored in query records. Density sums keep their Float64 precision and range.
 Minkowski inherits that metric's documented arbitrary-power numerical limits.
 
 `NearestNeighbors` and its KNN/radius/LOF consumers accept `algorithm="kd_tree"`.
@@ -103,6 +107,10 @@ The validated run covers 336 independent configurations and 205 original sklearn
 test invocations, including its Float32/Float64 consistency tests. It uses rtol 3e-5 for Float32 and 2e-11 for Float64 query fixtures; kernel tests allow 2e-9, a conservative bound since the
 kernel sums moved to Numax fdlibm exp/log. Log tails
 use corresponding absolute tolerance. Membership/count comparisons are exact.
+Both public tree APIs are also checked against the compiled oracle for Float32
+and Float64 inputs, including linear densities outside the Float32 range and
+log densities. The adapter casts densities to Float32 only when replaying
+scikit-learn's private `KDTree32` and `BallTree32` tests.
 
 For the original sklearn test bodies, compile the recorded local checkout into
 a separate Python test environment (Python, Cython, Meson, Ninja, NumPy, SciPy,

@@ -9,8 +9,9 @@ snapshots, shared dense reductions/RNG, clone lifecycle through isolated consume
 probes, and namespace collision and missing-source rejection. Public
 RandomForestClassifier/Regressor and ExtraTreesClassifier/Regressor now
 use this engine; see [forests.md](forests.md) for supported types, methods and
-limits. Other public estimator names remain declarations that raise. Boosting,
-bagging, voting, stacking, isolation and random embedding are not implemented.
+limits. [HistGradientBoostingRegressor](hgb-regressor.md) supports dense numerical
+regression. Other boosting estimators, bagging, voting, stacking, isolation, and
+random embedding remain declarations that raise.
 
 Deferred sparse branches: all CSR/CSC/COO inputs, conversions, sparse passthrough,
 and tree/forest decision_path. Reference: sklearn/ensemble/_forest.py decision_path,

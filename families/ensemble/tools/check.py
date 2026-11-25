@@ -83,7 +83,7 @@ def build():
         compile_file(p,ROOT/'builds'/p.stem)
     for driver in ('sampling_driver','forest_driver','public_forest_driver','public_edge_driver',
                    'hgb_binning_driver','hgb_histograms_driver','hgb_splitting_driver',
-                   'hgb_grower_driver','hgb_losses_driver'):
+                   'hgb_grower_driver','hgb_losses_driver','hgb_regressor_driver'):
         compile_file(ROOT/'tests'/(driver+'.mojo'),ROOT/'builds'/driver)
     compile_file(ROOT/'examples/estimator.mojo',ROOT/'builds/example')
     compile_file(ROOT/'examples/plumbing.mojo',ROOT/'builds/plumbing_example')
@@ -162,7 +162,7 @@ def hgb_component(component):
 
 def main():
     try:
-        if sys.argv[1] in ('hgb-binning', 'hgb-histograms', 'hgb-splitting', 'hgb-grower', 'hgb-losses', 'hgb-classification'):
+        if sys.argv[1] in ('hgb-binning', 'hgb-histograms', 'hgb-splitting', 'hgb-grower', 'hgb-losses', 'hgb-classification', 'hgb-regressor'):
             hgb_component(sys.argv[1].removeprefix('hgb-'))
             return
         if not sys.argv[1].endswith('-only'): build()
@@ -172,7 +172,8 @@ def main():
             oracle = pinned_oracle()
             for script in ('sampling_parity.py','forest_parity.py','public_forest_parity.py',
                            'public_edge_parity.py','hgb_binning_parity.py','hgb_histograms_parity.py',
-                           'hgb_splitting_parity.py','hgb_grower_parity.py','hgb_losses_parity.py'):
+                           'hgb_splitting_parity.py','hgb_grower_parity.py','hgb_losses_parity.py',
+                           'hgb_regressor_parity.py'):
                 execute(oracle, ROOT/'tests'/script)
         elif sys.argv[1]=='start': execute(ROOT/'builds/example')
         elif sys.argv[1]!='build': raise ValueError(sys.argv[1])

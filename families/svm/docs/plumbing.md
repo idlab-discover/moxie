@@ -18,6 +18,7 @@ all seven dense estimators are implemented in their assigned directories. Existi
 | svm.one_class / algorithms/one_class | `moxie.svm._one_class` | OneClassSVM; scaffold + libsvm |
 | svm.linear / algorithms/linear | `moxie.svm._linear`, `_bounds` | LinearSVC, LinearSVR, l1_min_c; scaffold + liblinear |
 | svm.nu_svm / algorithms/nu_svm | `moxie.svm._nu_svm` | NuSVC, NuSVR; scaffold + libsvm + c_svm |
+| families/svm | `moxie.svm.kernel_serialization` | Native kernel schemas consume all kernel wrappers and the shared model-file container |
 
 Children contribute public symbols to the `moxie.svm` export manifest. sklearn's
 `_base`, `_bounds`, LIBSVM and LIBLINEAR boundaries are retained conceptually;

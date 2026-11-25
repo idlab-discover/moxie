@@ -19,7 +19,8 @@ var stages = model.staged_predict(X_test)
 
 The estimator supports squared error, absolute error, Gamma, Poisson, and
 quantile losses, nonnegative sample weights, per-node feature subsampling,
-monotonic constraints by feature position, and interaction constraints.
+monotonic constraints by feature position, interaction constraints, and
+[explicit categorical columns](hgb-categorical.md).
 `staged_predict` returns an owned list containing one prediction vector per
 boosting iteration. `score` returns R² and accepts optional sample weights.
 
@@ -40,11 +41,9 @@ fitted stage. A fresh fit with early stopping disabled records empty histories.
 available until a successful fit replaces them. `moxie.base.clone` makes an
 unfitted estimator. The current model survives a failed fit.
 `n_iter_`, `n_trees_per_iteration_` and `n_features_in_` start at zero and
-describe the fitted state after fit. `is_categorical_` is `None` for the
-supported numerical inputs. Verbose fit emits native progress lines.
+describe the fitted state after fit. Verbose fit emits native progress lines.
 
-Categorical preprocessing, feature-name metadata, and additional
-early-stopping scorers remain open. The random-state argument accepts
+Feature-name metadata and additional early-stopping scorers remain open. The random-state argument accepts
 an integer seed or `None`. Python-style scorer objects and iterator-based stages
 have no native API in this implementation.
 

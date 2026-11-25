@@ -1,7 +1,10 @@
 from std.testing import TestSuite, assert_equal, assert_false, assert_raises, assert_true
 
 from moxie.base import SupervisedEstimator, clone
-from moxie.ensemble import HistGradientBoostingRegressor
+from moxie.ensemble import (
+    HistGradientBoostingCategoricalFeatures,
+    HistGradientBoostingRegressor,
+)
 from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
 from numojo import NDArray, Shape, Strides, full
@@ -142,6 +145,70 @@ def test_pipeline_and_unsupported_configuration() raises:
     var scorer = HistGradientBoostingRegressor(early_stopping=True, scoring=String("r2"))
     with assert_raises(contains="scoring=loss"):
         _ = scorer.fit(X, y)
+
+
+def test_categorical_feature_validation_and_refit() raises:
+    var X = NDArray[DType.float64](Shape(120, 2))
+    var y = NDArray[DType.float64](Shape(120))
+    for i in range(120):
+        var category = i % 3
+        X.unsafe_set(2 * i, 0)
+        X.unsafe_set(2 * i + 1, 1000.5 if category == 1 else Float64(category - 2))
+        y.unsafe_set(i, 4.0 if category == 1 else -5.0)
+    var model = HistGradientBoostingRegressor(
+        categorical_features=List[Int]([1, 1]), max_iter=1, max_leaf_nodes=2,
+        min_samples_leaf=2, max_bins=3, learning_rate=1.0, random_state=42,
+    )
+    _ = model.fit(X, y)
+    assert_equal(model.is_categorical_.value(), List[Bool]([False, True]))
+    assert_equal(model.score(X, y), 1.0)
+    var copied = clone(model)
+    assert_false(copied.__sklearn_is_fitted__())
+    assert_false(Bool(copied.is_categorical_))
+    _ = copied.fit(X, y)
+    assert_equal(copied.score(X, y), 1.0)
+
+    var params = model.get_params()
+    params.categorical_features = List[Bool]([True])
+    _ = model.set_params(params)
+    with assert_raises(contains="categorical mask"):
+        _ = model.fit(X, y)
+    params.categorical_features = List[Int]([-1])
+    _ = model.set_params(params)
+    with assert_raises(contains="categorical feature index"):
+        _ = model.fit(X, y)
+    params.categorical_features = List[Int]([1])
+    params.max_bins = 2
+    _ = model.set_params(params)
+    with assert_raises(contains="cardinality"):
+        _ = model.fit(X, y)
+
+    params.max_bins = 3
+    params.monotonic_cst = List[Int]([0, 1])
+    _ = model.set_params(params)
+    with assert_raises(contains="monotonic constraint"):
+        _ = model.fit(X, y)
+    params.monotonic_cst = None
+    params.warm_start = True
+    _ = model.set_params(params)
+    var changed = X.copy()
+    changed.unsafe_set(3, 2000.5)
+    with assert_raises(contains="cardinality"):
+        _ = model.fit(changed, y)
+    params.max_bins = 4
+    _ = model.set_params(params)
+    with assert_raises(contains="fitted category domains"):
+        _ = model.fit(changed, y)
+    changed.unsafe_set(3, Float64("inf"))
+    with assert_raises(contains="categorical features must be finite"):
+        _ = model.predict(changed)
+    assert_equal(model.score(X, y), 1.0)
+    assert_equal(model.is_categorical_.value(), List[Bool]([False, True]))
+
+    params.warm_start = False
+    params.categorical_features = HistGradientBoostingCategoricalFeatures(None)
+    _ = model.set_params(params).fit(X, y)
+    assert_false(Bool(model.is_categorical_))
 
 
 def main() raises:

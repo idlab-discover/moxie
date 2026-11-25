@@ -30,6 +30,7 @@ from ._api import (
 
 from ._forest import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier, ExtraTreesRegressor
 
+from ._hist_gradient_boosting.common import HistGradientBoostingCategoricalFeatures
 from ._hist_gradient_boosting.regressor import HistGradientBoostingRegressor, HistGradientBoostingRegressorParams
 from ._hist_gradient_boosting.classifier import (
     HistGradientBoostingClassifier,

@@ -28,6 +28,7 @@ class Case:
     sampled: bool
     seed: int
     initial: int = 0
+    categories: int = 0
 
     def explicit_validation(self):
         y_val = (np.arange(len(self.query)) % self.classes) * 11 - 7
@@ -36,7 +37,7 @@ class Case:
     def fixture(self):
         fields = [
             *self.X.shape, len(self.query), self.classes, int(self.weights is not None),
-            self.class_weight, self.mode, self.constraints, int(self.sampled), self.seed, self.initial,
+            self.class_weight, self.mode, self.constraints, int(self.sampled), self.seed, self.initial, self.categories,
             *bits64(self.X.ravel()), *bits64(self.query.ravel()), *bits64(self.y),
         ]
         if self.weights is not None:
@@ -60,6 +61,9 @@ class Case:
             random_state=self.seed, max_features=0.65 if self.sampled else 1.0,
             early_stopping="auto" if self.mode == 5 else self.mode != 0,
             validation_fraction=validation_size, n_iter_no_change=3, tol=0.02,
+            categorical_features=[
+                bool(self.categories & (1 << i)) for i in range(self.X.shape[1])
+            ],
             monotonic_cst=[1, 0, 0, 0] if self.constraints == 1 else None,
             interaction_cst="pairwise" if self.constraints == 2 else None,
             class_weight={0: None, 1: "balanced", 2: mapping}[self.class_weight],
@@ -72,6 +76,8 @@ class Case:
             model.do_early_stopping_, model.is_categorical_ is not None, len(model.classes_),
             len(model.train_score_), len(model.validation_score_),
         ]
+        if model.is_categorical_ is not None:
+            attrs.extend(model.is_categorical_)
         accuracy = model.score(self.X, self.y, sample_weight=self.weights)
         return attrs, [
             (False, [accuracy]), (True, model.classes_), (False, model.train_score_),
@@ -104,6 +110,27 @@ def cases():
             constraints = 1 if classes == 2 else 2
             yield Case(X, query, y, classes, weights, 1, 0, constraints, False, seed)
 
+    for seed in (5, 81):
+        rng = np.random.default_rng(seed)
+        X = rng.normal(size=(540, 4))
+        X[:, 1] = rng.choice([-400.25, -0.0, 12.5, 1000.0], size=len(X))
+        X[::9, 1] = np.nan
+        X[:, 3] = rng.choice([0.0, 1.0, 2.0], size=len(X))
+        signal = X[:, 0] + X[:, 2] + np.select(
+            [X[:, 1] == -400.25, X[:, 1] == 12.5, np.isnan(X[:, 1])], [4, -4, 2]
+        ) - X[:, 3]
+        query = X[:32].copy()
+        query[::4, 1] = 7000.25
+        query[1::4, 3] = np.nan
+        weights = rng.integers(1, 8, len(X)) / 4
+        weights[::29] = 0
+        for classes in (2, 3):
+            y = np.searchsorted(np.linspace(-1.5, 0.5, classes - 1), signal) * 11 - 7
+            constraints = 1 if classes == 2 else 2
+            for mode, sampled, initial in ((0, False, 0), (2, True, 0), (3, True, 5), (0, True, 5)):
+                yield Case(X, query, y, classes, weights, 1, mode, constraints, sampled,
+                           seed, initial=initial, categories=10)
+
     X = np.arange(25, dtype=np.float64).reshape(-1, 1)
     yield Case(X, X, np.full(len(X), -7), 1, None, 0, 0, 0, False, 7)
     X = np.zeros((10_001, 1))
@@ -125,7 +152,10 @@ def main():
         for index, case in enumerate(all_cases):
             attrs, expected = case.reference()
             context = f"case {index}, classes={case.classes}, mode={case.mode}, seed={case.seed}, initial={case.initial}"
-            assert_array_equal(list(map(int, next(records).split())), attrs, err_msg=context)
+            actual_attrs = list(map(int, next(records).split()))
+            if actual_attrs[4]:
+                actual_attrs.extend(int(next(records)) for _ in range(actual_attrs[1]))
+            assert_array_equal(actual_attrs, attrs, err_msg=context)
             for exact, values in expected:
                 values = np.asarray(values, dtype=np.float64).ravel()
                 actual = np.array([next(records) for _ in values], dtype=np.int64).view(np.float64)

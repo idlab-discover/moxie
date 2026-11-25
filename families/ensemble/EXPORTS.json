@@ -20,6 +20,7 @@
       "ExtraTreesRegressor": "moxie.ensemble._forest",
       "GradientBoostingClassifier": "moxie.ensemble._api",
       "GradientBoostingRegressor": "moxie.ensemble._api",
+      "HistGradientBoostingCategoricalFeatures": "moxie.ensemble._hist_gradient_boosting.common",
       "HistGradientBoostingClassifier": "moxie.ensemble._hist_gradient_boosting.classifier",
       "HistGradientBoostingClassifierParams": "moxie.ensemble._hist_gradient_boosting.classifier",
       "HistGradientBoostingRegressor": "moxie.ensemble._hist_gradient_boosting.regressor",

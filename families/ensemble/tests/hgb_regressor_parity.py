@@ -17,7 +17,7 @@ BUILDS = Path(__file__).resolve().parents[1] / "builds"
 
 def cases():
     for index, (loss, q, X, query, y, _, weights, stages) in enumerate(loss_cases()):
-        yield loss, q, X, query, y, weights, stages, 0, 0, False, index, 0
+        yield loss, q, X, query, y, weights, stages, 0, 0, False, index, 0, 0
     for seed in (0, 41, 421):
         rng = np.random.default_rng(seed)
         X = rng.normal(size=(167, 4))
@@ -28,23 +28,40 @@ def cases():
         weights = rng.integers(1, 8, len(X)) / 4
         for mode in (0, 1, 2, 3, 5):
             for constraints, sampled in ((0, True), (1, False), (1, True)):
-                yield "squared_error", 0.5, X, query, y, weights, 18, mode, constraints, sampled, seed, 0
+                yield "squared_error", 0.5, X, query, y, weights, 18, mode, constraints, sampled, seed, 0, 0
         for mode in (0, 1, 2, 3, 5):
             for loss in ("squared_error", "absolute_error", "quantile"):
-                yield loss, 0.6, X, query, y, weights, 18, mode, 0, True, seed, 6
+                yield loss, 0.6, X, query, y, weights, 18, mode, 0, True, seed, 6, 0
         for constraints in (2, 3):
-            yield "squared_error", 0.5, X, query, y, weights, 6, 2, constraints, False, seed, 0
+            yield "squared_error", 0.5, X, query, y, weights, 6, 2, constraints, False, seed, 0, 0
     # The original Poisson target is valid even when its sole positive row
     # lands in the internal validation set.
     X = np.arange(10, dtype=np.float64).reshape(-1, 1)
     y = np.zeros(len(X))
     split_seed = np.random.RandomState(2).randint(np.iinfo(np.uint32).max, dtype="uint64")
     y[np.random.RandomState(split_seed).permutation(len(y))[0]] = 1.0
-    yield "poisson", 0.5, X, X, y, None, 4, 2, 0, False, 2, 0
+    yield "poisson", 0.5, X, X, y, None, 4, 2, 0, False, 2, 0, 0
     rng = np.random.default_rng(123)
     X = rng.normal(size=(10_001, 2))
     y = np.ones(len(X))
-    yield "squared_error", 0.5, X, X[:5], y, None, 10, 4, 0, False, 123, 0
+    yield "squared_error", 0.5, X, X[:5], y, None, 10, 4, 0, False, 123, 0, 0
+
+    for seed in (3, 57):
+        rng = np.random.default_rng(seed)
+        X = rng.normal(size=(481, 4))
+        X[:, 2] = rng.choice([-400.25, -0.0, 12.5, 1000.0], size=len(X))
+        X[::8, 2] = np.nan
+        X[:, 3] = np.nan  # all-missing categorical column
+        y = 2 * X[:, 0] + X[:, 1] + np.select(
+            [X[:, 2] == -400.25, X[:, 2] == 12.5, np.isnan(X[:, 2])], [6, -5, 3]
+        )
+        weights = rng.integers(1, 8, len(X)) / 4
+        weights[::29] = 0
+        query = X[:31].copy()
+        query[::3, 2] = 7000.25  # unknown category, interleaved with NaN and known values
+        query[1::3, 3] = 4.0
+        for mode, sampled, initial in ((0, False, 0), (2, True, 0), (3, True, 6), (0, True, 6)):
+            yield "squared_error", 0.5, X, query, y, weights, 12, mode, 1, sampled, seed, initial, 12
 
 
 def explicit_validation(query):
@@ -52,10 +69,10 @@ def explicit_validation(query):
 
 
 def fixture(case):
-    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial = case
+    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial, categories = case
     fields = [
         loss, *bits64([q]), *X.shape, len(query), stages, int(weights is not None),
-        mode, constraints, int(sampled), seed, initial,
+        mode, constraints, int(sampled), seed, initial, categories,
         *bits64(X.ravel()), *bits64(query.ravel()), *bits64(y),
     ]
     if weights is not None:
@@ -67,7 +84,7 @@ def fixture(case):
 
 
 def reference(case):
-    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial = case
+    loss, q, X, query, y, weights, stages, mode, constraints, sampled, seed, initial, categories = case
     validation_size = {1: None, 5: 9}.get(mode, 0.1)
     validation = {}
     if mode == 3:
@@ -79,6 +96,7 @@ def reference(case):
         max_bins=16, max_leaf_nodes=5, max_depth=2 if initial else 3, learning_rate=0.125,
         min_samples_leaf=3, l2_regularization=0.25, max_features=0.6 if sampled else 1.0,
         validation_fraction=validation_size, n_iter_no_change=3, tol=0.125, random_state=seed,
+        categorical_features=[i for i in range(X.shape[1]) if categories & (1 << i)],
         monotonic_cst=[1, 1, 0, 0] if constraints == 1 else None,
         interaction_cst={1: [[0, 1], [2, 3]], 2: "pairwise", 3: "no_interactions"}.get(constraints),
     ).fit(X, y, sample_weight=weights, **validation)
@@ -88,6 +106,8 @@ def reference(case):
     attrs = [model.n_iter_, model.n_features_in_, model.n_trees_per_iteration_,
              model.do_early_stopping_, model.is_categorical_ is not None,
              len(model.train_score_), len(model.validation_score_)]
+    if model.is_categorical_ is not None:
+        attrs.extend(model.is_categorical_)
     return attrs, model.score(X, y, sample_weight=weights), model.train_score_, model.validation_score_, list(model.staged_predict(query)), model.predict(query)
 
 
@@ -109,7 +129,10 @@ def main():
         for index, case in enumerate(all_cases):
             attrs, r2, train, val, stages, prediction = reference(case)
             context = f"case {index} {case[0]}, mode={case[7]}, seed={case[10]}"
-            assert_array_equal(list(map(int, next(records).split())), attrs, err_msg=context)
+            actual_attrs = list(map(int, next(records).split()))
+            if actual_attrs[4]:
+                actual_attrs.extend(int(next(records)) for _ in range(actual_attrs[1]))
+            assert_array_equal(actual_attrs, attrs, err_msg=context)
             for expected in ([r2], train, val):
                 assert_allclose(read_values(len(expected)), expected, atol=1e-12, rtol=1e-12,
                                 equal_nan=True, err_msg=context)

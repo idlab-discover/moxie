@@ -236,6 +236,9 @@
       "modules": {
         "moxie.neural_network._mlp_engine": {
           "file": "src/moxie/neural_network/_mlp_engine.mojo"
+        },
+        "moxie.neural_network._mlp_lbfgs": {
+          "file": "src/moxie/neural_network/_mlp_lbfgs.mojo"
         }
       },
       "assets": {
@@ -268,6 +271,23 @@
       "id": "mojo-linalg",
       "modules": {},
       "path": "../../../../../.worktrees/mojo-linalg-covariance"
+    },
+    {
+      "id": "mojo-optimize",
+      "path": "../../../../../.worktrees/mojo-optimize-linear_model",
+      "modules": {},
+      "assets": {
+        "mojo_optimize/__init__.mojo": "src/mojo_optimize/__init__.mojo",
+        "mojo_optimize/_lbfgsb_core.mojo": "src/mojo_optimize/_lbfgsb_core.mojo",
+        "mojo_optimize/_vectors.mojo": "src/mojo_optimize/_vectors.mojo",
+        "mojo_optimize/contracts.mojo": "src/mojo_optimize/contracts.mojo",
+        "mojo_optimize/history.mojo": "src/mojo_optimize/history.mojo",
+        "mojo_optimize/lbfgs.mojo": "src/mojo_optimize/lbfgs.mojo",
+        "mojo_optimize/lbfgsb.mojo": "src/mojo_optimize/lbfgsb.mojo",
+        "mojo_optimize/line_search.mojo": "src/mojo_optimize/line_search.mojo",
+        "mojo_optimize/nnls.mojo": "src/mojo_optimize/nnls.mojo"
+      },
+      "exports": null
     }
   ],
   "overrides": []

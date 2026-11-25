@@ -15,7 +15,7 @@ MODULE = ORACLE / "sklearn/neural_network/_multilayer_perceptron.py"
 BASE = MODULE.with_name("_base.py")
 
 
-def reference_functions():
+def reference_functions(*additional_methods):
     assert subprocess.check_output(
         ["git", "-C", str(ORACLE), "rev-parse", "HEAD"], text=True
     ).strip() == REVISION
@@ -28,7 +28,7 @@ def reference_functions():
         node for node in tree.body
         if isinstance(node, ast.ClassDef) and node.name == "BaseMultilayerPerceptron"
     )
-    names = {"_init_coef", "_forward_pass", "_compute_loss_grad", "_backprop"}
+    names = {"_init_coef", "_forward_pass", "_compute_loss_grad", "_backprop", *additional_methods}
     methods = [
         node for node in estimator.body
         if isinstance(node, ast.FunctionDef) and node.name in names

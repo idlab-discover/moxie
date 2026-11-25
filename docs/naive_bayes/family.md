@@ -290,9 +290,15 @@ to the same estimator, following the [shared native contract](../interfaces.md).
   the same trait) takes an explicit `CVAdapter` / `TypedScorer`; `GaussianNB` with
   `exploit_incremental_learning=True` drives `partial_fit` through an
   `IncrementalCVAdapter`. See `notebooks/naive_bayes/plot_learning_curve.ipynb`.
-- `moxie.calibration.CalibratedClassifierCV` takes a `CalibrationEstimator`
-  adapter; no adapter ships for these classifiers yet. A forwarding adapter
-  is about 40 lines (see `notebooks/naive_bayes/plot_calibration_curve.ipynb`).
+- `moxie.calibration.adapt_classifier` wraps all five default Naive Bayes
+  specializations for `CalibratedClassifierCV`. For example, use
+  `CalibratedClassifierCV(adapt_classifier(BernoulliNB()), cv=2)`.
+  The adapter accepts Float64 features and exactly representable integral
+  labels in a Float64 vector. It converts targets to the native `List[Int]`
+  domain, forwards optional weights, and uses probabilities in fitted class
+  order. Pass a fitted `FrozenEstimator` handle to calibrate on separate
+  data while preserving its fitted state.
+  See [the calibration contract](../calibration/family.md#classifier-adapter).
 
 ## Supported scope and numerical behavior
 

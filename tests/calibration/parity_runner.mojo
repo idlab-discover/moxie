@@ -22,6 +22,7 @@ from moxie._calibration_algorithms import (
 )
 from moxie.calibration_serialization import (
     CalibratedBernoulliNBClassifierCVSchema,
+    CalibratedCategoricalNBClassifierCVSchema,
     CalibratedClassifierCVSchema,
     CalibratedComplementNBClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
@@ -34,7 +35,7 @@ from moxie.serialization import ModelSchema, dumps, loads
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.frozen import FrozenEstimator
 from moxie.linear_model import LogisticRegression
-from moxie.naive_bayes import BernoulliNB, ComplementNB, GaussianNB, MultinomialNB
+from moxie.naive_bayes import BernoulliNB, CategoricalNB, ComplementNB, GaussianNB, MultinomialNB
 from moxie.svm import LinearSVC, SVC
 from calibration_centroid import Centroid
 
@@ -370,6 +371,13 @@ def main() raises:
         elif kind == "serialized_bernoulli":
             compare_serialized[CalibratedBernoulliNBClassifierCVSchema](
                 adapt_classifier(BernoulliNB(alpha=0.25, binarize=1.5)),
+                x, y, w, q, expected, fields, context,
+            )
+        elif kind == "serialized_categorical":
+            compare_serialized[CalibratedCategoricalNBClassifierCVSchema](
+                adapt_classifier(CategoricalNB(
+                    alpha=0.25, min_categories_values=List[Int]([4, 3, 5]),
+                )),
                 x, y, w, q, expected, fields, context,
             )
         elif kind == "production_lda":

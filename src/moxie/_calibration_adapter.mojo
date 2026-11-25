@@ -124,7 +124,9 @@ def adapt_classifier(
     def classes(model: CategoricalNB[]) raises -> Array:
         return _numeric_classes(model.classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "CategoricalNB")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "CategoricalNB")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(

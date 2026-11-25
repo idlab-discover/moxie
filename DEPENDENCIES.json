@@ -2963,6 +2963,9 @@
         "moxie.feature_extraction._tfidf": {
           "file": "algorithms/text/src/moxie/feature_extraction/_tfidf.mojo"
         },
+        "moxie.feature_extraction._tfidf_vectorizer": {
+          "file": "algorithms/text/src/moxie/feature_extraction/_tfidf_vectorizer.mojo"
+        },
         "moxie.feature_extraction._unicode_data": {
           "file": "algorithms/text/src/moxie/feature_extraction/_unicode_data.mojo"
         },

@@ -279,6 +279,10 @@ struct CountVectorizer[
             return _fixed_vocabulary(self._params.vocabulary)
         raise Error("NotFittedError: CountVectorizer vocabulary is unavailable")
 
+    def _activate_fixed_vocabulary(mut self) raises:
+        if not self._vocabulary:
+            self._vocabulary = self._configured_vocabulary()
+
     def vocabulary_(self) raises -> Dict[String, Int]:
         if self._vocabulary:
             return self._vocabulary.value().columns.copy()
@@ -411,7 +415,7 @@ struct CountVectorizer[
             return self._inverse_transform(X, self._vocabulary.value().names)
         return self._inverse_transform(X, self._configured_vocabulary().names)
 
-    def _inverse_transform(self, X: Self.Transformed, names: List[String]) raises -> List[List[String]]:
+    def _inverse_transform[value_dtype: DType](self, X: NDArray[value_dtype], names: List[String]) raises -> List[List[String]]:
         if X.ndim != 2 or X.shape[0] == 0 or X.shape[1] != len(names):
             raise Error("ValueError: expected a nonempty matrix with fitted vocabulary width")
         var result = List[List[String]](capacity=X.shape[0])

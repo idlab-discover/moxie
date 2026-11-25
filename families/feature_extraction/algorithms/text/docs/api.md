@@ -160,3 +160,55 @@ The generated Unicode tables can be rebuilt with the locked Python from
 `algorithms/text/tools/generate_unicode.py`. They derive from [Unicode
 16.0.0](https://www.unicode.org/versions/Unicode16.0.0/) as exposed by CPython
 3.14.7 and carry the accompanying Unicode license.
+
+## TF-IDF from documents
+
+```mojo
+from moxie.feature_extraction.text import TfidfVectorizer
+
+def main() raises:
+    var documents: List[String] = ["Tea and coffee", "Coffee coffee"]
+    var vectorizer = TfidfVectorizer(stop_words=String("english"))
+    var weighted = vectorizer.fit_transform(documents)
+    var vocabulary = vectorizer.get_feature_names_out()  # ["coffee", "tea"]
+    var idf = vectorizer.idf_()
+```
+
+`TfidfVectorizer[dtype, Y]` combines the analyzer and vocabulary of
+`CountVectorizer` with the weighting of `TfidfTransformer`. It accepts the
+counting options described above and defaults to L2 normalization with
+smoothed IDF. Float64 is the default count and output dtype. Float32 preserves
+Float32 weights and IDF. Int64 counts produce Float64 weights and IDF.
+The optional fit target is ignored. Set `Y` when a typed pipeline needs a
+different target type.
+
+`get_params()` returns a `TfidfVectorizerParams` record with `count` and
+`weighting` fields. Edit the fields and pass the record to `set_params()`.
+Weighting configuration takes effect on the next fit, which replaces the
+vocabulary and weights together on success. Fitted copies own their
+vocabulary and weights, and clones copy only configuration. `transform()`
+requires successful fit or IDF assignment, including with a fixed vocabulary.
+`inverse_transform()` returns the present terms in column order.
+`idf_()` returns a copy of the weights when IDF was learned or supplied.
+`set_idf_(values)` copies a rank-one array of the output dtype with one weight
+per vocabulary term. It requires `use_idf=True` and a learned or fixed
+vocabulary. Supplying IDF for a fixed vocabulary enables transform before fit.
+
+The count stage materializes a dense matrix. The weighting stage reads that
+matrix and produces a separate result for `fit_transform()` and
+`transform()`. The vectorizer reuses the two estimators' NuMojo allocation
+and weighting paths. Choose `min_df` or `max_features` for a smaller dense
+output.
+
+After assembling the text consumer as above, run:
+
+```sh
+python families/feature_extraction/algorithms/text/tests/vectorizer_parity.py
+```
+
+The comparator executes pinned sklearn text and normalization bodies. It
+checks shapes, dtypes, term order, inverse mappings, IDF, and weights from
+both fit entry points and unseen documents. It uses the weighting tolerances
+above. `tests/test_tfidf_vectorizer.mojo` covers parameter updates, failed and
+successful refits, cloning and fitted copies, strided IDF assignment and
+typed pipeline composition.

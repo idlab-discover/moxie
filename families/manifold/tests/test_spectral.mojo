@@ -62,7 +62,7 @@ def _lifecycle[dtype: DType]() raises:
     assert_equal(model.embedding_.value().shape[1], 1)
     for i in range(9):
         assert_equal(Float64(model.affinity_matrix_.value().unsafe_get(i)), 1.0)
-    var params: SpectralEmbeddingParams = model.get_params()
+    var params: SpectralEmbeddingParams[dtype] = model.get_params()
     params.gamma = None
     _ = model.set_params(params)
     _ = model.fit(features)
@@ -134,9 +134,68 @@ def _invalid_and_unsupported() raises:
         _ = spectral_embedding(graph, n_components=2, eigen_solver="dense")
 
 
+def _affinity_view[dtype: DType](X: NDArray[dtype]) raises -> NDArray[dtype]:
+    return X.view_with_layout(X.shape, X.strides, X.offset)
+
+
+def _wrong_sample_count[dtype: DType](X: NDArray[dtype]) raises -> NDArray[dtype]:
+    return zeros[dtype](Shape(2, 2))
+
+
+def _failed_affinity[dtype: DType](X: NDArray[dtype]) raises -> NDArray[dtype]:
+    raise Error("callback failed")
+
+
+def _callable_affinity[dtype: DType]() raises:
+    var graph = _weighted_graph[dtype]()
+    graph.unsafe_set(1, 2)
+    var reversed = graph.view_with_layout(Shape(4, 4), NDArrayStrides(-4, -1), 15)
+    var model = SpectralEmbedding[dtype](
+        affinity="callable", affinity_function=_affinity_view[dtype], eigen_solver="dense",
+    )
+    assert_true(not model.pairwise_input())
+    var expected = spectral_embedding(reversed, n_components=2, eigen_solver="dense")
+    _check_close(model.fit_transform(reversed), expected)
+    assert_equal(model.get_n_features_in(), 4)
+    assert_equal(len(model.fit_warnings), 1)
+    assert_true(not model.gamma_)
+    var fresh = clone(model)
+    assert_true(not fresh.__sklearn_is_fitted__())
+    _check_close(fresh.fit_transform(reversed), expected)
+
+    graph.unsafe_set(0, -1)
+    assert_equal(Float64(model.affinity_matrix_.value().unsafe_get(15)), 11.0)
+    with assert_raises(contains="nonnegative"):
+        _ = model.fit(reversed)
+    with assert_raises(contains="finite"):
+        graph.unsafe_set(0, SIMD[dtype, 1](Float64("nan")))
+        _ = model.fit(reversed)
+    _ = model.set_params(affinity_function=_wrong_sample_count[dtype])
+    with assert_raises(contains="one row per sample"):
+        _ = model.fit(_weighted_graph[dtype]())
+    _ = model.set_params(affinity_function=_failed_affinity[dtype])
+    with assert_raises(contains="callback failed"):
+        _ = model.fit(_weighted_graph[dtype]())
+    _check_close(model.embedding_.value(), expected)
+    assert_equal(len(model.fit_warnings), 1)
+
+    _ = model.set_params(affinity="rbf", gamma=0.0)
+    with assert_raises(contains="affinity_function requires"):
+        _ = model.fit(_weighted_graph[dtype]())
+    var params = model.get_params()
+    params.affinity_function = None
+    _ = model.set_params(params).fit(_weighted_graph[dtype]())
+    assert_equal(model.gamma_.value(), 0.0)
+    assert_equal(len(model.fit_warnings), 0)
+    with assert_raises(contains="requires affinity_function"):
+        _ = model.set_params(affinity="callable").fit(_weighted_graph[dtype]())
+
+
 def main() raises:
     _lifecycle[DType.float32]()
     _lifecycle[DType.float64]()
     _strides_and_warnings()
     _invalid_and_unsupported()
+    _callable_affinity[DType.float32]()
+    _callable_affinity[DType.float64]()
     print("PASS: dense spectral contracts")

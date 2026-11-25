@@ -169,8 +169,12 @@ def spectral_embedding[dtype: DType](
     return _spectral_coordinates(adjacency, n_components, norm_laplacian, drop_first, warnings)
 
 
-@fieldwise_init
-struct SpectralEmbeddingParams(Copyable, Movable):
+comptime _AffinityFunction[dtype: DType] = def(
+    NDArray[dtype],
+) thin raises -> NDArray[dtype]
+
+
+struct SpectralEmbeddingParams[dtype: DType = DType.float64](Copyable, Movable):
     var n_components: Int
     var affinity: String
     var gamma: Optional[Float64]
@@ -179,16 +183,33 @@ struct SpectralEmbeddingParams(Copyable, Movable):
     var eigen_tol: Optional[Float64]
     var n_neighbors: Optional[Int]
     var n_jobs: Optional[Int]
+    var affinity_function: Optional[_AffinityFunction[Self.dtype]]
+
+    def __init__(
+        out self, n_components: Int, affinity: String, gamma: Optional[Float64],
+        random_state: Optional[Int], eigen_solver: Optional[String],
+        eigen_tol: Optional[Float64], n_neighbors: Optional[Int], n_jobs: Optional[Int],
+        affinity_function: Optional[_AffinityFunction[Self.dtype]] = None,
+    ):
+        self.n_components = n_components
+        self.affinity = affinity.copy()
+        self.gamma = gamma
+        self.random_state = random_state
+        self.eigen_solver = eigen_solver.copy()
+        self.eigen_tol = eigen_tol
+        self.n_neighbors = n_neighbors
+        self.n_jobs = n_jobs
+        self.affinity_function = affinity_function
 
 
 struct SpectralEmbedding[dtype: DType = DType.float64](
     Copyable, EmbeddingEstimator, InputFeatureCount, PairwiseInput,
 ):
-    """Dense RBF or precomputed Laplacian eigenmaps."""
+    """Dense Laplacian eigenmaps with RBF, precomputed, or callable affinity."""
     comptime Input = NDArray[Self.dtype]
     comptime Target = Self.Input
     comptime Transformed = Self.Input
-    comptime Params = SpectralEmbeddingParams
+    comptime Params = SpectralEmbeddingParams[Self.dtype]
 
     var _params: Self.Params
     var embedding_: Optional[Self.Transformed]
@@ -202,11 +223,12 @@ struct SpectralEmbedding[dtype: DType = DType.float64](
         gamma: Optional[Float64] = None, random_state: Optional[Int] = None,
         eigen_solver: Optional[String] = None, eigen_tol: Optional[Float64] = None,
         n_neighbors: Optional[Int] = None, n_jobs: Optional[Int] = None,
+        affinity_function: Optional[_AffinityFunction[Self.dtype]] = None,
     ):
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64
         self._params = Self.Params(
-            n_components, affinity.copy(), gamma, random_state, eigen_solver.copy(),
-            eigen_tol, n_neighbors, n_jobs,
+            n_components, affinity, gamma, random_state, eigen_solver,
+            eigen_tol, n_neighbors, n_jobs, affinity_function,
         )
         self.embedding_ = None
         self.affinity_matrix_ = None
@@ -229,6 +251,7 @@ struct SpectralEmbedding[dtype: DType = DType.float64](
         random_state: Optional[Int] = None, eigen_solver: Optional[String] = None,
         eigen_tol: Optional[Float64] = None, n_neighbors: Optional[Int] = None,
         n_jobs: Optional[Int] = None,
+        affinity_function: Optional[_AffinityFunction[Self.dtype]] = None,
     ) raises -> ref[self] Self:
         if n_components:
             self._params.n_components = n_components.value()
@@ -246,6 +269,8 @@ struct SpectralEmbedding[dtype: DType = DType.float64](
             self._params.n_neighbors = n_neighbors
         if n_jobs:
             self._params.n_jobs = n_jobs
+        if affinity_function:
+            self._params.affinity_function = affinity_function
         return self
 
     def __sklearn_clone__(self) raises -> Self:
@@ -278,8 +303,13 @@ struct SpectralEmbedding[dtype: DType = DType.float64](
             raise Error(
                 "NotImplementedError: spectral nearest-neighbor affinity requires sparse graphs"
             )
-        if params.affinity != "rbf" and params.affinity != "precomputed":
+        var callable_affinity = params.affinity == "callable"
+        if params.affinity != "rbf" and params.affinity != "precomputed" and not callable_affinity:
             raise Error("ValueError: unsupported SpectralEmbedding affinity")
+        if callable_affinity and not params.affinity_function:
+            raise Error("ValueError: affinity='callable' requires affinity_function")
+        if not callable_affinity and params.affinity_function:
+            raise Error("ValueError: affinity_function requires affinity='callable'")
         _validate_solver(params.eigen_solver, params.eigen_tol, params.random_state)
         var configured_gamma = params.gamma.or_else(0)
         if not isfinite(configured_gamma) or configured_gamma < 0:
@@ -301,6 +331,13 @@ struct SpectralEmbedding[dtype: DType = DType.float64](
                 affinity_matrix = ones[Self.dtype](Shape(X.shape[0], X.shape[0]))
             else:
                 affinity_matrix = pairwise(X, X, "rbf", gamma, same_data=True)
+        elif callable_affinity:
+            var callback = params.affinity_function.value()
+            var graph = callback(X)
+            var n = X.shape[0]
+            if graph.ndim != 2 or graph.shape[0] != n or graph.shape[1] != n:
+                raise Error("ValueError: affinity_function must return a square matrix with one row per sample")
+            affinity_matrix = graph.contiguous()
         else:
             affinity_matrix = X.contiguous()
         var warnings = List[FitWarning]()

@@ -28,8 +28,9 @@ operator directly where sklearn constructs a sparse intermediate; a child must
 validate the mathematical equivalence, not call that intermediate a sparse API.
 
 Dense TSNE supports the default `method="barnes_hut"` and `method="exact"`.
-Select `affinity="rbf"` or `affinity="precomputed"` and
-`eigen_solver="dense"` for SpectralEmbedding. The default affinity selects
+Select `affinity="rbf"`, `affinity="precomputed"`, or `affinity="callable"`
+with a native callback, and use `eigen_solver="dense"` for SpectralEmbedding.
+The default affinity selects
 nearest neighbors, and the default solver selects ARPACK. Both require an
 explicit dense setting in this implementation. LLE uses a dense operator
 and eigensolve for both `"dense"` and `"auto"`.

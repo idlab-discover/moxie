@@ -71,10 +71,12 @@ def function_case(reference, adjacency, label, *, n_components=2, solver="lobpcg
 
 
 def estimator_case(reference, x, label, *, affinity, gamma=None, n_components=2, degenerate=False):
+    reference_affinity = custom_affinity if affinity == "callable" else affinity
     with warnings.catch_warnings(record=True) as seen:
         warnings.simplefilter("always")
         expected = reference.SpectralEmbedding(
-            n_components, affinity=affinity, gamma=gamma, eigen_solver="lobpcg", random_state=17,
+            n_components, affinity=reference_affinity, gamma=gamma,
+            eigen_solver="lobpcg", random_state=17,
         ).fit(x)
     lines = native("estimator", x, n_components, affinity, gamma)
     n_features, n_warnings = map(int, next(lines).split())
@@ -98,6 +100,12 @@ def estimator_case(reference, x, label, *, affinity, gamma=None, n_components=2,
     eigenspace(actual_embedding, expected.embedding_, expected.affinity_matrix_,
                normed=True, skip=1, label=label, degenerate=degenerate)
     print(f"PASS {label}")
+
+
+def custom_affinity(x):
+    first = x[:, 0].astype(np.float64)
+    weights = 1 / (1 + np.abs(first[:, None] - first))
+    return (weights + np.triu(np.full_like(weights, 0.125), k=1)).astype(x.dtype)
 
 
 def notebook_case(reference):
@@ -167,7 +175,9 @@ def main():
                        affinity="rbf", gamma=0.1, n_components=6)
         estimator_case(reference, x.astype(dtype), f"{name} zero gamma repeated eigenspace",
                        affinity="rbf", gamma=0.0, n_components=len(x) - 1, degenerate=True)
-    print("PASS: 26 dense spectral comparisons against pinned sklearn")
+        estimator_case(reference, x.astype(dtype), f"{name} asymmetric callable affinity",
+                       affinity="callable")
+    print("PASS: 28 dense spectral comparisons against pinned sklearn")
 
 
 if __name__ == "__main__":

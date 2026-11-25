@@ -5,6 +5,7 @@ from std.math import isnan
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import SupervisedEstimator, Predictor, ProbabilityPredictor, SupervisedScorer, WeightedSupervisedEstimator, IncrementalClassifier, IncrementalRegressor, clone
 from moxie._multioutput import ChainResponses
+from moxie.metadata_routing import FitScoreMetadataRequest, FitScoreMetadataRequestProvider, SampleWeightRequest
 from moxie.multioutput import MultiOutputRegressor, MultiOutputClassifier, RegressorChain, ClassifierChain
 
 @fieldwise_init
@@ -128,7 +129,7 @@ struct TwoFold[label: DType](ChainResponses):
         return result^
 
 
-struct WeightedMean(WeightedSupervisedEstimator, Predictor):
+struct WeightedMean(WeightedSupervisedEstimator, Predictor, FitScoreMetadataRequestProvider):
     comptime Input = NDArray[DType.float64]
     comptime Target = NDArray[DType.float64]
     comptime Prediction = Self.Target
@@ -136,17 +137,23 @@ struct WeightedMean(WeightedSupervisedEstimator, Predictor):
     comptime Params = Params
     var mean: Float64
     var fitted: Bool
+    var _fit_request: SampleWeightRequest
 
-    def __init__(out self):
+    def __init__(out self) raises:
         self.mean = 0
         self.fitted = False
+        self._fit_request = SampleWeightRequest()
+        self._fit_request.set(True)
     def get_params(self, deep: Bool = True) -> Self.Params:
         return Params(0)
     def set_params[origin: MutOrigin, params_origin: ImmOrigin](ref[origin] self, ref[params_origin] params: Self.Params) raises -> ref[self] Self:
         pass
         return self
 
-    def __sklearn_clone__(self) -> Self:
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        return FitScoreMetadataRequest(self._fit_request.copy(), SampleWeightRequest())
+
+    def __sklearn_clone__(self) raises -> Self:
         return Self()
     def __sklearn_is_fitted__(self) -> Bool:
         return self.fitted
@@ -406,6 +413,17 @@ def main() raises:
     var weighted_prediction = weighted.predict(X)
     assert_equal(weighted_prediction.unsafe_get(0), Float64(20))
     assert_equal(weighted_prediction.unsafe_get(1), Float64(1))
+    var metadata = Dict[String, NDArray[DType.float64]]()
+    _ = reg.fit(X, y, metadata=metadata)
+    metadata["sample_weight"] = weights.copy()
+    with assert_raises(contains="unexpected fit metadata"):
+        _ = reg.fit(X, y, metadata=metadata)
+    assert_equal(reg.score(X, y), Float64(1))
+    var routed = weighted.fit(X, y, metadata=metadata).predict(query)
+    parity_matrix("MultiOutputRegressorRoutedFit", routed)
+    var weighted_chain = RegressorChain(WeightedMean(), cv=2)
+    var chained = weighted_chain.fit(X, y, metadata=metadata).predict(query)
+    parity_matrix("RegressorChainRoutedFit", chained)
     print("PARITY MultiOutputRegressorScore", reg.score(X, changed))
     print("PARITY MultiOutputRegressorWeightedScore", reg.score(X, changed, weights.copy()))
     var changed_labels = labels.copy()

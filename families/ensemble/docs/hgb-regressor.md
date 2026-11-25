@@ -1,0 +1,76 @@
+# Dense histogram gradient boosting regression
+
+`moxie.ensemble.HistGradientBoostingRegressor` accepts a rank-two numerical
+NuMojo `NDArray` with sample rows and feature columns. Features default to
+Float64. Use `HistGradientBoostingRegressor[DType.float32]` for Float32 inputs.
+Targets, predictions, sample weights, and score histories are rank-one Float64
+arrays. Both feature dtypes support strided layouts and NaNs.
+
+```mojo
+from moxie.ensemble import HistGradientBoostingRegressor
+
+var model = HistGradientBoostingRegressor(
+    max_iter=80, min_samples_leaf=5, early_stopping=True, random_state=42,
+)
+_ = model.fit(X, y)
+var predictions = model.predict(X_test)
+var stages = model.staged_predict(X_test)
+```
+
+The estimator supports squared error, absolute error, Gamma, Poisson, and
+quantile losses, nonnegative sample weights, per-node feature subsampling,
+monotonic constraints by feature position, and interaction constraints.
+`staged_predict` returns an owned list containing one prediction vector per
+boosting iteration. `score` returns R² and accepts optional sample weights.
+
+Early stopping uses `scoring="loss"`. The default `"auto"` enables it above
+10,000 rows. With early stopping enabled, `validation_fraction` selects a
+seeded shuffled holdout by fraction or by integer row count. Set it to
+`None` to monitor training loss, or pass `X_val` and `y_val` together to
+monitor explicit validation data. Optional array arguments can take an owned
+array via `^` or a view via `.view()`. Pass optional union-valued settings as
+`Variant[Int, Float64]` for a holdout size, or
+`Variant[String, List[List[Int]]]` for an interaction rule. Explicit validation
+follows the pinned estimator's 10,000-row rule when `early_stopping="auto"`.
+A score history starts with the intercept-only score and adds one score per
+fitted stage. Disabled histories are empty.
+
+`get_params()` returns a typed copy. Edit the record and pass it to
+`set_params()` before refitting. Parameter updates leave fitted predictions
+available until a successful fit replaces them. `moxie.base.clone` makes an
+unfitted estimator. The current model survives a failed fit.
+`n_iter_`, `n_trees_per_iteration_` and `n_features_in_` start at zero and
+describe the fitted state after fit. `is_categorical_` is `None` for the
+supported numerical inputs. Verbose fit emits native progress lines.
+
+Categorical preprocessing and feature-name metadata, warm-start continuation,
+and other early-stopping scorers remain open. The random-state argument accepts
+an integer seed or `None`. Python-style scorer objects and iterator-based stages
+have no native API in this implementation.
+
+## Validation
+
+With the locked toolchain active, run the focused checks from the Moxie root.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python families/ensemble/tools/check.py hgb-regressor
+PYTHONDONTWRITEBYTECODE=1 python families/ensemble/tools/check.py hgb-losses
+```
+
+The public check compares every stage, final predictions, R², training and
+validation loss histories, and fitted attributes against source-built
+scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
+Iteration counts, history lengths and feature counts must match exactly.
+Float64 comparisons use absolute and relative tolerances of 1e-12 for
+reduction and platform math rounding. Native contracts cover typed and
+strided inputs, unfitted prediction, cloning, parameter changes, and refits.
+
+The fit reuses the private bin mapper, grower and loss components. It updates
+the training raw predictions using the grower's leaf partitions and scores
+the holdout using binned traversal. Prediction traverses the fitted raw
+trees. Train/holdout selection gathers only requested rows in shuffle order.
+The consumed NuMojo `NDArray.take(axis=0)` materializes a contiguous copy of
+the entire input before each gather, including already-contiguous inputs.
+The row gather writes directly to the result while honoring source strides
+and offset. Raw prediction and feature binning use ordered tree traversal
+and do not require a tensor reduction.

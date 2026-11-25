@@ -107,8 +107,8 @@ struct _RegressionLoss(Copyable, Movable):
         if weights and (weights.value().ndim != 1 or weights.value().size != y.size):
             raise Error("ValueError: sample_weight must have one entry per target")
 
-    def fit_intercept(self, y: _Vector, weights: Optional[_Vector] = None) raises -> Float64:
-        """Validate the training target and return the initial raw prediction."""
+    def validate_targets(self, y: _Vector, weights: Optional[_Vector]) raises:
+        """Validate the original target and weights before any holdout split."""
         if y.ndim != 1 or y.size == 0:
             raise Error("ValueError: loss expects a nonempty target vector")
         if weights:
@@ -128,6 +128,13 @@ struct _RegressionLoss(Copyable, Movable):
         if self._name == "poisson" and not has_positive:
             raise Error("ValueError: Poisson loss requires a positive target sum")
 
+    def fit_intercept(self, y: _Vector, weights: Optional[_Vector] = None) raises -> Float64:
+        """Validate the training target and return the initial raw prediction."""
+        self.validate_targets(y, weights)
+        return self.intercept(y, weights)
+
+    def intercept(self, y: _Vector, weights: Optional[_Vector]) raises -> Float64:
+        """Compute an intercept on nonempty training rows from validated data."""
         if self.needs_leaf_update():
             var values = List[_Observation](capacity=y.size)
             for i in range(y.size):

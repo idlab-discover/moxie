@@ -5,8 +5,8 @@ its tests, examples, documentation, license assets and focused validation tools.
 The standalone ensemble checkout is no longer a build dependency.
 
 Implemented: RandomForestClassifier, RandomForestRegressor,
-ExtraTreesClassifier, ExtraTreesRegressor, BaseEnsemble and the shared dense
-forest/sampling engine. Other estimator declarations raise explicitly.
+ExtraTreesClassifier, ExtraTreesRegressor, BaseEnsemble, the shared dense
+forest/sampling engine, and [dense histogram gradient boosting regression](docs/hgb-regressor.md). Other estimator declarations raise explicitly.
 See [forests](docs/forests.md), [scope](docs/scope.md), and
 [API status](docs/api-surface.md) for supported inputs and limitations. The private
 [histogram bin mapper](docs/hgb-binning.md),

@@ -21,7 +21,6 @@ from ._api import (
     GradientBoostingClassifier,
     GradientBoostingRegressor,
     HistGradientBoostingClassifier,
-    HistGradientBoostingRegressor,
     IsolationForest,
     RandomTreesEmbedding,
     StackingClassifier,
@@ -31,3 +30,5 @@ from ._api import (
 )
 
 from ._forest import RandomForestClassifier, RandomForestRegressor, ExtraTreesClassifier, ExtraTreesRegressor
+
+from ._hist_gradient_boosting.regressor import HistGradientBoostingRegressor, HistGradientBoostingRegressorParams

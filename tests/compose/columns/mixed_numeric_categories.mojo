@@ -44,26 +44,30 @@ def main() raises:
     products.unsafe_set(2, LARGE_ID + 1)
     products.unsafe_set(3, -2)
     products.unsafe_set(4, LARGE_ID)
-    train.add_categorical("product", categorical_column(products), position=0)
+    train.add_numeric("product", products, position=0)
+    products.unsafe_set(0, Int64(-99))
 
-    var number: List[String] = ["number"]
+    var floating: List[String] = ["floating"]
+    var product_kinds: List[String] = ["int64", "category"]
     var category: List[String] = ["category"]
     var selector = make_column_selector(dtype_include=category^)
-    assert_equal(selector(train).names, ["product"])
+    assert_equal(selector(train).names, [])
 
     var model = ColumnTransformer(
         ColumnEntry("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()),
-                    make_column_selector(dtype_include=number^)),
-        ColumnEntry("cat", ProductEncoder(sparse_output=False, handle_unknown="ignore"), selector.copy()),
+                    make_column_selector(dtype_include=floating^)),
+        ColumnEntry("cat", ProductEncoder(sparse_output=False, handle_unknown="ignore"),
+                    make_column_selector(dtype_include=product_kinds^)),
     )
     var test = ages([35.0, nan[DType.float64](), 15.0])
     var new_products = zeros[DType.int64](Shape(3))
     new_products.unsafe_set(0, LARGE_ID + 2)
     new_products.unsafe_set(1, LARGE_ID)
     new_products.unsafe_set(2, LARGE_ID + 1)
-    test.add_categorical("product", categorical_column(new_products))
+    test.add_numeric("product", new_products)
 
-    var copy = test.copy()
+    var copy = ages([35.0, nan[DType.float64](), 15.0])
+    copy.add_categorical("product", categorical_column(new_products))
     check_storage(copy, "flag", Scalar[DType.bool](True))
     check_storage(copy, "small", Float32(1.25))
     check_storage(copy, "large", Float64(2.5))
@@ -91,6 +95,10 @@ def main() raises:
     assert_false(fresh.__sklearn_is_fitted__())
     _ = fresh.fit(train)
     result.add("after_fit", fresh.transform(test))
+    var wrong_dtype = ages([35.0, 25.0, 15.0])
+    wrong_dtype.add_numeric("product", zeros[DType.float32](Shape(3)))
+    with assert_raises(contains="requires int64 storage"):
+        _ = model.transform(wrong_dtype)
     result.emit()
     for name in model.get_feature_names_out():
         print(String("name|", name))

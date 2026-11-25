@@ -204,13 +204,49 @@ def check_mixed_boolean_columns():
     )
 
 
+def check_mixed_numeric_categories():
+    large = 2**53
+    train = pd.DataFrame({
+        "product": np.array([large + 1, large, large + 1, -2, large], dtype=np.int64),
+        "age": [10.0, np.nan, 30.0, 40.0, 20.0],
+    })
+    test = pd.DataFrame({
+        "age": [35.0, np.nan, 15.0],
+        "product": np.array([large + 2, large, large + 1], dtype=np.int64),
+    })
+    model = compose.ColumnTransformer([
+        ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
+         compose.make_column_selector(dtype_include="floating")),
+        ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
+         compose.make_column_selector(dtype_include=["int64", "category"])),
+    ])
+    check_composition(
+        "mixed_numeric_categories", model, train, test, ("with_extra_categories", "after_fit"),
+    )
+
+
+def check_mixed_raw_float_categories():
+    train = pd.DataFrame({
+        "rating": [1.25, np.nan, 2.5, 1.25, 2.5],
+        "band": [3.5, 4.5, 3.5, 4.5, 3.5],
+        "age": [10.0, np.nan, 30.0, 40.0, 20.0],
+    })
+    test = pd.DataFrame({
+        "band": [4.5, 3.5, 9.5],
+        "age": [35.0, np.nan, 15.0],
+        "rating": [7.5, np.nan, 2.5],
+    })
+    model = compose.ColumnTransformer([
+        ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()), ["age"]),
+        ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"), ["rating", "band"]),
+    ])
+    check_composition("mixed_raw_float_categories", model, train, test)
+
+
 if __name__ == "__main__":
     check_mixed("mixed", "color", ["red", "blue", "red", "amber", "blue"], ["green", None, "red"])
-    large = 2**53
-    check_mixed(
-        "mixed_numeric_categories", "product", [large + 1, large, large + 1, -2, large],
-        [large + 2, large, large + 1], extra_outputs=("with_extra_categories", "after_fit"),
-    )
+    check_mixed_numeric_categories()
+    check_mixed_raw_float_categories()
     check_categorical_imputation("mixed_categorical_impute")
     check_categorical_imputation("mixed_numeric_impute", numeric=True)
     check_mixed_float_columns()

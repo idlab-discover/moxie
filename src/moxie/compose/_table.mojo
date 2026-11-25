@@ -1,7 +1,7 @@
 """Owned named numeric, categorical, and text feature columns."""
-from numojo import NDArray, Shape, zeros
+from numojo import NDArray, NDArrayStrides, Shape, zeros
 from std.utils import Variant
-from moxie._categorical import CategoricalColumn, CategoryDomain, NumericCategories, StringCategories
+from moxie._categorical import CategoricalColumn, CategoryDomain, NumericCategories, StringCategories, categorical_column
 
 comptime StringColumn = CategoricalColumn[StringCategories]
 comptime NumericColumn[dtype: DType] = CategoricalColumn[NumericCategories[dtype]]
@@ -147,11 +147,41 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
         var result = List[Column](capacity=len(indices))
         for index in indices:
             self._check_index(index, "category")
-            ref column = self._added_columns[-1 - self._locations[index]]
-            if not column.isa[Column]():
-                raise Error(String("TypeError: column '", self._schema.names[index],
-                                   "' has a different categorical domain than this component requires"))
-            result.append(column[Column].copy())
+            result.append(self._copy_category[Domain](index))
+        return result^
+
+    def _copy_category[Domain: CategoryDomain](self, index: Int) raises -> CategoricalColumn[Domain]:
+        comptime Column = CategoricalColumn[Domain]
+        ref column = self._added_columns[-1 - self._locations[index]]
+        if not column.isa[Column]():
+            raise Error(String("TypeError: column '", self._schema.names[index],
+                               "' has a different categorical domain than this component requires"))
+        return column[Column].copy()
+
+    def _numeric_categories[column_dtype: DType](
+        self, indices: List[Int],
+    ) raises -> List[NumericColumn[column_dtype]]:
+        """Supply explicit categories or infer categories from same-dtype raw values."""
+        var kind = _numeric_kind[column_dtype]()
+        var result = List[NumericColumn[column_dtype]](capacity=len(indices))
+        for index in indices:
+            if self._schema.dtypes[index] == "category":
+                result.append(self._copy_category[NumericCategories[column_dtype]](index))
+                continue
+            self._check_index(index, kind)
+            var location = self._locations[index]
+            if location < 0:
+                ref column = self._added_columns[-1 - location][NDArray[column_dtype]]
+                result.append(categorical_column(column))
+            else:
+                comptime if column_dtype == Self.dtype:
+                    var view = self._data.view_with_layout(
+                        Shape(self.rows()), NDArrayStrides(self._data.strides[0]),
+                        self._data.offset + location * Int(self._data.strides[1]),
+                    )
+                    result.append(categorical_column(rebind[NDArray[column_dtype]](view^)))
+                else:
+                    raise Error("TypeError: numeric categorical input requires matching storage dtype")
         return result^
 
     def _select_numeric(self, indices: List[Int], scalar: Bool) raises -> NDArray[Self.dtype]:

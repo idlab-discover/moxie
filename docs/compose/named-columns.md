@@ -96,16 +96,24 @@ to its associated input type. For example,
 `OneHotEncoder[NumericKind[DType.int64]]` receives Int64 categorical columns
 and preserves their identities through encoding, including values above
 `2**53`. Import `NumericKind` from `moxie.preprocessing._vocabulary`.
-Each branch must select a single domain. Use explicit column lists to route
-different domains to different branches in the same table. A list, mask,
+Each branch must select a single domain. A branch that consumes a numeric
+categorical domain can also select raw columns of the exact same dtype.
+For example, use `ColumnEntry("product", OneHotEncoder[NumericKind[DType.int64]](sparse_output=False), product_names)`
+with a name list `product_names` and raw Int64 product IDs. Compose constructs
+the categorical input from the selected raw values on each call and treats
+floating NaN as missing. The column retains its raw dtype in the schema, so
+select it by name or raw dtype. Split different domains across entries and
+exclude raw columns from the numeric pipeline's selector when they should
+only be encoded. Use explicit categorical storage for a supplied dictionary
+or a separate missing mask. A list, mask,
 slice, or dtype selector supplies a collection of features. The component's
 target and dense result dtype must match the table dtype. Numeric components,
 including `"passthrough"`, gather selected numeric columns into an array of
 the table dtype in key order. The constructor matrix sets that dtype.
 At this boundary, raw Boolean values become floating-point zero or one.
 The conversion can round added Float64 values in a Float32 table and Int64
-values outside the exact integer range of either float dtype. Use an Int64
-categorical column when category identity must survive dense encoding. Fitted
+values outside the exact integer range of either float dtype. Route Int64
+values to an Int64 categorical component when exact category identity matters. Fitted
 numeric branches accept any supported numeric storage dtype for a fitted name.
 A change from numeric to categorical or text storage raises. Use `"drop"` for unused
 categorical columns. An NDArray selector callable requires a table backed
@@ -172,6 +180,10 @@ column, and compares dtype selection, reordered inference, conversion beyond
 Float64's exact integer range, and output metadata.
 The Boolean case checks selection, owned strided input, reordered inference
 and the dense pipeline over raw Boolean and Float64 inputs.
+Raw category cases compare Int64 identity beyond `2**53` and Float64 NaN
+handling through a dense OneHotEncoder alongside the numeric pipeline.
+The Float64 case selects both a negative-strided matrix column and an added
+column in the same branch.
 The mixed encoders parity case also compares ordinal codes and multiclass
 target encodings with exact equality, including cross-fitted training output.
 The mixed text comparison checks scalar name and position routing with

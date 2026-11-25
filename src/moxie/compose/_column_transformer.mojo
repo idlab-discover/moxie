@@ -6,7 +6,6 @@
 # scikit-learn developers. SPDX-License-Identifier: BSD-3-Clause
 """Apply transformers to selected columns and assemble a dense result."""
 from numojo import NDArray, Shape, zeros
-from moxie._categorical import CategoricalColumn, CategoryDomain, NumericCategories, StringCategories
 from moxie.compose._table import ColumnSchema, ColumnTable, NumericColumn, StringColumn
 from std.iter import downcast
 from std.reflection.type_info import _unqualified_type_name
@@ -424,14 +423,23 @@ struct _ColumnSource[dtype: DType, origin: ImmOrigin](Copyable, Movable):
             return _select(table._data, indices, scalar)
         return table._select_numeric(indices, scalar)
 
-    def categorical[Domain: CategoryDomain](
+    def string_categories(
         self, indices: List[Int], scalar: Bool,
-    ) raises -> List[CategoricalColumn[Domain]]:
+    ) raises -> List[StringColumn]:
         if not self._table:
             raise Error("TypeError: categorical components require a ColumnTable")
         if scalar:
             raise Error(_1D_MESSAGE)
-        return self._table.value()[].categorical_columns[Domain](indices)
+        return self._table.value()[].categorical_columns(indices)
+
+    def numeric_categories[column_dtype: DType](
+        self, indices: List[Int], scalar: Bool,
+    ) raises -> List[NumericColumn[column_dtype]]:
+        if not self._table:
+            raise Error("TypeError: categorical components require a ColumnTable")
+        if scalar:
+            raise Error(_1D_MESSAGE)
+        return self._table.value()[]._numeric_categories[column_dtype](indices)
 
     def text(self, indices: List[Int], scalar: Bool) raises -> List[String]:
         if not self._table:
@@ -714,12 +722,12 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
                         block = _fit_transform_one[Self.dtype](estimator, X.text(self.indices_, scalar), y)
                     elif Self.E.Input == List[StringColumn]:
                         block = _fit_transform_one[Self.dtype](
-                            estimator, X.categorical[StringCategories](self.indices_, scalar), y,
+                            estimator, X.string_categories(self.indices_, scalar), y,
                         )
                     else:
-                        comptime Domain = NumericCategories[_numeric_category_dtype[Self.E.Input]()]
+                        comptime category_dtype = _numeric_category_dtype[Self.E.Input]()
                         block = _fit_transform_one[Self.dtype](
-                            estimator, X.categorical[Domain](self.indices_, scalar), y,
+                            estimator, X.numeric_categories[category_dtype](self.indices_, scalar), y,
                         )
                 except error:
                     raise _remap_1d(error)
@@ -760,12 +768,12 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
                         block = _transform_one[Self.dtype](self.fitted_.value(), X.text(indices, scalar))
                     elif Self.E.Input == List[StringColumn]:
                         block = _transform_one[Self.dtype](
-                            self.fitted_.value(), X.categorical[StringCategories](indices, scalar),
+                            self.fitted_.value(), X.string_categories(indices, scalar),
                         )
                     else:
-                        comptime Domain = NumericCategories[_numeric_category_dtype[Self.E.Input]()]
+                        comptime category_dtype = _numeric_category_dtype[Self.E.Input]()
                         block = _transform_one[Self.dtype](
-                            self.fitted_.value(), X.categorical[Domain](indices, scalar),
+                            self.fitted_.value(), X.numeric_categories[category_dtype](indices, scalar),
                         )
                 except error:
                     raise _remap_1d(error)

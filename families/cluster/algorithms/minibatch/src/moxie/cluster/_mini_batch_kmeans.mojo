@@ -1,6 +1,7 @@
 """Dense incremental clustering, adapted from sklearn (BSD-3-Clause)."""
 import numojo as nm
 from std.math import min, max, isfinite, ceildiv
+from moxie._feature_metadata import FeatureNamesOut
 from moxie._random import RandomState, check_random_state
 from moxie.utils.validation import FittedState
 from moxie.cluster._base import PredictiveClusterer, ClusterDistanceTransformer, IncrementalClusterer
@@ -26,7 +27,10 @@ struct MiniBatchKMeansParams[dtype: DType](Copyable, Movable):
     var reassignment_ratio: Float64
 
 
-struct MiniBatchKMeans[dtype: DType = DType.float64](PredictiveClusterer, ClusterDistanceTransformer, IncrementalClusterer, Copyable, Movable):
+struct MiniBatchKMeans[dtype: DType = DType.float64](
+    PredictiveClusterer, ClusterDistanceTransformer, IncrementalClusterer,
+    FeatureNamesOut, Copyable, Movable,
+):
     comptime Params = MiniBatchKMeansParams[Self.dtype]
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = nm.NDArray[Self.dtype]

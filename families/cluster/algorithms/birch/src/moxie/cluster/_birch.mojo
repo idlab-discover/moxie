@@ -1,6 +1,7 @@
 """Dense BIRCH CF tree, adapted from scikit-learn (BSD-3-Clause)."""
 import numojo as nm
 from std.math import isfinite, sqrt
+from moxie._feature_metadata import FeatureNamesOut
 from moxie.cluster._base import PredictiveClusterer, ClusterDistanceTransformer, IncrementalClusterer
 from moxie.cluster._contracts import validate_matrix
 from moxie.cluster._centroid_engine import distances
@@ -126,7 +127,10 @@ def _split_distance[dtype: DType](a: CFSubcluster[dtype], b: CFSubcluster[dtype]
     return Scalar[dtype](max(Float64(0), (-2 * dot + norm_a) + norm_b))
 
 
-struct Birch[dtype: DType = DType.float64](PredictiveClusterer, ClusterDistanceTransformer, IncrementalClusterer, Copyable, Movable):
+struct Birch[dtype: DType = DType.float64](
+    PredictiveClusterer, ClusterDistanceTransformer, IncrementalClusterer,
+    FeatureNamesOut, Copyable, Movable,
+):
     comptime Params = BirchParams
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = Self.Input

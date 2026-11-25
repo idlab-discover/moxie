@@ -6,6 +6,7 @@ from moxie.cluster._base import Clusterer
 from moxie.base import UnsupervisedEstimator, TransformerMixin, FitTransformer
 from moxie.neighbors._distance import Metric
 from moxie._dense import row_squared_norms
+from moxie._feature_metadata import FeatureNamesOut
 
 
 struct FullTree(ImplicitlyCopyable):
@@ -363,7 +364,9 @@ struct FeatureAgglomerationParams[dtype: DType](Copyable, Movable):
     var pooling_func: String
 
 
-struct FeatureAgglomeration[dtype: DType = DType.float64](UnsupervisedEstimator, TransformerMixin, FitTransformer, Copyable, Movable):
+struct FeatureAgglomeration[dtype: DType = DType.float64](
+    UnsupervisedEstimator, TransformerMixin, FitTransformer, FeatureNamesOut, Copyable, Movable,
+):
     comptime Params = FeatureAgglomerationParams[Self.dtype]
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = nm.NDArray[Self.dtype]

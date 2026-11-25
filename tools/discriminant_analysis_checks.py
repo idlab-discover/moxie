@@ -17,6 +17,7 @@ def sources():
 def ownership():
     receipt = json.loads((DEPS / 'ASSEMBLY.json').read_text())
     files = [ROOT / 'src/moxie/discriminant_analysis.mojo',
+             ROOT / 'src/moxie/discriminant_analysis_serialization.mojo',
              ROOT / 'src/moxie/_discriminant_analysis_contracts.mojo',
              *sorted((ROOT / 'src/moxie/_discriminant_analysis').glob('*.mojo'))]
     for source in files:

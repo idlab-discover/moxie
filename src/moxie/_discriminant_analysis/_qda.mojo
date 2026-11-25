@@ -119,7 +119,7 @@ struct QuadraticDiscriminantAnalysis[
     dtype: DType = DType.float64,
     L: ClassLabel = Int,
     C: CovarianceEstimator = NoCovarianceEstimator,
-](DiscriminantClassifier, InputFeatureCount):
+](DiscriminantClassifier, InputFeatureCount, Copyable):
     """Quadratic Discriminant Analysis (sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis).
 
     Fits one Gaussian per class and classifies with Bayes' rule (quadratic boundary).

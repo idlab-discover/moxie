@@ -7,7 +7,8 @@ wraps real Moxie estimators and their sklearn counterparts:
 - `moxie.tree.DecisionTreeClassifier` with native Float32 features, Int64
   component targets and one Float64 probability matrix per output, and
 - `moxie.svm.SVC` and `moxie.svm.LinearSVC`,
-  `moxie.discriminant_analysis.LinearDiscriminantAnalysis`, and
+  `moxie.discriminant_analysis.LinearDiscriminantAnalysis` and
+  `QuadraticDiscriminantAnalysis`, and
   `moxie.naive_bayes.GaussianNB` through `BinaryAdapter` for the native List
   targets. GaussianNB also exercises incremental OvR and OvO updates.
 - `moxie.dummy.DummyClassifier` with integer-valued native labels through
@@ -39,6 +40,9 @@ Tolerances:
 - LDA uses the default SVD solver. Allow 1e-9 relative / 1e-11 absolute for
   Float64 responses across SVD implementations, and 1e-5 relative / 5e-6
   absolute for Float32 responses because Moxie accumulates in Float64.
+- QDA uses the default SVD solver and the eigen solver with fixed shrinkage.
+  Allow the same tolerances as LDA for factorization differences and
+  Float32 rounding of fitted parameters and responses.
 - GaussianNB allows 1e-9 relative / 1e-11 absolute for Float64 responses,
   and 1e-5 relative / 5e-6 absolute for Float32 responses because the
   native estimator stores its running moments and computes likelihoods in
@@ -60,7 +64,7 @@ from warnings import catch_warnings, filterwarnings
 import numpy as np
 import sklearn
 from sklearn import discriminant_analysis, naive_bayes
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import RidgeClassifier
 from sklearn.multiclass import OneVsOneClassifier, OneVsRestClassifier, OutputCodeClassifier, _predict_binary
@@ -105,6 +109,10 @@ COMPONENTS = {
                         'BinaryAdapter(SVC(kernel="precomputed", tol=1e-6, random_state=0))'),
     "lda": (LinearDiscriminantAnalysis,
             "BinaryAdapter(LinearDiscriminantAnalysis[{dtype}]())"),
+    "qda": (QuadraticDiscriminantAnalysis,
+            "BinaryAdapter(QuadraticDiscriminantAnalysis[{dtype}]())"),
+    "qda-eigen": (lambda: QuadraticDiscriminantAnalysis(solver="eigen", shrinkage=0.1),
+                  'BinaryAdapter(QuadraticDiscriminantAnalysis[{dtype}](solver="eigen", shrinkage=0.1))'),
     "gaussian-nb": (GaussianNB,
                     "BinaryAdapter(GaussianNB[IntListDomain, {dtype}]())"),
     "dummy": (DummyClassifier,
@@ -131,6 +139,8 @@ COMPONENT_TYPE = {
     "svc-probability": "BinaryAdapter[SVC[]]",
     "svc-precomputed": "BinaryAdapter[SVC[]]",
     "lda": "BinaryAdapter[LinearDiscriminantAnalysis[{dtype}]]",
+    "qda": "BinaryAdapter[QuadraticDiscriminantAnalysis[{dtype}]]",
+    "qda-eigen": "BinaryAdapter[QuadraticDiscriminantAnalysis[{dtype}]]",
     "gaussian-nb": "BinaryAdapter[GaussianNB[IntListDomain, {dtype}]]",
     "dummy": "BinaryAdapter[DummyClassifier[dtype={dtype}]]",
     "knn": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
@@ -149,6 +159,8 @@ OUTPUT_CODE_RESPONSE = {
     "knn": ("predict_proba", "response[0][Item(i, 1)]"),
     "knn-distance": ("predict_proba", "response[0][Item(i, 1)]"),
     "svc": ("decision_function", "response[Item(i)]"),
+    "qda": ("decision_function", "Float64(response[Item(i)])"),
+    "qda-eigen": ("decision_function", "Float64(response[Item(i)])"),
 }
 STRINGS = ["setosa", "versicolor", "virginica", "", "zeta"]
 
@@ -264,7 +276,7 @@ def native_source(all_cases, expected):
     header = driver([]).split("def main() raises:")[0]
     header += '''
 from moxie.multiclass import BinaryAdapter, OneVsOneClassifier, OutputCodeClassifier, StringLabels, StringTarget
-from moxie.discriminant_analysis import LinearDiscriminantAnalysis
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.dummy import DummyClassifier
 from moxie.linear_model import RidgeClassifier
 from moxie.naive_bayes import GaussianNB, IntListDomain
@@ -368,7 +380,7 @@ def tolerance(c, key):
         return TOLERANCE["linear-svc"]
     if c["component"] in SVC_COMPONENTS:
         return TOLERANCE["svc"]
-    if c["component"] == "lda":
+    if c["component"] in ("lda", "qda", "qda-eigen"):
         return TOLERANCE["lda32" if c["dtype"] == "float32" else "lda64"]
     if c["component"] == "gaussian-nb":
         return TOLERANCE["gaussian-nb32" if c["dtype"] == "float32" else "gaussian-nb64"]
@@ -399,6 +411,7 @@ def main():
         "linear-svc": ("linear-svc",),
         "svc": SVC_COMPONENTS,
         "lda": ("lda",),
+        "qda": ("qda", "qda-eigen"),
         "gaussian-nb": ("gaussian-nb",),
         "dummy": ("dummy",),
         "knn": ("knn", "knn-distance"),
@@ -421,7 +434,7 @@ def main():
             assert Path(inspect.getfile(svm_classes)).read_bytes() == (
                 REFERENCE / "sklearn/svm/_classes.py"
             ).read_bytes(), "install the pinned local scikit-learn checkout"
-        if group == "lda":
+        if group in ("lda", "qda"):
             assert Path(inspect.getfile(discriminant_analysis)).read_bytes() == (
                 REFERENCE / "sklearn/discriminant_analysis.py"
             ).read_bytes(), "install the pinned local scikit-learn checkout"

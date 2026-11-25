@@ -1,25 +1,21 @@
-"""Discriminant analysis inside clone, Pipeline and cross_val_score.
+"""Discriminant analysis inside clone, Pipeline, cross-validation and grid search.
 
-Every composed result is checked exactly against the same steps run by hand, so
-the composition adds no behavior of its own (sklearn's Pipeline/CV contract).
-Scenarios include a scale-then-LDA classifier and projector, LDA as a supervised
-reduction before QDA, a cloned pipeline with a typed nested set_params, and
-5-fold cross_val_score with the estimator's own accuracy `score`.
+Pipeline results are checked against the steps run by hand. The optional
+parity output also compares scaled projections and stratified LDA shrinkage
+selection with pinned scikit-learn.
 """
 from numojo import NDArray, Shape, zeros
 from std.math import sin, cos
 from std.sys import argv
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import FitTransformer, clone
-from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis, Shrinkage
 from moxie.preprocessing import StandardScaler
 from moxie.pipeline import Pipeline, TransformingPipeline, make_pipeline
-from moxie.model_selection import IndexArray, IndexSplit, KFold, cross_val_score
-from moxie.model_selection._evaluation import TypedScorer
-from moxie.model_selection._validation import CVAdapter
-from moxie.model_selection._split import _rows
+from moxie.model_selection import (
+    DenseSupervisedAdapter, GridSearchCV, IndexArray, cross_val_score, select_rows,
+)
 
-comptime Dense = NDArray[DType.float64]
 comptime LDA = LinearDiscriminantAnalysis[DType.float64, Int]
 
 
@@ -183,66 +179,73 @@ def cloned_pipeline() raises:
     assert_false(fresh.estimator.xbar_.__bool__())
 
 
-struct Accuracy(TypedScorer):
-    """sklearn's default for a classifier without `scoring`: estimator.score(X, y)."""
-
-    comptime Estimator = LDA
-    comptime Input = Dense
-    comptime Target = List[Int]
-    comptime Metadata = NoneType
-
-    def __init__(out self):
-        pass
-
-    def score(self, estimator: LDA, X: Dense, y: List[Int], metadata: NoneType) raises -> Float64:
-        return estimator.score(X, y)
+def apply_shrinkage[dtype: DType](
+    mut estimator: LinearDiscriminantAnalysis[dtype], params: Dict[String, Float64],
+) raises:
+    for key in params.keys():
+        if key != "shrinkage":
+            raise Error("ValueError: unsupported LDA search parameter " + key)
+        _ = estimator.set_params(shrinkage=Shrinkage(params[key]))
 
 
-struct Rows(CVAdapter):
-    comptime Scorer = Accuracy
+def cross_validation_and_search[dtype: DType](emit: Bool) raises:
+    comptime Model = LinearDiscriminantAnalysis[dtype]
+    comptime Adapter = DenseSupervisedAdapter[Model, List[Int], dtype]
+    # Grouped, unequal class counts make default stratification observable.
+    var order = IndexArray(Shape(61))
+    var y = List[Int](capacity=61)
+    for label in range(3):
+        for source_row in range(label, 61, 3):
+            order.unsafe_set(len(y), Int64(source_row))
+            y.append(label)
+    var x = select_rows(blobs[dtype](61, 4), order)
 
-    def __init__(out self):
-        pass
-
-    def n_samples(self, X: Dense, y: List[Int]) raises -> Int:
-        return len(y)
-
-    def input_rows(self, X: Dense, rows: IndexArray, train: IndexArray) raises -> Dense:
-        return _rows(X, rows)
-
-    def target_rows(self, y: List[Int], rows: IndexArray) raises -> List[Int]:
-        var out = List[Int](capacity=rows.size)
-        for i in range(rows.size):
-            out.append(y[Int(rows.unsafe_get(i))])
-        return out^
-
-    def metadata_rows(self, metadata: NoneType, rows: IndexArray) raises -> NoneType:
-        return None
-
-    def fit(self, mut estimator: LDA, X: Dense, y: List[Int], metadata: NoneType) raises:
-        _ = estimator.fit(X, y)
-
-
-def cross_validation() raises:
-    var x = blobs[DType.float64](60, 4)
-    var y = labels(60)
-    var cursor = KFold(5).split(60)
-    var splits = List[IndexSplit]()
-    while True:
-        var pair = cursor.next()
-        if not pair:
-            break
-        splits.append(pair.value().copy())
-    var model = LDA(solver="lsqr", shrinkage="auto")
-    var scores = cross_val_score[Rows](model, x, y, Rows(), Accuracy(), splits, None, None)
+    var model = Model(solver="lsqr", shrinkage=0.25)
+    var adapter = Adapter()
+    var scores = cross_val_score[Adapter](model, x, y, adapter)
+    var splits = adapter.default_cv(x, y)
     assert_equal(scores.size, 5)
+    for fold in range(scores.size):
+        ref split = splits[fold]
+        var train_x = adapter.input_rows(x, split.train, split.train)
+        var train_y = adapter.target_rows(y, split.train)
+        var test_x = adapter.input_rows(x, split.test, split.train)
+        var test_y = adapter.target_rows(y, split.test)
+        var by_hand = clone(model)
+        _ = by_hand.fit(train_x, train_y)
+        assert_equal(scores.item(fold), by_hand.score(test_x, test_y))
+        if emit:
+            print("lda_cv", String(dtype), fold, scores.item(fold))
+            for row in range(split.test.size):
+                print("lda_index", String(dtype), fold, split.test.item(row))
+
+    var grid = Dict[String, List[Float64]]()
+    grid["shrinkage"] = [1.0, 0.25, 0.0, 0.7]
+    var search = GridSearchCV[Adapter](model, grid, Adapter(apply_shrinkage[dtype]))
+    _ = search.fit(x, y)
     assert_false(model.__sklearn_is_fitted__())
-    for fold in range(5):
-        var train = splits[fold].train.copy()
-        var test = splits[fold].test.copy()
-        var by_hand = LDA(solver="lsqr", shrinkage="auto")
-        _ = by_hand.fit(_rows(x, train), Rows().target_rows(y, train))
-        assert_equal(scores.unsafe_get(fold), by_hand.score(_rows(x, test), Rows().target_rows(y, test)))
+    assert_equal(search.n_splits_(), 5)
+    assert_equal(search.best_index_(), 2)
+    assert_equal(search.best_params_()["shrinkage"], 0.0)
+    assert_equal(search.best_score_(), 1.0)
+    assert_false(clone(search).__sklearn_is_fitted__())
+
+    var expected = Model(solver="lsqr", shrinkage=0.0)
+    _ = expected.fit(x, y)
+    var prediction = search.predict(x)
+    same_labels(prediction, expected.predict(x))
+    var results = search.cv_results_()
+    for fold in range(scores.size):
+        assert_equal(results.scores.test_scores.item(1, fold, 0), scores.item(fold))
+    if emit:
+        for candidate in range(len(results.params)):
+            print("lda_mean", String(dtype), candidate, results.mean_test_score.item(candidate, 0))
+            print("lda_rank", String(dtype), candidate, results.rank_test_score.item(candidate, 0))
+            for fold in range(scores.size):
+                print("lda_fold", String(dtype), candidate, fold, results.scores.test_scores.item(candidate, fold, 0))
+        print("lda_best", String(dtype), search.best_index_())
+        for row in range(len(prediction)):
+            print("lda_predict", String(dtype), prediction[row])
 
 
 def main() raises:
@@ -255,11 +258,12 @@ def main() raises:
     scaled_lda[DType.float64]()
     scaled_lda[DType.float32]()
     var args = argv()
-    var emit = len(args) == 2 and args[1] == "--projection-parity"
+    var emit = len(args) == 2 and args[1] == "--composition-parity"
     scaled_lda_projection[DType.float64](emit)
     scaled_lda_projection[DType.float32](emit)
     lda_then_qda[DType.float64]()
     lda_then_qda[DType.float32]()
     cloned_pipeline()
-    cross_validation()
-    print("PASS: discriminant analysis composition (pipeline prediction and projection, clone, cross_val_score)")
+    cross_validation_and_search[DType.float64](emit)
+    cross_validation_and_search[DType.float32](emit)
+    print("PASS: discriminant analysis pipeline, clone, cross-validation and grid search")

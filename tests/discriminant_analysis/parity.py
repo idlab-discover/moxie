@@ -5,6 +5,7 @@ compiled native runner (tests/parity_runner.mojo, built from the verified
 assembly) fits every case in Mojo and compares. Environment:
 MOXIE_PARITY_SEEDS (default "0,1,2") selects the random dataset seeds.
 """
+from collections import defaultdict
 import json
 import os
 import subprocess
@@ -193,10 +194,15 @@ def toy():
     return X, y, y3, X1, X6, y6, y7, X7, X2, y4
 
 
-def check_pipeline_projection():
+def composition_features(n):
+    """Mirror the deterministic feature generator in composition.mojo."""
+    i, j = np.ogrid[:n, :4]
+    return ((i % 3) * (j % 2 + 1) * 1.5 + j * 10.0
+            + (np.sin((i * 31 + j * 17) * 12.9898) + 0.5 * np.cos((i * 7 + j) * 3.1)) * (j + 1))
+
+
+def check_pipeline_projection(output):
     """Compare both projection calls with one consistent sign per LDA axis."""
-    binary = ROOT / 'builds/tests/discriminant_analysis/composition'
-    output = subprocess.check_output([str(binary), '--projection-parity'], text=True)
     projections = {}
     for line in output.splitlines():
         if line.startswith('projection '):
@@ -205,10 +211,7 @@ def check_pipeline_projection():
     assert set(projections) == {(dtype, split) for dtype in ('float32', 'float64')
                                for split in ('train', 'query')}
 
-    # Mirror the deterministic fixture in composition.mojo.
-    i, j = np.ogrid[:52, :4]
-    X = ((i % 3) * (j % 2 + 1) * 1.5 + j * 10.0
-         + (np.sin((i * 31 + j * 17) * 12.9898) + 0.5 * np.cos((i * 7 + j) * 3.1)) * (j + 1))
+    X = composition_features(52)
     y = np.arange(45) % 3
     errors = {}
     # sklearn's Float32 scaler and SVD round earlier than the native solver.
@@ -226,6 +229,50 @@ def check_pipeline_projection():
                                        err_msg=f'{dtype.__name__} {split} projection')
             errors[f'{dtype.__name__}/{split}'] = float(np.max(np.abs(actual - expected)))
     print(f'PASS: pinned sklearn scaler → LDA projection, four comparisons (max errors {errors})')
+
+
+def check_lda_search(output):
+    records = defaultdict(list)
+    for line in output.splitlines():
+        if line.startswith('lda_'):
+            field, dtype, *values = line.split()
+            records[dtype, field].append([float(value) for value in values])
+
+    labels = np.arange(61) % 3
+    order = np.argsort(labels, kind='stable')
+    y = labels[order]
+    for dtype in (np.float32, np.float64):
+        X = composition_features(61)[order].astype(dtype)
+        model = DA.LinearDiscriminantAnalysis(solver='lsqr', shrinkage=0.25)
+        search = ORACLE['search'].GridSearchCV(
+            model, {'shrinkage': [1.0, 0.25, 0.0, 0.7]}, error_score='raise',
+        ).fit(X, y)
+        folds = ORACLE['split'].StratifiedKFold().split(X, y)
+        results = search.cv_results_
+        dtype_name = dtype.__name__
+        np.testing.assert_array_equal(
+            records[dtype_name, 'lda_index'],
+            [(fold, row) for fold, (_, test) in enumerate(folds) for row in test],
+        )
+        np.testing.assert_array_equal(
+            records[dtype_name, 'lda_cv'],
+            [(fold, results[f'split{fold}_test_score'][1]) for fold in range(search.n_splits_)],
+        )
+        np.testing.assert_array_equal(
+            records[dtype_name, 'lda_fold'],
+            [(candidate, fold, results[f'split{fold}_test_score'][candidate])
+             for candidate in range(len(results['params'])) for fold in range(search.n_splits_)],
+        )
+        np.testing.assert_allclose(
+            records[dtype_name, 'lda_mean'], list(enumerate(results['mean_test_score'])),
+            atol=1e-15, rtol=0,  # Only the mean reduction order can affect the result.
+        )
+        np.testing.assert_array_equal(
+            records[dtype_name, 'lda_rank'], list(enumerate(results['rank_test_score'])),
+        )
+        np.testing.assert_array_equal(records[dtype_name, 'lda_best'], [[search.best_index_]])
+        np.testing.assert_array_equal(records[dtype_name, 'lda_predict'], search.predict(X)[:, None])
+    print('PASS: pinned sklearn LDA stratified CV and shrinkage grid search (Float32/Float64)')
 
 
 def main():
@@ -349,7 +396,10 @@ def main():
     if result.returncode != 0:
         print(result.stderr[-4000:], file=sys.stderr)
         raise SystemExit(f'parity failed ({out / "result.txt"})')
-    check_pipeline_projection()
+    composition = ROOT / 'builds/tests/discriminant_analysis/composition'
+    output = subprocess.check_output([str(composition), '--composition-parity'], text=True)
+    check_pipeline_projection(output)
+    check_lda_search(output)
 
 
 if __name__ == '__main__':

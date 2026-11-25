@@ -81,6 +81,39 @@ estimator. The default `List[Int]` label type works with the multiclass
 Weighted scoring rejects NaN, infinity, all-zero weights and weights whose sum
 is zero, as in scikit-learn. Signed weights with a nonzero sum are accepted.
 
+## Cross-validation and shrinkage search
+
+For default five-fold stratified cross-validation with Float64 features and
+`List[Int]` labels, use the built-in model-selection adapter. Grid search
+uses the same folds and accuracy scorer. Pass a typed parameter applier to
+map the grid's candidate values to LDA's configuration.
+
+```mojo
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis, Shrinkage
+from moxie.model_selection import DenseSupervisedAdapter, GridSearchCV, cross_val_score
+
+comptime LDA = LinearDiscriminantAnalysis[]
+comptime Adapter = DenseSupervisedAdapter[LDA, List[Int]]
+
+def apply_shrinkage(mut estimator: LDA, params: Dict[String, Float64]) raises:
+    for key in params.keys():
+        if key != "shrinkage":
+            raise Error("ValueError: unsupported LDA search parameter " + key)
+        _ = estimator.set_params(shrinkage=Shrinkage(params[key]))
+
+# Inside a function with X and y:
+var model = LDA(solver="lsqr")
+var scores = cross_val_score[Adapter](model, X, y, Adapter())
+var grid = Dict[String, List[Float64]]()
+grid["shrinkage"] = [0.0, 0.25, 1.0]
+var search = GridSearchCV[Adapter](model, grid, Adapter(apply_shrinkage))
+_ = search.fit(X, y)
+```
+
+For Float32 features, use `LinearDiscriminantAnalysis[DType.float32]` and
+specify `DType.float32` as the adapter's third type parameter. See the
+[model-selection search contract](../../families/model_selection/algorithms/search/docs/search.md).
+
 ## Learned attributes
 
 LDA: `coef_` `(1, p)` binary or `(K, p)`, `intercept_` `(1,)` or `(K,)`, `means_`, `priors_`,

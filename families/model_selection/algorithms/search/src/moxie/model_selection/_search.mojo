@@ -3,7 +3,10 @@
 from moxie.base import SupervisedEstimator, SupervisedScorer, UnsupervisedScorer, ClassifierMixin, RegressorMixin, BaseEstimator, InputEstimator, clone, Predictor, ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, TransformerMixin, InverseTransformer, SampleScorer, WeightedSupervisedEstimator
 from moxie.model_selection._base import SearchEstimator
 from moxie.model_selection._evaluation import EstimatorScore, TypedScorer, ParameterAdapter
-from moxie.model_selection._validation import DefaultCVAdapter, DenseUnsupervisedAdapter, _cross_validate
+from moxie.model_selection._validation import (
+    DefaultCVAdapter, DenseUnsupervisedAdapter, _NativePredictionAdapter,
+    _cross_validate, _scatter_prediction,
+)
 from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
 from moxie.model_selection._split import KFold, SplitLabels, check_cv, select_rows
 from moxie.model_selection._results import ScoreTable, FitStatus, ErrorPolicy, RefitSelector, validate_refit_index, require_refit
@@ -86,6 +89,22 @@ def _collect_splits[C: SplitCursor & Deinitable](var cursor: C) raises -> List[I
         splits.append(pair.take())
 
 
+comptime _IsDenseArray[P: AnyType] = (
+    P == NDArray[DType.float32] or P == NDArray[DType.float64] or P == IndexArray
+)
+comptime _DenseArrayDType[P: AnyType] = (
+    DType.float32 if P == NDArray[DType.float32] else
+    DType.int64 if P == IndexArray else DType.float64
+)
+comptime _DenseListLabel[P: AnyType] = (
+    Int if P == List[Int] else
+    Int64 if P == List[Int64] else
+    Float32 if P == List[Float32] else
+    Float64 if P == List[Float64] else
+    String if P == List[String] else NoneType
+)
+
+
 struct DenseSupervisedAdapter[
     E: SupervisedScorer & Deinitable,
     Y: Copyable & Deinitable = NDArray[DType.float64],
@@ -93,27 +112,20 @@ struct DenseSupervisedAdapter[
     V: Copyable & Deinitable = Float64,
     weight_dtype: DType = dtype,
     S: TypedScorer & Copyable = EstimatorScore[E, NDArray[dtype], Y, NDArray[weight_dtype]],
-](SearchAdapter):
+](
+    SearchAdapter,
+    _NativePredictionAdapter where conforms_to(E, Predictor),
+):
     """Ordinary dense samples with array or list targets and optional weights."""
 
     comptime X = NDArray[Self.dtype]
     comptime Weight = NDArray[Self.weight_dtype]
     comptime Scorer = Self.S
     comptime Value = Self.V
-    comptime _IsArray = (
-        Self.Y == NDArray[DType.float32] or Self.Y == NDArray[DType.float64]
-        or Self.Y == IndexArray
-    )
-    comptime _ArrayDType = (
-        DType.float32 if Self.Y == NDArray[DType.float32] else
-        DType.int64 if Self.Y == IndexArray else DType.float64
-    )
-    comptime _Label = (
-        String if Self.Y == List[String] else
-        Int if Self.Y == List[Int] else
-        Int64 if Self.Y == List[Int64] else
-        Float32 if Self.Y == List[Float32] else Float64
-    )
+    comptime Prediction = Self.E.Prediction if conforms_to(Self.E, Predictor) else NoneType
+    comptime _IsArray = _IsDenseArray[Self.Y]
+    comptime _ArrayDType = _DenseArrayDType[Self.Y]
+    comptime _Label = _DenseListLabel[Self.Y]
 
     var _apply_params: Optional[_ParameterApplier[Self.E, Self.V]]
     var _classifier: Bool
@@ -148,7 +160,7 @@ struct DenseSupervisedAdapter[
         comptime assert Self.X == Self.E.Input, "Dense input must match the estimator"
         comptime assert Self.Y == Self.E.Target, "Target must match the estimator"
         comptime assert Self.Weight == Self.E.SampleWeight, "Weight must match the estimator"
-        comptime assert Self._IsArray or Self.Y == List[Self._Label], (
+        comptime assert Self._IsArray or Self._Label != NoneType, (
             "Expected Float32, Float64 or Int64 arrays, or String, Int, Int64, Float32 or Float64 lists"
         )
         self._apply_params = apply_params
@@ -219,6 +231,30 @@ struct DenseSupervisedAdapter[
             self._apply_params.value()(rebind[Self.E](estimator), params)
         elif len(params) != 0:
             raise Error("ValueError: nonempty parameters require an apply_params function")
+
+    def predict(
+        self, estimator: Self.Scorer.Estimator, X: Self.Scorer.Input,
+    ) raises -> Self.Prediction where conforms_to(Self.E, Predictor):
+        return rebind_var[Self.Prediction](
+            rebind[Self.E](estimator).predict(rebind[Self.E.Input](X))
+        )
+
+    def scatter_prediction(
+        self, mut output: Optional[Self.Prediction], predicted: Self.Prediction,
+        rows: IndexArray, n: Int,
+    ) raises where conforms_to(Self.E, Predictor):
+        comptime if _IsDenseArray[Self.Prediction]:
+            comptime Array = NDArray[_DenseArrayDType[Self.Prediction]]
+            _scatter_prediction(
+                rebind[Optional[Array]](output), rebind[Array](predicted), rows, n,
+            )
+        else:
+            comptime Label = _DenseListLabel[Self.Prediction]
+            comptime assert Label != NoneType, "Expected numeric NDArray or label List predictions"
+            comptime Labels = List[Label]
+            _scatter_prediction(
+                rebind[Optional[Labels]](output), rebind[Labels](predicted), rows, n,
+            )
 
     def default_scorer(self) -> Self.Scorer:
         return self._scoring.copy()

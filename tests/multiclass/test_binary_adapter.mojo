@@ -9,7 +9,8 @@ from moxie.base import (
     clone,
 )
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
-from moxie.multiclass import BinaryAdapter
+from moxie.dummy import DummyClassifier
+from moxie.multiclass import BinaryAdapter, OneVsRestClassifier
 from moxie.naive_bayes import GaussianNB
 from moxie.svm import LinearSVC
 from std.testing import assert_equal, assert_false, assert_raises, assert_true
@@ -200,9 +201,66 @@ def check_gaussian_nb() raises:
     assert_equal(model.estimator.class_count_.item(1), 2.0)
 
 
+def check_dummy() raises:
+    var X = nm.zeros[DType.float64](nm.Shape(4, 1))
+    var storage = nm.full[DType.int64](nm.Shape(8), 99)
+    var y = storage.view_with_layout(nm.Shape(4), nm.NDArrayStrides(-2), 7)
+    y[nm.Item(0)] = -1
+    for i in range(1, 4):
+        y[nm.Item(i)] = 1
+
+    var model = BinaryAdapter(DummyClassifier())
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict_proba(X)
+    _ = model.fit(X, y)
+    assert_equal(model.estimator.classes_[0].integer, -1)
+    assert_equal(model.estimator.classes_[1].integer, 1)
+    assert_equal(model.predict(X).item(0), 1)
+    var proba = model.predict_proba(X)
+    assert_equal(proba.shape, nm.Shape(4, 2))
+    assert_equal(proba.item(0, 0), 0.25)
+    assert_equal(proba.item(0, 1), 0.75)
+    assert_equal(model.predict_log_proba(X).shape, proba.shape)
+    assert_equal(model.score(X, y), 0.75)
+
+    var fitted_copy = model.copy()
+    fitted_copy.estimator.classes_[0].integer = -9
+    fitted_copy.estimator.class_prior_[nm.Item(0)] = 0.5
+    assert_equal(model.estimator.classes_[0].integer, -1)
+    assert_equal(model.estimator.class_prior_.item(0), 0.25)
+
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    var params = fresh.get_params()
+    params.strategy = "most_frequent"
+    _ = fresh.set_params(params).fit(X, y)
+    assert_equal(fresh.predict_proba(X).item(0, 1), 1.0)
+    assert_equal(model.predict_proba(X).item(0, 1), 0.75)
+
+    y[nm.Item(1)] = 0
+    with assert_raises(contains="binary codes"):
+        _ = model.fit(X, y)
+    assert_equal(model.predict_proba(X).item(0, 1), 0.75)
+
+    y[nm.Item(0)] = 0
+    y[nm.Item(2)] = 0
+    _ = model.fit(X, y)
+    assert_equal(model.predict(X).item(0), 0)
+
+    # The outer labels need not be members of the component's binary domain.
+    y[nm.Item(0)] = -7
+    y[nm.Item(1)] = -7
+    y[nm.Item(2)] = -7
+    y[nm.Item(3)] = 12
+    var wrapper = OneVsRestClassifier(BinaryAdapter(DummyClassifier()))
+    assert_equal(wrapper.fit(X, y).predict(X).item(0), -7)
+    assert_false(clone(wrapper).__sklearn_is_fitted__())
+
+
 def main() raises:
     check_labels[Float64]()
     check_labels[Float32]()
     check_labels[Int64]()
     check_lda()
     check_gaussian_nb()
+    check_dummy()

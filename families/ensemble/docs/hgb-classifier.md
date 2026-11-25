@@ -42,15 +42,24 @@ above 10,000 rows. With early stopping enabled, the default holdout is a seeded
 stratified split. Supply a fraction or count in a `Variant[Int, Float64]`, set
 `validation_fraction=None` to monitor training loss, or supply both `X_val` and
 `y_val` to use explicit validation data. Each score history starts with the
-intercept-only score and gains one entry per fitted iteration. Disabled
-histories are empty.
+intercept-only score and gains one entry per fitted iteration. A fresh fit with early stopping disabled records empty histories.
 
 `get_params()` returns a typed copy. Pass the edited record to `set_params()`
 before refitting. Configuration updates and failed fits preserve the current
 fitted model. `moxie.base.clone` makes an unfitted estimator. Learned counters
 start at zero, and `is_categorical_` is `None` for numerical arrays. Verbose fits
-emit native progress lines. Warm-start continuation, categorical preprocessing,
-feature-name metadata and additional early-stopping scorers remain open.
+emit native progress lines. Categorical preprocessing, feature-name metadata, and
+additional early-stopping scorers remain open.
+
+Set `warm_start=True`, increase `max_iter` through the parameter record, and
+refit on the same data to continue boosting. The first fit's baseline, trees,
+holdout seed, feature-sampling state, and score histories carry forward.
+New tree settings such as `max_depth` apply to the added stages. Continuation
+uses the original random stream even if `random_state` changes. An equal
+`max_iter` adds zero stages. A smaller value or a different feature count
+raises `ValueError` and preserves the current fitted model. Classifiers also
+require the same sorted labels to preserve the meaning of retained tree
+outputs. Set `warm_start=False` to fit a fresh model with the current parameters.
 
 ## Validation
 
@@ -76,3 +85,8 @@ column without copying it. Training updates each margin column directly from
 leaf partitions. NuMojo's eager gather and arithmetic on a materialized column
 would copy the input or allocate an intermediate per tree. Traversal, class
 selection and margin updates operate directly on the existing storage.
+
+Continuation replays retained raw-tree predictions to initialize training and
+validation margins. The tree snapshots retain their fitted thresholds, and the
+fit keeps one accumulated raw prediction array per split. Continuation copies
+the retained trees while fitting so a failed fit can preserve the previous model.

@@ -49,10 +49,13 @@ See the shared [fit warning contract](../../interfaces.md#fit-warnings).
 `set_score_request(sample_weight=...)` configures the request for a parent
 that forwards weights to `score`. It takes `True`, `False`, `None`, or a
 `String` alias. Omitting the keyword retains the request. The setter returns a
-mutable borrow, and `get_metadata_routing().score` returns an independent
-`SampleWeightRequest`. The typed API is always available in Mojo. Cloning
-preserves the request, as do fitting and native archive round trips. Direct
-calls accept weights through the `score` argument regardless of the request.
+mutable borrow. The estimators implement `FitScoreMetadataRequestProvider`,
+so generic parents can discover `get_metadata_routing().score` as an independent
+`SampleWeightRequest`. The fit request has no requested name because fit
+accepts no sample weights. The shared request snapshot can convert to the
+score-only `PLSMetadataRequest` type. The typed API is always available in
+Mojo. The request survives cloning, fitting and native archive round trips.
+Direct calls accept weights through the `score` argument regardless of the request.
 See the [shared sample-weight contract](../../interfaces.md#sample-weight-requests).
 Parent forwarding is owned by each composition. Mojo exposes the mutating
 prediction and transform operations as separate methods, so they take no

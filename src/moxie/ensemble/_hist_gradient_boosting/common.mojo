@@ -7,6 +7,10 @@ from std.utils import Variant
 
 from numojo import NDArray, Shape
 
+from moxie._random import check_random_state
+
+from .feature_sampling import _FeatureSampler
+
 
 comptime _Values = NDArray[DType.float64]
 comptime _EarlyStopping = Variant[Bool, String]
@@ -146,3 +150,38 @@ def _history(scores: List[Float64]) raises -> _Values:
     for i in range(len(scores)):
         result.unsafe_set(i, scores[i])
     return result^
+
+
+@fieldwise_init
+struct _FitRandomState(Copyable, Movable):
+    var split_seed: Int
+    var feature_sampler: _FeatureSampler
+
+    @staticmethod
+    def start(random_state: Optional[Int]) raises -> Self:
+        with check_random_state(random_state) as rng:
+            var split_seed = rng[].randint(4294967295)
+            var feature_seed = UInt32(rng[].randint(4294967295))
+            return Self(split_seed, _FeatureSampler(feature_seed))
+
+
+def _resume_history(scores: _Values) raises -> List[Float64]:
+    if scores.ndim != 1:
+        raise Error("ValueError: warm start requires rank-one score histories")
+    var stride = scores.strides[0]
+    var result = List[Float64](capacity=scores.size)
+    for i in range(scores.size):
+        result.append(scores.unsafe_get(i * stride))
+    return result^
+
+
+def _check_warm_start(
+    max_iter: Int, n_iter: Int, n_features: Int, fitted_features: Int
+) raises:
+    if max_iter < n_iter:
+        raise Error(
+            t"ValueError: max_iter={max_iter} must be at least the fitted"
+            t" n_iter_={n_iter} when warm_start is true"
+        )
+    if n_features != fitted_features:
+        raise Error("ValueError: warm start requires the fitted feature count")

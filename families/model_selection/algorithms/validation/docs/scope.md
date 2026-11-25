@@ -88,6 +88,12 @@ For sklearn's default policy, supply five unshuffled stratified folds for binary
 or multiclass classification and five unshuffled KFold splits otherwise.
 Use `cv=` to override fold generation and `fit_metadata=` for explicit metadata.
 Omitting metadata requires a default-constructible associated metadata type.
+With `DenseSupervisedAdapter`, ordinary `predict` uses the estimator's native
+return type. It supports rank-one or rank-two Float32, Float64 and Int64
+arrays and lists of `String`, `Int`, `Int64`, `Float32` or `Float64`. Each
+prediction is placed at its original sample index. Use `ClassPredictionAdapter`
+for class-aligned probabilities and decision values.
+
 Choose one prediction-adapter capability per adapter type so the result type
 is unambiguous at compile time:
 
@@ -420,6 +426,20 @@ responses compare exactly; Float64 probability/log values allow rtol=atol=1e-12.
 Native tests also cover large Int64 labels, malformed class IDs, unsupported
 methods and original estimator isolation. These are not claims of arbitrary
 classifier or full sklearn parity.
+
+The dense prediction probe covers Float32 vectors and weighted multioutput
+regression, as well as String predictions from a StandardScaler/SVC pipeline
+using default stratified folds. The reference uses the pinned CV, DummyRegressor
+and Pipeline sources with the locked sklearn wheel's StandardScaler and SVC.
+String labels match exactly. Float32 values allow an absolute tolerance of
+`5e-7` for mean reduction rounding. Run from the repository root with the
+locked toolchain and assembled sources.
+
+```sh
+mojo build -O3 --fp-mode=contract=off -I builds/deps tests/pipeline/test_dense_cross_val_predict.mojo -o builds/dense_cross_val_predict
+python tests/pipeline/dense_cross_val_predict_parity.py builds/dense_cross_val_predict
+```
+
 No performance claim is made.
 
 ## Native displays and incremental validation

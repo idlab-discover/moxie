@@ -21,7 +21,9 @@ from harness import Driver, oracle
 oracle()
 from sklearn import config_context
 from sklearn.model_selection import (
-    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, StratifiedGroupKFold, StratifiedKFold,
+    GroupKFold, GroupShuffleSplit, KFold, LeaveOneGroupOut, LeaveOneOut, LeavePGroupsOut,
+    LeavePOut, PredefinedSplit, RepeatedKFold, RepeatedStratifiedKFold, ShuffleSplit,
+    StratifiedGroupKFold, StratifiedKFold, StratifiedShuffleSplit, TimeSeriesSplit,
 )
 from sklearn.preprocessing import TargetEncoder
 
@@ -39,6 +41,8 @@ d.prelude('''
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import seed_global_random_state, RandomState
 from moxie.model_selection import GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, SplitLabels, StratifiedGroupKFold, StratifiedKFold
+from moxie.model_selection import LeavePGroupsOut, LeavePOut, RepeatedKFold, RepeatedStratifiedKFold
+from moxie.model_selection import GroupShuffleSplit, ShuffleSplit, SplitSize, StratifiedShuffleSplit, TimeSeriesSplit
 from moxie.preprocessing._vocabulary import CategoryKind, StringKind, StringNaNKind, NumericKind
 from moxie.preprocessing._label import LabelKind, StringLabels, NumericLabels
 from moxie.preprocessing._target_encoder import kfold_test_folds, stratified_kfold_test_folds
@@ -190,8 +194,22 @@ def native_args(kind, kw):
             parts.append(f'cv={type(v).__name__}({v.n_splits}, shuffle={shuffle}, random_state={v.random_state})')
         elif k == 'cv' and isinstance(v, (LeaveOneOut, LeaveOneGroupOut)):
             parts.append(f'cv={type(v).__name__}()')
+        elif k == 'cv' and isinstance(v, LeavePOut):
+            parts.append(f'cv=LeavePOut({v.p})')
+        elif k == 'cv' and isinstance(v, LeavePGroupsOut):
+            parts.append(f'cv=LeavePGroupsOut({v.n_groups})')
         elif k == 'cv' and isinstance(v, PredefinedSplit):
             parts.append(f'cv=PredefinedSplit({d.input(v.test_fold)})')
+        elif k == 'cv' and isinstance(v, (RepeatedKFold, RepeatedStratifiedKFold)):
+            parts.append(f'cv={type(v).__name__}(n_splits={v.cvargs["n_splits"]}, '
+                         f'n_repeats={v.n_repeats}, random_state={v.random_state})')
+        elif k == 'cv' and isinstance(v, (ShuffleSplit, GroupShuffleSplit, StratifiedShuffleSplit)):
+            train_size = 'None' if v.train_size is None else f'SplitSize({v.train_size})'
+            test_size = 'None' if v.test_size is None else f'SplitSize({v.test_size})'
+            parts.append(f'cv={type(v).__name__}({v.n_splits}, train_size={train_size}, '
+                         f'test_size={test_size}, random_state={v.random_state})')
+        elif k == 'cv' and isinstance(v, TimeSeriesSplit):
+            parts.append(f'cv=TimeSeriesSplit({v.n_splits}, test_size={v.test_size}, gap={v.gap})')
         elif k == 'cv' and isinstance(v, list):
             indices = ', '.join(f'IndexSplit({d.input(train)}, {d.input(test)})' for train, test in v)
             parts.append(f'cv=TargetEncoderSplits([{indices}])')
@@ -226,6 +244,7 @@ def grouped_fit_transform(encoder, X, y, groups):
 
 def run_case(tag, kind, y, kw, *, column_y=False, global_seed=None, test=True, groups=None):
     Xtr, Xte = DATA[kind]
+    Xtr = Xtr[:len(y)]
     label_kind, y_expr = target(y.reshape(-1, 1) if column_y else y)
     native = f'TargetEncoder[{KIND[kind]}, {label_kind}]'
     C = f'List[CategoricalColumn[{KIND[kind]}.Domain]]'
@@ -325,11 +344,32 @@ run_case('stratified_group_kfold_shuffled', 's', y_bin, dict(cv=StratifiedGroupK
 run_case('leave_one_out', 's', y_cont, dict(cv=LeaveOneOut()))
 run_case('leave_one_group_out', 's', y_multi_s,
          dict(cv=LeaveOneGroupOut(), categories=[['red'], ['x'], ['a']]), groups=group_names[::-1])
+run_case('leave_p_out', 's', y_cont, dict(cv=LeavePOut(1)))
+run_case('leave_p_groups_out', 's', y_multi_s,
+         dict(cv=LeavePGroupsOut(1), categories=[['red'], ['x'], ['a']]), groups=group_names[::-1])
 predefined = np.resize(np.array([8, -2, 4, 8], dtype=np.int64), n)
 run_case('predefined_continuous', 's', y_cont, dict(cv=PredefinedSplit(predefined)))
 run_case('predefined_multiclass', 's', y_multi_s,
          dict(cv=PredefinedSplit(predefined), categories=[['red'], ['x'], ['a']]))
 run_case('predefined_one_fold', 's', y_cont, dict(cv=PredefinedSplit(np.zeros_like(predefined))))
+run_case('repeated_kfold', 's', y_cont, dict(cv=RepeatedKFold(n_splits=4, n_repeats=1, random_state=0)))
+run_case('repeated_stratified', 's', y_multi_s,
+         dict(cv=RepeatedStratifiedKFold(n_splits=4, n_repeats=1, random_state=42)))
+run_case('repeated_kfold_global', 's', y_cont,
+         dict(cv=RepeatedKFold(n_splits=4, n_repeats=1)), global_seed=42)
+run_case('repeated_stratified_global', 's', y_bin,
+         dict(cv=RepeatedStratifiedKFold(n_splits=4, n_repeats=1)), global_seed=42)
+run_case('shuffle_partition', 's', y_cont[:8],
+         dict(cv=ShuffleSplit(2, test_size=0.5, random_state=131)))
+run_case('stratified_shuffle_partition', 's', np.resize([2.25, 10.25], 8),
+         dict(cv=StratifiedShuffleSplit(2, test_size=0.5, random_state=3)), column_y=True)
+run_case('stratified_shuffle_string_labels', 's', np.resize(['a', 'z'], 8),
+         dict(cv=StratifiedShuffleSplit(2, test_size=0.5, random_state=3)))
+two_group_names = np.where(group_ids % 2 == 0, 'team-a', 'team-b')
+run_case('group_shuffle_partition', 's', y_multi_s,
+         dict(cv=GroupShuffleSplit(2, test_size=1, random_state=0)), groups=two_group_names)
+run_case('group_shuffle_global', 's', y_cont,
+         dict(cv=GroupShuffleSplit(2, test_size=1)), global_seed=0, groups=two_group_names)
 test_parts = [np.arange(start, n, 3, dtype=np.int64)[::-1] for start in range(3)]
 custom_cv = [
     (np.resize(test_parts[(i + 1) % 3][::2], 13), test)
@@ -462,6 +502,9 @@ for tag, test_fold, needle in [
     expect(f'err_{tag}', 'error', needle, 'error')
 
 for tag, splitter, groups, needle in [
+    ('group_shuffle_missing', GroupShuffleSplit(2, random_state=0), None, 'groups are required'),
+    ('group_shuffle_overlap', GroupShuffleSplit(2, test_size=1, random_state=1), group_ids % 2,
+     'must cover each sample index exactly once'),
     ('group_missing', GroupKFold(4), None, 'groups are required'),
     ('group_length', GroupKFold(4), group_ids[:-1], 'matching length'),
     ('group_count', GroupKFold(4), group_ids % 2, 'exceeds group count'),
@@ -469,6 +512,8 @@ for tag, splitter, groups, needle in [
     ('leave_group_missing', LeaveOneGroupOut(), None, 'groups are required'),
     ('leave_group_length', LeaveOneGroupOut(), group_ids[:-1], 'matching length'),
     ('leave_group_single', LeaveOneGroupOut(), np.zeros_like(group_ids), 'leave-out count'),
+    ('leave_p_groups_overlap', LeavePGroupsOut(2), group_ids, 'must cover each sample index exactly once'),
+    ('leave_p_groups_too_many', LeavePGroupsOut(2), group_ids % 2, 'leave-out count'),
 ]:
     sk_raises(lambda: grouped_fit_transform(TargetEncoder(cv=splitter), S, y_cont, groups))
     native_groups = '' if groups is None else f', groups=SplitLabels({d.input(groups)})'
@@ -476,6 +521,36 @@ for tag, splitter, groups, needle in [
            f'var X: List[CategoricalColumn[StringCategories]] = {columns("s", S)}\n'
            f'var enc = TargetEncoder({native_args("s", dict(cv=splitter))})\n'
            f'_ = enc.fit_transform(X, {d.input(y_cont)}{native_groups})')
+    expect(f'err_{tag}', 'error', needle, 'error')
+
+for tag, splitter, y, needle in [
+    ('shuffle_incomplete', ShuffleSplit(1, random_state=0), y_cont,
+     'must cover each sample index exactly once'),
+    ('stratified_shuffle_overlaps', StratifiedShuffleSplit(3, test_size=0.5, random_state=0), y_bin,
+     'must cover each sample index exactly once'),
+    ('shuffle_size_invalid', ShuffleSplit(2, test_size=n, random_state=0), y_cont,
+     'size count must be positive and smaller than population'),
+    ('time_series_incomplete', TimeSeriesSplit(3, gap=1), y_cont,
+     'must cover each sample index exactly once'),
+    ('time_series_size_invalid', TimeSeriesSplit(3, test_size=n), y_cont,
+     'insufficient samples'),
+    ('leave_p_overlap', LeavePOut(2), y_cont, 'must cover each sample index exactly once'),
+    ('leave_p_too_many', LeavePOut(n), y_cont, 'leave-out count'),
+    ('repeat_kfold_overlap', RepeatedKFold(n_splits=3, n_repeats=2, random_state=0), y_cont,
+     'must cover each sample index exactly once'),
+    ('repeat_stratified_overlap', RepeatedStratifiedKFold(n_splits=3, n_repeats=2, random_state=0), y_bin,
+     'must cover each sample index exactly once'),
+    ('repeat_too_many_folds', RepeatedKFold(n_splits=n + 1, n_repeats=1, random_state=0), y_cont,
+     'exceeds sample count'),
+    ('repeat_stratified_continuous', RepeatedStratifiedKFold(n_splits=3, n_repeats=1, random_state=0), y_cont,
+     'Supported target types'),
+]:
+    sk_raises(lambda: TargetEncoder(cv=splitter).fit_transform(S, y))
+    label_kind, y_expr = target(y)
+    d.case(f'err_{tag}',
+           f'var X: List[CategoricalColumn[StringCategories]] = {columns("s", S)}\n'
+           f'var enc = TargetEncoder[StringKind, {label_kind}]({native_args("s", dict(cv=splitter))})\n'
+           f'_ = enc.fit_transform(X, {y_expr})')
     expect(f'err_{tag}', 'error', needle, 'error')
 
 out = d.run(imports='from moxie.preprocessing import TargetEncoder, TargetEncoderSplits')

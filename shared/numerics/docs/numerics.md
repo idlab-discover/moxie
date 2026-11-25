@@ -67,7 +67,14 @@ RNG or sparse API returns a placeholder result.
 Mojo 1.0 `std.math.exp`, `log` and `pow` can lose roughly 1e-10 relative
 accuracy in Float64. Numax `core.libm.exp` and `log` provide dedicated
 Float64 implementations and delegate other dtypes to the standard library.
-Check edge semantics and pinned-reference parity when migrating callers.
+Use `numax.core.libm.exp(Float64)` and `numax.core.libm.log(Float64)` for
+CPU scalar Float64 calculations. The
+[shared validation](../../special/docs/special.md#scalar-float64-exp-and-log)
+requires agreement within one ULP of the rounded reference on its finite test
+cases and checks signed zeros, infinities, NaNs and subnormal boundaries.
+Check caller-specific edge semantics and pinned scikit-learn parity when
+migrating callers. The scalar tolerance does not determine the tolerance of
+an estimator or a composition.
 The neighbors query engine uses algebraic fast paths and `llvm.pow.f64`
 for general Minkowski powers. Its oracle checks exercise weighted and
 unweighted queries. Numax `core.libm` has no `pow` API, and composing its

@@ -2,6 +2,7 @@
 from moxie.linear_model._bayes import BayesianRidge
 from moxie.linear_model._bayes import BayesianRidgeParams
 from moxie.linear_model._ridge_labels import ClassWeight
+from moxie.linear_model._coordinate_descent import CoordinatePathResult, enet_path, lasso_path
 from moxie.linear_model._coordinate_descent import ElasticNet
 from moxie.linear_model._coordinate_descent import ElasticNetParams
 from moxie.linear_model._coordinate_descent import Lasso

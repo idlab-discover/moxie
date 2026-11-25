@@ -18,6 +18,7 @@ from moxie.base import (
 from moxie._isotonic_adapters import IsotonicCVAdapter, IsotonicScorer, IsotonicSearchValue
 from moxie.metadata_routing import (
     FitScoreMetadataRequest,
+    FitScoreMetadataRequestProvider,
     SampleWeightRequest,
     SampleWeightUpdate,
 )
@@ -303,7 +304,11 @@ def isotonic_regression[dtype: DType](
 
 
 struct IsotonicRegression[dtype: DType = DType.float64](
-    Copyable, IsotonicRegressorAPI, WeightedSupervisedEstimator, EstimatorTagsProvider
+    Copyable,
+    IsotonicRegressorAPI,
+    WeightedSupervisedEstimator,
+    EstimatorTagsProvider,
+    FitScoreMetadataRequestProvider,
 ):
     """Monotonic regression with weighted predictor ties and linear prediction.
 

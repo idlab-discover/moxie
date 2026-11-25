@@ -4,7 +4,11 @@ from std.math import isnan, abs
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
 from moxie.model_selection import (
-    GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, SplitLabels, StratifiedGroupKFold, StratifiedKFold,
+    GroupKFold, GroupShuffleSplit, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut,
+    LeavePGroupsOut, LeavePOut,
+    PredefinedSplit,
+    RepeatedKFold, RepeatedStratifiedKFold, SplitLabels, StratifiedGroupKFold,
+    SplitSize, StratifiedKFold, StratifiedShuffleSplit, TimeSeriesSplit,
 )
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import RandomState, seed_global_random_state
@@ -411,6 +415,42 @@ def test_leave_one_cv() raises:
         _ = fresh.fit_transform(X, y, groups=groups)
 
 
+def test_leave_p_cv() raises:
+    var X = table()
+    var y = target()
+    var model = TargetEncoder(cv=LeavePOut(1))
+    var equivalent = TargetEncoder(cv=LeaveOneOut())
+    var expected = equivalent.fit_transform(X, y)
+    assert_same(model.fit_transform(X, y), expected)
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_equal(fresh.get_params().cv[LeavePOut].p, 1)
+    assert_same(fresh.fit_transform(X, y), expected)
+
+    var groups = SplitLabels(["z", "a", "x", "a", "z", "x", "x", "z", "a", "z"])
+    var names: List[String] = ["color", "size"]
+    var grouped = TargetEncoder(cv=LeavePGroupsOut(1))
+    _ = equivalent.set_params(cv=LeaveOneGroupOut())
+    var expected_grouped = equivalent.fit_transform(X, y, groups=groups)
+    assert_same(grouped.fit_transform_named(X, names, y, groups=groups), expected_grouped)
+    assert_equal(grouped.get_feature_names_out(), names)
+    _ = fresh.set_params(grouped.get_params())
+    assert_equal(fresh.cv[LeavePGroupsOut].n_groups, 1)
+    assert_same(fresh.fit_transform(X, y, groups=groups), expected_grouped)
+    with assert_raises(contains="groups are required"):
+        _ = fresh.fit_transform(X, y)
+
+    for count in [0, 2]:
+        _ = fresh.set_params(cv=LeavePGroupsOut(count))
+        with assert_raises(contains="must cover each sample index exactly once"):
+            _ = fresh.fit_transform(X, y, groups=groups)
+        _ = fresh.set_params(cv=LeavePOut(count))
+        with assert_raises(contains="must cover each sample index exactly once"):
+            _ = fresh.fit_transform(X, y)
+    _ = fresh.fit(X, y)
+    assert_same(fresh.transform(X), model.transform(X))
+
+
 def test_predefined_cv() raises:
     var X = table()
     var y = target()
@@ -436,6 +476,77 @@ def test_predefined_cv() raises:
     assert_true(model.get_feature_names_out() == names)
 
 
+def test_repeated_cv() raises:
+    var X = table()
+    var y = target()
+    var model = TargetEncoder(cv=RepeatedKFold(n_splits=3, n_repeats=1, random_state=0))
+    var expected = TargetEncoder(cv=KFold(3, shuffle=True, random_state=0))
+    var training = expected.fit_transform(X, y)
+    assert_same(model.fit_transform(X, y), training)
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_true(fresh.get_params().cv.isa[RepeatedKFold]())
+    assert_same(fresh.fit_transform(X, y), training)
+
+    _ = fresh.set_params(cv=RepeatedKFold(n_splits=3, n_repeats=2, random_state=0))
+    with assert_raises(contains="must cover each sample index exactly once"):
+        _ = fresh.fit_transform(X, y)
+    _ = fresh.fit(X, y)
+    assert_same(fresh.transform(X), expected.transform(X))
+
+    _ = model.set_params(cv=RepeatedStratifiedKFold(n_splits=2, n_repeats=1, random_state=0))
+    _ = fresh.set_params(model.get_params())
+    assert_true(fresh.cv.isa[RepeatedStratifiedKFold]())
+    _ = expected.set_params(cv=StratifiedKFold(2, shuffle=True, random_state=0))
+    var labels = TargetEncoder[StringKind, NumericLabels[DType.int64]](cv=fresh.cv.copy())
+    var stratified = TargetEncoder[StringKind, NumericLabels[DType.int64]](cv=expected.cv.copy())
+    var classes = ints([0, 1, 2, 0, 1, 2, 0, 1, 2, 0])
+    var names: List[String] = ["color", "size"]
+    assert_same(labels.fit_transform_named(X, names, classes), stratified.fit_transform(X, classes))
+    var expected_names: List[String] = [
+        "color_0", "color_1", "color_2", "size_0", "size_1", "size_2",
+    ]
+    assert_true(labels.get_feature_names_out() == expected_names)
+
+
+def test_shuffle_cv() raises:
+    var X = table()
+    var y = target()
+    var groups = SplitLabels(ints([0, 1, 0, 1, 0, 1, 0, 1, 0, 1]))
+    var model = TargetEncoder()
+    _ = model.set_params(cv=GroupShuffleSplit(2, test_size=SplitSize(1), random_state=0))
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_true(fresh.get_params().cv.isa[GroupShuffleSplit]())
+
+    var names: List[String] = ["color", "size"]
+    var training = fresh.fit_transform_named(X, names, y, groups=groups)
+    assert_same(model.fit_transform(X, y, groups=groups), training)
+    assert_true(fresh.get_feature_names_out() == names)
+
+    _ = fresh.set_params(cv=GroupShuffleSplit(2, test_size=SplitSize(1)))
+    # Seed 5 covers every row on the first pass and repeats one group on the second.
+    seed_global_random_state(5)
+    with assert_raises(contains="must cover each sample index exactly once"):
+        _ = fresh.fit_transform(X, y, groups=groups)
+
+    var column_y32 = zeros[DType.float32](Shape(10, 1))
+    for i in range(10):
+        column_y32[Item(i, 0)] = Float32(i % 2)
+    var model32 = TargetEncoder[StringKind, NumericLabels[DType.float32]](
+        cv=StratifiedShuffleSplit(2, test_size=SplitSize(0.5), random_state=0)
+    )
+    with assert_raises(contains="rank-two Float32 stratification labels"):
+        _ = model32.fit_transform(X, column_y32)
+
+    _ = fresh.set_params(cv=TimeSeriesSplit(3, gap=1))
+    assert_true(fresh.get_params().cv.isa[TimeSeriesSplit]())
+    with assert_raises(contains="must cover each sample index exactly once"):
+        _ = fresh.fit_transform(X, y)
+    _ = fresh.fit(X, y)
+    assert_same(fresh.transform(X), model.transform(X))
+
+
 def main() raises:
     test_lifecycle()
     test_params()
@@ -446,5 +557,8 @@ def main() raises:
     test_cv_none()
     test_grouped_cv()
     test_leave_one_cv()
+    test_leave_p_cv()
     test_predefined_cv()
+    test_repeated_cv()
+    test_shuffle_cv()
     print("PASS target encoder lifecycle contracts")

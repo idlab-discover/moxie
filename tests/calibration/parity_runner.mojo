@@ -21,6 +21,7 @@ from moxie._calibration_algorithms import (
     _TemperatureScaling,
 )
 from moxie.calibration_serialization import (
+    CalibratedBernoulliNBClassifierCVSchema,
     CalibratedClassifierCVSchema,
     CalibratedComplementNBClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
@@ -33,7 +34,7 @@ from moxie.serialization import ModelSchema, dumps, loads
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.frozen import FrozenEstimator
 from moxie.linear_model import LogisticRegression
-from moxie.naive_bayes import ComplementNB, GaussianNB, MultinomialNB
+from moxie.naive_bayes import BernoulliNB, ComplementNB, GaussianNB, MultinomialNB
 from moxie.svm import LinearSVC, SVC
 from calibration_centroid import Centroid
 
@@ -364,6 +365,11 @@ def main() raises:
         elif kind == "serialized_complement":
             compare_serialized[CalibratedComplementNBClassifierCVSchema](
                 adapt_classifier(ComplementNB(alpha=0.25, norm=True)),
+                x, y, w, q, expected, fields, context,
+            )
+        elif kind == "serialized_bernoulli":
+            compare_serialized[CalibratedBernoulliNBClassifierCVSchema](
+                adapt_classifier(BernoulliNB(alpha=0.25, binarize=1.5)),
                 x, y, w, q, expected, fields, context,
             )
         elif kind == "production_lda":

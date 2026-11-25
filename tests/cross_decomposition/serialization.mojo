@@ -7,6 +7,7 @@ from moxie.cross_decomposition import (
     CCASchema,
     PLSCanonical,
     PLSCanonicalSchema,
+    PLSMetadataRequest,
     PLSRegression,
     PLSRegressionSchema,
     PLSSVD,
@@ -197,7 +198,10 @@ def score_requests() raises:
     with assert_raises():
         _ = model.set_score_request(sample_weight=String("invalid alias"))
     assert_equal(model.get_metadata_routing().score.route(metadata).or_else(-1), 8)
-    var snapshot = model.get_metadata_routing()
+    var requests = model.get_metadata_routing()
+    assert_true(not requests.fit.requested_name())
+    var snapshot: PLSMetadataRequest = requests
+    var score_only = PLSMetadataRequest(requests.score.copy())
     var invalid = Schema.encode(model)
     invalid.manifest[len(invalid.manifest) - 1] = 32
     with assert_raises():
@@ -206,6 +210,7 @@ def score_requests() raises:
     _ = model.set_score_request(sample_weight=None)
     assert_equal(Schema.encode(model).schema_version, 1)
     assert_equal(snapshot.score.route(metadata).or_else(-1), 8)
+    assert_equal(score_only.score.route(metadata).or_else(-1), 8)
     with assert_raises():
         _ = model.get_metadata_routing().score.route(metadata)
 

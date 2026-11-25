@@ -123,7 +123,7 @@ Int64; a vector or one-column matrix) or `StringLabels` (`List[String]`).
 String targets can be binary or multiclass only.
 
 ```mojo
-from moxie.model_selection import GroupKFold, KFold, LeaveOneGroupOut, SplitLabels
+from moxie.model_selection import GroupKFold, KFold, LeaveOneGroupOut, RepeatedKFold, SplitLabels
 from moxie.preprocessing import TargetEncoder, TargetEncoderSplits
 from moxie.preprocessing._label import StringLabels
 from moxie._random import RandomState
@@ -132,6 +132,7 @@ var te = TargetEncoder(random_state=0)       # TargetEncoder[StringKind, Numeric
 var Z = te.fit_transform(X, y)               # cross-fitted training encoding, Float64
 var Z_test = te.transform(X_test)            # encodings_ learned on all of X
 var configured = TargetEncoder(cv=KFold(5, shuffle=True, random_state=0))
+var repeated = TargetEncoder(cv=RepeatedKFold(n_repeats=1, random_state=0))
 var Z_cv = configured.fit_transform(X, y)   # explicitly use KFold
 var grouped = TargetEncoder(cv=GroupKFold(3))
 var Z_group = grouped.fit_transform(X, y, groups=SplitLabels(group_ids)) # one group id per row
@@ -167,13 +168,35 @@ Behavior follows sklearn:
   settings, as do `GroupKFold` and `StratifiedGroupKFold`. The grouped
   splitters keep all rows of each group in the same validation fold.
   `LeaveOneOut` validates one row per fold, and `LeaveOneGroupOut`
-  validates one group per fold. Both are deterministic.
+  validates one group per fold. `LeavePOut(1)` and `LeavePGroupsOut(1)`
+  produce the same deterministic partitions. Other leave-out counts cannot
+  cover every row exactly once. Moxie rejects them in `fit_transform`
+  before enumerating combinations, with a splitter error for an invalid
+  population or count, and a coverage error otherwise.
   `PredefinedSplit` uses one Int64 fold label per input row and validates
   folds in ascending label order. Its labels must cover every row, so the
   splitter's training-only label `-1` raises `ValueError` in `fit_transform`.
-  Both stratified splitters require binary or multiclass labels in the
-  original target, even when `target_type="continuous"`. A shuffled
-  splitter with no seed uses Moxie's process default RNG.
+  `RepeatedKFold` and `RepeatedStratifiedKFold` use the splitter's own seed.
+  Set `n_repeats=1` to cover each row exactly once. Other repeat counts
+  raise the coverage error at `fit_transform` before drawing folds.
+  With a single unseeded repeat, the process RNG advances through the
+  coverage pass and the encoding uses the next shuffled partition,
+  matching scikit-learn.
+  `ShuffleSplit`, `GroupShuffleSplit`, and `StratifiedShuffleSplit`
+  can cross-fit when their validation sets form a partition. Training
+  indices retain each splitter's order and may omit rows outside the
+  validation set. An unseeded splitter draws once for coverage and again
+  for encoding from Moxie's process RNG. Moxie raises a coverage error if
+  either draw fails to cover every row exactly once.
+  `TimeSeriesSplit` always raises during cross-fitting because its initial
+  training rows never appear in validation.
+  Stratified K-fold variants require binary or multiclass labels in the
+  original target, even when `target_type="continuous"`.
+  `StratifiedShuffleSplit` can also stratify on distinct continuous values
+  when they satisfy the splitter's class-count and size requirements.
+  Its native splitter requires Float64 for rank-two floating-point
+  stratification targets.
+  A shuffled splitter with no seed uses Moxie's process default RNG.
 - Explicit splits use the supplied training rows in order, including duplicate
   training indices. Validation indices must cover every sample exactly once.
   Validation happens in `fit_transform`; plain `fit` learns from all samples.
@@ -223,9 +246,12 @@ shuffle, and `n_splits` greater than every class count all raise.
   `Optional[Optional[...]]`. The outer `None` leaves the value unchanged, and
   an inner `None` restores `"auto"`/`"deprecated"`.
 * `cv` accepts an integer of at least 2, `None`, `KFold`, `StratifiedKFold`,
-  `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneOut`, `LeaveOneGroupOut`, `PredefinedSplit`, or
-  `TargetEncoderSplits` in the constructor and `set_params`. `cv=None` uses
-  five folds with the same target-based splitter as `cv=5`. The constructor
+  `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneOut`, `LeaveOneGroupOut`,
+  `LeavePOut`, `LeavePGroupsOut`, `PredefinedSplit`, `RepeatedKFold`,
+  `RepeatedStratifiedKFold`, `ShuffleSplit`, `GroupShuffleSplit`,
+  `StratifiedShuffleSplit`, `TimeSeriesSplit`, or `TargetEncoderSplits` in
+  the constructor and `set_params`. `cv=None` uses five folds with the same
+  target-based splitter as `cv=5`. The constructor
   default is the integer `5`. Omitting `cv` in `set_params` keeps the existing
   configuration. Pass a `List[IndexSplit]` from `moxie.model_selection` or a
   native splitter cursor to `TargetEncoderSplits` to snapshot the index pairs.
@@ -238,7 +264,8 @@ shuffle, and `n_splits` greater than every class count all raise.
   integer configuration, read `model.cv[Int]`. Use
   `model.cv.isa[type_of(None)]()` to check for explicit `None`. The caller-owned
   `RandomState` overload accepts integer `cv` or `None`.
-* For `GroupKFold`, `StratifiedGroupKFold`, and `LeaveOneGroupOut`, pass
+* For `GroupKFold`, `StratifiedGroupKFold`, `LeaveOneGroupOut`,
+  `LeavePGroupsOut`, and `GroupShuffleSplit`, pass
   `groups=SplitLabels(group_ids)`
   to `fit_transform` or `fit_transform_named`. Use rank-one Int64, Float32 or
   Float64 arrays or a list of strings with one label per input row. Supplying
@@ -301,9 +328,12 @@ Estimator cases cover:
 - direct `GroupKFold` and `StratifiedGroupKFold` with integer and string
   groups, unshuffled and seeded splitters, and seeded global shuffling;
 - direct `LeaveOneOut` with continuous targets and `LeaveOneGroupOut` with
-  multiclass targets, string groups, and unknown training categories;
+  multiclass targets, string groups, and unknown training categories, also
+  tested with `LeavePOut(1)` and `LeavePGroupsOut(1)`;
 - direct `PredefinedSplit` with nonconsecutive labels, including a negative
   fold label, a single fold, and invalid assignment lengths or training-only rows;
+- direct `RepeatedKFold` and `RepeatedStratifiedKFold` with seeded and
+  global shuffling, and overlapping validation rows from multiple repeats;
 - explicit train/test pairs with reordered and repeated training rows,
   one split, and missing or overlapping validation rows;
 - explicit categories with unknown training values;

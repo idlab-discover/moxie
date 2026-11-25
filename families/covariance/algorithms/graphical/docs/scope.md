@@ -9,7 +9,9 @@ or custom folds, CV scores and a final refit. Its private path uses the same
 graphical solver; no extra public `graphical_lasso_path` export is
 introduced (it is absent from sklearn's covariance `__all__`).
 
-Not implemented: parallel CV execution and Python metadata routing. See [API adaptations](api.md).
+`n_jobs` controls native CV fold workers. The CV parity suite checks that
+two-worker fits reproduce serial results bit for bit for both solvers. Python
+metadata routing remains outside the native API. See [API adaptations](api.md).
 
 `pixi run covariance-test` covers Gram CD closed forms, symmetry and C P = I at
 convergence, diagonal precision at large alpha, precomputed/function agreement,

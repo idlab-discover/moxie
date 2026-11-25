@@ -59,6 +59,14 @@ Use `BinaryAdapter(GaussianNB())` with the default Float64 features and
 `BinaryAdapter(GaussianNB[dtype=DType.float32]())` for Float32 features. OvR
 and OvO can fit incrementally with either. OutputCode uses 0/1 codes and the
 positive-class probabilities.
+
+Use `BinaryAdapter(DummyClassifier())` for the single-output baseline with
+Float64 features, or set the component's `dtype` to Float32. The adapter
+converts binary codes to integer-valued `moxie.dummy.Label` values and
+preserves the component's Float64 probabilities. If you use the
+`constant` strategy, choose an integer constant from the inner codes.
+OvR, OvO and OutputCode all use 0/1 for this probability-only component.
+
 Use `adapter.estimator` to inspect the underlying model, and use the adapter's
 typed `get_params` and `set_params` to configure it. A fitted copy owns its
 state independently, while `clone` returns an unfitted adapter.

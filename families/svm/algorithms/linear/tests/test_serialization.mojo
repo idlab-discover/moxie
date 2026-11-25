@@ -36,7 +36,15 @@ def _check_requests_unset(requests: FitScoreMetadataRequest) raises:
         _ = requests.score.route(metadata)
 
 
+def _without_v3_names(mut archive: ModelArchive):
+    # Only the optional-name presence flag is stored when names are absent.
+    for _ in range(8):
+        _ = archive.manifest.pop()
+    archive.schema_version = 2
+
+
 def _as_version_one(mut archive: ModelArchive):
+    _without_v3_names(archive)
     # The v2 extension is two unset requests, each stored as one 64-bit tag.
     for _ in range(16):
         _ = archive.manifest.pop()
@@ -88,7 +96,20 @@ def _check_classifier(X: Dense) raises:
     with assert_raises():
         _ = Schema.decode(empty)
 
-    _ = model.fit(X, y)
+    var names: List[String] = ["height", "β\x00"]
+    var wrong_names: List[String] = ["β\x00", "height"]
+    var short_names: List[String] = ["height"]
+    _ = model.fit(X, y, feature_names=names)
+    var copied = model.copy()
+    names[0] = "mutated"
+    assert_equal(model.feature_names_in_.value()[0], "height")
+    assert_equal(copied.feature_names_in_.value()[0], "height")
+    names[0] = "height"
+    with assert_raises(contains="must match X columns"):
+        _ = model.fit(X, y, feature_names=short_names)
+    with assert_raises(contains="target length"):
+        _ = model.fit(X, List[String](), feature_names=wrong_names)
+    assert_true(model.feature_names_in_.value() == names)
     _ = model.set_params(C=0.25, fit_intercept=False, max_iter=1)
     save_model[Schema](model, path)
     var restored = load_model[Schema](path)
@@ -101,12 +122,20 @@ def _check_classifier(X: Dense) raises:
     assert_equal(len(restored.fit_warnings), 0)
     var expected_classes: List[String] = ["a", "z", "β\x00"]
     assert_true(restored.classes_ == expected_classes)
-    assert_true(restored.predict(X) == model.predict(X))
+    assert_true(restored.feature_names_in_.value() == names)
+    assert_true(restored.predict(X, feature_names=names) == model.predict(X))
+    with assert_raises(contains="same order"):
+        _ = restored.predict(X, feature_names=wrong_names)
+    with assert_raises(contains="same order"):
+        _ = restored.decision_function(X, feature_names=wrong_names)
+    with assert_raises(contains="same order"):
+        _ = restored.score(X, y, feature_names=wrong_names)
     assert_equal(restored.score(X, y), model.score(X, y))
     _equal_array(restored.decision_function(X), model.decision_function(X))
     _equal_array(restored.intercept_, model.intercept_)
     var cloned = clone(restored)
     assert_true(not cloned.__sklearn_is_fitted__())
+    assert_true(not cloned.feature_names_in_)
     assert_equal(cloned.get_metadata_routing().fit.route(metadata).value(), 7)
     assert_true(not cloned.get_metadata_routing().score.route(metadata))
     _ = cloned.set_fit_request(sample_weight=None)
@@ -119,6 +148,7 @@ def _check_classifier(X: Dense) raises:
 
     # A later fit uses the saved configuration and resumes the owned RNG stream.
     _ = restored.fit(X, y)
+    assert_true(not restored.feature_names_in_)
     _ = model.fit(X, y)
     assert_true(dumps(Schema.encode(restored)) == dumps(Schema.encode(model)))
     assert_equal(len(model.fit_warnings), 1)
@@ -173,6 +203,7 @@ def _check_regressor(X: Dense) raises:
     _as_version_one(legacy)
     _check_requests_unset(LinearSVRSchema.decode(legacy).get_metadata_routing())
     var malformed = LinearSVRSchema.encode(model)
+    _without_v3_names(malformed)
     # The final v2 tag is the score request. Four is not a recognized tag.
     malformed.manifest[len(malformed.manifest) - 8] = 4
     with assert_raises(contains="metadata request tag"):
@@ -194,7 +225,19 @@ def _check_regressor(X: Dense) raises:
     with assert_raises():
         _ = unfitted.predict(X)
 
-    _ = model.fit(X.astype[DType.float32](), y)
+    var legacy_v2 = LinearSVRSchema.encode(model)
+    _without_v3_names(legacy_v2)
+    var restored_v2 = LinearSVRSchema.decode(legacy_v2)
+    assert_true(not restored_v2.feature_names_in_)
+    assert_equal(restored_v2.get_metadata_routing().score.route(metadata).value(), 7)
+
+    var names: List[String] = ["same name", "same name"]
+    var wrong_names: List[String] = ["same name", "other"]
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict(X, feature_names=names)
+    _ = model.fit(
+        X.astype[DType.float32](), y.astype[DType.float32](), feature_names=names
+    )
     _ = model.set_params(epsilon=0.4, fit_intercept=False)
     save_model[LinearSVRSchema](model, path)
     var restored = load_model[LinearSVRSchema](path)
@@ -203,11 +246,16 @@ def _check_regressor(X: Dense) raises:
     assert_equal(restored.n_features_in_, 2)
     assert_equal(restored.n_iter_, model.n_iter_)
     assert_equal(restored.fit_status_, model.fit_status_)
-    _equal_array(restored.predict(X), model.predict(X))
+    assert_true(restored.feature_names_in_.value() == names)
+    _equal_array(restored.predict(X, feature_names=names), model.predict(X))
+    assert_equal(restored.score(X, y, feature_names=names), model.score(X, y))
+    with assert_raises(contains="same order"):
+        _ = restored.score(X, y, feature_names=wrong_names)
     _equal_array(restored.predict(X.astype[DType.float32]()), model.predict(X.astype[DType.float32]()))
     assert_equal(restored.score(X, y), model.score(X, y))
     var cloned = clone(restored)
     assert_true(not cloned.__sklearn_is_fitted__())
+    assert_true(not cloned.feature_names_in_)
     assert_equal(cloned.get_metadata_routing().score.route(metadata).value(), 7)
     _ = cloned.set_score_request(sample_weight=False)
     assert_true(not cloned.get_metadata_routing().score.route(metadata))
@@ -223,6 +271,14 @@ def _check_regressor(X: Dense) raises:
     _equal_array(materialized.coef_, model.coef_)
 
     var archive = LinearSVRSchema.encode(model)
+    var truncated = archive.copy()
+    _ = truncated.manifest.pop()
+    with assert_raises():
+        _ = LinearSVRSchema.decode(truncated)
+    var malformed_names = LinearSVRSchema.decode(archive)
+    malformed_names.feature_names_in_ = List[String]()
+    with assert_raises(contains="feature names count"):
+        _ = LinearSVRSchema.encode(malformed_names)
     archive.schema_version += 1
     with assert_raises():
         _ = LinearSVRSchema.decode(loads(dumps(archive)))
@@ -243,11 +299,25 @@ def _check_regressor(X: Dense) raises:
         _ = LinearSVRSchema.encode(model)
 
 
+def _check_named_numeric_target(X: Dense) raises:
+    var y = nm.zeros[DType.int64](nm.Shape(6))
+    for i in range(3, 6):
+        y.unsafe_set(i, 1)
+    var names: List[String] = ["height", "width"]
+    var model = LinearSVC(random_state=0)
+    var fitted = model.fit(X, y, feature_names=names).predict(
+        X.astype[DType.float32](), feature_names=names
+    )
+    assert_true(fitted == model.predict(X))
+    assert_true(model.feature_names_in_.value() == names)
+
+
 def main() raises:
     var X = nm.zeros[DType.float64](nm.Shape(6, 2))
     for i in range(6):
         X.unsafe_set(i * 2, Float64(i) - 2.5)
         X.unsafe_set(i * 2 + 1, Float64(i % 2))
+    _check_named_numeric_target(X)
     _check_classifier(X)
     _check_regressor(X)
     _check_label_type[Int](X, [1, 1, 1, 2, 2, 2])

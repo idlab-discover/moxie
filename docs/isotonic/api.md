@@ -198,7 +198,9 @@ var requests = model.get_metadata_routing()
 var weight_name = requests.fit.requested_name()
 ```
 
-`get_metadata_routing()` returns an independent snapshot. Fitted copies and
+`get_metadata_routing()` returns an independent snapshot and satisfies
+`FitScoreMetadataRequestProvider` from `moxie.metadata_routing`. Generic
+parents can query both requests before or after fit. Fitted copies and
 unfitted clones preserve both requests. Direct `fit` and `score` always use
 their explicit `sample_weight` arguments. Pipeline and model selection still
 require their existing explicit metadata arguments.

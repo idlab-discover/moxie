@@ -1,8 +1,22 @@
 """Drive dense spectral entry points for pinned scikit-learn parity."""
+from std.math import abs
 from std.sys import argv
-from numojo import NDArray
+from numojo import NDArray, Shape, zeros
 from moxie.manifold import SpectralEmbedding, spectral_embedding
+from moxie.neighbors._distance import at
 from trustworthiness_driver import read_matrix
+
+
+def _custom_affinity[dtype: DType](x: NDArray[dtype]) raises -> NDArray[dtype]:
+    var n = x.shape[0]
+    var graph = zeros[dtype](Shape(n, n))
+    for row in range(n):
+        for col in range(n):
+            var weight = 1 / (1 + abs(at(x, row, 0) - at(x, col, 0)))
+            if row < col:
+                weight += 0.125
+            graph.unsafe_set(row * n + col, SIMD[dtype, 1](weight))
+    return graph^
 
 
 def _write_matrix[dtype: DType](x: NDArray[dtype]) raises:
@@ -30,6 +44,8 @@ def _compare[dtype: DType]() raises:
         n_components, affinity=String(args[5]), gamma=gamma,
         random_state=17, eigen_solver="dense",
     )
+    if args[5] == "callable":
+        _ = model.set_params(affinity_function=_custom_affinity[dtype])
     var embedding = model.fit_transform(x)
     print(model.n_features_in_, len(model.fit_warnings))
     for warning in model.fit_warnings:

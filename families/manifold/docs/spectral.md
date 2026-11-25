@@ -25,6 +25,15 @@ different valid orthonormal bases across solvers. The normalized dense
 Laplacian gives isolated vertices diagonal zero and degree scale one, matching
 the reference's dense LAPACK branch.
 
+For a custom graph, pass `affinity="callable", affinity_function=build_graph`.
+The native callback has type `def(NDArray[dtype]) thin raises -> NDArray[dtype]`.
+It is a function without captures and receives the borrowed feature array once
+per fit with its original strides.
+It returns a finite, nonnegative square matrix in the feature dtype, with one
+row and column per training sample in input order. The estimator snapshots that
+matrix and applies the same Laplacian and warning rules as for precomputed
+affinity. A callback error or invalid graph leaves the previous fit intact.
+
 The function supports both normalized and unnormalized Laplacians and
 `drop_first=False` for consumers that need the first eigenvector, such as
 spectral clustering. The estimator requires at least two samples and both
@@ -41,18 +50,21 @@ ARPACK and raises here, as do explicit `"arpack"`, `"lobpcg"` and `"amg"`.
 seeds are validated, and the deterministic dense solver uses its own fixed
 convergence criterion without an initial random vector. The default
 `affinity="nearest_neighbors"` and `"precomputed_nearest_neighbors"` raise under
-the existing sparse-graph deferral. The native affinity parameter takes named
-dense modes. The sklearn callable extension remains open. The typed
+the existing sparse-graph deferral. The typed
 `n_neighbors` and `n_jobs` configuration is retained for compatibility with the
 reference constructor. Neither alters the dense affinities.
 
 `embedding_`, `affinity_matrix_`, and `gamma_` use `Optional`, with `gamma_`
 present only after an RBF fit. `n_features_in_` records the input column count.
 A successful fit replaces learned state, and a failed fit preserves it.
-`get_params` returns a `SpectralEmbeddingParams` record, `set_params` accepts the
-record or keyword updates, and `clone` copies only the configuration. Set
-optional fields to `None` through the record to reset them. `fit` and
-`set_params` return a mutable borrow, and `fit_transform` returns an independent
+`get_params` returns a `SpectralEmbeddingParams[dtype]` record and `set_params`
+accepts the record or keyword updates. Explicit annotations for Float32
+models use `SpectralEmbeddingParams[DType.float32]`. The bare record type
+defaults to Float64. `clone` copies only the configuration. Set
+optional fields to `None` through the record to reset them. Clear
+`affinity_function` in the record when switching from callable affinity to a
+built-in mode. `fit` and `set_params` return a mutable borrow, and
+`fit_transform` returns an independent
 copy of the learned coordinates. Precomputed affinities advertise pairwise
 input. Dense arrays carry no column names, and metadata routing is a Python
 binding capability.
@@ -75,8 +87,8 @@ both dtypes. Coordinate absolute and relative tolerances are `2e-10` for
 Float64 and `3e-5` for Float32, whose reference builds the Laplacian and solves
 at input precision. Affinity comparisons are stricter at `2e-13` and `3e-7`
 respectively. Both normalized and unnormalized paths, the first-mode switch,
-isolates, all eigenpairs, RBF and precomputed affinities, and digits RBF are
-covered.
+isolates, all eigenpairs, RBF, precomputed and asymmetric callable affinities,
+and digits RBF are covered.
 
 ```sh
 python -u families/manifold/tools/check.py spectral

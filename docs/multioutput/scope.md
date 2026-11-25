@@ -45,8 +45,9 @@ original sample order.
   component targets and predictions use the declared NDArray type. Classifier
   components also accept a list of scalars of the declared label dtype, or
   `List[Int]` for Int64 wrapper labels. Incremental classifier components
-  use the same type for their targets and class declarations. Component
-  probabilities and log probabilities can be Float32 or Float64 NDArrays,
+  use the same type for their targets and class declarations. A component
+  using Dummy's tagged `List[Label]` accepts Int64, Float32 or Float64 labels.
+  Component probabilities and log probabilities can be Float32 or Float64 NDArrays,
   or a one-element list containing a Float64 NDArray.
   Component decisions use Float32 or Float64 NDArrays. Wrapper probabilities,
   log probabilities and decisions are Float64:

@@ -21,8 +21,9 @@ def oracle():
     from sklearn.neighbors import _classification
     from sklearn.tree import _classes
     from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
-    from sklearn.dummy import DummyRegressor
+    from sklearn.dummy import DummyRegressor, __file__ as dummy_source
     from sklearn.discriminant_analysis import __file__ as lda_source
+    from sklearn.svm import _classes as svm_classes
     path = REFERENCE / 'sklearn/multioutput.py'
     for relative, source in [
         ('sklearn/multioutput.py', path),
@@ -31,8 +32,10 @@ def oracle():
         ('sklearn/model_selection/_validation.py', Path(_validation.__file__)),
         ('sklearn/naive_bayes.py', Path(naive_bayes_source)),
         ('sklearn/discriminant_analysis.py', Path(lda_source)),
+        ('sklearn/dummy.py', Path(dummy_source)),
         ('sklearn/neighbors/_classification.py', Path(_classification.__file__)),
         ('sklearn/tree/_classes.py', Path(_classes.__file__)),
+        ('sklearn/svm/_classes.py', Path(svm_classes.__file__)),
     ]:
         expected = subprocess.check_output(['git', '-C', str(REFERENCE), 'show', f'{REVISION}:{relative}'])
         if source.read_bytes() != expected:
@@ -216,8 +219,10 @@ def classifier_components(module, np):
 
     from sklearn import config_context
     from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+    from sklearn.dummy import DummyClassifier
     from sklearn.naive_bayes import GaussianNB
     from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.svm import SVC
     from sklearn.tree import DecisionTreeClassifier
 
     i = np.arange(12)
@@ -253,7 +258,29 @@ def classifier_components(module, np):
         X, binary.astype(np.int64)
     )
     lda = module.MultiOutputClassifier(LinearDiscriminantAnalysis()).fit(X, multiclass)
+    dummy = module.MultiOutputClassifier(DummyClassifier()).fit(
+        X, integer_targets, sample_weight=weights
+    )
+    dummy32 = module.MultiOutputClassifier(DummyClassifier()).fit(
+        X32, multiclass.astype(np.float32), sample_weight=weights
+    )
+    dummy_chain = module.ClassifierChain(
+        DummyClassifier(), order=[1, 0], chain_method='predict_proba', cv=3,
+    ).fit(X, binary)
+    svc = module.MultiOutputClassifier(SVC(kernel='linear')).fit(X, integer_targets)
+    svc_chain = module.ClassifierChain(
+        SVC(kernel='linear'), chain_method='decision_function', cv=3,
+    ).fit(X, binary.astype(np.int64))
     return {
+        'ComponentsDummyWeightedLabels': dummy.predict(X).ravel().tolist(),
+        'ComponentsDummyWeightedProba': dummy.predict_proba(X)[1].ravel().tolist(),
+        'ComponentsDummy32WeightedLabels': dummy32.predict(X32).ravel().tolist(),
+        'ComponentsDummy32WeightedProba': dummy32.predict_proba(X32)[1].ravel().tolist(),
+        'ComponentsDummyChainCVLabels': dummy_chain.predict(X).ravel().tolist(),
+        'ComponentsDummyChainCVProba': dummy_chain.predict_proba(X).ravel().tolist(),
+        'ComponentsSVCLabels': svc.predict(X).ravel().tolist(),
+        'ComponentsSVCChainCVLabels': svc_chain.predict(X).ravel().tolist(),
+        'ComponentsSVCChainCVDecision': svc_chain.decision_function(X).ravel().tolist(),
         'ComponentsGaussianNBListLabels': list_bayes.predict(X).ravel().tolist(),
         'ComponentsGaussianNBListProba': list_bayes.predict_proba(X)[1].ravel().tolist(),
         'ComponentsGaussianNBListIncrementalLabels': incremental.predict(X).ravel().tolist(),
@@ -317,7 +344,11 @@ if __name__ == '__main__':
                 # SVD and probability normalization can differ in rounding.
                 matches = all(math.isclose(a, b, rel_tol=0.0, abs_tol=1e-12)
                               for a, b in zip(actual[name], reference[name]))
-            elif name.startswith(('ComponentsTree', 'ComponentsKNN')):
+            elif name == 'ComponentsSVCChainCVDecision':
+                # Match the standalone SVM solver tolerance.
+                matches = all(math.isclose(a, b, rel_tol=3e-5, abs_tol=3e-6)
+                              for a, b in zip(actual[name], reference[name]))
+            elif name.startswith(('ComponentsTree', 'ComponentsKNN', 'ComponentsDummy')):
                 matches = actual[name] == reference[name]
             elif name.startswith('Components') and not name.endswith(('Labels', 'Order')) and 'Forest' not in name:
                 # Float64 Ridge solves differ from LAPACK in operation order.

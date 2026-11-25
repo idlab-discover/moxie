@@ -17,8 +17,10 @@ The parity oracle uses scikit-learn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`. The comparisons cover a test
 component and production `Ridge`, `RidgeClassifier`, `RandomForestClassifier`,
 `LogisticRegression`, `DecisionTreeClassifier`, `KNeighborsClassifier`,
-`GaussianNB`, and `LinearDiscriminantAnalysis` components. Labels, orders,
-and the tested tree, KNN and seeded forest probabilities match exactly.
+`GaussianNB`, `LinearDiscriminantAnalysis`, `DummyClassifier`, and `SVC`
+components. Labels, orders, and the tested tree, KNN, dummy and seeded forest
+probabilities match exactly. The SVC chain uses the SVM family's decision
+tolerances of `rtol=3e-5` and `atol=3e-6`.
 Float64 scores and Ridge outputs use 1e-12 and Float32 Ridge outputs 2e-5. Logistic
 probabilities use a 2e-6 absolute tolerance for differences in L-BFGS iterates.
 Weighted GaussianNB uses 1e-12 for differences in accumulation order and

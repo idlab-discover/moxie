@@ -5,6 +5,46 @@
       "assets": {},
       "exports": {
         "packages": {
+          "moxie.model_selection": {}
+        },
+        "schema": 1
+      },
+      "id": "model_selection",
+      "modules": {
+        "moxie.model_selection._base": {
+          "file": "src/moxie/model_selection/_base.mojo"
+        },
+        "moxie.model_selection._indices": {
+          "file": "src/moxie/model_selection/_indices.mojo"
+        }
+      },
+      "path": "../model_selection"
+    },
+    {
+      "assets": {
+        "licenses/model_selection-splitters-scikit-learn.txt": "LICENSES/scikit-learn.txt"
+      },
+      "exports": {
+        "packages": {
+          "moxie.model_selection": {
+            "KFold": "moxie.model_selection._split",
+            "StratifiedKFold": "moxie.model_selection._split"
+          }
+        },
+        "schema": 1
+      },
+      "id": "splitters",
+      "modules": {
+        "moxie.model_selection._split": {
+          "file": "src/moxie/model_selection/_split.mojo"
+        }
+      },
+      "path": "../model_selection/algorithms/splitters"
+    },
+    {
+      "assets": {},
+      "exports": {
+        "packages": {
           "moxie": {
             "BaseEstimator": "moxie.base",
             "ClassifierMixin": "moxie.base",

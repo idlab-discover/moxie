@@ -35,6 +35,7 @@ def expect(case, name, value, kind='array'):
 d.prelude('''
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import seed_global_random_state, RandomState
+from moxie.model_selection import KFold, StratifiedKFold
 from moxie.preprocessing._vocabulary import CategoryKind, StringKind, StringNaNKind, NumericKind
 from moxie.preprocessing._label import LabelKind, StringLabels, NumericLabels
 from moxie.preprocessing._target_encoder import kfold_test_folds, stratified_kfold_test_folds
@@ -181,6 +182,9 @@ def native_args(kind, kw):
         if k == 'categories':
             rows = ', '.join('[' + ', '.join(mojo_value(kind, x) for x in cats) + ']' for cats in v)
             parts.append(f'categories=Optional[List[List[Optional[{DOMAIN_T[kind]}]]]]([{rows}])')
+        elif k == 'cv' and isinstance(v, (KFold, StratifiedKFold)):
+            shuffle = 'True' if v.shuffle else 'False'
+            parts.append(f'cv={type(v).__name__}({v.n_splits}, shuffle={shuffle}, random_state={v.random_state})')
         elif k == 'smooth':
             parts.append(f'smooth=Optional[Float64]({float(v)!r})')
         elif isinstance(v, str):
@@ -277,6 +281,10 @@ run_case('forced_multi', 's', y_multi_f, dict(random_state=6, target_type='multi
 run_case('one_class', 'i', y_one, dict(random_state=6, target_type='multiclass'))
 run_case('global_default', 's', y_cont, {}, global_seed=1234)
 run_case('global_multi', 'n', y_multi, dict(cv=3), global_seed=99)
+run_case('explicit_kfold', 's', y_cont, dict(cv=KFold(4, shuffle=True, random_state=42)))
+run_case('explicit_kfold_binary', 's', y_bin, dict(cv=KFold(4), shuffle=True, random_state=42))
+run_case('explicit_stratified', 's', y_multi_s, dict(cv=StratifiedKFold(4, shuffle=True, random_state=42)))
+run_case('explicit_stratified_global', 's', y_bin, dict(cv=StratifiedKFold(4, shuffle=True)), global_seed=42)
 # A caller-owned RandomState (sklearn: a RandomState instance) advances across calls.
 for tag, kind, y in [('rng_cont', 's', y_cont), ('rng_multi', 'f', y_multi_s)]:
     Xtr, _ = DATA[kind]

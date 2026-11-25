@@ -2,6 +2,7 @@
 from moxie._categorical import categorical_column
 from moxie.base import clone
 from moxie.compose import ColumnEntry, ColumnTable, ColumnTransformer
+from moxie.model_selection import StratifiedKFold
 from moxie.preprocessing import OrdinalEncoder, TargetEncoder
 from numojo import Shape, zeros
 from parity_io import ResultLine
@@ -28,7 +29,7 @@ def main() raises:
     var age: List[String] = ["age"]
     var model = ColumnTransformer(
         ColumnEntry("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1.0), color.copy()),
-        ColumnEntry("target", TargetEncoder(smooth=0.0, cv=2, shuffle=False), color^),
+        ColumnEntry("target", TargetEncoder(smooth=0.0, cv=StratifiedKFold(2)), color^),
         ColumnEntry("numeric", "passthrough", age^),
     )
     with assert_raises(contains="NotFittedError"):
@@ -51,6 +52,7 @@ def main() raises:
 
     var fresh = clone(model)
     assert_false(fresh.__sklearn_is_fitted__())
+    assert_equal(fresh.fit_transform(train, y.copy()).unsafe_get(1), 0.0)
     _ = fresh.fit(train, y^)
     line.add("after_fit", fresh.transform(test))
     line.emit()

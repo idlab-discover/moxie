@@ -108,13 +108,12 @@ after refitting.
 
 The notebook also compares `make_pipeline(StandardScaler(), GaussianMixture(2,
 random_state=0))` with the equivalent pinned scikit-learn Pipeline. It checks
-held-out labels and log likelihoods through `predict`, `score_samples` and
-`score`. Use `clone(pipe)` for an unfitted copy and update the nested estimator
+held-out labels, component probabilities and log likelihoods through
+`predict`, `predict_proba`, `score_samples` and `score`. Use
+`clone(pipe)` for an unfitted copy and update the nested estimator
 record through `pipe.get_params()` and `pipe.set_params(params)`. Both mixtures
 expose their existing training labels through the shared `FitPredictor` trait,
 so `pipe.fit_predict(X)` can fit the updated pipeline and return its labels.
-For probabilities, call `pipe.estimator.predict_proba(pipe.transformer.transform(X))`.
-Shared Pipeline probability forwarding is tracked in #21 part 1.
 
 Benchmark tooling remains at `tests/mixture/{gaussian,bayesian}/benchmark.py`;
 run with `pixi run python` after building. It writes under `benchmarks/mixture/`.

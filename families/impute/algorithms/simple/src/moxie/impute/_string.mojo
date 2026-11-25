@@ -1,6 +1,8 @@
 """Owned nullable text and string-only simple imputation."""
 import numojo as nm
 from std.utils import Variant
+from moxie._categorical import CategoricalColumn, StringCategories, categorical_column
+from moxie._feature_metadata import EstimatorClassName, FeatureNamesOut
 from moxie.base import UnsupervisedEstimator, TransformerMixin, FitTransformer
 from moxie.impute._base import Imputer
 from moxie.impute._plumbing import FeatureLayout
@@ -166,6 +168,10 @@ struct StringSimpleImputer(Imputer, Copyable, Movable):
         _ = result.set_params(self._params)
         return result^
 
+    def as_categorical(self) raises -> CategoricalStringImputer:
+        """Copy this configuration into an unfitted categorical pipeline stage."""
+        return CategoricalStringImputer(self)
+
     def __sklearn_is_fitted__(self) -> Bool:
         return self._layout.state.is_fitted()
 
@@ -277,6 +283,86 @@ struct StringSimpleImputer(Imputer, Copyable, Movable):
             for j in self._layout.indicator_features:
                 result.append("missingindicator_" + names[j])
         return result^
+
+
+struct CategoricalStringImputer(Imputer, FeatureNamesOut, EstimatorClassName, Copyable, Movable):
+    """Adapt the string imputer to the categorical encoder input contract."""
+
+    comptime Column = CategoricalColumn[StringCategories]
+    comptime Input = List[Self.Column]
+    comptime Target = nm.NDArray[DType.float64]
+    comptime Transformed = Self.Input
+    comptime Params = StringSimpleParams
+
+    var _imputer: StringSimpleImputer
+
+    def __init__(out self, imputer: StringSimpleImputer) raises:
+        self._imputer = imputer.__sklearn_clone__()
+
+    @staticmethod
+    def name() -> String:
+        return "SimpleImputer"
+
+    def get_params(self, deep: Bool = True) raises -> Self.Params:
+        return self._imputer.get_params(deep)
+
+    def set_params[origin: MutOrigin, params_origin: ImmOrigin](
+        ref[origin] self, ref[params_origin] params: Self.Params,
+    ) raises -> ref[self] Self:
+        _ = self._imputer.set_params(params)
+        return self
+
+    def __sklearn_clone__(self) raises -> Self:
+        return Self(self._imputer)
+
+    def __sklearn_is_fitted__(self) -> Bool:
+        return self._imputer.__sklearn_is_fitted__()
+
+    @staticmethod
+    def _matrix(X: Self.Input) raises -> StringMatrix:
+        var cols = len(X)
+        var rows = X[0].rows() if cols != 0 else 0
+        for column in X:
+            if column.rows() != rows:
+                raise Error("ValueError: categorical columns must have matching row counts")
+        var cells = List[Optional[String]](capacity=rows * cols)
+        for row in range(rows):
+            for column in X:
+                cells.append(column.get(row))
+        return StringMatrix(cells, rows, cols)
+
+    def _fit_matrix(mut self, X: StringMatrix) raises:
+        if self._imputer._params.add_indicator:
+            raise Error("ValueError: categorical imputer output cannot include Boolean indicators")
+        _ = self._imputer.fit(X)
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None,
+    ) raises -> ref[self] Self:
+        self._fit_matrix(Self._matrix(X))
+        return self
+
+    def _transform_matrix(self, X: StringMatrix) raises -> Self.Transformed:
+        var result = self._imputer.transform(X)
+        var columns = Self.Transformed(capacity=result.values.columns())
+        for column in range(result.values.columns()):
+            var cells = List[Optional[String]](capacity=result.values.rows())
+            for row in range(result.values.rows()):
+                cells.append(result.values.get(row, column))
+            columns.append(categorical_column(cells))
+        return columns^
+
+    def transform(self, X: Self.Input) raises -> Self.Transformed:
+        self._imputer._layout.state.check_features(len(X))
+        return self._transform_matrix(Self._matrix(X))
+
+    def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
+        var matrix = Self._matrix(X)
+        self._fit_matrix(matrix)
+        return self._transform_matrix(matrix)
+
+    def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
+        return self._imputer.get_feature_names_out(input_features)
 
 
 struct StringIndicatorParams(Copyable, Movable):

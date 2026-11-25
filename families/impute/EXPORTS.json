@@ -10,6 +10,7 @@
       "MissingIndicator": "moxie.impute._indicator",
       "SimpleImputer": "moxie.impute._simple",
       "IntegerSimpleImputer": "moxie.impute._simple",
+      "CategoricalStringImputer": "moxie.impute._string",
       "StringSimpleImputer": "moxie.impute._string",
       "StringMatrix": "moxie.impute._string",
       "StringImputationResult": "moxie.impute._string",

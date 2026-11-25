@@ -168,6 +168,19 @@ without indicators, the Boolean component has zero columns. No indicator is adde
 for missingness first encountered during transform. Both components own their
 storage even with `copy=False`.
 
+`StringSimpleImputer(...).as_categorical()` creates an unfitted
+`CategoricalStringImputer` with the same configuration. Use it before an encoder
+in a [mixed column pipeline](../../../../../docs/compose/named-columns.md).
+It accepts equal-length lists of `CategoricalColumn[StringCategories]` as
+features and returns owned categorical columns in retained feature order.
+The output dictionaries are inferred from the imputed values for each call.
+The adapter takes an optional Float64 array target and ignores it.
+An all-missing training column dropped by the string imputer is reflected in
+the output width and feature names. The reference also emits a `UserWarning`.
+`add_indicator=True` raises at fit because this output type can only carry string
+categories. Use `StringSimpleImputer` with `StringMatrix` for separate Boolean
+indicators. The stage appears as `simpleimputer` in `make_pipeline`.
+
 `statistics_` is `List[Optional[String]]`, with None for an empty dropped feature;
 `n_features_in_`, `feature_names_in_`, feature naming, optional ignored `y`, cloning,
 repeat fits and parameter resets follow the existing estimators. `indicator_`

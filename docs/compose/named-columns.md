@@ -111,6 +111,27 @@ when an active entry uses TargetEncoder. The training output uses out-of-fold
 encodings, and later `transform` uses the encodings learned on all training
 rows.
 
+For nullable string categories, replace the categorical entry with a pipeline
+that imputes missing cells before encoding:
+
+```mojo
+from moxie.impute import StringSimpleImputer
+
+var categorical = make_pipeline(
+    StringSimpleImputer(strategy="most_frequent").as_categorical(),
+    OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
+)
+var kinds: List[String] = ["category"]
+var entry = ColumnEntry("cat", categorical^, make_column_selector(dtype_include=kinds^))
+```
+
+`as_categorical()` copies the imputer configuration into an unfitted transformer
+that consumes and emits lists of string categorical columns. The pipeline uses
+the learned imputer to fill missing cells and passes names of retained columns to
+the encoder. This entry requires a Float64 table and a list-style column key.
+See the [string imputer API](../../families/impute/algorithms/simple/docs/api.md#string-specialization)
+for strategy and indicator behavior.
+
 The matrix-regressor overloads of TransformedTargetRegressor accept
 numeric-only tables. They store names and validate their order at prediction.
 
@@ -118,6 +139,8 @@ Native composition runs in Mojo. The named and mixed column parity suites
 use pandas solely for Python oracle inputs. The mixed parity case
 compares a single ColumnTransformer with median imputation, scaling and one-hot
 encoding, including reordered inputs, unknown categories, names and output spans.
+It also checks two categorical columns imputed before encoding and an all-missing
+training column dropped by the imputer.
 The mixed encoders parity case also compares ordinal codes and multiclass
 target encodings with exact equality, including cross-fitted training output.
 The mixed text comparison checks scalar name and position routing with

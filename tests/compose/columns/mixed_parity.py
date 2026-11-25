@@ -1,4 +1,4 @@
-"""Compare one mixed table with the pinned sklearn composition.
+"""Compare mixed tables with the pinned sklearn compositions.
 
 One-hot values, names and spans must match exactly. The scaler uses Float64
 accumulation and can round differently from NumPy's reductions, so its output
@@ -56,6 +56,10 @@ def check_mixed(case, column, train_categories, test_categories, *, extra_output
         ("cat", encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
          compose.make_column_selector(dtype_include="category")),
     ])
+    check_composition(case, model, train, test, extra_outputs)
+
+
+def check_composition(case, model, train, test, extra_outputs=()):
     expected_fit = model.fit_transform(train)
     expected_transform = model.transform(test)
     output = io.run(ROOT, BUILD / case, capture=True).stdout
@@ -84,6 +88,30 @@ def check_mixed(case, column, train_categories, test_categories, *, extra_output
     print(f"{case}: one-hot values, names and spans exact, scaler within 1e-12")
 
 
+def check_categorical_imputation():
+    train = pd.DataFrame({
+        "color": pd.Categorical(["red", None, "red", "amber", None]),
+        "age": [10.0, np.nan, 30.0, 40.0, 20.0],
+        "empty": pd.Categorical([None] * 5),
+        "shape": pd.Categorical(["square", "circle", None, "square", "circle"]),
+    })
+    test = pd.DataFrame({
+        "age": [35.0, np.nan, 15.0],
+        "shape": pd.Categorical([None, "triangle", "square"]),
+        "color": pd.Categorical(["green", None, "amber"]),
+        "empty": pd.Categorical(["ignored", None, "value"]),
+    })
+    model = compose.ColumnTransformer([
+        ("num", pipeline.make_pipeline(impute.SimpleImputer(strategy="median"), data.StandardScaler()),
+         compose.make_column_selector(dtype_include="number")),
+        ("cat", pipeline.make_pipeline(
+            impute.SimpleImputer(strategy="most_frequent"),
+            encoders.OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
+        ), compose.make_column_selector(dtype_include="category")),
+    ])
+    check_composition("mixed_categorical_impute", model, train, test, ("after_fit",))
+
+
 if __name__ == "__main__":
     check_mixed("mixed", "color", ["red", "blue", "red", "amber", "blue"], ["green", None, "red"])
     large = 2**53
@@ -91,3 +119,4 @@ if __name__ == "__main__":
         "mixed_numeric_categories", "product", [large + 1, large, large + 1, -2, large],
         [large + 2, large, large + 1], extra_outputs=("with_extra_categories", "after_fit"),
     )
+    check_categorical_imputation()

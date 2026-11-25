@@ -581,6 +581,12 @@
         "moxie.ensemble._hist_gradient_boosting.histogram": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/histogram.mojo"
         },
+        "moxie.ensemble._hist_gradient_boosting.losses": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/losses.mojo"
+        },
+        "moxie.ensemble._hist_gradient_boosting.predictor": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/predictor.mojo"
+        },
         "moxie.ensemble._hist_gradient_boosting.splitting": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/splitting.mojo"
         }

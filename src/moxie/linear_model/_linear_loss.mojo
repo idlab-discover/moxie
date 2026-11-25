@@ -3,8 +3,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Dense weighted linear-model objective and analytic gradient."""
 
-from std.math import abs, exp, log1p, max
+from std.math import abs, log1p, max
 from mojo_optimize import Objective
+from numax.core.libm import exp
 from numojo import NDArray, Shape, zeros
 
 

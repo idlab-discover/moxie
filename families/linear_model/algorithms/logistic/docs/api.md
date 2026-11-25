@@ -69,8 +69,9 @@ pointwise gradients for the two matrix products. Numax `softmax` and tensor
 `logsumexp` work on MAX tensor layouts and only cover the probability or
 reduction step. Numax's scalar `sigmoid` computes `exp(-score)`, which
 overflows for large negative scores before their probability underflows.
-The streamed objective uses Mojo `exp` and `log1p` with nonpositive exponents
-and accumulates the gradient directly.
+The streamed objective uses Numax scalar Float64 `exp` with nonpositive
+exponents and Mojo `log1p`. It accumulates the gradient directly. Probability
+inference uses Numax scalar Float64 `exp` and `log`.
 
 Select `solver="newton-cholesky"` to use analytic Newton steps with Armijo
 backtracking. This solver assembles the lower triangle of a reduced dense
@@ -224,6 +225,12 @@ and nearly singular Hessians, stationary and negative-curvature Newton-CG
 starts, and invalid inputs. The native contracts compare the streamed
 Hessian-vector product against central differences of the analytic gradient
 with signed and zero weights.
+
+The Float64 parity cases also call the pinned probability methods with
+identical decision scores or rounded probabilities to isolate inference
+from optimizer differences. Probability uses a relative tolerance of
+`2e-15` and an absolute tolerance of `2e-16` to allow rounding when
+subtracting a sigmoid from one. Log probability uses `2e-15` for both.
 
 The LIBLINEAR matrix covers primal L1, primal L2, dual L2, signed and class
 weights, loss of one class after weight filtering, scaled and disabled

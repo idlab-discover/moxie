@@ -1,4 +1,4 @@
-"""Native side of GPR parity. Usage: gpr_driver <cases-file>.
+"""Native side of GPR parity. Usage: gpr_driver <cases-file> [--roundtrip].
 
 Each case line: `name case_id dtype X y Xt` (matrices as `rows cols values...`).
 Estimator configurations are selected by case_id and must match CASES in
@@ -10,6 +10,8 @@ from std.sys import argv
 
 from moxie.gaussian_process import GenericGaussianProcessRegressor
 from moxie.gaussian_process._plumbing import Dense64
+from moxie.gaussian_process.serialization import GaussianProcessRegressorSchema
+from moxie.serialization import dumps, loads
 from moxie.gaussian_process.kernels import (
     Bounds,
     ConstantKernel,
@@ -92,15 +94,27 @@ def configure[dtype: DType](case_id: Int, n: Int) raises -> GenericGaussianProce
     raise Error("unknown case " + String(case_id))
 
 
-def run_case[dtype: DType](name: String, case_id: Int, X: Dense64, y: Dense64, Xt: Dense64) raises:
+def run_case[dtype: DType](
+    name: String, case_id: Int, X: Dense64, y: Dense64, Xt: Dense64, roundtrip: Bool
+) raises:
+    comptime Schema = GaussianProcessRegressorSchema[dtype]
     var Xn = convert[dtype](X)
     var yn = convert[dtype](y)
     var Xtn = convert[dtype](Xt)
     var gpr = configure[dtype](case_id, X.shape[0])
+    if roundtrip:
+        gpr = Schema.decode(loads(dumps(Schema.encode(gpr))))
     var prior = gpr.predict(Xtn, return_std=True)
     emit(name, "prior_mean", prior.mean)
     emit(name, "prior_std", prior.std.value())
+    if Xtn.shape[0] == 1 and case_id == 8:
+        var prior_with_cov = gpr.predict(Xtn, return_std=False, return_cov=True)
+        emit(name, "prior_mean_plain", gpr.predict(Xtn))
+        emit(name, "prior_mean_with_cov", prior_with_cov.mean)
+        emit(name, "prior_cov", prior_with_cov.covariance.value())
     _ = gpr.fit(Xn, yn)
+    if roundtrip:
+        gpr = Schema.decode(loads(dumps(Schema.encode(gpr))))
     emit(name, "theta", gpr.kernel_.theta())
     emit_scalar(name, "lml", gpr.log_marginal_likelihood_value_)
     emit(name, "alpha_", gpr.alpha_)
@@ -128,6 +142,7 @@ def run_case[dtype: DType](name: String, case_id: Int, X: Dense64, y: Dense64, X
 
 def main() raises:
     var args = argv()
+    var roundtrip = len(args) > 2 and String(args[2]) == "--roundtrip"
     var text = open(String(args[1]), "r").read()
     var tokens = List[String]()
     for token in text.split():
@@ -143,8 +158,8 @@ def main() raises:
         var Xt = parse(tokens, pos)
         try:
             if kind == "f32":
-                run_case[DType.float32](name, case_id, X, y, Xt)
+                run_case[DType.float32](name, case_id, X, y, Xt, roundtrip)
             else:
-                run_case[DType.float64](name, case_id, X, y, Xt)
+                run_case[DType.float64](name, case_id, X, y, Xt, roundtrip)
         except e:
             print("R|" + name + "|error||" + String(e))

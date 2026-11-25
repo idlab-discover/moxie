@@ -58,6 +58,7 @@ comptime _FLOAT_EPSILON: Float64 = 2.220446049250313e-16
 
 
 struct _Kind:
+    # Existing numeric tags are part of version 1 of the native kernel schema.
     comptime CONSTANT = 0
     comptime WHITE = 1
     comptime RBF = 2

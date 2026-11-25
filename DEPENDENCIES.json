@@ -362,6 +362,12 @@
         "moxie.gaussian_process._gpr": {
           "file": "src/moxie/gaussian_process/_gpr.mojo"
         },
+        "moxie.gaussian_process.serialization": {
+          "file": "src/moxie/gaussian_process/serialization.mojo"
+        },
+        "moxie.gaussian_process._search": {
+          "file": "src/moxie/gaussian_process/_search.mojo"
+        },
         "moxie.tree._base": {
           "file": "src/moxie/tree/_base.mojo"
         },
@@ -765,6 +771,7 @@
             "GaussianProcessRegressor": "moxie.gaussian_process._gpr",
             "GenericGaussianProcessRegressor": "moxie.gaussian_process._gpr",
             "GaussianProcessRegressorParams": "moxie.gaussian_process._gpr",
+            "GaussianProcessSearchAdapter": "moxie.gaussian_process._search",
             "LikelihoodResult": "moxie.gaussian_process._gpr",
             "LogMarginalLikelihood": "moxie.gaussian_process._gpr",
             "PredictionResult": "moxie.gaussian_process._plumbing",

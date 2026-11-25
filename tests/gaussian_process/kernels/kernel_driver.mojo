@@ -1,6 +1,6 @@
 """Native side of the sklearn kernel parity check (Python is fixture tooling only).
 
-Usage: kernel_driver <dataset-file>. Every catalog kernel is evaluated on every
+Usage: kernel_driver <dataset-file> [--roundtrip]. Every catalog kernel is evaluated on every
 dataset; results are printed as `R|kernel|dataset|key|shape|values` records.
 The catalog must match `KERNELS` in tests/parity.py entry for entry.
 """
@@ -26,6 +26,8 @@ from moxie.gaussian_process.kernels import (
     to_float64,
 )
 from moxie.gaussian_process._plumbing import Dense64
+from moxie.gaussian_process.serialization import KernelSchema
+from moxie.serialization import dumps, loads
 
 from std.math import inf
 
@@ -132,11 +134,15 @@ def narrow(X: Dense64) raises -> NDArray[DType.float32]:
     return out^
 
 
-def run_dataset(name: String, float32: Bool, X: Dense64, Y: Dense64) raises:
+def run_dataset(name: String, float32: Bool, X: Dense64, Y: Dense64, roundtrip: Bool) raises:
     var kernels = catalog()
     for i in range(len(kernels)):
         try:
-            report(i, kernels[i], name, float32, X, Y)
+            if roundtrip:
+                var restored = KernelSchema.decode(loads(dumps(KernelSchema.encode(kernels[i]))))
+                report(i, restored, name, float32, X, Y)
+            else:
+                report(i, kernels[i], name, float32, X, Y)
         except e:
             emit_text(i, name, "error", String(e))
 
@@ -179,6 +185,7 @@ def report(i: Int, k: Kernel, name: String, float32: Bool, X: Dense64, Y: Dense6
 
 def main() raises:
     var args = argv()
+    var roundtrip = len(args) > 2 and String(args[2]) == "--roundtrip"
     var text = open(String(args[1]), "r").read()
     var tokens = List[String]()
     for token in text.split():
@@ -190,4 +197,4 @@ def main() raises:
         pos += 2
         var X = parse_matrix(tokens, pos)
         var Y = parse_matrix(tokens, pos)
-        run_dataset(name, float32, X, Y)
+        run_dataset(name, float32, X, Y, roundtrip)

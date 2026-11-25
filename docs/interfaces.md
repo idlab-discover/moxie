@@ -214,8 +214,8 @@ remaining dense algorithms and sparse support are explicitly unfinished.
 query engine and spatial trees. Sparse graph APIs remain deferred.
 
 [Imputation](../families/impute/README.md) is owned by Moxie, including dense simple, integer,
-string and KNN imputers and numeric/string indicators. IterativeImputer remains
-deferred. The standalone checkout is not a build dependency.
+string and KNN imputers, numeric/string indicators, and dense deterministic
+IterativeImputer. The standalone checkout is not a build dependency.
 
 [Ensemble](../families/ensemble/README.md) is owned by Moxie, including the four
 dense RandomForest/ExtraTrees estimators and shared forest engine. Other ensemble

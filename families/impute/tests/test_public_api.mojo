@@ -1,8 +1,13 @@
 """The normal family namespace must resolve concrete, usable estimators."""
 import numojo as nm
-from std.testing import assert_equal, assert_false, assert_raises
+from std.testing import assert_equal, assert_false
 from moxie import clone
-from moxie.impute import SimpleImputer, MissingIndicator, KNNImputer, IterativeImputer
+from moxie.impute import (
+    SimpleImputer,
+    MissingIndicator,
+    KNNImputer,
+    IterativeImputer,
+)
 
 
 def main() raises:
@@ -23,6 +28,7 @@ def main() raises:
     assert_equal(mask.unsafe_get(1), False)
     var knn = KNNImputer()
     assert_equal(knn.fit_transform(X).unsafe_get(0), 4)
-    with assert_raises():
-        _ = IterativeImputer()
-    print("PASS: concrete public estimators and explicit deferred estimators")
+    var iterative = IterativeImputer(random_state=0)
+    assert_equal(iterative.fit_transform(X).unsafe_get(0), 4)
+    assert_equal(iterative.transform(X).unsafe_get(0), 4)
+    print("PASS: concrete public imputation estimators")

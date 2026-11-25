@@ -7,9 +7,9 @@ Import the public estimators from `moxie.impute` in Moxie's assembled
 Implemented contracts include dense floating SimpleImputer, integer and string
 specializations, numeric and string MissingIndicator, and dense KNNImputer.
 KNN uses the [integrated neighbors engine](../neighbors/README.md).
-IterativeImputer remains a declaration whose constructor raises
-`NotImplementedError`. Sparse and heterogeneous categorical behavior remains
-unsupported. See [the API](docs/api-surface.md) for exact limits and adaptations.
+IterativeImputer supports dense deterministic imputation and replay. Sparse
+and heterogeneous categorical inputs remain unsupported.
+See [the API](docs/api-surface.md) for exact limits and adaptations.
 
 From the Moxie root:
 
@@ -22,8 +22,8 @@ pixi run impute-independence
 ```
 
 The test command builds all family modules, examples, native estimator contracts
-and two isolated consumer namespaces. Parity compares floating, integer, string
-and KNN behavior with the pinned local scikit-learn source. The independence
+and two isolated consumer namespaces. Parity compares floating, integer, string,
+KNN and iterative behavior with the pinned local scikit-learn source. The independence
 command assembles the complete Moxie namespace and runs isolated public consumers.
 These checks do not establish full scikit-learn parity.
 
@@ -33,6 +33,7 @@ Generated binaries and raw oracle evidence remain ignored.
 
 - [Simple and indicator API](algorithms/simple/docs/api.md)
 - [KNN API](algorithms/knn/docs/api.md)
+- [Iterative API](algorithms/iterative/docs/api.md)
 - [Dense scope](docs/scope.md)
 - [Shared plumbing](docs/plumbing.md)
 - [Family contract](docs/family.md)

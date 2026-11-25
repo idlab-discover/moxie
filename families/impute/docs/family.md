@@ -1,7 +1,6 @@
 # impute family interfaces
 
 This integrated family implements the dense contracts in [the API guide](api-surface.md).
-IterativeImputer remains deferred.
 It uses scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 Read [the shared contract](interfaces.md) for typed parameter records,
 in-place fit, associated array types, and other Mojo-specific differences.

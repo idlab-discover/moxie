@@ -15,7 +15,7 @@ public at revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 | This family | `_base.Imputer`, `_plumbing` masks/layout/assembly and step ownership | current Moxie, numerics, assembly |
 | `algorithms/simple/` | `_simple.SimpleImputer`, `_indicator.MissingIndicator`; statistics, categorical representation, inverse transformation | impute.scaffold |
 | `algorithms/knn/` | `_knn.KNNImputer`; donor validity, distances/weight policy, aggregation | impute.scaffold, impute.simple, neighbors.query_engine |
-| Deferred iterative implementation | Rounds, bounds, posterior and real model sequence | impute.scaffold, impute.simple, linear_model.bayesian; foundation.random |
+| Iterative implementation | Rounds, bounds, posterior and real model sequence | impute.scaffold, impute.simple, linear_model.bayesian; foundation.random |
 
 The sklearn `_base.py` combines shared plumbing and two concrete estimators.
 Native children use `_simple` and `_indicator` to avoid two independent projects
@@ -109,14 +109,10 @@ Iterative uses `List[ImputationStep[Model]]` as its ordered per-round sequence.
 Each Model must implement the foundation SupervisedEstimator/Predictor contracts
 with input NDArray `(observed_rows,predictors)`, target/prediction `(rows,)`, and
 clone producing an unfitted configuration. Each step owns a distinct fitted model
-snapshot, not the same repeatedly mutated regressor. `ImputationStep` is an
-ownership record and deliberately does not impose probability or posterior
-methods on every model. The child constrains Model when fitting/predicting.
-Posterior mode separately requires mean/std prediction from the real regressor;
-nonposterior mode only requires predict. Transform replays the stored ordered
-sequence without fitting and preserves sample count. Copying a fitted step is
-not sklearn cloning. Random draws use `moxie._random.RandomState`; numerical
-sampling and all posterior branches belong to the iterative session.
+snapshot. `ImputationStep` holds a model with the fit and predict capabilities
+used in the deterministic implementation. Transform replays the stored ordered
+sequence and preserves sample count. Copying a fitted step preserves learned
+state. Random draws use `moxie._random.RandomState`.
 
 ## Native compatibility obligations
 
@@ -128,9 +124,9 @@ error_on_new. KNN supports uniform/distance/native-callable weights and
 nan_euclidean/native-callable metrics. Iterative supports real configurable
 regressors, posterior sampling, all five orders, bounds, feature subsampling,
 initial strategies, skip_complete, zero/max iterations and early stopping.
-The table below records the target contracts. The simple and KNN API guides
-document their implemented subsets; IterativeImputer remains deferred. The
-reference source remains authoritative for validation and numerical behavior.
+The table below records the target contracts. The algorithm API guides
+document the implemented subsets. The reference source remains authoritative
+for validation and numerical behavior.
 
 | Estimator | Constructor defaults | Learned state / methods |
 | --- | --- | --- |

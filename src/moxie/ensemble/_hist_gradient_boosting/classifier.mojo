@@ -8,7 +8,6 @@ from std.utils import Variant
 from numojo import NDArray, Shape, arange
 
 from moxie._labels import LabelIndex, StringTarget, encode_column
-from moxie._random import check_random_state
 from moxie.base import NumericClassifierClasses, WeightedSupervisedEstimator
 from moxie.metrics import accuracy_score
 from moxie.model_selection import SplitSize, StratifiedShuffleSplit
@@ -18,17 +17,19 @@ from .._sampling import check_sample_weight, class_weight_factors
 from .binning import _BinMapper
 from .common import (
     _EarlyStopping,
+    _FitRandomState,
     _Interactions,
     _ValidationSize,
     _Values,
     _check_settings,
+    _check_warm_start,
     _history,
     _interaction_groups,
+    _resume_history,
     _should_stop,
     _take_rows,
     _uses_early_stopping,
 )
-from .feature_sampling import _FeatureSampler
 from .grower import grow_tree
 from .losses import _ClassificationLoss
 from .predictor import _RawTree, make_raw_tree
@@ -77,6 +78,7 @@ struct _FittedClassifier(Copyable, Movable):
     var baseline: _Values
     var stages: List[List[_RawTree]]
     var n_features: Int
+    var random: _FitRandomState
 
 
 struct HistGradientBoostingClassifier[
@@ -345,11 +347,6 @@ struct HistGradientBoostingClassifier[
         )
         if params.loss != "log_loss":
             raise Error("ValueError: classifier loss must be log_loss")
-        if params.warm_start and self._model:
-            raise Error(
-                "NotImplementedError: histogram classification warm starts are"
-                " pending"
-            )
         Self._check_target(y, X.shape[0])
         var early = _uses_early_stopping(params.early_stopping, X.shape[0])
         if early and params.scoring.or_else("") != "loss":
@@ -441,11 +438,17 @@ struct HistGradientBoostingClassifier[
         var adjusted_weights = self._training_weights(index, sample_weight)
         ref weights = adjusted_weights if adjusted_weights else sample_weight
         var targets = index.inverse.astype[DType.float64]()
-        var seed: Int
-        var feature_seed: UInt32
-        with check_random_state(params.random_state) as rng:
-            seed = rng[].randint(4294967295)
-            feature_seed = UInt32(rng[].randint(4294967295))
+        var resume = params.warm_start and Bool(self._model)
+        var random: _FitRandomState
+        if resume:
+            ref prior = self._model.value()
+            _check_warm_start(
+                params.max_iter, len(prior.stages), X.shape[1], prior.n_features
+            )
+            self._check_warm_start_classes(classes)
+            random = prior.random.copy()
+        else:
+            random = _FitRandomState.start(params.random_state)
 
         if early and params.validation_fraction and not validation:
             ref size = params.validation_fraction.value()
@@ -453,7 +456,7 @@ struct HistGradientBoostingClassifier[
                 Int
             ]() else SplitSize(size[Float64])
             var splitter = StratifiedShuffleSplit(
-                n_splits=1, test_size=split_size, random_state=seed
+                n_splits=1, test_size=split_size, random_state=random.split_seed
             )
             var splits = splitter.split(
                 X.shape[0],
@@ -487,8 +490,8 @@ struct HistGradientBoostingClassifier[
                 validation,
                 loss^,
                 early,
-                seed,
-                feature_seed,
+                random^,
+                resume,
             )
         else:
             self._fit(
@@ -498,10 +501,28 @@ struct HistGradientBoostingClassifier[
                 validation,
                 loss^,
                 early,
-                seed,
-                feature_seed,
+                random^,
+                resume,
             )
         self.classes_ = classes^
+
+    def _check_warm_start_classes(self, classes: Self.Classes) raises:
+        var same: Bool
+        comptime if Self.string_labels:
+            ref fitted = rebind[List[String]](self.classes_)
+            ref current = rebind[List[String]](classes)
+            same = fitted == current
+        else:
+            ref fitted = rebind[NDArray[Self.label_dtype]](self.classes_)
+            ref current = rebind[NDArray[Self.label_dtype]](classes)
+            same = fitted.ndim == 1 and fitted.size == current.size
+            if same:
+                for i in range(fitted.size):
+                    if fitted.unsafe_get(i * fitted.strides[0]) != current.unsafe_get(i):
+                        same = False
+                        break
+        if not same:
+            raise Error("ValueError: warm start requires the fitted classes")
 
     @staticmethod
     def _baseline_rows(baseline: _Values, rows: Int) raises -> _Values:
@@ -526,11 +547,22 @@ struct HistGradientBoostingClassifier[
         validation: Optional[_Validation[Self.feature_dtype]],
         var loss: _ClassificationLoss,
         early: Bool,
-        seed: Int,
-        feature_seed: UInt32,
+        var random: _FitRandomState,
+        resume: Bool,
     ) raises:
         ref params = self._params
-        var baseline = loss.fit_intercept(y, weights)
+        var baseline: _Values
+        var stages = List[List[_RawTree]]()
+        var train_scores = List[Float64]()
+        var validation_scores = List[Float64]()
+        if resume:
+            ref prior = self._model.value()
+            baseline = prior.baseline.copy()
+            stages = prior.stages.copy()
+            train_scores = _resume_history(self.train_score_)
+            validation_scores = _resume_history(self.validation_score_)
+        else:
+            baseline = loss.fit_intercept(y, weights)
         var n_features = X.shape[1]
         var columns = loss.raw_columns()
         var rows = y.size
@@ -543,35 +575,32 @@ struct HistGradientBoostingClassifier[
             params.interaction_cst, n_features
         )
         var n_bins = params.max_bins + 1
-        var mapper = _BinMapper(n_bins=n_bins, random_state=seed)
+        var mapper = _BinMapper(n_bins=n_bins, random_state=random.split_seed)
         _ = mapper.fit(X, sample_weight=weights)
         var binned = mapper.transform(X)
-        var raw = Self._baseline_rows(baseline, rows)
+        var raw = Self._raw_predictions(X, baseline, stages)
         var raw_val = _Values(Shape(0))
         var binned_val: Optional[NDArray[DType.uint8]] = None
-        var train_scores = List[Float64]()
-        var validation_scores = List[Float64]()
-        if early:
+        if early and not resume:
             train_scores.append(-loss.mean_loss(y, raw, weights))
-            if validation:
-                ref val_data = validation.value()
-                binned_val = mapper.transform(val_data.X)
-                raw_val = Self._baseline_rows(baseline, val_data.y.size)
+        if early and validation:
+            ref val_data = validation.value()
+            binned_val = mapper.transform(val_data.X)
+            raw_val = Self._raw_predictions(val_data.X, baseline, stages)
+            if not resume:
                 validation_scores.append(
                     -loss.mean_loss(val_data.y, raw_val, val_data.weights)
                 )
 
-        var feature_sampler = _FeatureSampler(feature_seed)
         var gradients = List[Float32]()
         var hessians = List[Float32]()
-        var stages = List[List[_RawTree]]()
         var options = _SplitOptions(
             min_samples_leaf=params.min_samples_leaf,
             l2_regularization=params.l2_regularization,
         )
         if params.verbose > 0:
             print("Fitting gradient boosted rounds:")
-        for iteration in range(params.max_iter):
+        for iteration in range(len(stages), params.max_iter):
             loss.gradient_hessian(y, raw, weights, gradients, hessians)
             var stage = List[_RawTree](capacity=columns)
             for k in range(columns):
@@ -585,7 +614,7 @@ struct HistGradientBoostingClassifier[
                     mapper.n_bins_non_missing_,
                     mapper.is_categorical_,
                     monotonic,
-                    feature_sampler=feature_sampler,
+                    feature_sampler=random.feature_sampler,
                     feature_fraction_per_split=params.max_features,
                     interaction_groups=interactions,
                     max_leaf_nodes=params.max_leaf_nodes,
@@ -627,7 +656,9 @@ struct HistGradientBoostingClassifier[
         self.do_early_stopping_ = early
         self.train_score_ = train_history^
         self.validation_score_ = validation_history^
-        self._model = _FittedClassifier(loss^, baseline^, stages^, n_features)
+        self._model = _FittedClassifier(
+            loss^, baseline^, stages^, n_features, random^
+        )
 
     def _check_predict(self, X: Self.Input) raises:
         if not self._model:
@@ -647,13 +678,19 @@ struct HistGradientBoostingClassifier[
         for k in range(len(stage)):
             Self._add_column(raw, k, stage[k].predict(X))
 
+    @staticmethod
+    def _raw_predictions(
+        X: Self.Input, baseline: _Values, stages: List[List[_RawTree]]
+    ) raises -> _Values:
+        var raw = Self._baseline_rows(baseline, X.shape[0])
+        for stage in stages:
+            Self._apply_stage(raw, stage, X)
+        return raw^
+
     def _raw_predict(self, X: Self.Input) raises -> _Values:
         self._check_predict(X)
         ref model = self._model.value()
-        var raw = Self._baseline_rows(model.baseline, X.shape[0])
-        for stage in model.stages:
-            Self._apply_stage(raw, stage, X)
-        return raw^
+        return Self._raw_predictions(X, model.baseline, model.stages)
 
     @staticmethod
     def _winning_class(raw: _Values, row: Int, columns: Int) -> Int:

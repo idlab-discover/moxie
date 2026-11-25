@@ -33,7 +33,7 @@ array via `^` or a view via `.view()`. Pass optional union-valued settings as
 `Variant[String, List[List[Int]]]` for an interaction rule. Explicit validation
 follows the pinned estimator's 10,000-row rule when `early_stopping="auto"`.
 A score history starts with the intercept-only score and adds one score per
-fitted stage. Disabled histories are empty.
+fitted stage. A fresh fit with early stopping disabled records empty histories.
 
 `get_params()` returns a typed copy. Edit the record and pass it to
 `set_params()` before refitting. Parameter updates leave fitted predictions
@@ -43,10 +43,19 @@ unfitted estimator. The current model survives a failed fit.
 describe the fitted state after fit. `is_categorical_` is `None` for the
 supported numerical inputs. Verbose fit emits native progress lines.
 
-Categorical preprocessing and feature-name metadata, warm-start continuation,
-and other early-stopping scorers remain open. The random-state argument accepts
+Categorical preprocessing, feature-name metadata, and additional
+early-stopping scorers remain open. The random-state argument accepts
 an integer seed or `None`. Python-style scorer objects and iterator-based stages
 have no native API in this implementation.
+
+Set `warm_start=True`, increase `max_iter` through the parameter record, and
+refit on the same data to continue boosting. The first fit's baseline, trees,
+holdout seed, feature-sampling state, and score histories carry forward.
+New tree settings such as `max_depth` apply to the added stages. Continuation
+uses the original random stream even if `random_state` changes. An equal
+`max_iter` adds zero stages. A smaller value or a different feature count
+raises `ValueError` and preserves the current fitted model.
+Set `warm_start=False` to fit a fresh model with the current parameters.
 
 ## Validation
 
@@ -74,3 +83,8 @@ the entire input before each gather, including already-contiguous inputs.
 The row gather writes directly to the result while honoring source strides
 and offset. Raw prediction and feature binning use ordered tree traversal
 and do not require a tensor reduction.
+
+Continuation replays retained raw-tree predictions to initialize training and
+validation margins. The tree snapshots retain their fitted thresholds, and the
+fit keeps one accumulated raw prediction array per split. Continuation copies
+the retained trees while fitting so a failed fit can preserve the previous model.

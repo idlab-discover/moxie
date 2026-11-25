@@ -27,7 +27,8 @@ def _run_case[origin: ImmOrigin](fields: List[StringSpan[origin]]) raises:
     var constraints = atol(String(fields[7]))
     var sampled = atol(String(fields[8])) != 0
     var seed = atol(String(fields[9]))
-    var offset = 10
+    var initial = atol(String(fields[10]))
+    var offset = 11
     var X = _Values(Shape(rows, cols))
     var query = _Values(Shape(queries, cols))
     var y = _Values(Shape(rows))
@@ -74,23 +75,30 @@ def _run_case[origin: ImmOrigin](fields: List[StringSpan[origin]]) raises:
         if classes > 1:
             factors[1] = 0.5
         params.class_weight = factors^
+    if initial > 0:
+        params.warm_start = True
+        params.max_iter = initial
+        params.max_depth = 2
     _ = model.set_params(params)
 
+    var y_val = _Values(Shape(queries))
+    var w_val = _Values(Shape(queries))
     if mode == 3:
-        var y_val = _Values(Shape(queries))
-        var w_val = _Values(Shape(queries))
         read_values(fields, offset, y_val)
         read_values(fields, offset, w_val)
-        _ = model.fit(
-            X,
-            y,
-            weights,
-            X_val=query.view(),
-            y_val=y_val^,
-            sample_weight_val=w_val^,
-        )
-    else:
-        _ = model.fit(X, y, weights)
+    for pass_index in range(2 if initial > 0 else 1):
+        if pass_index == 1:
+            params.max_iter = 9
+            params.max_depth = 3
+            params.random_state = seed + 1
+            _ = model.set_params(params)
+        if mode == 3:
+            _ = model.fit(
+                X, y, weights, X_val=query.view(), y_val=y_val.view(),
+                sample_weight_val=w_val.view(),
+            )
+        else:
+            _ = model.fit(X, y, weights)
 
     print(
         model.n_iter_,

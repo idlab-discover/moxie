@@ -124,8 +124,8 @@ def add_case(estimator, name, X, y, T, dtype, labels='int', expect_extra='', **p
     lines += [f'X {enc(X)}', f'y {enc_labels(y)}', f'T {enc(T)}']
     model = cls(**kwargs)
     try:
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
+        with warnings.catch_warnings(record=True) as fit_warnings:
+            warnings.simplefilter('always')
             model.fit(X, y)
     except Exception as exc:  # the reference rejected this configuration
         kind = type(exc).__name__
@@ -133,6 +133,10 @@ def add_case(estimator, name, X, y, T, dtype, labels='int', expect_extra='', **p
         lines.append(f'error {kind}{expect_extra}')
         CASES.append('\n'.join(lines) + '\nend')
         return
+    if estimator == 'lda':
+        lines.append(f'fit_warning_count {len(fit_warnings)}')
+        for i, warning in enumerate(fit_warnings):
+            lines.append(f'fit_warning_{i} {warning.category.__name__}: {warning.message}')
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         lines.append(f'classes {enc_labels(model.classes_)}')
@@ -314,6 +318,7 @@ def main():
         for solver in ['svd', 'lsqr', 'eigen']:
             add_case('lda', 'priors', X6, y6, X6, dtype, solver=solver, priors=[0.2, 0.8])
             add_case('lda', 'priors-renorm', X6, y6, X6, dtype, solver=solver, priors=[0.5, 0.6])
+            add_case('lda', 'priors-within-tolerance', X6, y6, X6, dtype, solver=solver, priors=[0.5, 0.500008])
             add_case('lda', 'priors-negative', X6, y6, X6, dtype, solver=solver, priors=[0.5, -0.5])
             add_case('lda', 'default-cov', X6, y6, X6, dtype, solver=solver)
             add_case('lda', 'n-samples-eq-classes', [[0.5, 0.6], [0.6, 0.5]], [0, 1], [[0.5, 0.6]], dtype, solver=solver)

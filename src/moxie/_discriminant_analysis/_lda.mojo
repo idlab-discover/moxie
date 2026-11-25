@@ -7,6 +7,7 @@ from moxie.base import NumericClassifierClasses
 from moxie.utils.validation import FittedState, check_is_fitted
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._discriminant_analysis_contracts import LinearDiscriminantTransformer
+from moxie.warnings import FitWarning
 from ._labels import ClassLabel, sorted_unique, encode_labels, class_counts
 from ._work import (
     Work,
@@ -44,6 +45,7 @@ from ._prediction import (
 
 comptime ESTIMATOR = "LinearDiscriminantAnalysis"
 comptime EPS64: Float64 = 2.220446049250313e-16
+comptime PRIOR_RENORMALIZATION_MESSAGE = "The priors do not sum to 1. Renormalizing"
 
 
 @fieldwise_init
@@ -73,13 +75,10 @@ struct _LinearSolution(Movable):
 
 
 def resolve_priors(
-    priors: Optional[List[Float64]], counts: List[Int], n_samples: Int, estimator: String
+    priors: Optional[List[Float64]], counts: List[Int], n_samples: Int,
+    mut warnings: List[FitWarning],
 ) raises -> Work:
-    """Class priors: sample proportions, or validated user priors renormalized to sum 1.
-
-    sklearn warns (UserWarning) before renormalizing priors whose sum differs from 1
-    by more than 1e-5; Mojo has no warnings, so renormalization is silent.
-    """
+    """Resolve class priors and record any renormalization."""
     var k = len(counts)
     var out = vector(k)
     if not priors:
@@ -89,7 +88,7 @@ def resolve_priors(
     ref given = priors.value()
     if len(given) != k:
         raise Error(
-            String("ValueError: ", estimator, " priors has ", len(given), " entries but y has ")
+            String("ValueError: ", ESTIMATOR, " priors has ", len(given), " entries but y has ")
             + String(k, " classes")
         )
     var total: Float64 = 0
@@ -100,6 +99,7 @@ def resolve_priors(
         if given[c] < 0:
             raise Error("ValueError: priors must be non-negative")
     if abs(total - 1.0) > 1e-5:
+        warnings.append(FitWarning("UserWarning", PRIOR_RENORMALIZATION_MESSAGE))
         for c in range(k):
             out.unsafe_set(c, out.unsafe_get(c) / total)
     return out^
@@ -387,6 +387,7 @@ struct LinearDiscriminantAnalysis[
     var xbar_: Optional[NDArray[Self.dtype]]
     var classes_: List[Self.L]
     var n_features_in_: Int
+    var fit_warnings: List[FitWarning]
     var _max_components: Int
     var _fitted_solver: String
     var _state: FittedState
@@ -419,6 +420,7 @@ struct LinearDiscriminantAnalysis[
         self.xbar_ = None
         self.classes_ = List[Self.L]()
         self.n_features_in_ = 0
+        self.fit_warnings = []
         self._max_components = 0
         self._fitted_solver = ""
         self._state = FittedState()
@@ -563,7 +565,8 @@ struct LinearDiscriminantAnalysis[
         var k = len(classes)
         if n == k:
             raise Error("ValueError: The number of samples must be more than the number of classes.")
-        var priors = resolve_priors(self.priors, counts, n, ESTIMATOR)
+        var warnings = List[FitWarning]()
+        var priors = resolve_priors(self.priors, counts, n, warnings)
         var max_components = min(k - 1, p)
         if self.n_components:
             if self.n_components.value() > max_components:
@@ -613,6 +616,7 @@ struct LinearDiscriminantAnalysis[
         self._max_components = max_components
         self._fitted_solver = self.solver
         self._state.record_fit(n, p, n_targets=len(y))
+        self.fit_warnings = warnings^
         return self
 
     # ----- inference -----------------------------------------------------

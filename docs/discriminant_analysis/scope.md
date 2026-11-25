@@ -13,12 +13,13 @@
   all prediction/decision/score methods.
 - Input: dense `numojo.NDArray[DType.float32 | DType.float64]` of shape (n, p), any strides.
   Labels: any `ClassLabel` type (tested with `Int` and `String`).
-- Tested in parity (638 cases, pinned sklearn source): toy data from the sklearn test
+- Tested in parity (644 cases, pinned sklearn source): toy data from the sklearn test
   suite, 1-D data, 2/3/4 classes, string labels, Gaussian blobs (seeds 0-2), features
   scaled by 1..1e4, wide data (p > n), duplicated collinear features, saturated binary
   probabilities, multiclass QDA probabilities on a grid extending beyond the training data
-  for both solvers, every shrinkage/solver combination, covariance estimators, priors,
-  n_components, tol and all fit-time error branches, in Float64 and Float32.
+  for both solvers, every shrinkage/solver combination, covariance estimators,
+  priors, LDA prior-renormalization diagnostics, `n_components`, `tol` and all
+  fit-time error branches, in Float64 and Float32.
 
 ## 2. Deferred exports/branches
 

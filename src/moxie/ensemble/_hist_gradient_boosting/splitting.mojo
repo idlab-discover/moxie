@@ -46,6 +46,18 @@ struct _SplitOptions(ImplicitlyCopyable, Movable):
         self.min_samples_leaf = min_samples_leaf
         self.min_gain_to_split = min_gain_to_split
 
+    def validate(self) raises:
+        if (
+            self.min_samples_leaf < 1
+            or not isfinite(self.l2_regularization)
+            or self.l2_regularization < 0
+            or not isfinite(self.min_hessian_to_split)
+            or self.min_hessian_to_split < 0
+            or not isfinite(self.min_gain_to_split)
+            or self.min_gain_to_split < 0
+        ):
+            raise Error("ValueError: invalid split options or value bounds")
+
 
 @fieldwise_init
 struct _Split(Copyable, Movable):
@@ -262,18 +274,8 @@ def find_node_split[
         or len(monotonic_cst) != n_features
     ):
         raise Error("ValueError: split metadata must match histogram features")
-    if (
-        options.min_samples_leaf < 1
-        or not isfinite(options.l2_regularization)
-        or options.l2_regularization < 0
-        or not isfinite(options.min_hessian_to_split)
-        or options.min_hessian_to_split < 0
-        or not isfinite(options.min_gain_to_split)
-        or options.min_gain_to_split < 0
-        or isnan(bounds.lower)
-        or isnan(bounds.upper)
-        or bounds.lower > bounds.upper
-    ):
+    options.validate()
+    if isnan(bounds.lower) or isnan(bounds.upper) or bounds.lower > bounds.upper:
         raise Error("ValueError: invalid split options or value bounds")
 
     var missing_bin = histograms._n_bins - 1

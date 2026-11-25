@@ -10,8 +10,9 @@ forest/sampling engine. Other estimator declarations raise explicitly.
 See [forests](docs/forests.md), [scope](docs/scope.md), and
 [API status](docs/api-surface.md) for supported inputs and limitations. The private
 [histogram bin mapper](docs/hgb-binning.md),
-[node histograms](docs/hgb-histograms.md), and
-[splitter](docs/hgb-splitting.md) have focused contract and parity checks.
+[node histograms](docs/hgb-histograms.md),
+[splitter](docs/hgb-splitting.md), and
+[tree grower](docs/hgb-grower.md) have focused contract and parity checks.
 
 Run from the Moxie root, using its locked toolchain:
 

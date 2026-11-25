@@ -58,6 +58,25 @@ struct RandomState(Copyable, Movable):
         self._has_gauss = False
         self._gauss = 0
 
+    def __init__(
+        out self, *, var state_words: List[UInt32], position: Int,
+        has_gauss: Bool, cached_gauss: Float64,
+    ) raises:
+        """Restore an independent native MT19937 snapshot."""
+        if len(state_words) != 624 or position < 0 or position > 624:
+            raise Error("ValueError: invalid MT19937 state size or position")
+        if not isfinite(cached_gauss) or (not has_gauss and cached_gauss != 0):
+            raise Error("ValueError: invalid MT19937 cached normal")
+        var nonzero = UInt32(0)
+        for word in state_words:
+            nonzero |= word
+        if nonzero == 0:
+            raise Error("ValueError: MT19937 state must contain a nonzero word")
+        self._key = state_words^
+        self._pos = position
+        self._has_gauss = has_gauss
+        self._gauss = cached_gauss
+
     def next_uint32(mut self) -> UInt32:
         if self._pos == 624:
             for i in range(624):

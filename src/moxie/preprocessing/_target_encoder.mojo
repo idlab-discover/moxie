@@ -30,7 +30,9 @@ from moxie._categorical import CategoricalColumn
 from moxie._random import RandomState, check_random_state
 from moxie.base import FitTransformer
 from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
-from moxie.model_selection._split import GroupKFold, KFold, SplitLabels, StratifiedGroupKFold, StratifiedKFold
+from moxie.model_selection._split import (
+    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, SplitLabels, StratifiedGroupKFold, StratifiedKFold,
+)
 from moxie.preprocessing._base import TargetPreprocessor
 from moxie.preprocessing._common import (
     matrix, vector, check_fitted, check_set_output, check_names_length, feature_names_in,
@@ -354,14 +356,16 @@ struct TargetEncoderSplits(Copyable, Sized):
 
 
 comptime TargetEncoderCV = Variant[
-    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), GroupKFold, StratifiedGroupKFold
+    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), GroupKFold, StratifiedGroupKFold,
+    LeaveOneOut, LeaveOneGroupOut,
 ]
 comptime _CVUpdate = Variant[
-    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), NoneType, GroupKFold, StratifiedGroupKFold
+    Int, KFold, StratifiedKFold, TargetEncoderSplits, type_of(None), NoneType, GroupKFold, StratifiedGroupKFold,
+    LeaveOneOut, LeaveOneGroupOut,
 ]
 
 
-def _test_fold_assignments(var cursor: KFold.Splits, n: Int) raises -> List[Int]:
+def _test_fold_assignments[C: SplitCursor & Deinitable](var cursor: C, n: Int) raises -> List[Int]:
     # These splitters yield ascending complementary training rows.
     var assignments = List[Int](length=n, fill=-1)
     var fold = 0
@@ -488,6 +492,10 @@ struct TargetEncoder[
             self.cv = TargetEncoderCV(cv[GroupKFold].copy())
         elif cv.isa[StratifiedGroupKFold]():
             self.cv = TargetEncoderCV(cv[StratifiedGroupKFold].copy())
+        elif cv.isa[LeaveOneOut]():
+            self.cv = TargetEncoderCV(cv[LeaveOneOut].copy())
+        elif cv.isa[LeaveOneGroupOut]():
+            self.cv = TargetEncoderCV(cv[LeaveOneGroupOut].copy())
         if shuffle:
             self.shuffle = shuffle.value()
         if random_state:
@@ -653,6 +661,13 @@ struct TargetEncoder[
         var fold_variances = List[List[Float64]]()
         var train = List[Int](capacity=n)
         var n_splits = self._n_splits()
+        if self.cv.isa[LeaveOneOut]():
+            n_splits = n
+        elif self.cv.isa[LeaveOneGroupOut]():
+            # Each group contributes one nonempty fold.
+            n_splits = 0
+            for fold in folds:
+                n_splits = max(n_splits, fold + 1)
         for f in range(n_splits):
             self._training_rows(folds, f, train)
             var mean_row = List[Float64]()
@@ -694,9 +709,11 @@ struct TargetEncoder[
         return encoder.fit_transform(y)
 
     def _folds(self, y: Self.Y.Labels, n: Int, var groups: Optional[IndexArray]) raises -> List[Int]:
-        if self.cv.isa[GroupKFold]() or self.cv.isa[StratifiedGroupKFold]():
+        if self.cv.isa[GroupKFold]() or self.cv.isa[StratifiedGroupKFold]() or self.cv.isa[LeaveOneGroupOut]():
             if not groups:
                 raise Error("ValueError: groups are required for grouped TargetEncoder cross-fitting")
+            if self.cv.isa[LeaveOneGroupOut]():
+                return _test_fold_assignments(self.cv[LeaveOneGroupOut].split(n, groups=groups), n)
             if self.cv.isa[GroupKFold]():
                 ref splitter = self.cv[GroupKFold]
                 var seed = splitter.random_state if splitter.shuffle else Optional[Int](0)
@@ -708,7 +725,9 @@ struct TargetEncoder[
             with check_random_state(seed) as rng:
                 return _test_fold_assignments(splitter.split(n, rng[], codes^, groups^), n)
         if groups:
-            raise Error("ValueError: groups require GroupKFold or StratifiedGroupKFold for TargetEncoder")
+            raise Error("ValueError: groups require GroupKFold, StratifiedGroupKFold, or LeaveOneGroupOut for TargetEncoder")
+        if self.cv.isa[LeaveOneOut]():
+            return _test_fold_assignments(self.cv[LeaveOneOut].split(n), n)
         if self.cv.isa[TargetEncoderSplits]():
             return self.cv[TargetEncoderSplits]._test_folds(n)
         if self.cv.isa[KFold]():

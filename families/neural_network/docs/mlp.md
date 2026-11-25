@@ -60,13 +60,31 @@ before rounding. SGD and Adam coefficients retain the input dtype.
   `intercepts_()`. Both default to the feature dtype. To read an L-BFGS model
   with Float32 features, use `coefs_[DType.float64]()` and
   `intercepts_[DType.float64]()`. `parameter_dtype()` reports the fitted dtype.
-  L-BFGS has no loss history or best stochastic loss. In that case the getters
-  return `None`.
+  A model trained only with L-BFGS returns `None` for both loss-history getters.
 - Each successful fit replaces `fit_warnings` with native records, including
   convergence warnings and stochastic batch-size clipping. A failed fit leaves
   the previous fitted state and warnings available. A one-column label matrix
   is accepted without Python's conversion warning. Stochastic verbose output
   prints the iteration and loss using Mojo's numeric formatter.
+
+## Warm-start refitting
+
+With `warm_start=True`, `fit` starts from the fitted coefficients and
+intercepts. It requires the same feature width, hidden-layer sizes, output
+shape and output activation. The classifier also requires the same class
+domain. Set `warm_start=False` to start a fresh fit when changing those
+boundaries.
+
+Each stochastic warm fit creates a fresh optimizer with the current settings,
+keeps the loss history, best loss and stopping counter, and continues `t_()`.
+`n_iter_()` reports iterations from the current call. Integer seeds are
+reapplied per call, and an explicit RNG skips initialization draws on warm
+fits. A warm L-BFGS refit from L-BFGS state starts from the retained
+Float64 parameters and evaluates in Float64. Float32 training arrays are
+converted once for that solve.
+When switching from L-BFGS to SGD or Adam, coefficients convert to the feature
+dtype. Moxie initializes stochastic history if this is the first stochastic
+fit, where pinned scikit-learn requires history from a prior stochastic fit.
 
 ## Incremental training
 
@@ -103,6 +121,6 @@ incremental contract limits every successful call to one stochastic epoch.
 Continuing a fit requires the same input width, hidden topology, output shape
 and output activation. Start a fresh ordinary fit to change these boundaries.
 
-Warm-start refitting, validation-set early stopping, multilabel classification
-and named partial parameter updates remain open. Ordinary supervised, weighted
+Validation-set early stopping, multilabel classification and named partial
+parameter updates remain open. Ordinary supervised, weighted
 and probability traits remain available for typed pipelines and dense CV.

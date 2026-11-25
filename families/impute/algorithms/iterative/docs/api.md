@@ -61,6 +61,20 @@ named updates and clears learned state. Use the record to clear nullable
 settings, or supply an outer `Optional` containing the new optional value.
 Failed fits preserve the previous fitted estimator.
 
+A dense k-nearest-neighbors regressor can serve as the deterministic
+regressor. Choose `n_neighbors` no greater than the number of observed
+training rows for any feature the imputer fits.
+
+```mojo
+from moxie.impute import IterativeImputer
+from moxie.neighbors import KNeighborsRegressor
+
+comptime Regressor = KNeighborsRegressor[DType.float64]
+var imputer = IterativeImputer[DType.float64, Regressor](
+    Regressor(n_neighbors=10), random_state=0, max_iter=40, tol=1e-2,
+)
+```
+
 Set `sample_posterior=True` to draw from the predictive Gaussian truncated to
 the fitted feature bounds. Each missing row with a positive deviation and a
 mean inside the bounds consumes one uniform draw. A nonpositive deviation
@@ -120,3 +134,20 @@ names, signed strides, bounds, unfitted errors, state replacement, and
 independent clones and copies. The focused integration probe uses
 LinearRegression as both an iterative regressor and a downstream pipeline
 estimator.
+
+The k-NN gallery configuration has a separate integration check. It compares
+Float32 and Float64 training fills, held-out replay and fitted sequence
+metadata with the pinned scikit-learn imputer and regressor on a small
+deterministic fixture. The fixture also exercises a column that is complete at
+fit and has missing cells at transform. Observed values and sequence metadata
+match exactly. Fill tolerances account for reduction order in the neighbor
+means and are `3e-6` for Float32 and `2e-12` for Float64. The native check
+also verifies that clones start unfitted and that a fitted copy preserves its
+replay after the original is refit.
+
+```sh
+mkdir -p builds/pr6-iterative-knn
+python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
+mojo build -O3 --fp-mode=contract=off -I builds/deps families/impute/algorithms/iterative/tests/integration/knn_regressor.mojo -o builds/pr6-iterative-knn/knn_regressor
+python families/impute/algorithms/iterative/tests/knn_regressor_parity.py builds/pr6-iterative-knn/knn_regressor
+```

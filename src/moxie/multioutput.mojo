@@ -168,6 +168,37 @@ def _dense[T: Movable, dtype: DType](var values: T) raises -> NDArray[dtype]:
         comptime assert False, "component probabilities and decisions must be Float32 or Float64 NDArrays"
 
 
+def _probability_matrix[T: Movable, dtype: DType](var values: T) raises -> NDArray[dtype]:
+    """Unwrap the sole output from components with a list-valued probability API."""
+    comptime if T == List[NDArray[DType.float64]]:
+        var outputs = rebind_var[List[NDArray[DType.float64]]](values^)
+        if len(outputs) != 1:
+            raise Error("ValueError: a single-target component must return one probability matrix")
+        return _dense[NDArray[DType.float64], dtype](outputs.pop())
+    else:
+        return _dense[T, dtype](values^)
+
+
+def _fit_classifier_component[E: WeightedSupervisedEstimator, dtype: DType, label: DType](
+    mut model: E, X: NDArray[dtype], target: NDArray[label], weights: NDArray[DType.float64],
+) raises:
+    comptime if E.SampleWeight == List[Float64]:
+        if weights.ndim != 1 or weights.shape[0] != X.shape[0]:
+            raise Error("ValueError: sample weights must be a vector with one value per sample")
+        var native_weights = List[Float64](capacity=weights.size)
+        for i in range(weights.size):
+            native_weights.append(weights.item(i))
+        _ = model.fit(rebind[E.Input](X), rebind[E.Target](target), sample_weight=rebind[E.SampleWeight](native_weights))
+    elif E.SampleWeight == NDArray[DType.float32]:
+        var narrow = weights.astype[DType.float32]()
+        _ = model.fit(rebind[E.Input](X), rebind[E.Target](target), sample_weight=rebind[E.SampleWeight](narrow))
+    else:
+        comptime assert E.SampleWeight == NDArray[DType.float64], (
+            "classifier component sample weights must be Float32 or Float64 NDArrays or List[Float64]"
+        )
+        _ = model.fit(rebind[E.Input](X), rebind[E.Target](target), sample_weight=rebind[E.SampleWeight](weights))
+
+
 def _predict_response[E: Predictor, dtype: DType, label: DType, out: DType](
     estimator: E, X: NDArray[dtype],
 ) raises -> NDArray[out]:
@@ -189,13 +220,13 @@ def _response[E: Predictor, dtype: DType, label: DType, out: DType = dtype](esti
             return _dense[E.Decision, out](estimator.decision_function(rebind[E.Input](X)))
     if method == "predict_proba":
         comptime if conforms_to(E, ProbabilityPredictor):
-            var probability = _dense[E.Probabilities, out](estimator.predict_proba(rebind[E.Input](X)))
+            var probability = _probability_matrix[E.Probabilities, out](estimator.predict_proba(rebind[E.Input](X)))
             if probability.ndim != 2 or probability.shape[1] != 2:
                 raise Error("ValueError: chain response requires two probability columns")
             return target_column(probability, 1)
     if method == "predict_log_proba":
         comptime if conforms_to(E, LogProbabilityPredictor):
-            var probability = _dense[E.Probabilities, out](estimator.predict_log_proba(rebind[E.Input](X)))
+            var probability = _probability_matrix[E.Probabilities, out](estimator.predict_log_proba(rebind[E.Input](X)))
             if probability.ndim != 2 or probability.shape[1] != 2:
                 raise Error("ValueError: chain response requires two log probability columns")
             return target_column(probability, 1)
@@ -231,7 +262,7 @@ def _aligned_chain_response[T: Movable, out: DType](
     var values: T, classes: IndexArray, n_classes: Int, method: String,
 ) raises -> NDArray[out]:
     comptime raw_dtype = DType.float32 if T == NDArray[DType.float32] else DType.float64
-    var raw = rebind_var[NDArray[raw_dtype]](values^)
+    var raw = _probability_matrix[T, raw_dtype](values^)
     var aligned = _align_class_response(classes, raw, n_classes, method)
     if aligned.ndim == 2:
         aligned = target_column(aligned, 1)
@@ -245,13 +276,21 @@ def _chain_fold_response[E: Predictor, dtype: DType, label: DType](
         return _predict_response[E, dtype, label, dtype](model, X)
     if method == "predict_proba":
         comptime if conforms_to(E, ProbabilityPredictor):
-            comptime if E.Probabilities == NDArray[DType.float32] or E.Probabilities == NDArray[DType.float64]:
+            comptime if (
+                E.Probabilities == NDArray[DType.float32]
+                or E.Probabilities == NDArray[DType.float64]
+                or E.Probabilities == List[NDArray[DType.float64]]
+            ):
                 return _aligned_chain_response[E.Probabilities, dtype](
                     model.predict_proba(rebind[E.Input](X)), fold_classes, n_classes, method,
                 )
     if method == "predict_log_proba":
         comptime if conforms_to(E, LogProbabilityPredictor):
-            comptime if E.Probabilities == NDArray[DType.float32] or E.Probabilities == NDArray[DType.float64]:
+            comptime if (
+                E.Probabilities == NDArray[DType.float32]
+                or E.Probabilities == NDArray[DType.float64]
+                or E.Probabilities == List[NDArray[DType.float64]]
+            ):
                 return _aligned_chain_response[E.Probabilities, dtype](
                     model.predict_log_proba(rebind[E.Input](X)), fold_classes, n_classes, method,
                 )
@@ -652,12 +691,7 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
             ref input = X
             if sample_weight:
                 comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
-                    comptime if Self.E.SampleWeight == NDArray[DType.float32]:
-                        var narrow = sample_weight.value().astype[DType.float32]()
-                        _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target), sample_weight=rebind[Self.E.SampleWeight](narrow))
-                    else:
-                        comptime assert Self.E.SampleWeight == Self.SampleWeight, "component sample weights must be Float32 or Float64 NDArrays"
-                        _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target), sample_weight=rebind[Self.E.SampleWeight](sample_weight.value()))
+                    _fit_classifier_component(models[j], input, target, sample_weight.value())
                 else:
                     raise Error("ValueError: component does not support sample weights")
             else:
@@ -691,7 +725,7 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         var result = List[NDArray[DType.float64]]()
         for j in range(len(self.estimators_)):
             var probability = self.estimators_[j].predict_proba(rebind[Self.E.Input](X))
-            var dense = _dense[Self.E.Probabilities, DType.float64](probability^)
+            var dense = _probability_matrix[Self.E.Probabilities, DType.float64](probability^)
             if dense.ndim != 2 or dense.shape[0] != X.shape[0] or dense.shape[1] != self.classes_[j].shape[0]:
                 raise Error("ValueError: probability shape must match samples and classes")
             result.append(dense^)
@@ -1084,12 +1118,7 @@ struct ClassifierChain[
             var started = perf_counter_ns()
             if sample_weight:
                 comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
-                    comptime if Self.E.SampleWeight == NDArray[DType.float32]:
-                        var narrow = sample_weight.value().astype[DType.float32]()
-                        _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target), sample_weight=rebind[Self.E.SampleWeight](narrow))
-                    else:
-                        comptime assert Self.E.SampleWeight == Self.SampleWeight, "component sample weights must be Float32 or Float64 NDArrays"
-                        _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target), sample_weight=rebind[Self.E.SampleWeight](sample_weight.value()))
+                    _fit_classifier_component(models[j], input, target, sample_weight.value())
                 else:
                     raise Error("ValueError: component does not support sample weights")
             else:

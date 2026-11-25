@@ -1,4 +1,4 @@
-"""Compare frozen composition widths using a build of the pinned sklearn tree."""
+"""Compare frozen composition widths and indexed steps with pinned sklearn."""
 
 from pathlib import Path
 import subprocess
@@ -37,11 +37,33 @@ def main():
     frozen_union.fit(wider, None)
     expected = [clone(frozen_pipe).n_features_in_, clone(frozen_union).n_features_in_]
 
+    with np.testing.assert_raises(IndexError):
+        frozen_pipe[2]
+    assert frozen_pipe[0] is clone(frozen_pipe)[-2]
+    assert frozen_pipe[1] is FrozenEstimator(frozen_pipe)[-1]
+    expected_scaled = clone(frozen_pipe)[0].transform(X)
+    expected_predictions = FrozenEstimator(frozen_pipe)[-1].predict(expected_scaled)
+
     native = subprocess.check_output([ROOT / "builds/tests/frozen/test_frozen_composition"], text=True)
     [widths] = [line.split()[1:] for line in native.splitlines() if line.startswith("composition_width ")]
     actual = list(map(int, widths))
     assert actual == expected, (actual, expected)
     print(f"Frozen Pipeline and FeatureUnion input widths match sklearn exactly: {actual}")
+
+    def values(key, dtype):
+        return np.array(
+            [line.split()[1:] for line in native.splitlines() if line.startswith(key + " ")],
+            dtype=dtype,
+        )
+
+    [shape] = values("composition_step_shape", np.int64)
+    np.testing.assert_array_equal(shape, expected_scaled.shape)
+    scaled = values("composition_step_scaled", np.float64).reshape(shape)
+    predictions = values("composition_step_prediction", np.int64).ravel()
+    np.testing.assert_allclose(scaled, expected_scaled, rtol=0, atol=1e-14)
+    np.testing.assert_array_equal(predictions, expected_predictions)
+    print(f"Frozen pipeline steps matched sklearn with max transform error "
+          f"{abs(scaled - expected_scaled).max():.3g} and {predictions.size} exact predictions")
 
 
 if __name__ == "__main__":

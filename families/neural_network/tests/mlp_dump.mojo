@@ -36,7 +36,7 @@ def emit_model[dtype: DType](
         print(warning.message.replace("\n", "\\n"))
 
 
-def run_cases[dtype: DType]() raises:
+def run_cases[dtype: DType](warm_start: Bool) raises:
     var X = zeros[dtype](Shape(8, 2))
     var weights = zeros[dtype](Shape(8))
     for row in range(8):
@@ -56,27 +56,33 @@ def run_cases[dtype: DType]() raises:
                     y.unsafe_set(row, Int64(3 * (row % classes) - 4))
                 var clf = MLPClassifier[dtype](
                     [4, 3], "tanh", solver=solver, alpha=0.03,
-                    batch_size=3, max_iter=6, random_state=42, tol=0.0,
+                    batch_size=3, max_iter=6, random_state=42, tol=0.0, warm_start=warm_start,
                 )
-                if weighted:
-                    _ = clf.fit(X, y, sample_weight=weights)
-                else:
-                    _ = clf.fit(X, y)
-                print(clf.parameter_dtype() == DType.float64)
-                emit_model(
-                    (clf.n_iter_(), clf.t_(), clf.n_outputs_(), clf.n_layers_(),
-                     clf.get_n_features_in()), clf.out_activation_(), clf.loss_(),
-                    clf.best_loss_(), clf.score(X, y, Optional(weights.copy())),
-                    clf.loss_curve_(), clf.coefs_[parameter_dtype](),
-                    clf.intercepts_[parameter_dtype](), clf.fit_warnings,
-                )
-                emit(clf.classes_())
-                emit(clf.predict(X))
-                emit(clf.predict_proba(X))
-                emit(clf.predict_log_proba(X))
-                comptime if solver == "lbfgs" and dtype == DType.float32:
-                    emit(clf.predict_proba[DType.float64](X))
-                    emit(clf.predict_log_proba[DType.float64](X))
+                for step in range(3 if warm_start else 1):
+                    if step == 1:
+                        var params = clf.get_params()
+                        params.alpha = 0.06
+                        params.learning_rate_init = 0.02
+                        _ = clf.set_params(params)
+                    if weighted:
+                        _ = clf.fit(X, y, sample_weight=weights)
+                    else:
+                        _ = clf.fit(X, y)
+                    print(clf.parameter_dtype() == DType.float64)
+                    emit_model(
+                        (clf.n_iter_(), clf.t_(), clf.n_outputs_(), clf.n_layers_(),
+                         clf.get_n_features_in()), clf.out_activation_(), clf.loss_(),
+                        clf.best_loss_(), clf.score(X, y, Optional(weights.copy())),
+                        clf.loss_curve_(), clf.coefs_[parameter_dtype](),
+                        clf.intercepts_[parameter_dtype](), clf.fit_warnings,
+                    )
+                    emit(clf.classes_())
+                    emit(clf.predict(X))
+                    emit(clf.predict_proba(X))
+                    emit(clf.predict_log_proba(X))
+                    comptime if solver == "lbfgs" and dtype == DType.float32:
+                        emit(clf.predict_proba[DType.float64](X))
+                        emit(clf.predict_log_proba[DType.float64](X))
 
             for kind in range(3):
                 var width = 2 if kind == 1 else 1
@@ -88,25 +94,32 @@ def run_cases[dtype: DType]() raises:
                 var reg = MLPRegressor[dtype](
                     "poisson" if kind == 2 else "squared_error",
                     [4, 3], "tanh", solver=solver, alpha=0.03,
-                    batch_size=3, max_iter=6, random_state=42, tol=0.0,
+                    batch_size=3, max_iter=6, random_state=42, tol=0.0, warm_start=warm_start,
                 )
-                if weighted:
-                    _ = reg.fit(X, y, sample_weight=weights)
-                else:
-                    _ = reg.fit(X, y)
-                print(reg.parameter_dtype() == DType.float64)
-                emit_model(
-                    (reg.n_iter_(), reg.t_(), reg.n_outputs_(), reg.n_layers_(),
-                     reg.get_n_features_in()), reg.out_activation_(), reg.loss_(),
-                    reg.best_loss_(), reg.score(X, y, Optional(weights.copy())),
-                    reg.loss_curve_(), reg.coefs_[parameter_dtype](),
-                    reg.intercepts_[parameter_dtype](), reg.fit_warnings,
-                )
-                emit(reg.predict(X))
-                comptime if solver == "lbfgs" and dtype == DType.float32:
-                    emit(reg.predict[DType.float64](X))
+                for step in range(3 if warm_start else 1):
+                    if step == 1:
+                        var params = reg.get_params()
+                        params.alpha = 0.06
+                        params.learning_rate_init = 0.02
+                        _ = reg.set_params(params)
+                    if weighted:
+                        _ = reg.fit(X, y, sample_weight=weights)
+                    else:
+                        _ = reg.fit(X, y)
+                    print(reg.parameter_dtype() == DType.float64)
+                    emit_model(
+                        (reg.n_iter_(), reg.t_(), reg.n_outputs_(), reg.n_layers_(),
+                         reg.get_n_features_in()), reg.out_activation_(), reg.loss_(),
+                        reg.best_loss_(), reg.score(X, y, Optional(weights.copy())),
+                        reg.loss_curve_(), reg.coefs_[parameter_dtype](),
+                        reg.intercepts_[parameter_dtype](), reg.fit_warnings,
+                    )
+                    emit(reg.predict(X))
+                    comptime if solver == "lbfgs" and dtype == DType.float32:
+                        emit(reg.predict[DType.float64](X))
 
 
 def main() raises:
-    run_cases[DType.float32]()
-    run_cases[DType.float64]()
+    for warm_start in [False, True]:
+        run_cases[DType.float32](warm_start)
+        run_cases[DType.float64](warm_start)

@@ -2,7 +2,7 @@
 from moxie._categorical import categorical_column
 from moxie.base import clone
 from moxie.compose import ColumnEntry, ColumnTable, ColumnTransformer
-from moxie.model_selection import StratifiedKFold
+from moxie.model_selection import LeaveOneOut, StratifiedKFold
 from moxie.preprocessing import OrdinalEncoder, TargetEncoder, TargetEncoderSplits
 from numojo import Shape, zeros
 from parity_io import ResultLine
@@ -33,7 +33,8 @@ def main() raises:
     var model = ColumnTransformer(
         ColumnEntry("ordinal", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1.0), color.copy()),
         ColumnEntry("target", TargetEncoder(smooth=0.0, cv=cv^), color.copy()),
-        ColumnEntry("automatic", TargetEncoder(target_type="continuous", cv=None, shuffle=False), color^),
+        ColumnEntry("automatic", TargetEncoder(target_type="continuous", cv=None, shuffle=False), color.copy()),
+        ColumnEntry("leave_one_out", TargetEncoder(cv=LeaveOneOut()), color^),
         ColumnEntry("numeric", "passthrough", age^),
     )
     with assert_raises(contains="NotFittedError"):
@@ -63,6 +64,6 @@ def main() raises:
     for name in model.get_feature_names_out():
         print(String("name|", name))
     ref spans = model.output_indices_.value()
-    for name in ["ordinal", "target", "automatic", "numeric", "remainder"]:
+    for name in ["ordinal", "target", "automatic", "leave_one_out", "numeric", "remainder"]:
         ref span = spans[name]
         print(String("span|", name, "|", span.start, "|", span.stop))

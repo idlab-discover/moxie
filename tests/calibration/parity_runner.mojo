@@ -20,12 +20,16 @@ from moxie._calibration_algorithms import (
     _IsotonicCalibration,
     _TemperatureScaling,
 )
-from moxie.calibration_serialization import CalibratedClassifierCVSchema
+from moxie.calibration_serialization import (
+    CalibratedClassifierCVSchema,
+    CalibratedSVCClassifierCVSchema,
+)
 from moxie.serialization import dumps, loads
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.frozen import FrozenEstimator
 from moxie.linear_model import LogisticRegression
 from moxie.naive_bayes import GaussianNB
+from moxie.svm import SVC
 from calibration_centroid import Centroid
 
 
@@ -296,6 +300,16 @@ def main() raises:
                 cv=3, method=String(fields[6]), ensemble=fields[7] == "true"
             )
             compare_float32(model, x, y, w, q, expected, fields, context)
+        elif kind == "serialized_svc":
+            comptime Schema = CalibratedSVCClassifierCVSchema
+            var model = CalibratedClassifierCV(
+                adapt_classifier(SVC(tol=1e-8)), cv=3,
+                method=String(fields[6]), ensemble=fields[7] == "true",
+            )
+            _ = model.fit(x, y)
+            var restored = Schema.decode(loads(dumps(Schema.encode(model))))
+            compare_estimator_result(restored, q, expected, fields, context)
+            compare(restored.predict_proba(q), model.predict_proba(q), 0, context)
         elif kind == "float32_gaussian":
             var model = CalibratedClassifierCV(
                 adapt_classifier(GaussianNB()),

@@ -61,7 +61,7 @@ struct NeighborParams[dtype: DType, M: DenseMetric & Deinitable = Metric[dtype]]
         else:
             return BruteForce(metric)
 
-struct NearestNeighbors[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype]](UnsupervisedEstimator, KNeighborsQuery):
+struct NearestNeighbors[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype]](UnsupervisedEstimator, KNeighborsQuery, Copyable):
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = nm.NDArray[Self.dtype]
     comptime NeighborResult = TopKResult[Self.dtype]

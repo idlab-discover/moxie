@@ -12,3 +12,20 @@ trait PredictivePipeline(PipelineEstimator, Predictor):
 
 trait TransformingPipeline(PipelineEstimator, TransformerMixin):
     pass
+
+
+trait PipelineSteps(BaseEstimator):
+    """Typed read-only access to the two stored steps of a sequential pipeline."""
+
+    comptime Prefix: BaseEstimator
+    comptime Final: BaseEstimator
+
+    def _prefix_step[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> ref[origin] Self.Prefix:
+        ...
+
+    def _final_step[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> ref[origin] Self.Final:
+        ...

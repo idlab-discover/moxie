@@ -42,8 +42,10 @@ original sample order.
 - Incremental sample weights, arbitrary fit metadata, Python reflection,
   metadata routing and feature-name propagation are not implemented.
 - Component inputs, targets and predictions must match the wrapper's declared
-  array types. Component probabilities and decisions must be Float32 or Float64
-  NDArrays. Wrapper probabilities, log probabilities and decisions are Float64:
+  array types. Component probabilities and log probabilities can be Float32
+  or Float64 NDArrays, or a one-element list containing a Float64 NDArray.
+  Component decisions use Float32 or Float64 NDArrays. Wrapper probabilities,
+  log probabilities and decisions are Float64:
   sklearn's chains return Float64 matrices, and `MultiOutputClassifier` keeps
   each component's values exactly (a Float32 component's probabilities are
   widened, where sklearn would return Float32 arrays). Chain feature responses
@@ -52,7 +54,8 @@ original sample order.
   component that does not cast its input itself fits in Float32 here and in
   Float64 in sklearn.
   Wrapper sample weights are Float64 and are narrowed for Float32-weight
-  components. Other component response or weight types fail at compile time.
+  components. Classifier wrappers also accept components with List[Float64]
+  weights, validating the wrapper weights as a vector before conversion.
   Class ordering follows sorted observed labels, or the complete class vectors
   passed to first `partial_fit`.
   Components retaining additional classes or a different probability-column

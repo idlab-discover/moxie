@@ -6,10 +6,10 @@ from moxie.base import (
     BaseEstimator, SupervisedEstimator, UnsupervisedEstimator, Predictor,
     TransformerMixin, FitTransformer, InverseTransformer, SupervisedScorer, ClassifierMixin, clone,
     ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, SampleScorer,
-    WeightedSupervisedEstimator,
+    NumericClassifierClasses, WeightedSupervisedEstimator,
 )
 from moxie._pipeline import validate_names
-from moxie._pipeline_contracts import PredictivePipeline, TransformingPipeline
+from moxie._pipeline_contracts import PipelineSteps, PredictivePipeline, TransformingPipeline
 from moxie._pipeline_union import UnionFeatureNames, UnionInputFeatures
 from moxie.utils.validation import check_is_fitted
 
@@ -77,11 +77,12 @@ def _pipeline_feature_names[P: TransformerMixin, E: BaseEstimator](
 struct Pipeline[
     P: TransformerMixin & Deinitable,
     E: SupervisedEstimator & Predictor & Deinitable,
-](SupervisedEstimator, PredictivePipeline, UnionFeatureNames, UnionInputFeatures, InputFeatureCount,
+](SupervisedEstimator, PredictivePipeline, PipelineSteps, UnionFeatureNames, UnionInputFeatures, InputFeatureCount,
   TransformingPipeline where conforms_to(E, TransformerMixin),
   FitTransformer where conforms_to(E, TransformerMixin),
   SupervisedScorer where conforms_to(E, SupervisedScorer),
   ClassifierMixin where conforms_to(E, ClassifierMixin),
+  NumericClassifierClasses where conforms_to(E, NumericClassifierClasses),
   WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
   ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
   LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
@@ -96,9 +97,14 @@ struct Pipeline[
     Probability and decision methods follow the final estimator's capabilities.
     Transformation is available when the final estimator supports it.
     """
+    comptime Prefix = Self.P
+    comptime Final = Self.E
     comptime Input = Self.P.Input
     comptime Target = Self.E.Target
     comptime Prediction = Self.E.Prediction
+    comptime ClassLabelDType where conforms_to(
+        Self.E, NumericClassifierClasses
+    ) = Self.E.ClassLabelDType
     comptime Transformed where conforms_to(Self.E, TransformerMixin) = Self.E.Transformed
     comptime SampleWeight = Self.E.SampleWeight if conforms_to(Self.E, WeightedSupervisedEstimator) else (
         Self.E.SampleWeight if conforms_to(Self.E, SupervisedScorer) else Int
@@ -111,6 +117,17 @@ struct Pipeline[
     var estimator_name: String
     var transformer: Self.P
     var estimator: Self.E
+
+    # Each stored step lives for the supplied immutable borrow of the pipeline.
+    def _prefix_step[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> ref[origin] Self.Prefix:
+        return Pointer(to=self.transformer).unsafe_origin_cast[origin]()[]
+
+    def _final_step[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> ref[origin] Self.Final:
+        return Pointer(to=self.estimator).unsafe_origin_cast[origin]()[]
 
     def __init__(
         out self, var transformer: Self.P, var estimator: Self.E,
@@ -150,6 +167,17 @@ struct Pipeline[
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self.estimator.__sklearn_is_fitted__()
+
+    def classes_(self) raises -> Self.Target where conforms_to(
+        Self.E, NumericClassifierClasses
+    ):
+        """Return the final classifier's fitted classes in probability-column order."""
+        return self.estimator.get_classes()
+
+    def get_classes(self) raises -> Self.Target where conforms_to(
+        Self.E, NumericClassifierClasses
+    ):
+        return self.classes_()
 
     def n_features_in_(self) raises -> Int:
         """Delegate to the first step without duplicating its learned state."""
@@ -306,6 +334,7 @@ struct TransformerPipeline[
     E: TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable,
 ](
     TransformingPipeline,
+    PipelineSteps,
     TransformerMixin,
     UnsupervisedEstimator,
     FitTransformer,
@@ -315,6 +344,8 @@ struct TransformerPipeline[
 ):
     """Two named transformer stages, nestable as ordinary transformers."""
 
+    comptime Prefix = Self.P
+    comptime Final = Self.E
     comptime Input = Self.P.Input
     comptime Target = Self.E.Target
     comptime Transformed = Self.E.Transformed
@@ -323,6 +354,17 @@ struct TransformerPipeline[
     var estimator_name: String
     var transformer: Self.P
     var estimator: Self.E
+
+    # Each stored step lives for the supplied immutable borrow of the pipeline.
+    def _prefix_step[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> ref[origin] Self.Prefix:
+        return Pointer(to=self.transformer).unsafe_origin_cast[origin]()[]
+
+    def _final_step[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> ref[origin] Self.Final:
+        return Pointer(to=self.estimator).unsafe_origin_cast[origin]()[]
 
     def __init__(
         out self, var transformer: Self.P, var estimator: Self.E,

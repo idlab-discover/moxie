@@ -8,8 +8,10 @@ weighted fitting, incremental updates and probability prediction. See
 Sparse input remains deferred. Gaussian and categorical validation is dense in
 the reference; multinomial, complement and Bernoulli sparse counting paths are
 not implemented. No sparse input is silently densified. Python reflection,
-pandas output, metadata routing, bindings and serialization are outside this
-integration. CategoricalNB takes scalar alpha only, like the reference.
+pandas output, metadata routing and bindings are outside this integration.
+GaussianNB supports [experimental native persistence](gaussian/api.md#persistence).
+Persistence for the four discrete classifiers remains open. CategoricalNB takes
+scalar alpha only, like the reference.
 
 Run the root build, test and parity commands or the focused runner described in
 [README](README.md). Compilation alone does not establish sklearn parity.

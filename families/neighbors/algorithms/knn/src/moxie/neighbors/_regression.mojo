@@ -14,7 +14,7 @@ struct KNeighborsRegressorParams[dtype: DType, M: DenseMetric & Deinitable = Met
     var weighting: Optional[Self.W]
     var weights: String
 
-struct KNeighborsRegressor[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](KNeighborsRegressorAPI):
+struct KNeighborsRegressor[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](KNeighborsRegressorAPI, Copyable):
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = nm.NDArray[Self.dtype]
     comptime Prediction = Self.Target

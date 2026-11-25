@@ -29,6 +29,16 @@ def check_predictions(ns, dummy, root):
             name: ns['cross_val_predict'](dummy.DummyClassifier(), X, target, cv=folds)
             for name, target in [('single', y), ('multi', multi_y)]
         }
+        default_X = np.zeros((12, 2))
+        default_y = np.array(['z', 'z', 'é', 'é', 'z', 'z', 'z', 'é', 'é', 'é', 'z', 'é'])
+        expected_strings['default'] = ns['cross_val_predict'](dummy.DummyClassifier(), default_X, default_y)
+        expected['default_weighted'] = ns['cross_val_predict'](
+            dummy.DummyClassifier(), default_X, default_y, method='predict_proba',
+            params={'sample_weight': np.arange(1., 13.)},
+        )
+        expected['default_multi'] = ns['cross_val_predict'](
+            dummy.DummyClassifier(), X, multi_y, method='predict_log_proba',
+        )
         for method in ['predict_proba', 'predict_log_proba']:
             expected[method] = ns['cross_val_predict'](dummy.DummyClassifier(), X, y,
                                                      cv=folds, method=method)
@@ -62,6 +72,22 @@ def check_predictions(ns, dummy, root):
             missing = value == np.finfo(value.dtype).min
             np.testing.assert_array_equal(actual[missing], value[missing])
             cells += value.size
+
+    regression = {'prediction_default': [], 'prediction_weighted_default': []}
+    for line in subprocess.check_output([str(root / 'builds/evaluation')], text=True).splitlines():
+        key, *fields = line.split()
+        if key in regression:
+            row, value = fields
+            assert int(row) == len(regression[key])
+            regression[key].append(float(value))
+    numeric_y = np.arange(8, dtype=float)
+    for key, params in (
+        ('prediction_default', None),
+        ('prediction_weighted_default', {'sample_weight': weights}),
+    ):
+        reference = ns['cross_val_predict'](dummy.DummyRegressor(), X, numeric_y, params=params)
+        np.testing.assert_allclose(regression[key], reference, rtol=0, atol=1e-13)
+        cells += reference.size
 
     class DecisionProbe(ClassifierMixin, BaseEstimator):
         def __init__(self, mode=0, dtype='float64'):

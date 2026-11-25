@@ -14,7 +14,8 @@ RBM/MLP helper tests and examples. Native tests cover family capabilities, finit
 input and shape validation, strides, ownership, refit, clone, errors and incremental
 eligibility. Two isolated fixture consumers verify shared sources and reject
 missing files and conflicting ownership. The `mlp` target compiles only the
-public ordinary-fit MLP tests and their directly affected compositions.
+public ordinary-fit and warm-start MLP tests and their directly affected
+compositions.
 The `mlp-incremental` target compiles the public incremental trait and error
 contracts and tests 160 successive estimator snapshots, including updates
 after ordinary fit. It checks the next draw of explicit RNG streams,
@@ -25,11 +26,17 @@ Numerical comparisons run original method bodies from local scikit-learn revisio
 with complete RNG state, six public RBM lifecycle workloads, three Float64
 incremental workloads, 32 MLP initialization/packing cases, 40 MLP
 forward/gradient fixtures, 76 L-BFGS fixtures and 200 stochastic training
-snapshots, plus 72 public estimator fits and 160 incremental sequence snapshots.
+snapshots, plus 72 public estimator fits, 216 warm-start snapshots and 160
+incremental sequence snapshots.
 The public comparison checks parameters, probabilities, predictions, weighted
 scores, loss history, fitted metadata and warning text. It uses absolute and relative tolerances of 2e-5
 for Float32 L-BFGS, 3e-6 for Float32 stochastic training and 2e-11 for Float64
 to allow for rounding in the native reductions and accumulated solver steps.
+For repeated Float32 L-BFGS fits, coefficient and intercept absolute tolerance
+is 1e-3 and prediction and probability absolute tolerance is 5e-4. These bounds
+account for the way rounding from the first Float32 solve affects subsequent
+line searches. Metadata and loss comparisons retain the ordinary tolerances,
+and class labels and warnings match exactly.
 See [scope](scope.md) for exclusions.
 
 The isolated public consumer receives only copied assembled dependencies and
@@ -37,5 +44,5 @@ probe files, and must produce byte-identical lifecycle output. Ownership checks 
 core owners. The standalone source is not a runtime or build dependency.
 
 The focused MLP check validates forward propagation, batch losses and gradients,
-and the L-BFGS, SGD and Adam trainers. Public MLP validation-set early stopping,
-warm-start refitting and Float32 RBM incremental promotion remain open.
+and the L-BFGS, SGD and Adam trainers. Public MLP validation-set early stopping and
+Float32 RBM incremental promotion remain open.

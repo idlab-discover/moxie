@@ -1,10 +1,11 @@
 """Exact target identity and class order against the pinned compiled sklearn."""
 from pathlib import Path
 import subprocess
+import warnings
 import numpy as np
 from numpy.testing import assert_array_equal
 import sklearn
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neighbors import KNeighborsClassifier, RadiusNeighborsClassifier
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT.parents[2] / 'scikit-learn'
@@ -16,8 +17,10 @@ assert (installed/'neighbors/_classification.py').read_bytes() == (REFERENCE/'sk
 x = np.arange(4,dtype=np.float32).reshape(-1,1)
 integers = np.array([9007199254740992,9007199254740993,-9223372036854775807,9223372036854775807],dtype=np.int64)
 strings = np.array([['z','red'],['a','blue'],['z','blue'],['a','red']])
-raw = subprocess.check_output([str(ROOT/'builds/test_general_labels')],text=True)
-lines = [line.split() for line in raw.splitlines()]
+native = subprocess.run(
+    [str(ROOT/'builds/test_general_labels')], text=True, capture_output=True, check=True,
+)
+lines = [line.split() for line in native.stdout.splitlines()]
 actual_int = np.array([int(row[2]) for row in lines if row[0]=='I'],dtype=np.int64)
 actual_str = np.array([row[3] for row in lines if row[0]=='S']).reshape(4,2)
 integer_classes = [np.array([int(row[2]) for row in lines if row[0]=='IC'],dtype=np.int64)]
@@ -28,4 +31,12 @@ for target,actual,classes in [(integers,actual_int,integer_classes),(strings,act
     expected=[model.classes_] if target.ndim==1 else model.classes_
     for got,want in zip(classes,expected):
         assert_array_equal(got,want)
-print('PASS pinned sklearn exact Int64 and multioutput string predictions')
+strings[0, 0] = 'a'
+model = RadiusNeighborsClassifier(radius=0.1, outlier_label=['missing','red']).fit(
+    x, strings.astype(object),
+)
+with warnings.catch_warnings(record=True) as captured:
+    warnings.simplefilter('always')
+    model.predict(np.array([[99]], dtype=np.float32))
+assert native.stderr.splitlines() == [f'{w.category.__name__}: {w.message}' for w in captured]
+print('PASS pinned sklearn exact Int64 and multioutput string predictions and radius warnings')

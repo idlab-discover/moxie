@@ -25,8 +25,9 @@ for dtype in (np.float32,np.float64):
                         got=run_native(ROOT/'builds/sparse_coding_driver',dtype,[x,d,cov],
                                        -1 if alpha is None else alpha,int(positive),int(split),int(use_cov))
                         tol=2e-6 if dtype==np.float32 else 2e-12
+                        fit = m.fit_transform(x)
                         for key,value in dict(functional=expected,code=z,inverse=m.inverse_transform(z),
-                                              fit=m.fit_transform(x)).items():
+                                              fit=fit,restored_fit=fit).items():
                             assert_close(got[key],value,tol,f'{dtype} {(n,p,k)} {alpha=} {positive=} {split=} {use_cov=} {key}')
                         count+=1
 print(f'PASS: {count} threshold coding cases against local sklearn {REVISION}')

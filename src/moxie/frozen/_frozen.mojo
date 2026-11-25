@@ -25,6 +25,7 @@ from moxie.base import (
     ClusterMixin,
 )
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
+from moxie._pipeline_contracts import PipelineSteps
 from moxie.utils.validation import check_is_fitted
 from ._base import FrozenEstimatorAPI
 
@@ -62,6 +63,7 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
     NumericClassifierClasses where conforms_to(E, NumericClassifierClasses),
     OutlierMixin where conforms_to(E, OutlierMixin),
+    PipelineSteps where conforms_to(E, PipelineSteps),
     Predictor where conforms_to(E, Predictor),
     ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
     RegressorMixin where conforms_to(E, RegressorMixin),
@@ -86,6 +88,8 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
         Self.E, IncrementalClassifier
     ) else NoneType
     comptime Params = FrozenParams[Self.E]
+    comptime Prefix where conforms_to(Self.E, PipelineSteps) = Self.E.Prefix
+    comptime Final where conforms_to(Self.E, PipelineSteps) = Self.E.Final
     comptime ClassLabelDType where conforms_to(
         Self.E, NumericClassifierClasses
     ) = Self.E.ClassLabelDType
@@ -123,6 +127,27 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     def estimator(self) -> ref[self._estimator] Self.E:
         """Borrow the wrapped estimator without allowing mutation."""
         return self._estimator[]
+
+    # The wrapper's borrowed ArcPointer keeps the pipeline and its steps alive.
+    def _prefix_step[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> ref[origin] Self.Prefix where conforms_to(Self.E, PipelineSteps):
+        return Pointer(to=self._estimator[]._prefix_step()).unsafe_origin_cast[origin]()[]
+
+    def step[origin: ImmOrigin, //, index: Int](
+        ref[origin] self,
+    ) -> ref[origin] Self.Prefix where conforms_to(Self.E, PipelineSteps) and (index == 0 or index == -2):
+        return self._prefix_step()
+
+    def _final_step[origin: ImmOrigin](
+        ref[origin] self,
+    ) -> ref[origin] Self.Final where conforms_to(Self.E, PipelineSteps):
+        return Pointer(to=self._estimator[]._final_step()).unsafe_origin_cast[origin]()[]
+
+    def step[origin: ImmOrigin, //, index: Int](
+        ref[origin] self,
+    ) -> ref[origin] Self.Final where conforms_to(Self.E, PipelineSteps) and (index == 1 or index == -1):
+        return self._final_step()
 
     def __init__(out self, var estimator: Self.E):
         self._estimator = ArcPointer(estimator^)

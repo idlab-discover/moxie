@@ -53,7 +53,7 @@ struct SplitRecord(Copyable, Movable):
     var missing_go_to_left: UInt8
 
 @fieldwise_init
-struct TreeData(Movable):
+struct TreeData(Copyable, Movable):
     """Owned tree storage with parallel array snapshots in node ID order."""
     var n_features: Int
     var n_classes: List[Int]

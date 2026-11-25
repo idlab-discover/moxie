@@ -81,6 +81,15 @@ struct LabelOps[Y: Copyable & Deinitable]:
             ref y = rebind[nm.NDArray[Self.dtype]](b)
             return x.unsafe_get(i*Int(x.strides[0])+(j*Int(x.strides[1]) if x.ndim == 2 else 0)) == y.unsafe_get(row*Int(y.strides[0])+(col*Int(y.strides[1]) if y.ndim == 2 else 0))
 
+    @staticmethod
+    def label_text(labels: Self.Y, row: Int) raises -> String:
+        """Format one entry of a label vector for a diagnostic."""
+        comptime if Self.Y == StringTarget:
+            return rebind[StringTarget](labels).get(row)
+        else:
+            ref values = rebind[nm.NDArray[Self.dtype]](labels)
+            return String(values.unsafe_get(row * Int(values.strides[0])))
+
 struct ClassificationTargets[Y: Copyable & Deinitable](Copyable, Movable):
     comptime Ops = LabelOps[Self.Y]
     var classes: List[Self.Y]

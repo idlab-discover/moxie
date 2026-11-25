@@ -62,6 +62,33 @@ This is not a replacement for sklearn's `row_norms` API: sparse dispatch,
 unsquared norms and array-API namespaces are not exposed. No general solver,
 RNG or sparse API returns a placeholder result.
 
+## Scalar transcendental imports
+
+Mojo 1.0 `std.math.exp`, `log` and `pow` can lose roughly 1e-10 relative
+accuracy in Float64. Numax `core.libm.exp` and `log` provide dedicated
+Float64 implementations and delegate other dtypes to the standard library.
+Check edge semantics and pinned-reference parity when migrating callers.
+The neighbors query engine uses algebraic fast paths and `llvm.pow.f64`
+for general Minkowski powers. Its oracle checks exercise weighted and
+unweighted queries. Numax `core.libm` has no `pow` API, and composing its
+`exp` and `log` would require separate accuracy evidence for general powers.
+
+Run `python tools/check_std_math_precision.py` from the repository root to
+check direct `from std.math import` declarations in production Mojo sources.
+It detects new imports and reports stale baseline entries so they can be
+removed in the same change as the migration. The inventory includes these
+remaining imports from tracking PR #10 part 5:
+
+| Owner | Remaining users |
+| --- | --- |
+| Cluster | K-means++ local-trial count. |
+| Linear model | Bayesian regression scores, logistic loss and gradient, and logistic probabilities. |
+| Manifold | Classical MDS Minkowski dissimilarities. |
+| Multioutput | Classifier-chain log probabilities. |
+| Neural network | RBM sigmoid and free energy. |
+| Preprocessing | Unused scaler `log` import. |
+| SVM | libsvm probability calibration, liblinear logistic optimization, and C/nu-SVC log probabilities. One-class SVM also has an unused `log` import. |
+
 ## Validation
 
 Run `pixi run build`, `pixi run test`, `pixi run parity` here.

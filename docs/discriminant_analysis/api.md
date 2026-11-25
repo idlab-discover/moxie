@@ -61,6 +61,7 @@ and call `pipe.fit_transform(X, y.copy())` for training data or
 | `transform(X)`, `fit_transform(X, y)` | yes (not `lsqr`) | no | `(n, min(rank, n_components))` |
 | `get_feature_names_out(input_features=None)` | yes | no | `lineardiscriminantanalysis0`, ... |
 | `get_n_features_in()` | yes | yes | `n_features_in_`; `NotFittedError` before fit |
+| `get_classes()` | integer labels | integer labels | owned `List[Int]` in fitted order, raises `NotFittedError` before fit |
 | `get_params` | yes | yes | typed params record |
 | `set_params` | yes | yes | mutable borrow of self |
 | `__sklearn_clone__`, `__sklearn_is_fitted__` | yes | yes | unfitted copy, fitted-state Boolean |
@@ -75,7 +76,10 @@ shared `InputFeatureCount` contract and LDA the shared `FeatureNamesOut` contrac
 
 `LinearDiscriminantAnalysis.copy()` preserves fitted state in an independent
 copy. Use `clone` to copy constructor configuration into an unfitted
-estimator. The default `List[Int]` label type works with the multiclass
+estimator. With the default `List[Int]` labels, both estimators implement
+`NumericClassifierClasses`. Pipeline and FrozenEstimator forward that
+capability for [calibration](../calibration/family.md).
+The default label type also works with the multiclass
 [`BinaryAdapter`](../multiclass/family.md#binary-adapter-for-numeric-list-labels).
 
 Weighted scoring rejects NaN, infinity, all-zero weights and weights whose sum

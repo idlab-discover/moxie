@@ -466,6 +466,23 @@ def main() raises:
                     adapt_classifier(FrozenEstimator(estimator^)),
                     x, y, w, q, expected, fields, context,
                 )
+            elif kind == "production_frozen_qda_pipeline32":
+                var estimator = make_pipeline(
+                    StandardScaler[DType.float32](),
+                    QuadraticDiscriminantAnalysis[DType.float32](),
+                )
+                _ = estimator.fit(train_x.astype[DType.float32](), labels)
+                compare_production(
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
+            elif kind == "production_frozen_qda_pipeline":
+                var estimator = make_pipeline(StandardScaler(), QuadraticDiscriminantAnalysis())
+                _ = estimator.fit(train_x, labels)
+                compare_production(
+                    adapt_classifier(FrozenEstimator(estimator^)),
+                    x, y, w, q, expected, fields, context,
+                )
             elif kind == "production_frozen_lda":
                 var estimator = LinearDiscriminantAnalysis()
                 _ = estimator.fit(train_x, labels)

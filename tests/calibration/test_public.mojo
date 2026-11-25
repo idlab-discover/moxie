@@ -135,6 +135,40 @@ def test_frozen_float32_pipeline(X: Array, y: Array) raises:
         assert_equal(first.item(i), second.item(i))
 
 
+def test_frozen_qda_pipeline(X: Array, y: Array) raises:
+    var pipeline = make_pipeline(StandardScaler(), QuadraticDiscriminantAnalysis())
+    with assert_raises(contains="NotFittedError"):
+        _ = pipeline.get_classes()
+
+    var labels = List[Int](capacity=y.size)
+    for i in range(y.size):
+        labels.append(Int(y.item(i)))
+    _ = pipeline.fit(X, labels)
+    var frozen = FrozenEstimator(pipeline^)
+    var classes = frozen.get_classes()
+    assert_equal(len(classes), 2)
+    assert_equal(classes[0], -3)
+    assert_equal(classes[1], 7)
+    classes[0] = 99
+    assert_equal(frozen.get_classes()[0], -3)
+
+    var base_predictions = frozen.predict(X)
+    var adapter = adapt_classifier(frozen.copy())
+    assert_false(adapter.uses_probabilities())
+    var model = CalibratedClassifierCV(clone(adapter))
+    var first = model.fit(X, y).predict_proba(X)
+    var second = model.fit(X, y).predict_proba(X)
+    assert_equal(len(model.calibrated_classifiers_), 1)
+    assert_equal(model.classes_.item(0), -3)
+    assert_equal(model.classes_.item(1), 7)
+    assert_equal(first.shape, nm.Shape(X.shape[0], 2))
+    var after = frozen.predict(X)
+    for i in range(len(base_predictions)):
+        assert_equal(after[i], base_predictions[i])
+    for i in range(first.size):
+        assert_equal(first.item(i), second.item(i))
+
+
 def test_widen_strided_binary_response() raises:
     var backing = nm.full[DType.float32](nm.Shape(5), 99)
     backing[nm.Item(0)] = 1.5
@@ -212,6 +246,7 @@ def main() raises:
     test_default_classifier(X, y)
     test_generic_frozen_classifier(X, y)
     test_frozen_float32_pipeline(X, y)
+    test_frozen_qda_pipeline(X, y)
     test_widen_strided_binary_response()
     test_float32_features(X, y)
     var base = adapt_classifier(LinearDiscriminantAnalysis())

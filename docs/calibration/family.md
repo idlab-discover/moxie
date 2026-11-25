@@ -131,7 +131,8 @@ fitted default Naive Bayes specializations, Float32 `GaussianNB` with its
 default integer label domain, `LinearDiscriminantAnalysis[]`,
 `QuadraticDiscriminantAnalysis[]` and `LogisticRegression[]`. The same overload
 works for other classifiers implementing `NumericClassifierClasses`, including
-a fitted pipeline whose final step implements that trait.
+a fitted pipeline whose final step implements that trait. Integer-label LDA
+and QDA expose it with either Float32 or Float64 features.
 
 ```mojo
 var calibrated = CalibratedClassifierCV(adapt_classifier(frozen.copy()))
@@ -386,9 +387,10 @@ its Float32 path can produce different calibrated probabilities. The frozen
 Float32 cases use Float32 training, calibration, and query data in the reference
 and widen the responses before applying the reference calibrator.
 They cover weighted binary and multiclass calibration over GaussianNB
-probabilities and StandardScaler–LDA decision scores, with exact class and
-prediction checks and the family probability tolerance above. The native public
-test also checks column-major features and negative-stride features and scores.
+probabilities and decision scores from StandardScaler pipelines ending in
+LDA or QDA. Class order and predictions compare exactly, and probabilities use
+the family tolerance above. The native public test also checks column-major
+features and negative-stride features and scores.
 Additional checks compare Float32 and string-label curves and native display
 statistics, labels and metadata with the reference. SVG structure and native
 ownership/overlay behavior have separate contract tests.

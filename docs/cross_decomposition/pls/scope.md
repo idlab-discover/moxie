@@ -22,7 +22,6 @@ reference changes by more than its tolerance under a 1e-13 input
 perturbation (degenerate canonical correlations, exact sign ties, rank below
 k) are compared by shapes, finiteness and per-component objective values.
 
-Current Moxie commands and report locations are documented in
-[the family guide](../README.md). The native benchmark program is retained
-under `tests/cross_decomposition/pls/benchmark.mojo`; performance has not
-been remeasured during integration.
+See [the family guide](../README.md) for parity commands and report locations
+and the [dense fit benchmark](../README.md#dense-fit-benchmark) for timing
+PLSRegression, CCA and both PLSCanonical algorithms.

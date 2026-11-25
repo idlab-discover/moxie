@@ -286,6 +286,7 @@ calibrator's base estimator. Each schema accepts fitted and unfitted models.
 | Default LinearSVC or `adapt_classifier(LinearSVC(...))` | `CalibratedClassifierCVSchema` |
 | `adapt_classifier(SVC(...))` | `CalibratedSVCClassifierCVSchema` |
 | `adapt_classifier(GaussianNB(...))` | `CalibratedGaussianNBClassifierCVSchema` |
+| `adapt_classifier(MultinomialNB(...))` | `CalibratedMultinomialNBClassifierCVSchema` |
 | `adapt_classifier(LinearDiscriminantAnalysis(...))` | `CalibratedLDAClassifierCVSchema` |
 | `adapt_classifier(QuadraticDiscriminantAnalysis(...))` | `CalibratedQDAClassifierCVSchema` |
 

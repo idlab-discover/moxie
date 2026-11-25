@@ -82,8 +82,10 @@ def production_reference():
     svm_base = load('svm/_base', 'sklearn.svm')
     with patch.dict(sys.modules, {'sklearn.svm._base': svm_base}):
         svm = load('svm/_classes', 'sklearn.svm')
+    nb = load('naive_bayes')
     return (
-        load('naive_bayes').GaussianNB,
+        nb.GaussianNB,
+        nb.MultinomialNB,
         da.LinearDiscriminantAnalysis,
         da.QuadraticDiscriminantAnalysis,
         logistic.LogisticRegression,
@@ -314,7 +316,7 @@ def main():
                     False, False, model.predict(q))
     # Cover both response protocols, weighted fitting and class-column ordering
     # with production classifiers rather than a shared test double.
-    gaussian, lda, qda, logistic, ref.LinearSVC, svc = production_reference()
+    gaussian, multinomial, lda, qda, logistic, ref.LinearSVC, svc = production_reference()
     production = [
         ('gaussian', gaussian(), True),
         ('lda', lda(), False),
@@ -407,6 +409,20 @@ def main():
                     ).fit(X, y, sample_weight=w)
                     add(kind, X, y, w, q, model.predict_proba(q),
                         method, ensemble, model.predict(q), model.classes_)
+    for n_classes in (2, 3):
+        codes = np.arange(90) % n_classes
+        rates = np.array([[4, 2, 3], [2, 4, 3], [3, 2, 5]])[codes]
+        X = rng.gamma(rates)
+        q = rng.gamma(3, size=(17, 3))
+        w = rng.uniform(0.25, 2, size=len(codes))
+        for method in ('sigmoid', 'isotonic', 'temperature'):
+            y = codes if method == 'temperature' else 5 * codes - 7
+            for ensemble in (False, True):
+                model = ref.CalibratedClassifierCV(
+                    multinomial(alpha=0.25), method=method, cv=3, ensemble=ensemble,
+                ).fit(X, y, sample_weight=w)
+                add('serialized_multinomial', X, y, w, q, model.predict_proba(q),
+                    method, ensemble, model.predict(q), model.classes_)
     fixtures = out / 'cases.txt'
     fixtures.write_text('\n'.join(records) + '\n')
     command = ['mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', 'builds/deps', '-I', 'examples/calibration_support', 'tests/calibration/parity_runner.mojo', '-o', str(out / 'runner')]

@@ -16,6 +16,7 @@ from moxie.calibration_serialization import (
     CalibratedClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
     CalibratedLDAClassifierCVSchema,
+    CalibratedMultinomialNBClassifierCVSchema,
     CalibratedQDAClassifierCVSchema,
     CalibratedSVCClassifierCVSchema,
 )
@@ -25,7 +26,7 @@ from moxie.discriminant_analysis import (
     QuadraticDiscriminantAnalysis,
 )
 from moxie.model_selection import KFold, LeaveOneOut, StratifiedKFold
-from moxie.naive_bayes import GaussianNB
+from moxie.naive_bayes import GaussianNB, MultinomialNB
 from moxie.serialization import (
     ModelArchive, ModelSchema, dumps, loads, load_model, save_model,
 )
@@ -209,6 +210,63 @@ def test_lda_fold_fit_warnings(X: Dense, y: Dense) raises:
         assert_equal(warnings[0].message, "The priors do not sum to 1. Renormalizing")
 
 
+def test_multinomial(X: Dense, y: Dense) raises:
+    comptime MultinomialSchema = CalibratedMultinomialNBClassifierCVSchema
+    var file = "builds/calibration-multinomial-model.moxie"
+    var smoothing = nm.zeros[DType.float64](nm.Shape(2))
+    smoothing[nm.Item(1)] = 0.75
+    var priors: List[Float64] = [0.2, 0.3, 0.5]
+    var model = CalibratedClassifierCV(
+        adapt_classifier(
+            MultinomialNB(
+                alpha_values=smoothing^, force_alpha=False, class_prior=priors^,
+            )
+        ),
+        cv=3, method="isotonic", ensemble=True,
+    )
+    check_unfitted[MultinomialSchema](model, X)
+    _ = model.fit(X, y)
+    _ = model.set_params(
+        estimator=adapt_classifier(MultinomialNB(alpha=2.0)),
+        method="sigmoid",
+    )
+    save_model[MultinomialSchema](model, file)
+    var restored = load_model[MultinomialSchema](file)
+    assert_equal(restored.estimator.estimator().alpha, 2.0)
+    ref fitted = restored.calibrated_classifiers_[0].estimator.estimator()
+    assert_equal(fitted.alpha_values.value().item(1), 0.75)
+    assert_equal(fitted.class_prior.value()[2], 0.5)
+    assert_equal(len(fitted.fit_warnings), 1)
+    assert_equal(restored.calibrated_classifiers_[0].method, "isotonic")
+    assert_equal_predictions(model, restored, X, y)
+    assert_false(clone(restored).__sklearn_is_fitted__())
+
+    var archive = MultinomialSchema.encode(restored)
+    assert_equal(dumps(archive), dumps(MultinomialSchema.encode(model)))
+    with assert_raises(contains="unsupported estimator type or state schema"):
+        _ = CalibratedGaussianNBClassifierCVSchema.decode(archive)
+    for ref payload in archive.payloads:
+        if payload.name == "fold/0/estimator/feature_log_prob_":
+            payload.name = "fold/0/estimator/unknown"
+    with assert_raises(contains="feature_log_prob_"):
+        _ = MultinomialSchema.decode(loads(dumps(archive)))
+
+    _ = restored.fit(X, y)
+    _ = model.fit(X, y)
+    assert_equal(restored.calibrated_classifiers_[0].estimator.estimator().alpha, 2.0)
+    assert_equal(restored.calibrated_classifiers_[0].method, "sigmoid")
+    assert_equal_predictions(model, restored, X, y)
+
+    def read_classes(estimator: MultinomialNB[]) raises -> Dense:
+        return Dense(nm.Shape(0))
+
+    var custom = CalibratedClassifierCV(
+        ClassifierCalibrationAdapter(MultinomialNB(), read_classes, "MultinomialNB")
+    )
+    with assert_raises(contains="requires the built-in MultinomialNB adapter"):
+        _ = MultinomialSchema.encode(custom)
+
+
 def test_cv_configuration() raises:
     var splits: List[CalibrationSplit] = [
         CalibrationSplit([1, 3, 4], [0, 2]),
@@ -250,6 +308,7 @@ def main() raises:
     test_discriminant_configuration(X)
     test_lda_fold_fit_warnings(X, y)
     test_gaussian(X, y)
+    test_multinomial(X, y)
     var file = "builds/calibration-test-model.moxie"
     var model = CalibratedClassifierCV(
         adapt_classifier(LinearSVC(C=0.5, random_state=0)),

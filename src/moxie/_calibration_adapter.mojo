@@ -64,7 +64,9 @@ def adapt_classifier(
     def classes(model: MultinomialNB[]) raises -> Array:
         return _numeric_classes(model.classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "MultinomialNB")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "MultinomialNB")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(

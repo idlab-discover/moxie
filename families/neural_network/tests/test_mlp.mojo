@@ -46,6 +46,35 @@ def classifier() raises:
     _ = model.fit(X, y)
     equal(expected, model.predict_proba(X))
 
+    var widths = Optional[List[Int]]([4, 2])
+    var automatic = Optional[Optional[Int]](Optional[Int]())
+    _ = model.set_params(
+        hidden_layer_sizes=widths, batch_size=Optional[Int](4), shuffle=False,
+        random_state=Optional[Int](0), n_iter_no_change=Optional[Int](3),
+    )
+    widths.value()[0] = 9
+    var updated = model.get_params()
+    assert_equal(updated.hidden_layer_sizes[0], 4)
+    assert_equal(updated.hidden_layer_sizes[1], 2)
+    assert_equal(updated.batch_size.value(), 4)
+    assert_equal(updated.random_state.value(), 0)
+    assert_equal(updated.n_iter_no_change.value(), 3)
+    assert_false(updated.shuffle)
+    assert_equal(updated.max_iter, 3)
+    assert_equal(updated.loss, "log_loss")
+    _ = model.set_params(batch_size=automatic, random_state=automatic, n_iter_no_change=automatic)
+    updated = model.get_params()
+    assert_false(updated.batch_size)
+    assert_false(updated.random_state)
+    assert_false(updated.n_iter_no_change)
+    equal(expected, model.set_params().predict_proba(X))
+    equal(model.classes_(), y)
+    assert_equal(len(model.fit_warnings), 1)
+    assert_equal(model.n_layers_(), 3)
+
+    # Restore the original seed for the later fit error checks.
+    _ = model.set_params(random_state=Optional[Int](17))
+
     var copied = model.copy()
     var coefs = model.coefs_()
     coefs[0].unsafe_set(0, 12345.0)
@@ -173,6 +202,20 @@ def regressor[dtype: DType]() raises:
     )
     _ = constant.fit(dense, target)
     assert_equal(constant.score(dense, ones[dtype](Shape(6))), 0.0)
+    var initial_prediction = constant.predict(dense)
+    equal(initial_prediction, constant.set_params(loss="poisson").predict(dense))
+    assert_equal(constant.out_activation_(), "identity")
+    var poisson_config = clone(constant)
+    assert_false(poisson_config.__sklearn_is_fitted__())
+    assert_equal(poisson_config.get_params().loss, "poisson")
+    _ = constant.set_params(max_iter=2).fit(dense, target)
+    assert_equal(constant.out_activation_(), "exp")
+    assert_equal(constant.n_iter_(), 2)
+    var poisson_prediction = constant.predict(dense)
+    _ = constant.set_params(loss="invalid")
+    with assert_raises(contains="loss must be"):
+        _ = constant.fit(dense, target)
+    equal(poisson_prediction, constant.predict(dense))
 
 
 def main() raises:

@@ -49,10 +49,15 @@ before rounding. SGD and Adam coefficients retain the input dtype.
 - `fit(X, y, sample_weight=weights)` borrows a weight vector. Without an integer
   seed, use `fit(X, y, rng)` or its weighted overload with an explicit mutable
   `RandomState`. A seeded ordinary fit starts a new stream for each call.
-- `get_params()` returns an owned `MLPParams` record. Edit it and pass it to
-  `set_params(params)`. Fit and set_params return a mutable borrow of the
-  estimator. `clone` copies configuration and starts unfitted. A fitted
-  `copy()` owns independent buffers.
+- `get_params()` returns an owned `MLPParams` record. Pass an edited record to
+  `set_params(params)`, or update individual constructor settings with keywords
+  such as `set_params(alpha=0.01, max_iter=50)`. Named updates preserve omitted
+  settings and existing learned state. Fit validates the new configuration.
+  Fit and set_params return a mutable borrow of the estimator. `clone` copies
+  configuration and starts unfitted. A fitted `copy()` owns independent buffers.
+- Named updates for `batch_size`, `random_state` and `n_iter_no_change` use a
+  nested optional. Pass `Optional[Int](value)` to assign a value, and
+  `Optional[Int]()` to clear it. Omitting the keyword keeps the existing value.
 - Learned state is read through `n_features_in_()`, `n_iter_()`, `t_()`,
   `n_layers_()`, `n_outputs_()`, `out_activation_()`, `loss_()`,
   `best_loss_()`, `loss_curve_()`, and the classifier's `classes_()`.
@@ -121,6 +126,6 @@ incremental contract limits every successful call to one stochastic epoch.
 Continuing a fit requires the same input width, hidden topology, output shape
 and output activation. Start a fresh ordinary fit to change these boundaries.
 
-Validation-set early stopping, multilabel classification and named partial
-parameter updates remain open. Ordinary supervised, weighted
-and probability traits remain available for typed pipelines and dense CV.
+Validation-set early stopping and multilabel classification remain open.
+Ordinary supervised, weighted and probability traits remain available for
+typed pipelines and dense CV.

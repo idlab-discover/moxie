@@ -133,6 +133,63 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
         self._params = params.copy()
         return self
 
+    def set_params[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        hidden_layer_sizes: Optional[List[Int]] = None,
+        activation: Optional[String] = None,
+        solver: Optional[String] = None,
+        alpha: Optional[Float64] = None,
+        batch_size: Optional[Optional[Int]] = None,
+        learning_rate: Optional[String] = None,
+        learning_rate_init: Optional[Float64] = None,
+        power_t: Optional[Float64] = None,
+        max_iter: Optional[Int] = None,
+        shuffle: Optional[Bool] = None,
+        random_state: Optional[Optional[Int]] = None,
+        tol: Optional[Float64] = None,
+        verbose: Optional[Bool] = None,
+        warm_start: Optional[Bool] = None,
+        momentum: Optional[Float64] = None,
+        nesterovs_momentum: Optional[Bool] = None,
+        early_stopping: Optional[Bool] = None,
+        validation_fraction: Optional[Float64] = None,
+        beta_1: Optional[Float64] = None,
+        beta_2: Optional[Float64] = None,
+        epsilon: Optional[Float64] = None,
+        n_iter_no_change: Optional[Optional[Int]] = None,
+        max_fun: Optional[Int] = None,
+    ) raises -> ref[self] Self:
+        """Update the supplied constructor settings and return this estimator."""
+        if hidden_layer_sizes:
+            self._params.hidden_layer_sizes = hidden_layer_sizes.value().copy()
+        if activation:
+            self._params.activation = activation.value().copy()
+        if solver:
+            self._params.solver = solver.value().copy()
+        self._params.alpha = alpha.or_else(self._params.alpha)
+        self._params.batch_size = batch_size.or_else(self._params.batch_size)
+        if learning_rate:
+            self._params.learning_rate = learning_rate.value().copy()
+        self._params.learning_rate_init = learning_rate_init.or_else(self._params.learning_rate_init)
+        self._params.power_t = power_t.or_else(self._params.power_t)
+        self._params.max_iter = max_iter.or_else(self._params.max_iter)
+        self._params.shuffle = shuffle.or_else(self._params.shuffle)
+        self._params.random_state = random_state.or_else(self._params.random_state)
+        self._params.tol = tol.or_else(self._params.tol)
+        self._params.verbose = verbose.or_else(self._params.verbose)
+        self._params.warm_start = warm_start.or_else(self._params.warm_start)
+        self._params.momentum = momentum.or_else(self._params.momentum)
+        self._params.nesterovs_momentum = nesterovs_momentum.or_else(self._params.nesterovs_momentum)
+        self._params.early_stopping = early_stopping.or_else(self._params.early_stopping)
+        self._params.validation_fraction = validation_fraction.or_else(self._params.validation_fraction)
+        self._params.beta_1 = beta_1.or_else(self._params.beta_1)
+        self._params.beta_2 = beta_2.or_else(self._params.beta_2)
+        self._params.epsilon = epsilon.or_else(self._params.epsilon)
+        self._params.n_iter_no_change = n_iter_no_change.or_else(self._params.n_iter_no_change)
+        self._params.max_fun = max_fun.or_else(self._params.max_fun)
+        return self
+
     def __sklearn_clone__(self) raises -> Self:
         return Self(self._params)
 
@@ -469,6 +526,66 @@ struct MLPRegressor[dtype: DType = DType.float64](
         ref[origin] self, ref[params_origin] params: Self.Params,
     ) raises -> ref[self] Self:
         self._params = params.copy()
+        return self
+
+    def set_params[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        hidden_layer_sizes: Optional[List[Int]] = None,
+        activation: Optional[String] = None,
+        solver: Optional[String] = None,
+        alpha: Optional[Float64] = None,
+        batch_size: Optional[Optional[Int]] = None,
+        learning_rate: Optional[String] = None,
+        learning_rate_init: Optional[Float64] = None,
+        power_t: Optional[Float64] = None,
+        max_iter: Optional[Int] = None,
+        shuffle: Optional[Bool] = None,
+        random_state: Optional[Optional[Int]] = None,
+        tol: Optional[Float64] = None,
+        verbose: Optional[Bool] = None,
+        warm_start: Optional[Bool] = None,
+        momentum: Optional[Float64] = None,
+        nesterovs_momentum: Optional[Bool] = None,
+        early_stopping: Optional[Bool] = None,
+        validation_fraction: Optional[Float64] = None,
+        beta_1: Optional[Float64] = None,
+        beta_2: Optional[Float64] = None,
+        epsilon: Optional[Float64] = None,
+        n_iter_no_change: Optional[Optional[Int]] = None,
+        max_fun: Optional[Int] = None,
+        loss: Optional[String] = None,
+    ) raises -> ref[self] Self:
+        """Update the supplied constructor settings and return this estimator."""
+        if hidden_layer_sizes:
+            self._params.hidden_layer_sizes = hidden_layer_sizes.value().copy()
+        if activation:
+            self._params.activation = activation.value().copy()
+        if solver:
+            self._params.solver = solver.value().copy()
+        self._params.alpha = alpha.or_else(self._params.alpha)
+        self._params.batch_size = batch_size.or_else(self._params.batch_size)
+        if learning_rate:
+            self._params.learning_rate = learning_rate.value().copy()
+        self._params.learning_rate_init = learning_rate_init.or_else(self._params.learning_rate_init)
+        self._params.power_t = power_t.or_else(self._params.power_t)
+        self._params.max_iter = max_iter.or_else(self._params.max_iter)
+        self._params.shuffle = shuffle.or_else(self._params.shuffle)
+        self._params.random_state = random_state.or_else(self._params.random_state)
+        self._params.tol = tol.or_else(self._params.tol)
+        self._params.verbose = verbose.or_else(self._params.verbose)
+        self._params.warm_start = warm_start.or_else(self._params.warm_start)
+        self._params.momentum = momentum.or_else(self._params.momentum)
+        self._params.nesterovs_momentum = nesterovs_momentum.or_else(self._params.nesterovs_momentum)
+        self._params.early_stopping = early_stopping.or_else(self._params.early_stopping)
+        self._params.validation_fraction = validation_fraction.or_else(self._params.validation_fraction)
+        self._params.beta_1 = beta_1.or_else(self._params.beta_1)
+        self._params.beta_2 = beta_2.or_else(self._params.beta_2)
+        self._params.epsilon = epsilon.or_else(self._params.epsilon)
+        self._params.n_iter_no_change = n_iter_no_change.or_else(self._params.n_iter_no_change)
+        self._params.max_fun = max_fun.or_else(self._params.max_fun)
+        if loss:
+            self._params.loss = loss.value().copy()
         return self
 
     def __sklearn_clone__(self) raises -> Self:

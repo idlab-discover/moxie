@@ -1,12 +1,18 @@
 import numojo as nm
 from std.testing import assert_equal, assert_true, assert_raises
 from moxie.svm import LinearSVC, LinearSVR
-from moxie.base import BaseEstimator, SupervisedEstimator, clone
+from moxie.base import BaseEstimator, SupervisedEstimator, WeightedSupervisedEstimator, clone
 from moxie._random import RandomState
 
 
 def generic_fit[T: SupervisedEstimator](mut model: T, X: T.Input, y: T.Target) raises:
     assert_true(model.fit(X, y).__sklearn_is_fitted__())
+
+
+def generic_weighted_fit[T: WeightedSupervisedEstimator](
+    mut model: T, X: T.Input, y: T.Target, weights: T.SampleWeight
+) raises:
+    assert_true(model.fit(X, y, sample_weight=weights).__sklearn_is_fitted__())
 
 
 def generic_params[T: BaseEstimator](mut model: T, params: T.Params) raises:
@@ -39,6 +45,7 @@ def main() raises:
     var params = svc.get_params()
     generic_params(svc, params)
     generic_fit(svc, x, labels)
+    generic_weighted_fit(svc, x, labels, weights)
     var fresh = clone(svc)
     assert_true(not fresh.__sklearn_is_fitted__())
     var strings: List[String] = ["a", "a", "b", "b"]

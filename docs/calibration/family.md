@@ -34,9 +34,12 @@ estimator configuration and returns an unfitted calibrator. A frozen base
 estimator's clone retains its own fitted state.
 
 Constructor parameters are `estimator`, `method="sigmoid"`, `cv=None`,
-`n_jobs=None`, and `ensemble="auto"`. An explicit estimator is required because
-this family does not provide the reference's default LinearSVC. `cv=None`
-means five stratified folds. Explicit integers of at least two require each
+`n_jobs=None`, and `ensemble="auto"`. Omitting `estimator` or passing
+`estimator=None` constructs native `LinearSVC(random_state=0)` through the
+built-in adapter. The typed `estimator` field and parameter record expose the
+unfitted adapter immediately. Its fitted copies are in `calibrated_classifiers_`.
+Pass `adapt_classifier(LinearSVC(...))` to customize the base classifier.
+`cv=None` means five stratified folds. Explicit integers of at least two require each
 class to have at least `cv` samples, as in sklearn. With `cv=None`, smaller
 minority classes are allowed when the largest class has at least five samples.
 The reference warns for that case; the native implementation emits no warning.
@@ -66,14 +69,15 @@ are implementation details, not additional public sklearn estimators.
 ## Classifier adapter
 
 Use `adapt_classifier(estimator)` with the default type specializations of
-`GaussianNB`, `LinearDiscriminantAnalysis`, `QuadraticDiscriminantAnalysis`
-and `LogisticRegression`. Pass the result to `CalibratedClassifierCV` or, if
-already fitted, to `CalibrationDisplay.from_estimator`. The adapter prefers
+`GaussianNB`, `LinearDiscriminantAnalysis`, `QuadraticDiscriminantAnalysis`,
+`LogisticRegression` and `LinearSVC`. Pass the result to `CalibratedClassifierCV`.
+Adapters with `predict_proba` also support direct use with
+`CalibrationDisplay.from_estimator` after fitting. The adapter prefers
 `decision_function` for calibration and uses `predict_proba` for displays.
 With GaussianNB it uses probabilities for both. The adapter converts Float64
-calibration targets to the classifier's native `List[Int]` or Int64 array and
-returns its actual fitted classes in column order. It forwards explicit weights
-to GaussianNB and LogisticRegression and rejects them for LDA and QDA.
+calibration targets to the classifier's native numeric list or Int64 array and
+returns its fitted classes in column order. It forwards explicit weights to
+GaussianNB, LogisticRegression and LinearSVC. LDA and QDA reject explicit weights.
 
 `ClassifierCalibrationAdapter(estimator, read_classes, name)` also supports
 custom classifiers with these input and target types and compatible response
@@ -219,7 +223,7 @@ kwargs, interactive windows and other image formats are not supported.
 
 ## Limits and validation
 
-Remaining gaps include the default LinearSVC, sparse estimators, Float32 or
+Remaining gaps include sparse estimators, Float32 or
 string-label estimator fitting, arbitrary fit
 metadata, parallel jobs, metadata routing, persistence, feature names and
 Matplotlib object interoperability. Temperature ensemble folds with missing
@@ -239,8 +243,9 @@ materialized splits, missing classes, default minority-class splits, and
 explicit KFold and seeded shuffled KFold and StratifiedKFold. Production
 classifier cases load GaussianNB, LDA, QDA and LogisticRegression from the
 same revision and check binary and multiclass class order, predictions and
-probabilities. They also check frozen logistic calibration with disjoint
-training and calibration data.
+probabilities. Default LinearSVC cases cover all three calibrators, weighted
+and unweighted fitting, and every ensemble setting. The production cases also
+check frozen logistic calibration with disjoint training and calibration data.
 Additional checks compare Float32 and string-label curves and native display
 statistics, labels and metadata with the reference. SVG structure and native
 ownership/overlay behavior have separate contract tests.

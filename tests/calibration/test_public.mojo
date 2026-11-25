@@ -1,4 +1,4 @@
-"""Isolated consumer using Moxie's production LDA through the built-in adapter."""
+"""Isolated consumer using production classifiers through calibration."""
 import numojo as nm
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from std.sys import argv
@@ -12,12 +12,45 @@ from moxie.discriminant_analysis import (
     QuadraticDiscriminantAnalysis,
 )
 from moxie.frozen import FrozenEstimator
+from moxie.svm import LinearSVC
 
 comptime Array = nm.NDArray[DType.float64]
 
 
 def generic_fit[E: SupervisedEstimator](mut model: E, X: E.Input, y: E.Target) raises:
     _ = model.fit(X, y)
+
+
+def test_default_classifier(X: Array, y: Array) raises:
+    var model = CalibratedClassifierCV()
+    assert_equal(model.get_params().estimator.get_params().random_state, 0)
+    assert_false(model.estimator.uses_probabilities())
+    with assert_raises():
+        _ = model.predict_proba(X)
+    generic_fit(model, X, y)
+    assert_equal(len(model.calibrated_classifiers_), 5)
+    assert_false(model.estimator.__sklearn_is_fitted__())
+    assert_true(model.calibrated_classifiers_[0].estimator.estimator().__sklearn_is_fitted__())
+    var first = model.predict_proba(X)
+    var explicit_none = CalibratedClassifierCV(estimator=None)
+    var explicit = CalibratedClassifierCV(adapt_classifier(LinearSVC(random_state=0)))
+    var cloned = clone(model)
+    assert_false(cloned.__sklearn_is_fitted__())
+    assert_equal(cloned.get_params().estimator.get_params().random_state, 0)
+    _ = model.fit(X, y)
+    _ = explicit_none.fit(X, y)
+    _ = explicit.fit(X, y)
+    _ = cloned.fit(X, y)
+    var repeated = model.predict_proba(X)
+    var none_probability = explicit_none.predict_proba(X)
+    var explicit_probability = explicit.predict_proba(X)
+    var cloned_probability = cloned.predict_proba(X)
+    for i in range(X.shape[0]):
+        for j in range(2):
+            assert_equal(repeated.item(i, j), first.item(i, j))
+            assert_equal(none_probability.item(i, j), first.item(i, j))
+            assert_equal(explicit_probability.item(i, j), first.item(i, j))
+            assert_equal(cloned_probability.item(i, j), first.item(i, j))
 
 
 def main() raises:
@@ -27,6 +60,7 @@ def main() raises:
         X[nm.Item(i, 0)] = Float64(i % 2) + Float64(i % 7) / 4
         X[nm.Item(i, 1)] = Float64(i % 11) / 3
         y[nm.Item(i)] = -3.0 if i % 2 == 0 else 7.0
+    test_default_classifier(X, y)
     var base = adapt_classifier(LinearDiscriminantAnalysis())
     with assert_raises():
         _ = base.class_labels()
@@ -109,4 +143,4 @@ def main() raises:
             p[nm.Item(i)] = probabilities.item(i, 1)
         var curve = calibration_curve(y, p, pos_label=7.0, n_bins="cube_root")
         assert_true(curve[0].size > 0)
-    print("PASS: production LDA, fluent contracts, frozen ownership, splits, curves and SVG")
+    print("PASS: default LinearSVC, production LDA, fluent contracts, frozen ownership, splits, curves and SVG")

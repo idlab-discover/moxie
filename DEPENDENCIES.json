@@ -308,6 +308,9 @@
         "moxie._calibration_display": {
           "file": "src/moxie/_calibration_display.mojo"
         },
+        "moxie._calibration_estimator": {
+          "file": "src/moxie/_calibration_estimator.mojo"
+        },
         "moxie._calibration_frozen": {
           "file": "src/moxie/_calibration_frozen.mojo"
         },

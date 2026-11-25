@@ -2,6 +2,7 @@
 """Dense linear SVM presentation over the family LIBLINEAR owner."""
 import numojo as nm
 from std.math import isfinite, floor
+from moxie.base import WeightedSupervisedEstimator
 from moxie.svm._contracts import Dense, LinearModel, LinearOptions, validate_matrix, validate_vector
 from moxie.svm._liblinear import LibLinear
 from moxie.svm._base import SupportVectorClassifier, SupportVectorRegressor
@@ -200,7 +201,7 @@ struct LinearSVCParams[Label: Copyable & Comparable & Deinitable = Float64](Copy
 
 
 struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
-    SupportVectorClassifier, Copyable
+    SupportVectorClassifier, Copyable, WeightedSupervisedEstimator
 ):
     comptime Params = LinearSVCParams[Self.Label]
     comptime Input = Dense
@@ -287,6 +288,20 @@ struct LinearSVC[Label: Copyable & Comparable & Deinitable = Float64](
         if self.random_state == -1:
             self._rng = rng^
         return self
+
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        weight_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Dense,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[weight_origin] sample_weight: Dense,
+    ) raises -> ref[self] Self:
+        return self.fit(X, y, Optional(sample_weight.copy()))
 
     def fit_with_random_state[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Dense, ref[y_origin] y: Self.Target, mut rng: RandomState, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
         validate_matrix(X)

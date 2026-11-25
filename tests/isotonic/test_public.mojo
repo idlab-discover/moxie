@@ -125,10 +125,27 @@ def exercise_metadata() raises:
     assert_equal(cloned.get_metadata_routing().score.requested_name().or_else(""), "score_weights")
 
 
+def exercise_output[dtype: DType]() raises:
+    var model = IsotonicRegression[dtype]()
+    var x: List[Scalar[dtype]] = [0, 1, 2]
+    var y: List[Scalar[dtype]] = [1, 2, 4]
+    _ = model.set_output()
+    with assert_raises(contains="NotFittedError"):
+        _ = model.transform(x)
+    assert_equal(model.set_output(transform="default").fit_transform(x, y.copy()), y)
+    for mode in ["pandas", "polars", "invalid"]:
+        with assert_raises(contains="only 'default' native output is available"):
+            _ = model.set_output(transform=mode)
+    assert_equal(model.set_output(transform=None).transform(x), y)
+    assert_equal(model.predict(x), y)
+
+
 def main() raises:
     exercise[DType.float32]()
     exercise[DType.float64]()
     exercise_views[DType.float32]()
     exercise_views[DType.float64]()
+    exercise_output[DType.float32]()
+    exercise_output[DType.float64]()
     exercise_metadata()
-    print("PASS: isotonic public exports, fluent contracts, metadata requests and dtype preservation")
+    print("PASS: isotonic public exports, fluent contracts, metadata requests, output and dtypes")

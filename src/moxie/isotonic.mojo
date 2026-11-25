@@ -735,6 +735,21 @@ struct IsotonicRegression[dtype: DType = DType.float64](
             _feature(X), _vector(y, "y"), _vector(sample_weight, "sample_weight"),
         )
 
+    def set_output[origin: MutOrigin](
+        ref[origin] self,
+        *,
+        transform: Optional[String] = None,
+    ) raises -> ref[self] Self:
+        """Select the native container for transform and fit_transform."""
+        if transform and transform.value() != "default":
+            raise Error(
+                String(
+                    "ValueError: set_output(transform='", transform.value(),
+                    "') is unsupported; only 'default' native output is available",
+                )
+            )
+        return self
+
     def get_feature_names_out(self, input_features: Optional[List[String]] = None) raises -> List[String]:
         check_is_fitted(self)
         return [String("isotonicregression0")]

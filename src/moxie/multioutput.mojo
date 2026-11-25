@@ -50,6 +50,7 @@ struct ChainFolds(Copyable, Movable):
 
 
 comptime ChainCV = Variant[type_of(None), Int, KFold, StratifiedKFold, ChainFolds]
+comptime ChainMethod = Variant[String, List[String]]
 
 
 trait ChainSplitter(Copyable):
@@ -64,19 +65,21 @@ trait ChainSplitter(Copyable):
 
 
 struct ChainParams[
-    P: Copyable & Deinitable, CV: Copyable & Deinitable = ChainCV,
+    P: Copyable & Deinitable,
+    CV: Copyable & Deinitable = ChainCV,
+    Method: Copyable & Deinitable = String,
 ](Copyable, Movable):
     var estimator: Self.P
     var order: Optional[List[Int]]
     var random_state: Optional[Int]
     var random_order: Bool
     var verbose: Bool
-    var chain_method: String
+    var chain_method: Self.Method
     var cv: Self.CV
 
     def __init__(
         out self, var estimator: Self.P, var order: Optional[List[Int]], random_state: Optional[Int],
-        random_order: Bool, verbose: Bool, var chain_method: String,
+        random_order: Bool, verbose: Bool, var chain_method: Self.Method,
         var cv: Self.CV = rebind_var[Self.CV](ChainCV(None)),
     ):
         self.estimator = estimator^
@@ -315,19 +318,28 @@ def _response[E: Predictor, dtype: DType, label: DType, out: DType = dtype](esti
     raise Error("ValueError: component lacks requested chain response")
 
 
-def _check_method[E: Predictor](method: String) raises:
-    if method == "predict":
-        return
-    comptime if conforms_to(E, ProbabilityPredictor):
-        if method == "predict_proba":
-            return
-    comptime if conforms_to(E, LogProbabilityPredictor):
-        if method == "predict_log_proba":
-            return
-    comptime if conforms_to(E, DecisionFunction):
-        if method == "decision_function":
-            return
-    raise Error("ValueError: unavailable chain_method")
+def _supports_chain_method[E: Predictor](method: String) -> Bool:
+    return (
+        method == "predict"
+        or (method == "predict_proba" and conforms_to(E, ProbabilityPredictor))
+        or (method == "predict_log_proba" and conforms_to(E, LogProbabilityPredictor))
+        or (method == "decision_function" and conforms_to(E, DecisionFunction))
+    )
+
+
+def _select_chain_method[E: Predictor](preference: ChainMethod) raises -> String:
+    if preference.isa[String]():
+        ref method = preference[String]
+        if _supports_chain_method[E](method):
+            return method
+        raise Error(t"ValueError: unavailable chain_method '{method}'")
+    ref methods = preference[List[String]]
+    if not len(methods):
+        raise Error("ValueError: chain_method preference list must not be empty")
+    for method in methods:
+        if _supports_chain_method[E](method):
+            return method
+    raise Error("ValueError: component lacks all requested chain_method responses")
 
 
 def _materialize_chain_folds[C: SplitCursor & Deinitable](var cursor: C) raises -> List[IndexSplit]:
@@ -1046,14 +1058,14 @@ struct ClassifierChain[
     comptime Prediction = Self.Target
     comptime Probabilities = NDArray[DType.float64]
     comptime SampleWeight = NDArray[DType.float64]
-    comptime Params = ChainParams[Self.E.Params, Self.Splitter]
+    comptime Params = ChainParams[Self.E.Params, Self.Splitter, ChainMethod]
     var estimator: Self.E
     var n_jobs: Optional[Int]
     var order: Optional[List[Int]]
     var random_state: Optional[Int]
     var random_order: Bool
     var verbose: Bool
-    var chain_method: String
+    var chain_method: ChainMethod
     var cv: Self.Splitter
     var chain_method_: String
     var estimators_: List[Self.E]
@@ -1061,22 +1073,34 @@ struct ClassifierChain[
     var order_: List[Int]
     var n_features_in_: Optional[Int]
 
-    def __init__(out self, var estimator: Self.E, *, order: Optional[List[Int]] = None, random_state: Optional[Int] = None,
-                 random_order: Bool = False, verbose: Bool = False, chain_method: String = "predict",
-                 cv: ChainCV = None) raises where Self.Splitter == ChainCV:
-        self = Self(estimator^, rebind[Self.Splitter](cv), order, random_state, random_order, verbose, chain_method)
+    def __init__(
+        out self,
+        var estimator: Self.E,
+        *,
+        order: Optional[List[Int]] = None,
+        random_state: Optional[Int] = None,
+        random_order: Bool = False,
+        verbose: Bool = False,
+        var chain_method: ChainMethod = String("predict"),
+        cv: ChainCV = None,
+    ) raises where Self.Splitter == ChainCV:
+        self = Self(
+            estimator^, rebind[Self.Splitter](cv), order, random_state,
+            random_order, verbose, chain_method^,
+        )
 
     def __init__(
         out self, var estimator: Self.E, *, cv: Self.Splitter,
         order: Optional[List[Int]] = None, random_state: Optional[Int] = None,
-        random_order: Bool = False, verbose: Bool = False, chain_method: String = "predict",
+        random_order: Bool = False, verbose: Bool = False,
+        var chain_method: ChainMethod = String("predict"),
     ) raises where conforms_to(Self.Splitter, ChainSplitter):
-        self = Self(estimator^, cv, order, random_state, random_order, verbose, chain_method)
+        self = Self(estimator^, cv, order, random_state, random_order, verbose, chain_method^)
 
     def __init__(
         out self, var estimator: Self.E, _cv: Self.Splitter,
         order: Optional[List[Int]], random_state: Optional[Int], random_order: Bool,
-        verbose: Bool, chain_method: String,
+        verbose: Bool, var chain_method: ChainMethod,
     ):
         comptime assert Self.Splitter == ChainCV or conforms_to(Self.Splitter, ChainSplitter)
         comptime assert Self.dtype in (DType.float32, DType.float64), "features must use Float32 or Float64"
@@ -1093,7 +1117,7 @@ struct ClassifierChain[
         self.random_state = random_state
         self.random_order = random_order
         self.verbose = verbose
-        self.chain_method = chain_method
+        self.chain_method = chain_method^
         self.cv = _cv.copy()
         self.chain_method_ = "predict"
         self.estimators_ = List[Self.E]()
@@ -1102,7 +1126,10 @@ struct ClassifierChain[
         self.n_features_in_ = None
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
-        return Self.Params(self.estimator.get_params(deep), self.order.copy(), self.random_state, self.random_order, self.verbose, self.chain_method, self.cv.copy())
+        return Self.Params(
+            self.estimator.get_params(deep), self.order.copy(), self.random_state,
+            self.random_order, self.verbose, self.chain_method.copy(), self.cv.copy(),
+        )
 
     def set_params[origin: MutOrigin, params_origin: ImmOrigin](ref[origin] self, ref[params_origin] params: Self.Params) raises -> ref[self] Self:
         _ = self.estimator.set_params(params.estimator)
@@ -1110,14 +1137,14 @@ struct ClassifierChain[
         self.random_state = params.random_state
         self.random_order = params.random_order
         self.verbose = params.verbose
-        self.chain_method = params.chain_method
+        self.chain_method = params.chain_method.copy()
         self.cv = params.cv.copy()
         return self
 
     def __sklearn_clone__(self) raises -> Self:
         return Self(
             clone(self.estimator), self.cv, self.order, self.random_state,
-            self.random_order, self.verbose, self.chain_method,
+            self.random_order, self.verbose, self.chain_method.copy(),
         )
 
     def __sklearn_is_fitted__(self) -> Bool:
@@ -1160,7 +1187,7 @@ struct ClassifierChain[
         _finite(y)
         if self.n_jobs and self.n_jobs.value() == 0:
             raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
-        _check_method[Self.E](self.chain_method)
+        var method = _select_chain_method[Self.E](self.chain_method)
         var order = List[Int]()
         for j in range(y.shape[1]):
             order.append(j)
@@ -1191,7 +1218,7 @@ struct ClassifierChain[
                 if use_cv:
                     var response = rebind_var[Self.Input](cv.cross_val_response(
                         rebind[CV.Estimator](self.estimator), rebind[CV.Input](input),
-                        rebind[CV.Target](target), self.chain_method,
+                        rebind[CV.Target](target), method,
                     ))
                     _put_column(responses, j, response)
                 else:
@@ -1200,7 +1227,7 @@ struct ClassifierChain[
         self.classes_ = classes^
         self.order_ = order^
         self.n_features_in_ = X.shape[1]
-        self.chain_method_ = self.chain_method
+        self.chain_method_ = method^
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check(X)

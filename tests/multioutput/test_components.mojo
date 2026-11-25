@@ -140,10 +140,12 @@ def custom_chain_cv() raises:
     for i in range(ROWS):
         binary.unsafe_set(i * 3, Int64(1 if i < 4 or i == 7 else 0))
     var classifier = ClassifierChain(
-        LogisticRegression(tol=1e-10, max_iter=1000), chain_method="predict_proba",
+        LogisticRegression(tol=1e-10, max_iter=1000),
+        chain_method=List[String](["predict_proba", "decision_function", "predict"]),
         cv=PerLinkKFold[DType.int64](7, 0.5),
     )
     var proba = classifier.fit(X, binary).predict_proba(X)
+    assert_equal(classifier.chain_method_, "predict_proba")
     parity("ComponentsLogisticChainCustomCVProba", proba)
     parity("ComponentsLogisticChainCustomCVLabels", classifier.predict(X))
     var override = classifier.fit(X, binary, cv=3).predict_proba(X)
@@ -218,6 +220,14 @@ def chain_cv() raises:
     parity("ComponentsDecisionChainKFold", kfold_decision)
     var integer_decision = classifier.fit(X, binary).decision_function(X)
     parity("ComponentsDecisionChainIntegerCV", integer_decision)
+    var preferred = ClassifierChain(
+        RidgeClassifier(), order=List[Int]([0, 2, 1]), cv=3,
+        chain_method=List[String](["predict_proba", "decision_function", "predict"]),
+    )
+    var preferred_decision = preferred.fit(X, binary).decision_function(X)
+    assert_equal(preferred.chain_method_, "decision_function")
+    assert_same(integer_decision, preferred_decision)
+    parity("ComponentsDecisionChainPreferenceCV", preferred_decision)
     var splitter_effect = Float64(0)
     for i in range(integer_decision.size):
         splitter_effect = max(splitter_effect, abs(integer_decision.unsafe_get(i) - kfold_decision.unsafe_get(i)))

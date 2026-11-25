@@ -15,7 +15,8 @@ Chains support natural, explicit and integer-seeded random orders, teacher
 forcing during ordinary fit, and predicted feature augmentation at inference.
 Classifier chains support `predict`, `predict_proba`, `predict_log_proba`, and
 `decision_function` feature responses when the component exposes the matching
-trait. Probability and decision outputs are restored to original target order.
+trait. A preference list selects the first supported response. Probability
+and decision outputs are restored to original target order.
 `predict_log_proba` computes the logarithm of the final positive probabilities.
 Chain CV configuration accepts an integer fold count, a native `KFold` or
 `StratifiedKFold`, fixed `ChainFolds`, a typed `ChainSplitter`, or `None`.
@@ -33,8 +34,7 @@ original sample order.
   describes worker counts, ordering and failure behavior. Sparse inputs
   remain deferred.
 - Random chain order uses `random_order=True`, with an optional integer
-  `random_state`. Mutable RNG objects and response-method preference lists
-  are not supported.
+  `random_state`. Mutable RNG objects are unsupported.
 - The default `cv=None` uses true preceding targets. Native splitter and
   class-response diagnostics use Mojo errors for invalid folds and handle
   undersized classes silently.

@@ -1,13 +1,14 @@
 """Serial typed CV orchestration; see docs/scope.md for supported modes."""
-from moxie.base import BaseEstimator, clone
-from moxie.model_selection._evaluation import FitAdapter, ParameterAdapter
+from moxie.base import BaseEstimator, UnsupervisedScorer, clone
+from moxie.model_selection._evaluation import FitAdapter, ParameterAdapter, TypedScorer
 from moxie.model_selection._indices import IndexArray, IndexSplit
 from moxie.model_selection._results import ScoreTable, FitStatus, ErrorPolicy
 from numojo import NDArray, Shape, Item, zeros, mean
-from moxie.model_selection._split import SplitLabels, _rows
+from moxie.model_selection._split import KFold, SplitLabels, _rows, select_rows
 from moxie._labels import encode_column, StringTarget
 from moxie._random import RandomState
 from std.builtin.sort import sort
+from std.iter import downcast
 from std.math import isfinite, min, max
 from std.memory import bitcast
 from std.time import perf_counter_ns
@@ -36,6 +37,70 @@ trait DefaultCVAdapter(CVAdapter):
 
     def default_cv(self, X: Self.Scorer.Input, y: Self.Scorer.Target) raises -> List[IndexSplit]:
         ...
+
+
+struct _TargetlessEstimatorScore[
+    E: UnsupervisedScorer & Deinitable, dtype: DType,
+](TypedScorer, Copyable, Defaultable):
+    comptime Estimator = Self.E
+    comptime Input = NDArray[Self.dtype]
+    comptime Target = NoneType
+    comptime Metadata = NoneType
+
+    def __init__(out self):
+        pass
+
+    def score(self, estimator: Self.E, X: Self.Input, y: NoneType, metadata: NoneType) raises -> Float64:
+        var target = Optional[downcast[Self.E.Target, Movable & Deinitable]](None)
+        return estimator.score(rebind[Self.E.Input](X), rebind[Optional[Self.E.Target]](target))
+
+
+struct DenseUnsupervisedAdapter[
+    E: UnsupervisedScorer & Deinitable, dtype: DType = DType.float64,
+](DefaultCVAdapter):
+    """Cross-validation over ordinary dense sample rows with no target or metadata."""
+
+    comptime Scorer = _TargetlessEstimatorScore[Self.E, Self.dtype]
+    comptime Input = NDArray[Self.dtype]
+
+    var _n_splits: Int
+
+    def __init__(out self, n_splits: Int = 5):
+        comptime assert Self.Input == Self.E.Input, "Dense input must match the estimator"
+        comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, (
+            "Expected Float32 or Float64 features"
+        )
+        self._n_splits = n_splits
+
+    def n_samples(self, X: Self.Input, y: NoneType) raises -> Int:
+        if X.ndim != 2:
+            raise Error("ValueError: dense CV expects a rank-two feature matrix")
+        return X.shape[0]
+
+    def input_rows(self, X: Self.Input, rows: IndexArray, train: IndexArray) raises -> Self.Input:
+        return select_rows(X, rows)
+
+    def target_rows(self, y: NoneType, rows: IndexArray) raises -> NoneType:
+        return None
+
+    def metadata_rows(self, metadata: NoneType, rows: IndexArray) raises -> NoneType:
+        return None
+
+    def fit(self, mut estimator: Self.E, X: Self.Input, y: NoneType, metadata: NoneType) raises:
+        var target = Optional[downcast[Self.E.Target, Movable & Deinitable]](None)
+        _ = estimator.fit(rebind[Self.E.Input](X), rebind[Optional[Self.E.Target]](target))
+
+    def default_scorer(self) raises -> Self.Scorer:
+        return Self.Scorer()
+
+    def default_cv(self, X: Self.Input, y: NoneType) raises -> List[IndexSplit]:
+        var cursor = KFold(self._n_splits).split(self.n_samples(X, y))
+        var folds = List[IndexSplit]()
+        while True:
+            var split = cursor.next()
+            if not split:
+                return folds^
+            folds.append(split.take())
 
 
 trait IncrementalCVAdapter(CVAdapter):
@@ -261,6 +326,31 @@ def cross_val_score[A: DefaultCVAdapter](
     return cross_val_score[A](
         estimator, X, y, adapter, scoring=scoring^, cv=cv, error_score=error_score,
         fit_metadata=A.Scorer.Metadata(), score_metadata=A.Scorer.Metadata(),
+    )
+
+
+def cross_val_score[E: UnsupervisedScorer & Deinitable, dtype: DType](
+    estimator: E, X: NDArray[dtype], *, cv: List[IndexSplit],
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> NDArray[DType.float64]:
+    """Score fresh clones on explicit splits in the supplied order."""
+    comptime Adapter = DenseUnsupervisedAdapter[E, dtype]
+    var adapter = Adapter()
+    return cross_val_score[Adapter](
+        estimator, X, None, adapter, adapter.default_scorer(), cv, None, None,
+        error_score=error_score,
+    )
+
+
+def cross_val_score[E: UnsupervisedScorer & Deinitable, dtype: DType](
+    estimator: E, X: NDArray[dtype], *, cv: Int = 5,
+    error_score: ErrorPolicy = ErrorPolicy(False, bitcast[DType.float64](UInt64(0x7ff8000000000000))),
+) raises -> NDArray[DType.float64]:
+    """Score fresh clones on the requested number of unshuffled folds."""
+    comptime Adapter = DenseUnsupervisedAdapter[E, dtype]
+    return cross_val_score[Adapter](
+        estimator, X, None, Adapter(cv), fit_metadata=None, score_metadata=None,
+        error_score=error_score,
     )
 
 

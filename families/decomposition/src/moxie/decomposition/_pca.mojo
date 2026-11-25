@@ -11,7 +11,7 @@ from std.math import abs, isfinite, isnan, sqrt, lgamma
 from std.sys import llvm_intrinsic
 from numojo import NDArray, Shape, zeros, mean
 from ._pca_backend import PCABackend, RuntimePCABackend
-from moxie.base import UnsupervisedEstimator
+from moxie.base import UnsupervisedScorer
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import entropy_state, RandomState
 from ._base import InvertibleDecomposition
@@ -91,7 +91,7 @@ def _infer_dimension[dtype: DType](spectrum: NDArray[dtype], n_samples: Int) rai
 
 
 struct PCA[dtype: DType = DType.float64, Backend: PCABackend = RuntimePCABackend](
-    InvertibleDecomposition, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount, Copyable,
+    InvertibleDecomposition, UnsupervisedScorer, FeatureNamesOut, InputFeatureCount, Copyable,
 ):
     """PCA on dense Float32/Float64 matrices; Backend may fix training dimensions.
 

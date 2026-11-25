@@ -7,7 +7,7 @@ dtype. Factorizations: shared SVD engine; inverses/log-determinants: mojo-linalg
 """
 from numojo import NDArray, Shape, zeros
 from std.math import sqrt, isfinite
-from moxie.base import UnsupervisedEstimator
+from moxie.base import UnsupervisedScorer
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import RandomState
 from moxie.warnings import FitWarning
@@ -70,7 +70,7 @@ def ortho_rotation(components: NDArray[DType.float64], method: String, *, tol: F
     return (components @ rotation).T()
 
 
-struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
+struct FactorAnalysis[dtype: DType = DType.float64](DecompositionTransformer, UnsupervisedScorer, FeatureNamesOut, InputFeatureCount):
     """Factor analysis on dense Float32/Float64 input; learned state is Float64.
 
     `svd_method="lapack"` uses the exact economy SVD; `"randomized"` (default)

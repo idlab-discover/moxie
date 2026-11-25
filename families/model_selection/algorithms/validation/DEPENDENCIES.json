@@ -398,6 +398,7 @@
           "moxie.model_selection": {
             "cross_validate": "moxie.model_selection._validation",
             "cross_val_score": "moxie.model_selection._validation",
+            "DenseUnsupervisedAdapter": "moxie.model_selection._validation",
             "cross_val_predict": "moxie.model_selection._validation",
             "CVAdapter": "moxie.model_selection._validation",
             "DefaultCVAdapter": "moxie.model_selection._validation",

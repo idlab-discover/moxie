@@ -19,7 +19,12 @@ from moxie._feature_metadata import (
     FeatureNamesOut,
     InputFeatureCount,
 )
-from moxie.metadata_routing import SampleWeightRequest, SampleWeightUpdate
+from moxie.metadata_routing import (
+    FitScoreMetadataRequest,
+    FitScoreMetadataRequestProvider,
+    SampleWeightRequest,
+    SampleWeightUpdate,
+)
 from moxie.warnings import FitWarning
 from moxie.compose._table import ColumnTable
 from moxie.cross_decomposition._base import (
@@ -848,9 +853,13 @@ comptime _CCA = 2
 
 @fieldwise_init
 struct PLSMetadataRequest(Copyable, Movable):
-    """Metadata accepted by the native PLS regression and CCA score methods."""
+    """Score-only view of a PLS or CCA metadata request."""
 
     var score: SampleWeightRequest
+
+    @implicit
+    def __init__(out self, requests: FitScoreMetadataRequest):
+        self.score = requests.score.copy()
 
 
 @fieldwise_init
@@ -1002,6 +1011,7 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
     CrossDecompositionTransformer,
     EstimatorClassName,
     FeatureNamesOut,
+    FitScoreMetadataRequestProvider,
     InputFeatureCount,
     Movable,
     PLSPredictor,
@@ -1217,8 +1227,10 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         self._score_request.set(sample_weight)
         return self
 
-    def get_metadata_routing(self) -> PLSMetadataRequest:
-        return PLSMetadataRequest(self._score_request.copy())
+    def get_metadata_routing(self) -> FitScoreMetadataRequest:
+        return FitScoreMetadataRequest(
+            fit=SampleWeightRequest(), score=self._score_request.copy()
+        )
 
     def __sklearn_clone__(self) raises -> Self:
         var cloned = Self(params=self.get_params())

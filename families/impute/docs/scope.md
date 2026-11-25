@@ -34,6 +34,7 @@ verifies floating, integer and string imputation branches against scikit-learn.
 IntegerSimpleImputer supports signed/unsigned integer arrays with the documented
 typed-result and range adaptations. StringSimpleImputer supports most-frequent
 and constant strategies with the documented typed result and empty/inverse limits.
-Standalone string missing indicators use `StringMissingIndicator`. Broader
-heterogeneous categorical imputation and indicators remain unfinished.
+Standalone string missing indicators use `StringMissingIndicator`.
+`MissingIndicator` accepts a typed selection of `ColumnTable` categorical
+columns. Categorical imputation remains unfinished.
 Passing these checks is not full dense estimator parity.

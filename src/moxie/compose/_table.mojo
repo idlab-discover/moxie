@@ -1,14 +1,20 @@
 """Owned named numeric, categorical, and text feature columns."""
-from numojo import NDArray
+from numojo import NDArray, Shape, zeros
 from std.utils import Variant
 from moxie._categorical import CategoricalColumn, CategoryDomain, NumericCategories, StringCategories
 
 comptime StringColumn = CategoricalColumn[StringCategories]
 comptime NumericColumn[dtype: DType] = CategoricalColumn[NumericCategories[dtype]]
-comptime _NonNumericColumn = Variant[
+comptime _AddedColumn = Variant[
     StringColumn, NumericColumn[DType.bool], NumericColumn[DType.int64],
     NumericColumn[DType.float32], NumericColumn[DType.float64], List[String],
+    NDArray[DType.float32], NDArray[DType.float64],
 ]
+
+
+def _float_kind[dtype: DType]() -> String:
+    comptime assert dtype == DType.float32 or dtype == DType.float64
+    return "float32" if dtype == DType.float32 else "float64"
 
 
 struct ColumnSchema(Copyable, Movable):
@@ -44,12 +50,13 @@ struct ColumnSchema(Copyable, Movable):
 
 
 struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
-    """An owned named table with a numeric block and typed non-numeric columns."""
+    """An owned named table with a numeric block and typed additional columns."""
 
     var _data: NDArray[Self.dtype]
     var _schema: ColumnSchema
+    # Nonnegative locations index the matrix. Negative locations encode added columns.
     var _locations: List[Int]
-    var _non_numeric: List[_NonNumericColumn]
+    var _added_columns: List[_AddedColumn]
 
     def __init__(out self, X: NDArray[Self.dtype], names: List[String]) raises:
         comptime assert Self.dtype == DType.float32 or Self.dtype == DType.float64, "Float32/Float64 tables only"
@@ -60,30 +67,42 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
         var dtypes = List[String]()
         self._locations = List[Int]()
         for i in range(len(names)):
-            dtypes.append("float32" if Self.dtype == DType.float32 else "float64")
+            dtypes.append(_float_kind[Self.dtype]())
             self._locations.append(i)
         self._schema = ColumnSchema(names, dtypes)
         self._data = X.copy()
-        self._non_numeric = List[_NonNumericColumn]()
+        self._added_columns = List[_AddedColumn]()
+
+    def add_numeric[column_dtype: DType](
+        mut self, name: String, column: NDArray[column_dtype], *, position: Optional[Int] = None,
+    ) raises:
+        """Insert an owned rank-one float column and retain its storage dtype."""
+        comptime assert column_dtype == DType.float32 or column_dtype == DType.float64, "add_numeric requires Float32 or Float64"
+        if column.ndim != 1:
+            raise Error("ValueError: add_numeric requires a rank-1 array")
+        var index = self._insertion_index(name, column.shape[0], position)
+        # NuMojo's strided copy assumes a nonempty last axis.
+        var values = column.contiguous() if column.size > 0 else zeros[column_dtype](Shape(0))
+        self._insert_column(index, name, _float_kind[column_dtype](), _AddedColumn(values^))
 
     def add_categorical[Domain: CategoryDomain](
         mut self, name: String, column: CategoricalColumn[Domain], *, position: Optional[Int] = None,
     ) raises:
         """Insert an independent categorical column, appending by default."""
         var index = self._insertion_index(name, column.rows(), position)
-        self._insert_column(index, name, "category", _NonNumericColumn(column.copy()))
+        self._insert_column(index, name, "category", _AddedColumn(column.copy()))
 
     def add_strings(
         mut self, name: String, column: List[String], *, position: Optional[Int] = None,
     ) raises:
         """Insert an owned copy of raw UTF-8 strings, appending by default."""
         var index = self._insertion_index(name, len(column), position)
-        self._insert_column(index, name, "string", _NonNumericColumn(column.copy()))
+        self._insert_column(index, name, "string", _AddedColumn(column.copy()))
 
     def string_column(self, index: Int) raises -> List[String]:
         """Copy one raw UTF-8 column in row order."""
         self._check_index(index, "string")
-        return self._non_numeric[self._locations[index]][List[String]].copy()
+        return self._added_columns[-1 - self._locations[index]][List[String]].copy()
 
     def _insertion_index(self, name: String, rows: Int, position: Optional[Int]) raises -> Int:
         self._check_shape()
@@ -97,15 +116,15 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
             raise Error("ValueError: column insertion position is out of bounds")
         return index
 
-    def _insert_column(mut self, index: Int, name: String, kind: String, var column: _NonNumericColumn):
+    def _insert_column(mut self, index: Int, name: String, kind: String, var column: _AddedColumn):
         self._schema.names.insert(index, name)
         self._schema.dtypes.insert(index, kind)
-        self._locations.insert(index, len(self._non_numeric))
-        self._non_numeric.append(column^)
+        self._locations.insert(index, -1 - len(self._added_columns))
+        self._added_columns.append(column^)
 
     def values(ref self) raises -> ref[self._data] NDArray[Self.dtype]:
-        """Borrow the matrix when all columns are numeric."""
-        if len(self._non_numeric) > 0:
+        """Borrow the original matrix when it represents the entire table."""
+        if len(self._added_columns) > 0:
             raise Error("TypeError: mixed ColumnTable cannot be borrowed as a numeric matrix")
         return self._data
 
@@ -124,18 +143,41 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
         var result = List[Column](capacity=len(indices))
         for index in indices:
             self._check_index(index, "category")
-            ref column = self._non_numeric[self._locations[index]]
+            ref column = self._added_columns[-1 - self._locations[index]]
             if not column.isa[Column]():
                 raise Error(String("TypeError: column '", self._schema.names[index],
                                    "' has a different categorical domain than this component requires"))
             result.append(column[Column].copy())
         return result^
 
-    def _numeric_indices(self, indices: List[Int]) raises -> List[Int]:
-        var result = List[Int](capacity=len(indices))
-        for index in indices:
-            self._check_index(index, "float32" if Self.dtype == DType.float32 else "float64")
-            result.append(self._locations[index])
+    def _select_numeric(self, indices: List[Int], scalar: Bool) raises -> NDArray[Self.dtype]:
+        """Gather numeric columns in key order, casting at the dense component boundary."""
+        var rows = self.rows()
+        var width = len(indices)
+        if scalar and width != 1:
+            raise Error("ValueError: a scalar column key must resolve to one column")
+        var shape = Shape(rows) if scalar else Shape(rows, width)
+        var result = zeros[Self.dtype](shape)
+        var row_stride = Int(self._data.strides[0])
+        var column_stride = Int(self._data.strides[1])
+        for output_index in range(width):
+            var index = indices[output_index]
+            var location = self._locations[index]
+            if location >= 0:
+                for row in range(rows):
+                    result.unsafe_set(
+                        row * width + output_index,
+                        self._data.unsafe_get(row * row_stride + location * column_stride),
+                    )
+                continue
+            ref column = self._added_columns[-1 - location]
+            if column.isa[NDArray[DType.float32]]():
+                _gather_column(column[NDArray[DType.float32]], result, output_index, width)
+            elif column.isa[NDArray[DType.float64]]():
+                _gather_column(column[NDArray[DType.float64]], result, output_index, width)
+            else:
+                raise Error(String("TypeError: column '", self._schema.names[index],
+                                   "' requires float32 or float64 storage for this component"))
         return result^
 
     def _check_index(self, index: Int, expected: String) raises:
@@ -145,5 +187,12 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
             raise Error(String("TypeError: column '", self._schema.names[index], "' requires ", expected, " storage for this component"))
 
     def _check_shape(self) raises:
-        if self._data.ndim != 2 or self._data.shape[1] != len(self._schema.names) - len(self._non_numeric):
+        if self._data.ndim != 2 or self._data.shape[1] != len(self._schema.names) - len(self._added_columns):
             raise Error("ValueError: table data no longer matches its column schema")
+
+
+def _gather_column[source_dtype: DType, dtype: DType](
+    column: NDArray[source_dtype], mut result: NDArray[dtype], index: Int, width: Int,
+):
+    for row in range(column.size):
+        result.unsafe_set(row * width + index, column.unsafe_get(row).cast[dtype]())

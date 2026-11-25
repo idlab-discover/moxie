@@ -2,6 +2,7 @@ from moxie.base import clone
 from moxie.dummy import DummyRegressor
 from moxie.model_selection import (
     DenseSupervisedAdapter, GridSearchCV, IndexArray, IndexSplit, cross_val_score, cross_validate,
+    learning_curve, permutation_test_score, validation_curve,
 )
 from numojo import NDArray, Shape, Item, zeros
 from std.testing import assert_equal, assert_false, assert_raises
@@ -9,6 +10,72 @@ from std.testing import assert_equal, assert_false, assert_raises
 comptime Dense = NDArray[DType.float32]
 comptime Regression = DummyRegressor[DType.float32]
 comptime Adapter = DenseSupervisedAdapter[Regression, Dense, DType.float32]
+comptime CurveAdapter = DenseSupervisedAdapter[Regression, Dense, DType.float32, String]
+
+
+def apply_strategy(mut model: Regression, values: Dict[String, String]) raises:
+    var params = model.get_params()
+    params.strategy = values["strategy"].copy()
+    _ = model.set_params(params)
+
+
+def check_curves(model: Regression, X: Dense, y: Dense, weights: Optional[Dense]) raises:
+    var adapter = CurveAdapter(apply_strategy)
+    var strategies: List[String] = ["mean", "median"]
+    var validation = validation_curve[CurveAdapter](
+        model, X, y, adapter, param_name="strategy", param_range=strategies,
+    )
+    assert_equal(validation[0].shape[1], 5)
+    assert_equal(validation[1].shape[1], 5)
+    for parameter in range(len(strategies)):
+        for fold in range(5):
+            print("validation_curve", parameter, fold,
+                  validation[0].item(parameter, fold), validation[1].item(parameter, fold))
+
+    var learning = learning_curve[CurveAdapter](
+        model, X, y, adapter, fit_metadata=weights, score_metadata=weights,
+        return_times=True,
+    )
+    assert_equal(learning.train_scores.shape[1], 5)
+    assert_equal(learning.test_scores.shape[1], 5)
+    assert_equal(learning.fit_times.value().shape[1], 5)
+    assert_equal(learning.score_times.value().shape[1], 5)
+    for size in range(learning.train_sizes.size):
+        print("learning_size", learning.train_sizes.item(size))
+        for fold in range(5):
+            print("learning_curve", size, fold,
+                  learning.train_scores.item(size, fold), learning.test_scores.item(size, fold))
+
+    var folds = adapter.default_cv(X, y)
+    _ = folds.pop()
+    var explicit_validation = validation_curve[CurveAdapter](
+        model, X, y, adapter, param_name="strategy", param_range=strategies,
+        scoring=adapter.default_scorer(), cv=folds^,
+    )
+    var learning_folds = adapter.default_cv(X, y)
+    _ = learning_folds.pop()
+    var explicit_learning = learning_curve[CurveAdapter](
+        model, X, y, adapter, scoring=adapter.default_scorer(), cv=learning_folds^,
+        fit_metadata=weights, score_metadata=weights,
+    )
+    var unweighted_learning = learning_curve[CurveAdapter](model, X, y, adapter)
+    assert_equal(explicit_validation[1].shape[1], 4)
+    assert_equal(explicit_learning.test_scores.shape[1], 4)
+    assert_equal(unweighted_learning.test_scores.shape[1], 5)
+    assert_equal(explicit_validation[1].item(0, 0), validation[1].item(0, 0))
+    assert_equal(explicit_learning.test_scores.item(0, 0), learning.test_scores.item(0, 0))
+    assert_equal(unweighted_learning.test_scores.item(unweighted_learning.train_sizes.size - 1, 0),
+                 validation[1].item(0, 0))
+    with assert_raises(contains="at least one split"):
+        _ = validation_curve[CurveAdapter](
+            model, X, y, adapter, param_name="strategy", param_range=strategies,
+            cv=List[IndexSplit](),
+        )
+    with assert_raises(contains="at least one split"):
+        _ = learning_curve[CurveAdapter](model, X, y, adapter, cv=List[IndexSplit]())
+    with assert_raises(contains="requires an integer seed"):
+        _ = learning_curve[CurveAdapter](model, X, y, adapter, shuffle=True)
+    assert_false(model.__sklearn_is_fitted__())
 
 
 def main() raises:
@@ -22,7 +89,15 @@ def main() raises:
 
     var sample_weight = Optional[Dense](weights^)
     var model = Regression()
+    check_curves(model, X, y, sample_weight)
     var adapter = Adapter()
+    var permutation = permutation_test_score[Adapter](
+        model, X, y, adapter, fit_metadata=sample_weight, score_metadata=sample_weight,
+        random_state=42, n_permutations=7,
+    )
+    print("permutation", permutation.score, permutation.pvalue)
+    for i in range(permutation.permutation_scores.size):
+        print("permutation_null", i, permutation.permutation_scores[Item(i)])
     var folds = adapter.default_cv(X, y)
     var scores = cross_val_score[Adapter](
         model, X, y, adapter, fit_metadata=sample_weight, score_metadata=sample_weight,

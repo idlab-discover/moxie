@@ -219,10 +219,6 @@ def main() raises:
     with assert_raises():
         var invalid = IsotonicRegression(y_max=Float64("nan"))
         _ = invalid.fit(X, y)
-    with assert_raises():
-        _ = check_increasing(List[Float64](), List[Float64]())
-    with assert_raises():
-        _ = check_increasing([Float64("nan")], [1.0])
     close(
         isotonic_regression(
             [1.0, 2], y_min=Float64("-inf"), y_max=Float64("inf")

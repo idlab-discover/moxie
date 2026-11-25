@@ -96,10 +96,20 @@ trajectories are reported separately from strict comparison passes.
 observed before relocation; new exceptional cases fail the parity command.
 
 Side-by-side notebooks replay `plot_gmm_init`, `plot_concentration_prior` and
-`plot_gmm_selection` (GridSearchCV with a -BIC scorer) against the pinned
-reference: `pixi run -e notebooks notebooks notebooks/mixture`. A
-`Pipeline` cannot end in a mixture yet: the shared Pipeline requires a
-supervised final step (recorded as a GAP in `plot_gmm_selection`).
+`plot_gmm_selection` against the pinned reference. Run the search notebook with
+`pixi run -e notebooks notebooks notebooks/mixture/plot_gmm_selection.ipynb`.
+Its −BIC search uses the public `select_rows` function and a
+`Variant[Int, String]` grid. The adapter supplies five unshuffled folds and
+accepts an explicit `None` target.
+
+The notebook also compares direct composition of `StandardScaler` and
+`GaussianMixture` with the equivalent pinned scikit-learn Pipeline. Fit the
+scaler on training data with `fit_transform`, then call that same scaler's
+`transform` before predicting or scoring new rows. Clone both steps for a
+configuration-only copy and update each child through its typed `set_params`.
+The notebook checks held-out labels, probabilities and log likelihoods, plus
+clone and refit behavior. An unsupervised final step in Moxie's shared Pipeline
+is tracked in #21 part 1.
 
 Benchmark tooling remains at `tests/mixture/{gaussian,bayesian}/benchmark.py`;
 run with `pixi run python` after building. It writes under `benchmarks/mixture/`.

@@ -110,9 +110,10 @@ shared engines, prepared forest inputs and native text/DOT/SVG/Treelite exports.
 See [tree documentation](tree/README.md).
 
 [Neural networks](../families/neural_network/README.md) are owned by Moxie. The
-dense RBM subset and MLP parameter helpers are implemented; MLP training and
-Float32 RBM partial_fit remain unfinished. The standalone checkout is not a
-build dependency.
+family implements dense RBM and dense MLP fit, including stochastic MLP
+incremental training. MLP warm-start refitting and validation-set early
+stopping remain open, as does Float32 RBM partial_fit. The standalone checkout
+is not a build dependency.
 
 [Semi-supervised learning](../families/semi_supervised/README.md) is owned by Moxie,
 including dense LabelPropagation, LabelSpreading and SelfTrainingClassifier.

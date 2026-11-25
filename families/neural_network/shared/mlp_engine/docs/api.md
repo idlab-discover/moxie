@@ -48,3 +48,27 @@ accuracy on the locked toolchain.
 Helpers raise Mojo `Error` with `ValueError` prefixes for invalid batch
 shapes and settings. Concurrent mutation and manually invalid array metadata
 are outside the shared storage contract.
+
+## Full-batch L-BFGS
+
+`moxie.neural_network._mlp_lbfgs.fit_lbfgs(X, y, initial, hidden_activation,
+output_activation, loss, alpha=0.0001, options=LBFGSOptions())` takes the same
+encoded targets and loss pairs as the objective. The weighted overload takes
+`sample_weight` after `alpha`. `initial` supplies initialized coefficients
+and biases in the input dtype. The solver reads the inputs and works on an
+independent parameter copy.
+
+`LBFGSOptions(max_iter=200, max_fun=15000, tol=1e-4)` configures the
+iteration count, soft function-evaluation budget, and projected-gradient
+tolerance. The adapter uses the current `mojo_optimize.LBFGSB` dependency
+with infinite bounds and SciPy defaults for history, function tolerance and
+line search. It evaluates the objective in the input dtype and returns
+independent Float64 parameters from the accepted iterate, matching the
+pinned scikit-learn and SciPy dtype behavior.
+
+The result includes the loss, iteration and evaluation counts, and an empty
+warning string on convergence. On solver termination without convergence, the
+result carries the scikit-learn convergence warning text for the caller.
+The loss follows SciPy's last evaluated objective, including after an abnormal
+line search that restores an earlier parameter vector. Invalid settings,
+callback errors and nonfinite output parameters raise Mojo errors.

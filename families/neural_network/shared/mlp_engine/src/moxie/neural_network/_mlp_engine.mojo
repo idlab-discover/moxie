@@ -62,6 +62,12 @@ def parameter_count[dtype: DType](params: LayerTensors[dtype]) raises -> Int:
 def pack[dtype: DType](params: LayerTensors[dtype]) raises -> NDArray[DType.float64]:
     """Return an independent Float64 vector: all coefficients, then biases."""
     var result = zeros[DType.float64](Shape(parameter_count(params)))
+    _pack_into(params, result)
+    return result^
+
+
+def _pack_into[dtype: DType](params: LayerTensors[dtype], mut result: NDArray[DType.float64]) raises:
+    """Write validated tensors to a contiguous, correctly sized vector."""
     var k = 0
     for l in range(len(params.coefs)):
         for i in range(params.coefs[l].shape[0]):
@@ -72,7 +78,6 @@ def pack[dtype: DType](params: LayerTensors[dtype]) raises -> NDArray[DType.floa
         for j in range(params.intercepts[l].shape[0]):
             result.unsafe_set(k, Float64(params.intercepts[l].unsafe_get(j * Int(params.intercepts[l].strides[0]))))
             k += 1
-    return result^
 
 
 def unpack[dtype: DType](packed: NDArray[DType.float64], mut params: LayerTensors[dtype]) raises:

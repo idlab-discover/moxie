@@ -23,6 +23,14 @@ coefficients, as in the pinned implementation. Invalid inputs or nonfinite
 final coefficients/gap raise. Inputs, including initial coefficients, are never
 mutated. Strided inputs are materialized once as contiguous feature columns.
 
+`coordinate_descent_gram` is the cyclic solver for precomputed systems. Supply
+a contiguous symmetric Gram matrix, a matching cross-product vector, owned
+initial coefficients, and the squared target norm. The arrays use the same
+Float32 or Float64 dtype. The routine supports the same unnormalized penalties
+and optional positivity, and can check the gap before the first sweep with
+`early_stopping=True`. Sparse coding supplies one Gram matrix for every input
+row and solves each target separately.
+
 See [scope](scope.md) for unfinished branches and validation commands. The
 engine does not center inputs, normalize weights, derive solve seeds, fit an
 intercept or perform CV; the estimator/family owners supply those operations.

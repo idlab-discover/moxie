@@ -272,9 +272,9 @@ dense RandomForest/ExtraTrees estimators and shared forest engine. Other ensembl
 estimators remain explicit declarations; sparse input and decision paths are deferred.
 The retired ensemble checkout is not a build dependency.
 
-[Decomposition](../families/decomposition/docs/api-surface.md) is owned by Moxie, including its SVD, threshold
-and Lasso CD coding engines. Dictionary learning, SparsePCA, LARS and OMP
-coding remain unfinished. The standalone checkout is not a build dependency.
+[Decomposition](../families/decomposition/docs/api-surface.md) is owned by Moxie, including its SVD and
+threshold, Lasso CD and OMP coding engines. Dictionary learning, SparsePCA and
+LARS coding remain unfinished. The standalone checkout is not a build dependency.
 
 [Clustering](../families/cluster/README.md) is owned by Moxie, including the documented
 dense affinity, centroid, density, linkage and Birch implementations. Spectral

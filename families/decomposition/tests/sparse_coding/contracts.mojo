@@ -37,10 +37,6 @@ def check[dtype: DType]() raises:
     assert_equal(c.transform(reversed).unsafe_get(2), 3)
     with assert_raises(contains="NotImplementedError: sparse coding requires"):
         _ = sparse_encode(x, d)  # default lasso_lars unavailable
-    var default = SparseCoder[dtype](d)
-    default.fit(x)
-    with assert_raises(contains="NotImplementedError: sparse coding requires"):
-        _ = default.transform(x)  # default omp unavailable
     with assert_raises(contains="wrong feature count"):
         _ = model.transform(zeros[dtype](Shape(1, 4)))
     with assert_raises(contains="wrong code component count"):
@@ -115,9 +111,62 @@ def lasso_cd[dtype: DType]() raises:
         _ = sparse_encode(x, dictionary, check_input=False, algorithm="lasso_cd")
 
 
+def omp[dtype: DType]() raises:
+    var dictionary = zeros[dtype](Shape(2, 3))
+    dictionary.unsafe_set(0, 2)
+    dictionary.unsafe_set(4, 1)
+    var x = zeros[dtype](Shape(2, 3))
+    x.unsafe_set(0, 3)
+    x.unsafe_set(1, -4)
+    x.unsafe_set(4, -5)
+    var model = SparseCoder[dtype](dictionary)
+    var default_code = model.transform(x)
+    assert_equal(default_code.shape, Shape(2, 2))
+    assert_equal(default_code.unsafe_get(0), 1.5)
+    assert_equal(default_code.unsafe_get(1), 0)
+    assert_equal(default_code.unsafe_get(3), -5)
+    _ = model.set_params(transform_n_nonzero_coefs=Optional(2)).fit(x)
+    assert_equal(clone(model).transform(x).unsafe_get(1), -4)
+
+    var gram_storage = zeros[dtype](Shape(3, 3))
+    gram_storage.unsafe_set(4, 4)
+    gram_storage.unsafe_set(8, 1)
+    var gram = gram_storage.view_with_layout(Shape(2, 2), NDArrayStrides(3, 1), 4)
+    var cov_storage = zeros[dtype](Shape(2, 2))
+    cov_storage.unsafe_set(0, -8)
+    cov_storage.unsafe_set(1, 12)
+    cov_storage.unsafe_set(2, 7)
+    var cov = cov_storage.view_with_layout(Shape(2, 2), NDArrayStrides(2, -1), 1)
+    var code = sparse_encode(x, dictionary, algorithm="omp", n_nonzero_coefs=2,
+        gram=gram.view(), cov=cov.view(), copy_cov=False, check_input=False)
+    assert_equal(code.unsafe_get(0), 3)
+    assert_equal(code.unsafe_get(1), 0)
+    assert_equal(code.unsafe_get(2), -2)
+    assert_equal(code.unsafe_get(3), 7)
+    assert_equal(cov_storage.unsafe_get(0), -8)
+    assert_equal(cov_storage.unsafe_get(1), 12)
+    assert_equal(gram_storage.unsafe_get(4), 4)
+
+    with assert_raises(contains="Positive constraint not supported for 'omp'"):
+        _ = sparse_encode(x, dictionary, algorithm="omp", positive=True)
+    with assert_raises(contains="cannot exceed the number of atoms"):
+        _ = sparse_encode(x, dictionary, algorithm="omp", n_nonzero_coefs=3)
+    with assert_raises(contains="gram must have shape"):
+        _ = sparse_encode(x, dictionary, algorithm="omp", gram=x.view())
+    with assert_raises(contains="cov must have shape"):
+        _ = sparse_encode(x, dictionary, algorithm="omp", cov=x.view())
+    cov_storage.unsafe_set(0, inf[dtype]())
+    with assert_raises(contains="OMP: input cov contains NaN or infinity"):
+        _ = sparse_encode(x, dictionary, algorithm="omp", cov=cov.view())
+    var reversed = x.view_with_layout(Shape(2, 3), NDArrayStrides(-3, 1), 3)
+    assert_equal(model.transform(reversed).unsafe_get(1), -5)
+
+
 def main() raises:
     check[DType.float32]()
     check[DType.float64]()
     lasso_cd[DType.float32]()
     lasso_cd[DType.float64]()
-    print("PASS: threshold and Lasso CD sparse coding contracts Float32/Float64")
+    omp[DType.float32]()
+    omp[DType.float64]()
+    print("PASS: threshold, Lasso CD and OMP contracts Float32/Float64")

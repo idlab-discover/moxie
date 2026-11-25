@@ -12,6 +12,7 @@ from pinned_coordinate import load as load_coordinate
 coordinate, _ = load_coordinate(ROOT)
 module = load_pinned('sklearn/decomposition/_dict_learning.py')
 module.Lasso = coordinate.Lasso
+module.orthogonal_mp_gram = load_pinned('sklearn/linear_model/_omp.py').orthogonal_mp_gram
 
 rng=np.random.RandomState(12)
 count=0
@@ -104,3 +105,50 @@ for dtype in (np.float32, np.float64):
                     assert_close(got[key], value, tol, f'{dtype} {fixture=} {positive=} {mode=} {key}')
                 count += 1
 print(f'PASS: {count} Lasso CD coding cases against local sklearn {REVISION}')
+
+count = 0
+for dtype in (np.float32, np.float64):
+    fixtures = {
+        'tall': (rng.normal(size=(9, 24)), rng.normal(size=(5, 24))),
+        'overcomplete': (rng.normal(size=(4, 3)), rng.normal(size=(7, 3))),
+        'single-sample': (rng.normal(size=(1, 5)), rng.normal(size=(3, 5))),
+        'singleton': ([[2.]], [[-4.]]),
+        'zero-correlation': (np.zeros((3, 4)), np.eye(4)),
+        'dependent': ([[2., -1.], [0., 0.]], [[1., 0.], [1., 0.], [0., 1.], [0., 0.]]),
+        'tie-after-swap': ([[1., 1., 2.]], np.eye(3)),
+        'small-correlation': ([[1e-9, -1e-9]], np.eye(2)),
+    }
+    for fixture, (x, dictionary) in fixtures.items():
+        x = np.asarray(x, dtype=dtype)
+        dictionary = np.asarray(dictionary, dtype=dtype)
+        k = len(dictionary)
+        for atom_count in dict.fromkeys((None, min(k, 2), k)):
+            # Independent perturbations demonstrate that both borrowed inputs drive OMP.
+            gram = (dictionary @ dictionary.T) * dtype(1.25)
+            cov = dictionary @ (x + dtype(.125)).T
+            for use_gram, use_cov in ((False, False), (True, False), (False, True), (True, True)):
+                split = dtype == np.float64 and use_gram and use_cov
+                model = module.SparseCoder(dictionary, transform_n_nonzero_coefs=atom_count,
+                                           split_sign=split)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', message='Orthogonal matching pursuit ended prematurely')
+                    expected = module.sparse_encode(
+                        x, dictionary, algorithm='omp', n_nonzero_coefs=atom_count,
+                        gram=gram if use_gram else None, cov=cov if use_cov else None,
+                    )
+                    z = model.transform(x)
+                    fit = model.fit_transform(x)
+                assert expected.shape == (len(x), k)
+                assert expected.dtype == z.dtype == dtype
+                got = run_native(
+                    ROOT / 'builds/sparse_coding_driver', dtype,
+                    [x, dictionary, cov, gram, gram],
+                    'omp', -1, 0, int(split), 0, int(use_cov), int(use_gram), 0,
+                    atom_count or 0,
+                )
+                tol = 2e-5 if dtype == np.float32 else 2e-12
+                for key, value in dict(functional=expected, code=z, inverse=model.inverse_transform(z),
+                                       fit=fit, restored_fit=fit).items():
+                    assert_close(got[key], value, tol, f'{dtype} {fixture=} {atom_count=} {use_gram=} {use_cov=} {key}')
+                count += 1
+print(f'PASS: {count} OMP coding cases against local sklearn {REVISION}')

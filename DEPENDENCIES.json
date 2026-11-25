@@ -569,6 +569,9 @@
         "moxie.linear_model._cd_fast": {
           "file": "src/moxie/linear_model/_cd_fast.mojo"
         },
+        "moxie.linear_model._omp": {
+          "file": "src/moxie/linear_model/_omp.mojo"
+        },
         "moxie.linear_model._bayes": {
           "file": "src/moxie/linear_model/_bayes.mojo"
         },

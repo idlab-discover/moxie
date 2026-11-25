@@ -26,11 +26,11 @@ from moxie.compose._plumbing import (
 from moxie.compose._column_keys import ColumnKey, KeyKind, KeyType, make_column_selector
 
 
-comptime ColumnComponent = TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable
+comptime ColumnComponent = TransformerMixin & Copyable & Deinitable
 """Column transformers with numeric or typed categorical inputs and dense output.
 
-A component that also conforms to `FitTransformer` is fitted with
-`fit_transform`, otherwise with `fit` then `transform` (sklearn's rule).
+A component must conform to `FitTransformer` or `UnsupervisedEstimator`.
+ColumnTransformer prefers `fit_transform` when both are available.
 """
 
 comptime ColumnCallable[dtype: DType] = def(NDArray[dtype]) thin raises -> ColumnKey
@@ -77,7 +77,7 @@ trait _ModeOnly:
     pass
 
 
-struct NoTransformer[dtype: DType = DType.float64](ColumnComponent, _ModeOnly):
+struct NoTransformer[dtype: DType = DType.float64](ColumnComponent, UnsupervisedEstimator, _ModeOnly):
     """Type slot of an entry written with "drop" or "passthrough" only.
 
     It holds no estimator and cannot be fitted; give the entry a concrete
@@ -531,39 +531,6 @@ def _fixed(value: Float64, width: Int) -> String:
 # Component calls (destructibility evidence for foundation associated types).
 
 
-def _fit_transform_impl[dtype: DType, E: ColumnComponent, A: Deinitable](
-    mut estimator: E, X: A, y: Optional[NDArray[dtype]]
-) raises -> NDArray[dtype] where conforms_to(E.Input, Deinitable) and conforms_to(E.Target, Deinitable) and conforms_to(
-    E.Transformed, Deinitable
-):
-    comptime assert E.Target == NDArray[dtype], "column components take NDArray[dtype] targets"
-    var target: Optional[E.Target] = None
-    if y:
-        target = rebind_var[E.Target](y.value().copy())
-    _ = estimator.fit(rebind[E.Input](X), target)
-    var out = estimator.transform(rebind[E.Input](X))
-    return rebind_var[NDArray[dtype]](out^)
-
-
-def _fit_transform_combined[dtype: DType, E: ColumnComponent, A: Deinitable](
-    mut estimator: E, X: A, y: Optional[NDArray[dtype]]
-) raises -> NDArray[dtype] where conforms_to(E, FitTransformer) and conforms_to(E.Input, Deinitable) and conforms_to(
-    E.Target, Deinitable
-) and conforms_to(E.Transformed, Deinitable):
-    comptime assert E.Target == NDArray[dtype], "column components take NDArray[dtype] targets"
-    # The Optional is moved back to a destructible type after the call (on
-    # every path), so no destructibility evidence for FitTransformer.Target
-    # is needed.
-    var target = rebind_var[Optional[E.Target]](y.copy())
-    try:
-        var out = estimator.fit_transform(rebind[E.Input](X), target)
-        _ = rebind_var[Optional[NDArray[dtype]]](target^)
-        return rebind_var[NDArray[dtype]](out^)
-    except error:
-        _ = rebind_var[Optional[NDArray[dtype]]](target^)
-        raise error^
-
-
 def _transform_impl[dtype: DType, E: ColumnComponent, A: Deinitable](
     estimator: E, X: A
 ) raises -> NDArray[dtype] where conforms_to(E.Input, Deinitable) and conforms_to(E.Transformed, Deinitable):
@@ -576,16 +543,17 @@ def _fit_transform_one[dtype: DType, E: ColumnComponent, A: Deinitable](
 ) raises -> NDArray[dtype]:
     comptime assert E.Input == A, "column component input must match column storage"
     comptime assert E.Transformed == NDArray[dtype], "column components return NDArray[dtype]"
-    comptime assert E.Target == NDArray[dtype], "column components take NDArray[dtype] targets"
-    comptime if conforms_to(E.Input, Deinitable) and conforms_to(E.Target, Deinitable) and conforms_to(
-        E.Transformed, Deinitable
-    ):
-        comptime if conforms_to(E, FitTransformer):
-            return _fit_transform_combined[dtype](estimator, X, y)
-        else:
-            return _fit_transform_impl[dtype](estimator, X, y)
+    comptime if conforms_to(E, FitTransformer):
+        comptime assert E.Target == NDArray[dtype], "column components take NDArray[dtype] targets"
+        return rebind_var[NDArray[dtype]](
+            estimator.fit_transform(rebind[E.Input](X), rebind[Optional[E.Target]](y))
+        )
+    elif conforms_to(E, UnsupervisedEstimator):
+        comptime assert E.Target == NDArray[dtype], "column components take NDArray[dtype] targets"
+        _ = estimator.fit(rebind[E.Input](X), rebind[Optional[E.Target]](y))
+        return _transform_one[dtype](estimator, X)
     else:
-        comptime assert False, "column component data types must be destructible"
+        comptime assert False, "column components need FitTransformer or UnsupervisedEstimator"
 
 
 def _transform_one[dtype: DType, E: ColumnComponent, A: Deinitable](estimator: E, X: A) raises -> NDArray[dtype]:

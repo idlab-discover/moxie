@@ -631,7 +631,7 @@ struct OrdinalEncoderParams[K: CategoryKind](Copyable):
     var max_categories: Optional[Int]
 
 
-struct OrdinalEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
+struct OrdinalEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut, Copyable):
     """Encode categorical features as one integer-valued column per feature.
 
     `dtype` is the output dtype (Float32, Float64 or Int64). `unknown_value`

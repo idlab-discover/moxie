@@ -81,6 +81,14 @@ selections. Use `"drop"` for unused categorical columns. A callable taking
 an NDArray requires a numeric-only table. Invalid selections and type changes
 on fitted columns raise errors.
 
+String categorical selections also support `OrdinalEncoder` and
+`TargetEncoder`. For `TargetEncoder`, use a Float64 table and a Float64
+target array. Pass `y.copy()` to keep the target or `y^` to transfer it when
+calling `fit_transform(table, y)` or `fit(table, y)`. The target is required
+when an active entry uses TargetEncoder. The training output uses out-of-fold
+encodings, and later `transform` uses the encodings learned on all training
+rows.
+
 The matrix-regressor overloads of TransformedTargetRegressor accept
 numeric-only tables. They store names and validate their order at prediction.
 
@@ -88,6 +96,8 @@ Native composition runs in Mojo. The named and mixed column parity suites
 use pandas solely for Python oracle inputs. The mixed parity case
 compares a single ColumnTransformer with median imputation, scaling and one-hot
 encoding, including reordered inputs, unknown categories, names and output spans.
+The mixed encoders parity case also compares ordinal codes and multiclass
+target encodings with exact equality, including cross-fitted training output.
 
 Table overloads supplement the existing NDArray-associated estimator traits;
 generic pipeline wrappers do not automatically acquire schema routing. Native

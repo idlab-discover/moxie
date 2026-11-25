@@ -42,10 +42,11 @@ repeats kept), `Slice(start, stop, step)`, a boolean mask, or a callable
 `make_column_selector` work on native `ColumnTable` inputs. They raise on
 unnamed arrays as sklearn does. Regex patterns are not yet supported. See
 [the native table guide](../named-columns.md). A component is
-a copyable `TransformerMixin & UnsupervisedEstimator` with `NDArray[dtype]`
-target and result. Its input is `NDArray[dtype]` for numeric selections or
-`List[CategoricalColumn[StringCategories]]` for categorical selections; it is fitted with `fit_transform` when it conforms to
-`FitTransformer`, otherwise `fit` then `transform`, and receives `y`.
+a copyable `TransformerMixin` with `NDArray[dtype]` target and result.
+Its input is `NDArray[dtype]` for numeric selections or
+`List[CategoricalColumn[StringCategories]]` for categorical selections.
+ColumnTransformer passes `y` to `FitTransformer.fit_transform` when
+available. Otherwise it calls `UnsupervisedEstimator.fit` then `transform`.
 
 ## Learned state and methods
 

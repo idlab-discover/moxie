@@ -77,7 +77,7 @@ def _pipeline_feature_names[P: TransformerMixin, E: BaseEstimator](
 struct Pipeline[
     P: TransformerMixin & Deinitable,
     E: SupervisedEstimator & Predictor & Deinitable,
-](SupervisedEstimator, PredictivePipeline, UnionFeatureNames, UnionInputFeatures,
+](SupervisedEstimator, PredictivePipeline, UnionFeatureNames, UnionInputFeatures, InputFeatureCount,
   SupervisedScorer where conforms_to(E, SupervisedScorer),
   WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
   ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
@@ -156,6 +156,9 @@ struct Pipeline[
         else:
             raise Error("AttributeError: first pipeline step " + self.transformer_name +
                         " does not expose n_features_in_")
+
+    def get_n_features_in(self) raises -> Int:
+        return self.n_features_in_()
 
     def get_feature_names_out(
         self, input_features: Optional[List[String]] = None,

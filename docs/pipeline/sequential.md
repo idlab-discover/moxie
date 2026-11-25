@@ -107,7 +107,9 @@ number of columns. A FeatureUnion prefix uses its own first-branch rule.
 For constituents with a stored attribute, `InputFeatureCount` from
 `moxie._feature_metadata` instead exposes `get_n_features_in(self) raises -> Int`.
 `ColumnTransformer` implements it while retaining its public `n_features_in_`
-attribute; Pipeline and FeatureUnion recognize both count contracts.
+attribute. Pipeline and FeatureUnion recognize both count contracts and also
+implement `InputFeatureCount` themselves, so `FrozenEstimator` can read their
+input counts through `get_n_features_in()`.
 
 No count or fitted flag is cached by Pipeline. The first step decides whether
 the count is available; it can remain available while the final estimator is

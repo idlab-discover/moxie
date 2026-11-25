@@ -81,6 +81,7 @@ def test(run, executable):
         ('pipeline_slice_stride', 'pipeline slicing only supports a step of 1'),
         ('pipeline_slice_empty_transform', "'transform'"),
         ('pipeline_slice_lifetime', "use of uninitialized value 'pipe'"),
+        ('pipeline_named_steps_lifetime', "use of uninitialized value 'pipe'"),
         ('pipeline_type_mismatch', 'pipeline intermediate types must match'),
         ('union_predict', "'predict'"), ('union_dtype', 'union input must be NDArray[dtype]'),
         ('union_missing_transform', 'TransformerMixin'),

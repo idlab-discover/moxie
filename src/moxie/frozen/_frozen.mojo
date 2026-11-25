@@ -220,10 +220,10 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     ) -> ref[origin] Self.Final where conforms_to(Self.E, PipelineSteps):
         return Pointer(to=self._estimator[]._final_step()).unsafe_origin_cast[origin]()[]
 
-    def _step_index(self, name: StringSpan) raises -> Int where conforms_to(
+    def _step_name(self, index: Int) -> String where conforms_to(
         Self.E, PipelineSteps
     ):
-        return self._estimator[]._step_index(name)
+        return self._estimator[]._step_name(index)
 
     def slice[start: Int = 0, stop: Int = 2, stride: Int = 1](
         self,

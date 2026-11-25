@@ -213,6 +213,13 @@ def frozen_pipeline_steps() raises:
     ref final_step = nested.named_step[LDA]("lineardiscriminantanalysis")
     assert_true(Pointer(to=prefix) == Pointer(to=frozen.step[0]()))
     assert_true(Pointer(to=final_step) == Pointer(to=frozen.step[1]()))
+    var named = nested.named_steps()
+    var keys = named.keys()
+    assert_equal(len(named), 2)
+    assert_equal(keys[0], prefix_name)
+    assert_equal(keys[1], "lineardiscriminantanalysis")
+    assert_true(Pointer(to=named.get[StandardScaler[]](keys[0])) == Pointer(to=prefix))
+    assert_true(Pointer(to=named.get[LDA](keys[1])) == Pointer(to=final_step))
     with assert_raises(contains="KeyError"):
         _ = frozen.named_step[StandardScaler[]]("missing")
     with assert_raises(contains="TypeError"):

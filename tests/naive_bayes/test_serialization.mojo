@@ -386,7 +386,7 @@ def bernoulli_raw_state_and_validation() raises:
     with assert_raises(contains="unsupported estimator"):
         _ = MultinomialNBSchema[].decode(archive)
     var bad = archive.copy()
-    bad.schema_version = 3
+    bad.schema_version = 4
     with assert_raises(contains="unsupported estimator"):
         _ = Schema.decode(bad)
     bad = archive.copy()
@@ -462,7 +462,7 @@ def categorical_archive_validation() raises:
     with assert_raises(contains="label domain mismatch"):
         _ = CategoricalNBSchema[NumericDomain[DType.int64]].decode(archive)
     var bad = archive.copy()
-    bad.schema_version = 3
+    bad.schema_version = 4
     with assert_raises(contains="unsupported estimator"):
         _ = Schema.decode(bad)
     bad = archive.copy()

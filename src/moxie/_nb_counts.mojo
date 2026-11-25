@@ -1,10 +1,13 @@
 """Native count-model kernels; formulas adapted from sklearn (BSD-3-Clause)."""
 import numojo as nm
+from moxie.compose._table import ColumnTable
 from moxie.warnings import FitWarning
 from moxie._naive_bayes_dense import ClassDomain, _prepare
 from moxie._dense import sum_axis2d
 from moxie.metadata_routing import FitScoreMetadataRequest, SampleWeightRequest, SampleWeightUpdate
-from moxie._naive_bayes_common import NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata
+from moxie._naive_bayes_common import (
+    NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata, _check_feature_names,
+)
 from moxie._naive_bayes_common import _alpha, _log
 from moxie._naive_bayes_dense import (
     DenseMatrix, BatchContract, CountStatistics, CountUpdater,
@@ -124,6 +127,7 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
     var class_log_prior_: DenseMatrix
     var fit_warnings: List[FitWarning]
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var feature_count_: DenseMatrix
     var feature_log_prob_: DenseMatrix
 
@@ -148,6 +152,7 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self.fit_warnings = []
         self.class_log_prior_ = nm.zeros[DType.float64](nm.Shape(0))
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self.feature_count_ = nm.zeros[DType.float64](nm.Shape(0, 0))
         self.feature_log_prob_ = nm.zeros[DType.float64](nm.Shape(0, 0))
 
@@ -442,6 +447,51 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
         self = updated^
         return self
 
+    def fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit[input_dtype](X.values(), y, sample_weight=sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
+    def fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        *,
+        sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        return self.fit(X, y, sample_weight=_scalar_weights(X.rows(), sample_weight))
+
+    def partial_fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _check_feature_names(self.feature_names_in_, names)
+        var first = not self.__sklearn_is_fitted__()
+        _ = self.partial_fit[input_dtype](X.values(), y, classes, sample_weight=sample_weight)
+        if first:
+            self.feature_names_in_ = names^
+        return self
+
+    def partial_fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+        *,
+        sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        return self.partial_fit(X, y, classes, sample_weight=_scalar_weights(X.rows(), sample_weight))
+
     def _joint_dense[input_dtype: DType](self, X: nm.NDArray[input_dtype]) raises -> DenseMatrix:
         # Same accumulation order as the List path, so both agree exactly.
         check_is_fitted(self)
@@ -459,6 +509,29 @@ struct MultinomialNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float6
     def _joint_array(self, X: _Matrix) raises -> DenseMatrix:
         check_is_fitted(self)
         return self._joint_dense(dense_from_lists(X))
+
+    def predict_joint_log_proba[input_dtype: DType](
+        self, X: ColumnTable[input_dtype],
+    ) raises -> DenseMatrix:
+        check_is_fitted(self)
+        _check_feature_names(self.feature_names_in_, X.schema().names)
+        return self.predict_joint_log_proba(X.values())
+
+    def predict[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> Self.Target:
+        var joint = self.predict_joint_log_proba(X)
+        return predict_labels(self._domain.value(), joint)
+
+    def predict_log_proba[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> DenseMatrix:
+        return log_normalize(self.predict_joint_log_proba(X))
+
+    def predict_proba[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> DenseMatrix:
+        return exp_normalize(self.predict_joint_log_proba(X))
+
+    def score[input_dtype: DType](
+        self, X: ColumnTable[input_dtype], y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> Float64:
+        return weighted_accuracy[Self.D](y, self.predict(X), sample_weight)
 
     # Trait-typed NDArray[dtype] overloads; they delegate to the generic paths.
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
@@ -565,6 +638,7 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
     var class_log_prior_: DenseMatrix
     var fit_warnings: List[FitWarning]
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var feature_count_: DenseMatrix
     var feature_log_prob_: DenseMatrix
     var feature_all_: DenseMatrix
@@ -592,6 +666,7 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
         self.fit_warnings = []
         self.class_log_prior_ = nm.zeros[DType.float64](nm.Shape(0))
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self.feature_count_ = nm.zeros[DType.float64](nm.Shape(0, 0))
         self.feature_log_prob_ = nm.zeros[DType.float64](nm.Shape(0, 0))
         self.feature_all_ = nm.zeros[DType.float64](nm.Shape(0))
@@ -894,6 +969,51 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
         self = updated^
         return self
 
+    def fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit[input_dtype](X.values(), y, sample_weight=sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
+    def fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        *,
+        sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        return self.fit(X, y, sample_weight=_scalar_weights(X.rows(), sample_weight))
+
+    def partial_fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _check_feature_names(self.feature_names_in_, names)
+        var first = not self.__sklearn_is_fitted__()
+        _ = self.partial_fit[input_dtype](X.values(), y, classes, sample_weight=sample_weight)
+        if first:
+            self.feature_names_in_ = names^
+        return self
+
+    def partial_fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+        *,
+        sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        return self.partial_fit(X, y, classes, sample_weight=_scalar_weights(X.rows(), sample_weight))
+
     def _joint_dense[input_dtype: DType](self, X: nm.NDArray[input_dtype]) raises -> DenseMatrix:
         # Same accumulation order as the List path, so both agree exactly.
         check_is_fitted(self)
@@ -912,6 +1032,29 @@ struct ComplementNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64
     def _joint_array(self, X: _Matrix) raises -> DenseMatrix:
         check_is_fitted(self)
         return self._joint_dense(dense_from_lists(X))
+
+    def predict_joint_log_proba[input_dtype: DType](
+        self, X: ColumnTable[input_dtype],
+    ) raises -> DenseMatrix:
+        check_is_fitted(self)
+        _check_feature_names(self.feature_names_in_, X.schema().names)
+        return self.predict_joint_log_proba(X.values())
+
+    def predict[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> Self.Target:
+        var joint = self.predict_joint_log_proba(X)
+        return predict_labels(self._domain.value(), joint)
+
+    def predict_log_proba[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> DenseMatrix:
+        return log_normalize(self.predict_joint_log_proba(X))
+
+    def predict_proba[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> DenseMatrix:
+        return exp_normalize(self.predict_joint_log_proba(X))
+
+    def score[input_dtype: DType](
+        self, X: ColumnTable[input_dtype], y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> Float64:
+        return weighted_accuracy[Self.D](y, self.predict(X), sample_weight)
 
     # Trait-typed NDArray[dtype] overloads; they delegate to the generic paths.
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](

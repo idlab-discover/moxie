@@ -302,6 +302,53 @@ to the same estimator, following the [shared native contract](../interfaces.md).
   data while preserving its fitted state.
   See [the calibration contract](../calibration/family.md#classifier-adapter).
 
+## Named dense inputs
+
+All five classifiers accept an owned [ColumnTable](../compose/named-columns.md)
+backed by one Float32 or Float64 matrix for `fit`, `partial_fit`, prediction
+and `score`. The probability methods return the same dense arrays as they do
+for NDArray queries.
+
+```mojo
+from moxie.compose import ColumnTable
+from moxie.naive_bayes import MultinomialNB
+
+var table = ColumnTable(X, ["page_views", "clicks"])
+var model = MultinomialNB()
+_ = model.fit(table, y)
+var probabilities = model.predict_proba(table)
+```
+
+An ordinary named fit or the first successful named incremental update
+records the column names in order in `feature_names_in_`
+(`Optional[List[String]]`). Subsequent named predictions, scores and updates
+check the names and order when the model has learned names. An array or List
+refit clears them. Incremental updates preserve the first batch's naming
+state, and failed calls preserve fitted state. A fitted copy owns its names
+and a clone starts unfitted. When only one side carries names, validation uses
+column positions and emits no Python warning. Tables with individually added
+columns raise at the native numeric-matrix boundary.
+
+Named fitted models use native state version 3 with sample-weight requests
+followed by the ordered feature names. Unnamed models continue to use version
+1 with unset requests or version 2 with configured requests. The schemas
+validate name count and uniqueness on save and load.
+
+After assembling the current dependencies, build the discrete named-input
+contract and use the pinned scikit-learn Python environment with pandas:
+
+```sh
+mojo build -O1 --fp-mode=contract=off -I builds/deps \
+  tests/naive_bayes/test_discrete_named.mojo -o builds/nb-discrete-named
+python tests/naive_bayes/check_discrete_named.py builds/nb-discrete-named
+```
+
+The oracle compares feature names and predictions exactly, probability and
+joint log scores within `1e-12 + 1e-12 * abs(expected)` for floating-point
+rounding, and weighted accuracy within `1e-15`. See the
+[Gaussian named-input comparison](gaussian/api.md#named-dense-inputs) for its
+focused commands.
+
 ## Sample-weight requests
 
 Each classifier provides fluent `set_fit_request`, `set_partial_fit_request`,
@@ -330,10 +377,10 @@ Native calls pass the `classes` argument to `partial_fit` explicitly.
 Compositions need their own metadata forwarding support.
 
 Fit, incremental updates, fitted copies and unfitted clones retain the
-request settings. Native archives with configured requests use state version
-2 and append fit, score and incremental requests to the existing manifest.
+request settings. Unnamed native archives with configured requests use state
+version 2 and append fit, score and incremental requests to the existing manifest.
 The schema reads version 1 with unset requests and continues writing the
-original version 1 bytes when all requests are unset.
+original version 1 bytes for unnamed models when all requests are unset.
 
 After assembling the current dependencies, build the focused request contract
 and run the comparison in the pinned reference environment.

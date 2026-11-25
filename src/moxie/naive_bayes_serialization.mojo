@@ -56,13 +56,19 @@ def _has_metadata(metadata: _NaiveBayesMetadata) -> Bool:
 
 def _write_metadata(
     mut writer: BinaryWriter, mut archive: ModelArchive, metadata: _NaiveBayesMetadata,
-    named: Bool = False,
-):
+    feature_names: Optional[List[String]], features: Int,
+) raises:
+    var named = Bool(feature_names)
     if named or _has_metadata(metadata):
         archive.schema_version = _FEATURE_NAMES_VERSION if named else _WEIGHT_REQUEST_VERSION
         _write_request(writer, metadata.fit_score.fit)
         _write_request(writer, metadata.fit_score.score)
         _write_request(writer, metadata.partial_fit)
+    if feature_names:
+        ref names = feature_names.value()
+        _validate_feature_names(names, features)
+        for name in names:
+            writer.string(name)
 
 
 def _read_metadata(
@@ -254,12 +260,7 @@ struct GaussianNBSchema[
             or model.theta_.shape.tolist() != [0, 0] or model.var_.shape.tolist() != [0, 0]
         ):
             raise Error("ModelSchemaError: unfitted GaussianNB has learned state")
-        _write_metadata(writer, archive, model._metadata, named=Bool(model.feature_names_in_))
-        if model.feature_names_in_:
-            ref names = model.feature_names_in_.value()
-            _validate_feature_names(names, features)
-            for name in names:
-                writer.string(name)
+        _write_metadata(writer, archive, model._metadata, model.feature_names_in_, features)
         archive.manifest = writer^.finish()
         return archive^
 
@@ -493,13 +494,15 @@ struct MultinomialNBSchema[
             or model.feature_log_prob_.shape.tolist() != [0, 0]
         ):
             raise Error("ModelSchemaError: unfitted " + Self.Estimator + " has learned state")
-        _write_metadata(writer, archive, model._metadata)
+        _write_metadata(writer, archive, model._metadata, model.feature_names_in_, features)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        var version = Self.StateVersion
+        if archive.schema_version in (_WEIGHT_REQUEST_VERSION, _FEATURE_NAMES_VERSION):
+            version = archive.schema_version
         archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
@@ -537,6 +540,8 @@ struct MultinomialNBSchema[
             model.classes_ = classes^
             model._domain = domain^
         model._metadata = _read_metadata(reader, archive)
+        if version == _FEATURE_NAMES_VERSION:
+            model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
         reader.finish()
         return model^
 
@@ -589,13 +594,15 @@ struct ComplementNBSchema[
             or model.feature_all_.shape.tolist() != [0]
         ):
             raise Error("ModelSchemaError: unfitted " + Self.Estimator + " has learned state")
-        _write_metadata(writer, archive, model._metadata)
+        _write_metadata(writer, archive, model._metadata, model.feature_names_in_, features)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        var version = Self.StateVersion
+        if archive.schema_version in (_WEIGHT_REQUEST_VERSION, _FEATURE_NAMES_VERSION):
+            version = archive.schema_version
         archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
@@ -636,6 +643,8 @@ struct ComplementNBSchema[
             model.classes_ = classes^
             model._domain = domain^
         model._metadata = _read_metadata(reader, archive)
+        if version == _FEATURE_NAMES_VERSION:
+            model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
         reader.finish()
         return model^
 
@@ -687,13 +696,15 @@ struct BernoulliNBSchema[
             or model.feature_log_prob_.shape.tolist() != [0, 0]
         ):
             raise Error("ModelSchemaError: unfitted " + Self.Estimator + " has learned state")
-        _write_metadata(writer, archive, model._metadata)
+        _write_metadata(writer, archive, model._metadata, model.feature_names_in_, features)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        var version = Self.StateVersion
+        if archive.schema_version in (_WEIGHT_REQUEST_VERSION, _FEATURE_NAMES_VERSION):
+            version = archive.schema_version
         archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
@@ -733,6 +744,8 @@ struct BernoulliNBSchema[
             model.classes_ = classes^
             model._domain = domain^
         model._metadata = _read_metadata(reader, archive)
+        if version == _FEATURE_NAMES_VERSION:
+            model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
         reader.finish()
         return model^
 
@@ -824,13 +837,15 @@ struct CategoricalNBSchema[
             or len(model.category_count_) != 0 or len(model.feature_log_prob_) != 0
         ):
             raise Error("ModelSchemaError: unfitted CategoricalNB has learned state")
-        _write_metadata(writer, archive, model._metadata)
+        _write_metadata(writer, archive, model._metadata, model.feature_names_in_, features)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        var version = Self.StateVersion
+        if archive.schema_version in (_WEIGHT_REQUEST_VERSION, _FEATURE_NAMES_VERSION):
+            version = archive.schema_version
         archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
@@ -901,5 +916,7 @@ struct CategoricalNBSchema[
         elif len(archive.payloads) != 0:
             raise Error("ModelSchemaError: unexpected CategoricalNB arrays")
         model._metadata = _read_metadata(reader, archive)
+        if version == _FEATURE_NAMES_VERSION:
+            model.feature_names_in_ = _read_feature_names(reader, model.n_features_in_)
         reader.finish()
         return model^

@@ -29,9 +29,19 @@ classifier with a different target type (for example `RidgeClassifier` or
 `PolynomialCountSketch` defaults to Float64 output. Select
 `output_dtype=DType.float32` for a Float32 successor or union.
 `tests/kernel_approximation/test_composition.mojo` covers pipelines with
-`RidgeClassifier`, default RNG use, unions, clone,
-nested `set_params` and names. `moxie.model_selection` search and validation
-use typed adapters supplied by the caller.
+`RidgeClassifier`, default RNG use, unions, clone, nested `set_params`, and
+feature names.
+
+Use `DenseSupervisedAdapter` to search a dense kernel-map pipeline with
+`GridSearchCV`. The test's `grid_search_matches_manual_refits` function searches
+`feature_map__n_components` on an `RBFSampler` followed by `RidgeClassifier`.
+Its integer-valued parameter callback writes
+`params.transformer.n_components` and calls `set_params`.
+`classifier=True` selects the default stratified folds for the pipeline.
+The test checks every split score and the winning refit against manual native
+fits. The expected split scores and predictions also come from the pinned
+scikit-learn search, splitter, pipeline, and sampler, with `RidgeClassifier`
+from the locked support wheel.
 
 ## Native scope
 

@@ -182,6 +182,29 @@ emit_names("plain", m.get_feature_names_out())''')
 expect('qt_names', 'named', ['a', 'b', 'c'], 'names')
 expect('qt_names', 'plain', ['x0', 'x1', 'x2'], 'names')
 
+# The native estimator retains explicit fit warnings as ordered records.
+for n_quantiles in (5, 6):
+    for ignore in (False, True):
+        case = f'qt_warnings_{n_quantiles}_{ignore}'
+        X = qdata['toy']
+        d.case(case, f'''var m = QuantileTransformer(n_quantiles={n_quantiles},
+    ignore_implicit_zeros={str(ignore)})
+_ = m.fit({d.input(X)})
+var categories = List[String]()
+var messages = List[String]()
+for warning in m.fit_warnings:
+    categories.append(warning.category)
+    messages.append(warning.message)
+emit_names("categories", categories)
+emit_names("messages", messages)''')
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            P.QuantileTransformer(
+                n_quantiles=n_quantiles, ignore_implicit_zeros=ignore
+            ).fit(X)
+        expect(case, 'categories', [w.category.__name__ for w in caught], 'names')
+        expect(case, 'messages', [str(w.message) for w in caught], 'names')
+
 # ---------------------------------------------------------------------------
 # PowerTransformer
 

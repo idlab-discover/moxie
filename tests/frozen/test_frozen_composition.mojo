@@ -200,6 +200,8 @@ def frozen_pipeline_steps() raises:
     _ = frozen.fit(dataset(26, 5.0), y)
     var cloned = clone(frozen)
     var nested = FrozenEstimator(cloned.copy())
+    assert_equal(len(frozen), 2)
+    assert_equal(len(nested), 2)
     assert_true(
         Pointer(to=frozen.step[0]()) == Pointer(to=frozen.estimator().transformer)
     )

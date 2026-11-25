@@ -47,9 +47,23 @@ This is nested sklearn Pipeline composition, not a flattened heterogeneous list.
 Names are unique within each container. Names, child instances, and typed child
 parameters are available as `transformer_name`, `estimator_name`, `transformer`,
 and `estimator`. Assigning a same-type child replaces that instance, preserving
-its state; changing a static type requires constructing a new pipeline. When
-the pipeline is wrapped in `FrozenEstimator`, [positional and named step access](../frozen/api.md#access-to-pipeline-steps)
-borrows these same children immutably.
+its state; changing a static type requires constructing a new pipeline.
+
+`len(pipe)` counts the two immediate steps, including in a nested pipeline.
+Use `pipe.step[0]()` or `pipe.step[-2]()` for the prefix and
+`pipe.step[1]()` or `pipe.step[-1]()` for the final estimator. The index
+is a compile-time parameter because it determines the return type.
+An out-of-range index fails compilation.
+
+For a name known at run time, use
+`pipe.named_step[StandardScaler[]]("standardscaler")` with the expected
+concrete child type. An unknown name raises a KeyError-style error and a
+known name with the wrong type raises a TypeError-style error. Both accessors
+borrow the stored child immutably, before or after fitting. The public child
+fields support mutation. `FrozenEstimator` follows the same
+[access contract](../frozen/api.md#access-to-pipeline-steps).
+The [step parity check](../../tests/pipeline/steps_parity.py) compares
+lengths, step selection and fitted child outputs with pinned scikit-learn.
 
 `PipelineParams` holds both names and both child parameter records. `deep` is
 forwarded to each child; the native record shape is unchanged for `deep=False`.
@@ -454,11 +468,10 @@ from the pinned checkout, after building `test_pipeline_cluster.mojo` and
 This implementation exposes fit, final-step weighted fit, conditional fit_predict,
 predict, conditional transforms and score, per-sample scores, decision and probability methods,
 ordered numeric classes, feature names, input feature counts, configuration,
-cloning and the two factories. The following sklearn Pipeline
+typed step access, length, cloning and the two factories. The following sklearn Pipeline
 API is **deferred** (absent from the typed API, so use fails at compile time):
 
-- `passthrough`/`None` steps, `__len__`, integer/slice `__getitem__` and
-  `named_steps` (use the typed `transformer`/`estimator` fields and names);
+- `passthrough`/`None` steps, slice indexing and a heterogeneous `named_steps` mapping;
 - constructor options `memory`, `verbose` and `transform_input`;
 - arbitrary fit parameter routing, metadata routing, callbacks,
   `set_output` and `feature_names_in_`.

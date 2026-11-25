@@ -363,6 +363,8 @@ struct TransformerPipeline[
     UnionFeatureNames,
     Predictor where conforms_to(E, Predictor),
     PredictivePipeline where conforms_to(E, Predictor),
+    ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
+    LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
     TransformerMixin where conforms_to(E, TransformerMixin),
     TransformingPipeline where conforms_to(E, TransformerMixin),
     FitTransformer where conforms_to(E, FitTransformer) or conforms_to(E, TransformerMixin),
@@ -388,6 +390,7 @@ struct TransformerPipeline[
     )
     comptime Labels where conforms_to(Self.E, FitPredictor) = Self.E.Labels
     comptime Prediction where conforms_to(Self.E, Predictor) = Self.E.Prediction
+    comptime Probabilities where conforms_to(Self.E, ProbabilityPredictor) = Self.E.Probabilities
     comptime SampleScores where conforms_to(Self.E, SampleScorer) = Self.E.SampleScores
     comptime Decision where conforms_to(Self.E, DecisionFunction) = Self.E.Decision
     comptime Params = PipelineParams[Self.P.Params, Self.E.Params]
@@ -513,6 +516,26 @@ struct TransformerPipeline[
         comptime if conforms_to(Self.P.Transformed, Deinitable):
             var transformed = self.transformer.transform(X)
             return self.estimator.predict(rebind[Self.E.Input](transformed))
+        else:
+            comptime assert False, "pipeline needs destructible intermediate values"
+
+    def predict_proba(
+        self, X: Self.Input,
+    ) raises -> Self.Probabilities where conforms_to(Self.E, ProbabilityPredictor):
+        check_is_fitted(self)
+        comptime if conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = self.transformer.transform(X)
+            return self.estimator.predict_proba(rebind[Self.E.Input](transformed))
+        else:
+            comptime assert False, "pipeline needs destructible intermediate values"
+
+    def predict_log_proba(
+        self, X: Self.Input,
+    ) raises -> Self.Probabilities where conforms_to(Self.E, LogProbabilityPredictor):
+        check_is_fitted(self)
+        comptime if conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = self.transformer.transform(X)
+            return self.estimator.predict_log_proba(rebind[Self.E.Input](transformed))
         else:
             comptime assert False, "pipeline needs destructible intermediate values"
 

@@ -395,6 +395,14 @@ uses the final estimator's aggregation. A concrete final-step method beyond
 these traits is accessible on `pipe.estimator`, with input already transformed
 by the caller. Configuration-dependent methods retain final-step validation.
 
+`predict_proba` and `predict_log_proba` require the final step's
+`ProbabilityPredictor` and `LogProbabilityPredictor` traits, respectively.
+For example, `make_pipeline(StandardScaler(), GaussianMixture(n_components=2))`
+exposes `predict_proba`. Its columns follow the fitted mixture's component
+order and retain the mixture's Float32 or Float64 output dtype. The
+[mixture parity check](../../tests/pipeline/mixture_probability_parity.py)
+exercises both dtypes, including nested pipelines and refits.
+
 ### Training-only transformation
 
 An unsupervised final step can provide `FitTransformer` independently of

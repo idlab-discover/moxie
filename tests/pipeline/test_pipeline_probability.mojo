@@ -1,13 +1,13 @@
 """Probability dispatch probes and real dense DummyClassifier integration."""
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
-from moxie.base import SupervisedEstimator, ProbabilityPredictor, LogProbabilityPredictor, TransformerMixin, FitTransformer, ClassifierMixin, clone
-from moxie.pipeline import Pipeline
+from moxie.base import SupervisedEstimator, UnsupervisedEstimator, ProbabilityPredictor, LogProbabilityPredictor, TransformerMixin, FitTransformer, ClassifierMixin, clone
+from moxie.pipeline import Pipeline, UnsupervisedPipeline
 from moxie.dummy import DummyClassifier, Label
 from numojo import NDArray, Shape, zeros
-from test_sequential import Shift, Recorder, Fused
+from test_sequential import Shift, Recorder, Fused, Unsupervised
 
 
-struct ProbabilityProbe[logs: Bool = True](SupervisedEstimator, ProbabilityPredictor,
+struct ProbabilityProbe[logs: Bool = True](SupervisedEstimator, UnsupervisedEstimator, ProbabilityPredictor,
                                          LogProbabilityPredictor where logs):
     comptime Input = Int
     comptime Target = Int
@@ -41,6 +41,16 @@ struct ProbabilityProbe[logs: Bool = True](SupervisedEstimator, ProbabilityPredi
         ref[y_origin] y: Int,
     ) raises -> ref[self] Self:
         _ = self.child.fit(X, y)
+        return self
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Int,
+        y: Optional[Int] = None,
+    ) raises -> ref[self] Self:
+        _ = self.child.fit(X, y.or_else(0))
         return self
     def predict(self, X: Int) raises -> Int:
         raise Error("probability methods must not call predict")
@@ -191,5 +201,16 @@ def main() raises:
     var only = Pipeline(Shift(), ProbabilityProbe[False]())
     _ = only.fit(5, 7)
     assert_equal(only.predict_proba(1), 307)
+    comptime assert not conforms_to(UnsupervisedPipeline[Unsupervised, Unsupervised], ProbabilityPredictor)
+    comptime assert not conforms_to(UnsupervisedPipeline[Unsupervised, ProbabilityProbe[False]], LogProbabilityPredictor)
+    comptime assert not conforms_to(UnsupervisedPipeline[Unsupervised, ProbabilityProbe[True]], ClassifierMixin)
+    var optional_target = UnsupervisedPipeline(Unsupervised(), ProbabilityProbe())
+    with assert_raises(contains="NotFittedError"):
+        _ = optional_target.predict_log_proba(1)
+    _ = optional_target.fit(5, 7)
+    assert_equal(through_trait(optional_target, 1), 210)
+    assert_equal(through_log_trait(optional_target, 1), -30)
+    with assert_raises(contains="log probability probe input"):
+        _ = optional_target.predict_log_proba(-1)
     dense[DType.float32]()
     dense[DType.float64]()

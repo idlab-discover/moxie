@@ -17,6 +17,9 @@ import numpy as np
 import scipy
 from scipy.sparse import issparse
 from scipy.spatial.distance import cdist
+from sklearn.metrics import pairwise_distances
+from sklearn.metrics._dist_metrics import DistanceMetric
+from sklearn.neighbors import NearestNeighbors
 from setuptools import Distribution, Extension
 import sklearn
 
@@ -78,7 +81,7 @@ def build_pinned_extensions(stems, files, *, source_edits=()):
     return {stem: importlib.import_module(f"moxie_oracle{stem}") for stem in stems}
 
 
-def pinned_oracle():
+def pinned_linkage_oracles():
     files = [
         REFERENCE / name for name in ("_linkage.pyx", "_reachability.pyx", "_tree.pxd", "hdbscan.py")
     ]
@@ -91,11 +94,15 @@ def pinned_oracle():
         "warn": warnings.warn,
         "make_single_linkage": extensions["_linkage"].make_single_linkage,
         "mst_from_mutual_reachability": extensions["_linkage"].mst_from_mutual_reachability,
+        "mst_from_data_matrix": extensions["_linkage"].mst_from_data_matrix,
+        "pairwise_distances": pairwise_distances,
+        "DistanceMetric": DistanceMetric,
+        "NearestNeighbors": NearestNeighbors,
         "mutual_reachability_graph": extensions["_reachability"].mutual_reachability_graph,
     }
     for path, functions in [
         (files[-1], {"_allclose_dense_sparse"}),
-        (REFERENCE / "hdbscan.py", {"_hdbscan_brute", "_brute_mst", "_process_mst"}),
+        (REFERENCE / "hdbscan.py", {"_hdbscan_brute", "_hdbscan_prims", "_brute_mst", "_process_mst"}),
     ]:
         nodes = [
             node for node in ast.parse((SOURCE / path).read_text()).body
@@ -103,9 +110,14 @@ def pinned_oracle():
         ]
         exec(compile(ast.Module(body=nodes, type_ignores=[]), str(path), "exec"), scope)
 
-    return scope["_hdbscan_brute"], {
+    return scope["_hdbscan_brute"], scope["_hdbscan_prims"], {
         str(path): hashlib.sha256((SOURCE / path).read_bytes()).hexdigest() for path in files
     }
+
+
+def pinned_oracle():
+    brute, _, hashes = pinned_linkage_oracles()
+    return brute, hashes
 
 
 def run_native(distances, min_samples, alpha, layout):

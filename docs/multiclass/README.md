@@ -54,8 +54,9 @@ features and an Int64 component target. See [tree composition](family.md#decisio
 `moxie.svm.SVC` and `moxie.svm.LinearSVC` work through
 [`BinaryAdapter`](family.md#binary-adapter-for-numeric-list-labels), which
 converts its binary labels between `NDArray` and numeric `List` values.
-`moxie.discriminant_analysis.LinearDiscriminantAnalysis` works through the
-same adapter with its default `Int` labels and Float32 or Float64 features.
+`moxie.discriminant_analysis.LinearDiscriminantAnalysis` and
+`QuadraticDiscriminantAnalysis` work through the same adapter with their
+default `Int` labels and Float32 or Float64 features.
 `moxie.naive_bayes.GaussianNB` works through the adapter in both feature dtypes,
 including incremental OvR and OvO with the default List labels.
 Single-output `moxie.dummy.DummyClassifier` works through the adapter with
@@ -64,10 +65,13 @@ integer-valued native labels and either feature dtype.
 an explicit Int64 array target type. See [KNN composition](family.md#k-nearest-neighbors-components).
 `tests/multiclass/production_parity.py` compares all three wrappers around
 these production components against pinned sklearn. Pass `--group tree`, `--group svc`,
-`--group linear-svc`, `--group lda`, `--group gaussian-nb`, `--group dummy` or `--group knn` to
+`--group linear-svc`, `--group lda`, `--group qda`, `--group gaussian-nb`,
+`--group dummy` or `--group knn` to
 check one component after assembly. The SVC group checks RBF margins in all three
 wrappers, OvR with probability enabled, and OvO with a precomputed kernel,
 including the training indices retained for each class pair.
+The QDA group checks the default SVD solver and the eigen solver with fixed
+shrinkage, including the signed decision margins used by OutputCode.
 The GaussianNB group checks the reference's string OvO incremental error, then
 compares Moxie's string predictions and decisions against sklearn with labels
 encoded as sorted integers. See [OvO string labels](one_vs_one.md#string-labels).

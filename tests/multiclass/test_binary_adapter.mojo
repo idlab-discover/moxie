@@ -8,7 +8,7 @@ from moxie.base import (
     ProbabilityPredictor,
     clone,
 )
-from moxie.discriminant_analysis import LinearDiscriminantAnalysis
+from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.dummy import DummyClassifier
 from moxie.multiclass import BinaryAdapter, OneVsRestClassifier
 from moxie.naive_bayes import GaussianNB
@@ -147,6 +147,59 @@ def check_lda() raises:
     assert_equal(model.predict(X)[nm.Item(0)], -1)
 
 
+def check_qda[dtype: DType]() raises:
+    comptime Adapter = BinaryAdapter[QuadraticDiscriminantAnalysis[dtype]]
+    comptime assert conforms_to(Adapter, DecisionFunction)
+    comptime assert conforms_to(Adapter, LogProbabilityPredictor)
+    comptime assert not conforms_to(Adapter, IncrementalClassifier)
+
+    var X = nm.zeros[dtype](nm.Shape(6, 1))
+    var y = nm.zeros[DType.int64](nm.Shape(6))
+    for i in range(3):
+        X[nm.Item(i, 0)] = Scalar[dtype](i) - 4
+        X[nm.Item(i + 3, 0)] = Scalar[dtype](2 * i) + 2
+        y[nm.Item(i + 3)] = 1
+
+    var model = Adapter(QuadraticDiscriminantAnalysis[dtype](reg_param=0.1))
+    with assert_raises(contains="NotFittedError"):
+        _ = model.decision_function(X)
+    _ = model.fit(X, y)
+    assert_equal(model.estimator.classes_[0], 0)
+    assert_equal(model.estimator.classes_[1], 1)
+    assert_equal(model.score(X, y), 1.0)
+    var decision: nm.NDArray[dtype] = model.decision_function(X)
+    var proba: nm.NDArray[dtype] = model.predict_proba(X)
+    var log_proba: nm.NDArray[dtype] = model.predict_log_proba(X)
+    assert_equal(decision.shape, nm.Shape(6))
+    assert_equal(proba.shape, nm.Shape(6, 2))
+    assert_equal(log_proba.shape, proba.shape)
+    assert_true(decision.item(0) < 0)
+    assert_true(decision.item(5) > 0)
+    assert_true(proba.item(0, 0) > proba.item(0, 1))
+    assert_true(proba.item(5, 1) > proba.item(5, 0))
+
+    var fresh = clone(model)
+    assert_false(fresh.__sklearn_is_fitted__())
+    var params = fresh.get_params()
+    assert_equal(params.reg_param, 0.1)
+    params.store_covariance = True
+    _ = fresh.set_params(params).fit(X, y)
+    assert_true(Bool(fresh.estimator.covariance_))
+    assert_false(Bool(model.estimator.covariance_))
+
+    var fitted_copy = model.copy()
+    y[nm.Item(0)] = -1
+    with assert_raises(contains="binary codes"):
+        _ = model.fit(X, y)
+    assert_equal(model.predict(X).item(0), 0)
+    for i in range(1, 3):
+        y[nm.Item(i)] = -1
+    assert_equal(model.fit(X, y).predict(X).item(0), -1)
+    assert_equal(model.estimator.classes_[0], -1)
+    assert_equal(model.estimator.classes_[1], 1)
+    assert_equal(fitted_copy.predict(X).item(0), 0)
+
+
 def check_gaussian_nb() raises:
     comptime Adapter = BinaryAdapter[GaussianNB[]]
     comptime assert conforms_to(Adapter, IncrementalClassifier)
@@ -262,5 +315,7 @@ def main() raises:
     check_labels[Float32]()
     check_labels[Int64]()
     check_lda()
+    check_qda[DType.float32]()
+    check_qda[DType.float64]()
     check_gaussian_nb()
     check_dummy()

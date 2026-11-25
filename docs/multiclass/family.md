@@ -55,6 +55,10 @@ option is disabled. Scikit-learn hides the method in that configuration.
 `BinaryAdapter(LinearDiscriminantAnalysis())` uses LDA's default native
 `List[Int]` label type and preserves its decision and probability responses
 for either feature dtype.
+`BinaryAdapter(QuadraticDiscriminantAnalysis())` uses the same label
+conversion. OvR and OvO fit QDA on 0/1 codes. OutputCode fits it on signed
+-1/+1 codes and decodes its decision margins. The adapter preserves QDA's
+Float32 or Float64 decision, probability and log-probability arrays.
 Use `BinaryAdapter(GaussianNB())` with the default Float64 features and
 `BinaryAdapter(GaussianNB[dtype=DType.float32]())` for Float32 features. OvR
 and OvO can fit incrementally with either. OutputCode uses 0/1 codes and the

@@ -348,6 +348,49 @@ def frozen_union_and_columns() raises:
     assert_equal(union.get_feature_names_out(names^), expected_names)
 
 
+def frozen_column_transformer_lookup() raises:
+    var X = dataset(26, 0.0)
+    var columns = ColumnTransformer(
+        ColumnEntry("scale", StandardScaler(), [0]),
+        ColumnEntry("empty", StandardScaler(), List[Int]()),
+        remainder=MinMaxScaler(),
+    )
+    var unfitted = FrozenEstimator(columns.copy())
+    with assert_raises(contains="NotFittedError"):
+        _ = unfitted.named_transformers_[StandardScaler[]]("scale")
+    _ = columns.fit(X)
+    var frozen = FrozenEstimator(columns^)
+    var cloned = clone(frozen)
+    var nested = FrozenEstimator(cloned^)
+    var scaler = nested.named_transformers_[StandardScaler[]]("scale")
+    var remainder = frozen.named_transformers_[MinMaxScaler[]]("remainder")
+    assert_false(frozen.named_transformers_[StandardScaler[]]("empty").__sklearn_is_fitted__())
+    with assert_raises(contains="KeyError"):
+        _ = frozen.named_transformers_[StandardScaler[]]("missing")
+    with assert_raises(contains="KeyError"):
+        _ = frozen.named_transformers_[MinMaxScaler[]]("scale")
+
+    var first = nm.zeros[DType.float64](nm.Shape(26, 1))
+    var last = nm.zeros[DType.float64](nm.Shape(26, 1))
+    for row in range(26):
+        first[nm.Item(row, 0)] = X[nm.Item(row, 0)]
+        last[nm.Item(row, 0)] = X[nm.Item(row, 1)]
+    var scaled = scaler.transform(first)
+    var ranged = remainder.transform(last)
+    var combined = frozen.transform(X)
+    assert_equal(scaled.shape[1], 1)
+    assert_equal(ranged.shape[1], 1)
+    for row in range(26):
+        var scale_value = scaled[nm.Item(row, 0)]
+        var range_value = ranged[nm.Item(row, 0)]
+        assert_equal(scale_value, combined[nm.Item(row, 0)])
+        assert_equal(range_value, combined[nm.Item(row, 1)])
+        print("column_lookup", scale_value, range_value)
+    _ = scaler.fit(nm.zeros[DType.float64](nm.Shape(26, 1)))
+    assert_true(scaler.transform(first)[nm.Item(0, 0)] != scaled[nm.Item(0, 0)])
+    assert_same(frozen.transform(X), combined)
+
+
 def frozen_float32() raises:
     var X = nm.zeros[DType.float32](nm.Shape(6, 2))
     for i in range(6):
@@ -377,5 +420,6 @@ def main() raises:
     frozen_pipeline_steps()
     frozen_cv_and_search()
     frozen_union_and_columns()
+    frozen_column_transformer_lookup()
     frozen_float32()
     print("Frozen composition contracts passed")

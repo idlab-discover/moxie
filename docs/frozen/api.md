@@ -178,6 +178,22 @@ and works when both children have the same type. A missing name raises a
 `KeyError`. A known name with a mismatched type raises a `TypeError`.
 Lookup itself works before fit, just like positional access.
 
+### Access to column transformers
+
+Use `frozen.named_transformers_[StandardScaler[]]("scale")` to retrieve a
+named estimator from a fitted `ColumnTransformer`, through clones and nested
+wrappers as well. The same method accepts `"remainder"` if the fitted
+composition recorded a remainder estimator. An empty column selection returns
+the stored unfitted child.
+
+The concrete type is required at compile time. The result follows
+[Compose's typed lookup contract](../compose/columns/api.md) and returns a
+copy. Looking up a child before fitting raises `NotFittedError`. A missing
+name or mismatched type raises `KeyError`. Use
+`frozen.estimator().transformers_()` to inspect records for symbolic
+`"drop"` and `"passthrough"` entries. The focused comparison in
+`tests/frozen/compare_composition_width.py` also checks column lookup.
+
 ## Native differences and scope
 
 - Python clone returns the same wrapper object. Mojo clone returns a value
@@ -185,8 +201,7 @@ Lookup itself works before fit, just like positional access.
   other wrapper values unchanged.
 - Learned attributes and custom read-only methods use `frozen.estimator()`;
   arbitrary attribute forwarding and inference overloads outside the shared
-  traits are not synthesized. Pipeline slices and ColumnTransformer indexing
-  remain open.
+  traits are not synthesized. Pipeline slices remain open.
 - Fit, partial fit, and parameter changes return a mutable borrow of this wrapper.
   Nested parameter rejection occurs at compile time rather than as a Python
   `ValueError`.

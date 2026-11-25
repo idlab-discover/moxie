@@ -17,7 +17,7 @@ from max.algorithm import parallelize
 from moxie._feature_metadata import EstimatorClassName, FeatureNamesOut as NativeFeatureNamesOut, InputFeatureCount
 from moxie.base import BaseEstimator, FitTransformer, TransformerMixin, UnsupervisedEstimator, clone
 from moxie.utils.validation import check_is_fitted
-from moxie.compose._base import ColumnComposer
+from moxie.compose._base import ColumnComposer, NamedColumnTransformers
 from moxie.compose._plumbing import (
     BlockLayout,
     ColumnSelection,
@@ -1081,7 +1081,7 @@ comptime _CONSTRUCTOR_PARAMS: List[String] = [
 ]
 
 
-struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dtype]](ColumnComposer, Copyable, NativeFeatureNamesOut, InputFeatureCount):
+struct ColumnTransformer[L: ColumnList, R: ColumnComponent = NoTransformer[L.dtype]](ColumnComposer, Copyable, NativeFeatureNamesOut, InputFeatureCount, NamedColumnTransformers):
     """Applies transformers to columns of a dense array and concatenates the results.
 
     `ColumnTransformer(ColumnEntry("num", Scaler(), [0, 1]), ColumnEntry("raw", "passthrough", [3]),

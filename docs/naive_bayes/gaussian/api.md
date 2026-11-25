@@ -97,6 +97,35 @@ Nonfinite results are checked explicitly. Contracts cover invalid ranks, feature
 inputs, continuous labels, failed updates, repeat fits, clone/copy and strides.
 No performance or exhaustive sklearn compatibility claim is made.
 
+## Named dense inputs
+
+Pass a `ColumnTable` backed by a single Float32 or Float64 matrix to `fit`,
+`partial_fit`, any prediction method, or `score`.
+
+```mojo
+from moxie.compose import ColumnTable
+
+_ = model.fit(ColumnTable(X, ["height", "width"]), y)
+```
+
+The model stores an ordered list of names in `feature_names_in_`, an
+`Optional[List[String]]`. The first successful `partial_fit` also records names.
+A later named call checks the fitted order and names when they are present.
+Mixed tables raise at the numeric matrix boundary.
+
+An ordinary array or List refit clears the names. Incremental updates preserve
+the names recorded by the first fit or update. Calls mixing named and unnamed
+inputs use positional validation when either side lacks names, without the
+Python warning emitted by scikit-learn. An unfitted clone has no learned names.
+
+For a focused named-input comparison, compile
+`tests/naive_bayes/gaussian/test_named.mojo` against the current assembly with
+`mojo build -O1 --fp-mode=contract=off -I builds/deps`. Pass the resulting
+binary to `tests/naive_bayes/gaussian/check_named.py` using the pinned
+scikit-learn environment with pandas installed. The comparison requires exact
+feature names and predicted labels and allows `1e-12 + 1e-12 * abs(expected)`
+for probabilities and log scores to accommodate floating-point rounding.
+
 ## Persistence
 
 Use `GaussianNBSchema[D, dtype]` from `moxie.naive_bayes_serialization` with the
@@ -121,6 +150,9 @@ domain and owns its arrays independently, so the model can predict and resume
 `partial_fit` immediately. Float payloads retain their original bit patterns,
 including nonfinite moments produced by arithmetic overflow. Unfitted archives
 preserve configuration and retain the usual fitted-state checks.
+Named fitted models use schema version 3, which preserves feature names and
+any sample-weight requests. Unnamed models retain schema version 1 or 2
+according to their request settings.
 
 The focused test in `tests/naive_bayes/test_serialization.mojo` covers native
 files, malformed state and independent updates. Run

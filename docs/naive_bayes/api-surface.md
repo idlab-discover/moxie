@@ -47,8 +47,9 @@ records, fluent mutable-reference returns, descriptive Mojo errors, stricter
 negative-weight/prior validation and default Gaussian arithmetic dtype. See
 [behavior classifications](family.md#behavioral-compatibility-decisions). All five estimators
 expose [typed sample-weight requests](family.md#sample-weight-requests).
-Named-data `feature_names_in_`, Python reflection/bindings and device array
-namespace dispatch are outside the native contract. Gaussian is CPU dense only.
+[Named dense inputs](gaussian/api.md#named-dense-inputs) and
+`feature_names_in_` are available on GaussianNB. Python reflection/bindings
+and device array namespace dispatch are outside the native contract.
 Multioutput targets are unsupported by the reference classifiers as well.
 
 `pixi run test` checks native contracts and composed consumers.

@@ -2,6 +2,7 @@
 import numojo as nm
 from numojo import NDArray, Shape, Item
 from std.math import isfinite
+from moxie.compose._table import ColumnTable
 from moxie.metadata_routing import FitScoreMetadataRequest, SampleWeightRequest, SampleWeightUpdate
 from moxie._naive_bayes_common import NaiveBayesMetadataRequestProvider, _NaiveBayesMetadata
 from moxie._naive_bayes_common import _scalar_weights
@@ -124,6 +125,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
     var var_: Self.Array
     var epsilon_: Self.ScalarType
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var _domain: Optional[Self.D]
     var _metadata: _NaiveBayesMetadata
 
@@ -139,6 +141,7 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
         self.var_ = nm.zeros[Self.dtype](Shape(0, 0))
         self.epsilon_ = 0
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self._domain = None
         self._metadata = _NaiveBayesMetadata()
 
@@ -372,6 +375,55 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
                     if not isfinite(Self.ScalarType(X.item(i, f))):
                         raise Error("ValueError: X is not finite in the selected Gaussian dtype")
 
+    def fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        _ = self.fit[input_dtype](X.values(), y, sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
+    def fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        *,
+        sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        return self.fit(X, y, _scalar_weights(X.rows(), sample_weight))
+
+    def partial_fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> ref[self] Self:
+        var names = X.schema().names.copy()
+        self._check_feature_names(names)
+        var first = not self.__sklearn_is_fitted__()
+        _ = self.partial_fit[input_dtype](X.values(), y, classes, sample_weight)
+        if first:
+            self.feature_names_in_ = names^
+        return self
+
+    def partial_fit[input_dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
+        ref[origin] self,
+        ref[x_origin] X: ColumnTable[input_dtype],
+        ref[y_origin] y: Self.Target,
+        classes: Optional[Self.Classes] = None,
+        *,
+        sample_weight: Float64,
+    ) raises -> ref[self] Self:
+        return self.partial_fit(X, y, classes, _scalar_weights(X.rows(), sample_weight))
+
+    def _check_feature_names(self, names: List[String]) raises:
+        if self.feature_names_in_ and names != self.feature_names_in_.value():
+            raise Error("ValueError: feature names must match the names and order used during fit")
+
     def _update[input_dtype: DType](
         mut self, X: NDArray[input_dtype], y: Self.Target,
         classes: Optional[Self.Classes], sample_weight: Optional[List[Float64]],
@@ -449,6 +501,29 @@ struct GaussianNB[D: ClassDomain = IntListDomain, dtype: DType = DType.float64](
 
     def score[input_dtype: DType](self, X: NDArray[input_dtype], y: Self.Target,
                            sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:
+        return weighted_accuracy[Self.D](y, self.predict(X), sample_weight)
+
+    def predict_joint_log_proba[input_dtype: DType](
+        self, X: ColumnTable[input_dtype],
+    ) raises -> Self.Array:
+        check_is_fitted(self)
+        self._check_feature_names(X.schema().names)
+        return self.predict_joint_log_proba(X.values())
+
+    def predict[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> Self.Target:
+        var joint = self.predict_joint_log_proba(X)
+        return predict_labels(self._domain.value(), joint)
+
+    def predict_log_proba[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> Self.Array:
+        return log_normalize(self.predict_joint_log_proba(X))
+
+    def predict_proba[input_dtype: DType](self, X: ColumnTable[input_dtype]) raises -> Self.Array:
+        return exp_normalize(self.predict_joint_log_proba(X))
+
+    def score[input_dtype: DType](
+        self, X: ColumnTable[input_dtype], y: Self.Target,
+        sample_weight: Optional[Self.SampleWeight] = None,
+    ) raises -> Float64:
         return weighted_accuracy[Self.D](y, self.predict(X), sample_weight)
 
     # Trait-typed NDArray[dtype] overloads; they delegate to the generic paths.

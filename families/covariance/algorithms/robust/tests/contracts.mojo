@@ -5,7 +5,7 @@ from std.math import abs, inf, nan
 from std.testing import assert_equal, assert_true, assert_false
 from moxie.base import clone
 from moxie._random import RandomState
-from moxie.covariance import MinCovDet, EllipticEnvelope, fast_mcd
+from moxie.covariance import MinCovDet, EllipticEnvelope, empirical_covariance, fast_mcd
 from moxie.covariance._robust_covariance import consistency_factor, chi2_isf
 
 
@@ -367,6 +367,71 @@ def check_error_norm[dtype: DType]() raises:
     print("PASS EllipticEnvelope error_norm contracts", dtype)
 
 
+def check_custom_covariance[dtype: DType]() raises:
+    var X = data[dtype](60, 3, 3)
+    var ridge: Float64 = 0.25
+    var calls = 0
+    def strided_covariance(
+        samples: NDArray[DType.float64],
+    ) raises {imm ridge, mut calls} -> NDArray[DType.float64]:
+        calls += 1
+        assert_equal(samples.shape[0], 60)
+        assert_equal(samples.shape[1], 3)
+        assert_equal(samples.unsafe_get(0), 20.0)
+        var covariance = empirical_covariance(samples)
+        var backing = nm.zeros[DType.float64](Shape(20))
+        for i in range(9):
+            backing.unsafe_set(17 - 2 * i, covariance.unsafe_get(i) + (ridge if i % 4 == 0 else 0))
+        return backing.view_with_layout(Shape(3, 3), nm.NDArrayStrides(-6, -2), 17)
+
+    var baseline = fast_mcd(X, 1.0, 7)
+    var seeded = fast_mcd(X, 1.0, 7, cov_computation_method=strided_covariance)
+    var stream = RandomState(7)
+    var streamed = fast_mcd(X, 1.0, stream, cov_computation_method=strided_covariance)
+    assert_true(calls > 0)
+    var default_stream = RandomState(7)
+    _ = fast_mcd(X, 1.0, default_stream)
+    assert_equal(stream.standard_normal(), default_stream.standard_normal())
+    assert_true(same(seeded.covariance, streamed.covariance))
+    assert_true(same(seeded.dist, streamed.dist))
+    assert_true(same(seeded.location, baseline.location))
+    assert_true(same(seeded.support, baseline.support))
+    assert_false(same(seeded.dist, baseline.dist))
+    for i in range(9):
+        var expected = Float64(baseline.covariance.unsafe_get(i)) + (ridge if i % 4 == 0 else 0)
+        assert_true(close(Float64(seeded.covariance.unsafe_get(i)), expected))
+
+    for kind in range(4):
+        def invalid_covariance(samples: NDArray[DType.float64]) raises {imm kind} -> NDArray[DType.float64]:
+            if kind == 0:
+                return nm.zeros[DType.float64](Shape(9))
+            if kind == 1:
+                return nm.zeros[DType.float64](Shape(2, 2))
+            if kind == 2:
+                var invalid = nm.zeros[DType.float64](Shape(3, 3))
+                invalid.unsafe_set(0, nan[DType.float64]())
+                return invalid^
+            raise Error("test callback failed")
+        try:
+            _ = fast_mcd(X, random_state=7, cov_computation_method=invalid_covariance)
+            assert_true(False)
+        except e:
+            assert_true(has("test callback failed" if kind == 3 else "ValueError: fast_mcd", e), String(e))
+
+    def unexpected(samples: NDArray[DType.float64]) raises -> NDArray[DType.float64]:
+        raise Error("the univariate path called the covariance method")
+
+    var x = data[dtype](25, 1, 1)
+    for fraction in [0.7, 1.0]:
+        var direct = fast_mcd(x, fraction, 7)
+        var custom = fast_mcd(x, fraction, 7, cov_computation_method=unexpected)
+        assert_true(same(custom.location, direct.location))
+        assert_true(same(custom.covariance, direct.covariance))
+        assert_true(same(custom.support, direct.support))
+        assert_true(same(custom.dist, direct.dist))
+    print("PASS fast_mcd callable contracts", dtype)
+
+
 def main() raises:
     check[DType.float64]()
     check[DType.float32]()
@@ -374,3 +439,5 @@ def main() raises:
     check_postprocessing[DType.float32]()
     check_error_norm[DType.float64]()
     check_error_norm[DType.float32]()
+    check_custom_covariance[DType.float64]()
+    check_custom_covariance[DType.float32]()

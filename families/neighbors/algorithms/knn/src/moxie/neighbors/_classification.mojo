@@ -1,6 +1,7 @@
 """Dense KNeighborsClassifier; see docs/estimators.md for native type adaptations."""
 import numojo as nm
 from moxie.base import BaseEstimator
+from moxie._multiclass_contracts import PairwiseInput
 from moxie.neighbors._base import KNeighborsClassifierAPI
 from moxie.neighbors._classification_targets import ClassificationTargets, LabelOps
 from moxie.neighbors._distance import Metric
@@ -17,7 +18,7 @@ struct KNeighborsClassifierParams[dtype: DType, M: DenseMetric & Deinitable = Me
     var outlier_label: Optional[Self.Y]
     var outlier_most_frequent: Bool
 
-struct KNeighborsClassifier[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype], Y: Copyable & Deinitable = nm.NDArray[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](KNeighborsClassifierAPI, Copyable):
+struct KNeighborsClassifier[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype], Y: Copyable & Deinitable = nm.NDArray[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](KNeighborsClassifierAPI, Copyable, PairwiseInput):
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = Self.Y
     comptime Prediction = Self.Target
@@ -91,6 +92,15 @@ struct KNeighborsClassifier[dtype: DType = DType.float64, M: DenseMetric & Deini
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._y)
+
+    def pairwise_input(self) -> Bool:
+        """Whether the configured metric expects a precomputed distance matrix."""
+        comptime if Self.M == Metric[Self.dtype]:
+            ref params = self._query._params
+            if params.metric_params:
+                return params.metric_name(params.metric_params.value()) == "precomputed"
+            return params.metric == "precomputed"
+        return False
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: nm.NDArray[Self.dtype], ref[y_origin] y: Self.Y) raises -> ref[self] Self:
         if not self.weighting and self.weights != "uniform" and self.weights != "distance": raise Error("ValueError: invalid weights")

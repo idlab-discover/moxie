@@ -107,6 +107,14 @@ COMPONENTS = {
             "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3)"),
     "knn-distance": (lambda: KNeighborsClassifier(n_neighbors=3, weights="distance"),
                      'KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3, weights="distance")'),
+    "knn-precomputed": (
+        lambda: KNeighborsClassifier(n_neighbors=3, metric="precomputed"),
+        'KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3, metric="precomputed")',
+    ),
+    "knn-precomputed-distance": (
+        lambda: KNeighborsClassifier(n_neighbors=3, metric="precomputed", weights="distance"),
+        'KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]](3, metric="precomputed", weights="distance")',
+    ),
 }
 COMPONENT_TYPE = {
     "ridge": "RidgeClassifier[{dtype}]", "ridge-noint": "RidgeClassifier[{dtype}]",
@@ -120,8 +128,12 @@ COMPONENT_TYPE = {
     "gaussian-nb": "BinaryAdapter[GaussianNB[IntListDomain, {dtype}]]",
     "knn": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
     "knn-distance": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
+    "knn-precomputed": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
+    "knn-precomputed-distance": "KNeighborsClassifier[{dtype}, Y=NDArray[DType.int64]]",
 }
 SVC_COMPONENTS = ("svc", "svc-probability", "svc-precomputed")
+KNN_PRECOMPUTED = ("knn-precomputed", "knn-precomputed-distance")
+PAIRWISE_COMPONENTS = ("svc-precomputed", *KNN_PRECOMPUTED)
 OUTPUT_CODE_RESPONSE = {
     "tree": ("predict_proba", "response[0][Item(i, 1)]"),
     "tree-depth2": ("predict_proba", "response[0][Item(i, 1)]"),
@@ -140,7 +152,7 @@ def cases(components):
         for component in components:
             if component == "svc-probability" and wrapper != "ovr":
                 continue
-            if component == "svc-precomputed" and wrapper != "ovo":
+            if component in PAIRWISE_COMPONENTS and wrapper != "ovo":
                 continue
             for k in (2, 3, 5):
                 for labels in ("int64", "float64", "string", "float32-features"):
@@ -148,8 +160,9 @@ def cases(components):
                         continue
                     if labels != "int64" and k != 3:
                         continue
-                    n = 12 * k
-                    y = np.tile(np.arange(k), 12)
+                    repeats = 6 if component in KNN_PRECOMPUTED else 12
+                    n = repeats * k
+                    y = np.tile(np.arange(k), repeats)
                     rng.shuffle(y)
                     X = rng.normal(size=(n, 4)) + y[:, None] * np.array([0.8, -0.5, 0.3, 0.0])
                     Xt = rng.normal(size=(15, 4)) + rng.integers(0, k, 15)[:, None] * 0.6
@@ -164,6 +177,11 @@ def cases(components):
                         target = y * 3 - 7
                     if component == "svc-precomputed":
                         X, Xt = X @ X.T, Xt @ X.T
+                    if component in KNN_PRECOMPUTED:
+                        X, Xt = (
+                            np.linalg.norm(rows[:, None, :] - X[None, :, :], axis=2)
+                            for rows in (X, Xt)
+                        )
                     for code_size, seed in (((1.5, 0), (2.0, 3)) if wrapper == "oc" else ((None, None),)):
                         result.append(dict(
                             name=f"{wrapper}-{component}-k{k}-{labels}" + (f"-size{code_size}-seed{seed}" if seed is not None else ""),
@@ -212,7 +230,7 @@ def reference(c):
         assert not hasattr(model, "predict_proba")
     if c["wrapper"] == "ovr" and hasattr(model, "predict_proba"):
         out["proba"] = model.predict_proba(c["Xt"]).tolist()
-    if c["component"] == "svc-precomputed":
+    if c["component"] in PAIRWISE_COMPONENTS:
         out["pairwise_indices"] = [indices.tolist() for indices in model.pairwise_indices_]
     if c["wrapper"] == "oc":
         out["code_book"] = model.code_book_.tolist()
@@ -345,9 +363,9 @@ def tolerance(c, key):
         return TOLERANCE["lda32" if c["dtype"] == "float32" else "lda64"]
     if c["component"] == "gaussian-nb":
         return TOLERANCE["gaussian-nb32" if c["dtype"] == "float32" else "gaussian-nb64"]
-    if c["component"] == "knn":
+    if c["component"] in ("knn", "knn-precomputed"):
         return TOLERANCE["tree"]
-    if c["component"] == "knn-distance":
+    if c["component"] in ("knn-distance", "knn-precomputed-distance"):
         return TOLERANCE["knn-distance32" if c["dtype"] == "float32" else "knn-distance64"]
     if c["component"].startswith("tree"):
         return (1e-14, 1e-15) if key == "decision" else TOLERANCE["tree"]
@@ -374,6 +392,7 @@ def main():
         "lda": ("lda",),
         "gaussian-nb": ("gaussian-nb",),
         "knn": ("knn", "knn-distance"),
+        "knn-precomputed": KNN_PRECOMPUTED,
     }
     parser = argparse.ArgumentParser()
     parser.add_argument("--group", choices=("all", *groups), default="all")
@@ -396,7 +415,7 @@ def main():
             assert Path(inspect.getfile(discriminant_analysis)).read_bytes() == (
                 REFERENCE / "sklearn/discriminant_analysis.py"
             ).read_bytes(), "install the pinned local scikit-learn checkout"
-        if group == "knn":
+        if group in ("knn", "knn-precomputed"):
             assert Path(inspect.getfile(neighbors_classification)).read_bytes() == (
                 REFERENCE / "sklearn/neighbors/_classification.py"
             ).read_bytes(), "install the pinned local scikit-learn checkout"

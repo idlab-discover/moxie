@@ -102,6 +102,12 @@ column from the single `(n_samples, 2)` Float64 matrix. A fitted component
 copy retains its query state, and `clone` keeps the configuration for a new
 fit. The KNN production parity group covers feature matrices, uniform and
 distance weights, and all three wrappers.
+For OvO with precomputed distances, use the same component with
+`metric="precomputed"`. Fit takes the square training distance matrix and
+prediction takes one column per original training row. The wrapper gathers
+each class pair's distances and records the selected training rows in
+`pairwise_indices_`. The `knn-precomputed` production parity group checks
+these indices, decisions, predictions and scores against scikit-learn.
 
 ## Behavioral distinctions
 

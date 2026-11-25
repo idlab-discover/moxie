@@ -83,6 +83,9 @@ change through `set_params`. Undeclared components default to `False` through
 the exported `pairwise_input(estimator)` helper. This is an explicit Mojo
 capability adaptation, not an implementation of sklearn's full tag system.
 OvO and OvR expose the trait and delegate to their template estimator.
+Use `KNeighborsClassifier[Y=NDArray[DType.int64]](3, metric="precomputed")`
+as the component for a precomputed distance matrix. The same slicing rules
+apply to distances and kernels.
 
 ```mojo
 # MyKernelClassifier implements PairwiseInput and returns True.

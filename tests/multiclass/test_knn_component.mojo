@@ -2,9 +2,10 @@
 import numojo as nm
 from moxie._multiclass_binary import positive_probability
 from moxie.base import clone
-from moxie.multiclass import OneVsRestClassifier
+from moxie.multiclass import OneVsOneClassifier, OneVsRestClassifier, pairwise_input
 from moxie.neighbors import KNeighborsClassifier
-from std.testing import assert_equal, assert_false, assert_raises
+from moxie.neighbors._distance import Metric
+from std.testing import assert_equal, assert_false, assert_raises, assert_true
 
 
 def check_copy[dtype: DType](algorithm: String) raises:
@@ -66,9 +67,46 @@ def check_probability_shape() raises:
     assert_equal(model.fit(X, binary).predict(X)[nm.Item(1)], 1)
 
 
+def check_pairwise_fit() raises:
+    comptime KNN = KNeighborsClassifier[Y=nm.NDArray[DType.int64]]
+    var distances = nm.zeros[DType.float64](nm.Shape(6, 6))
+    var features = nm.zeros[DType.float64](nm.Shape(6, 1))
+    var y = nm.zeros[DType.int64](nm.Shape(6))
+    for i in range(6):
+        features[nm.Item(i, 0)] = Float64(i)
+        y[nm.Item(i)] = Int64(i % 3)
+        for j in range(6):
+            distances[nm.Item(i, j)] = Float64(abs(i - j))
+
+    var model = OneVsOneClassifier(KNN(1), n_jobs=2)
+    assert_false(pairwise_input(model))
+    _ = model.set_params(estimator=KNN(1, metric_params=Metric[DType.float64]("precomputed")))
+    assert_true(pairwise_input(model))
+    _ = model.fit(distances, y)
+    assert_equal(model.n_features_in_, 6)
+    assert_equal(model.estimators_[0].n_features_in_, 4)
+    assert_equal(model.pairwise_indices_.value()[0][nm.Item(2)], 3)
+    assert_equal(model.score(distances, y), 1.0)
+    var fresh = clone(model)
+    assert_true(pairwise_input(fresh))
+    assert_false(Bool(fresh.pairwise_indices_))
+
+    with assert_raises(contains="square"):
+        _ = model.fit(features, y)
+    with assert_raises(contains="ValueError"):
+        _ = model.predict(features)
+    _ = model.set_params(estimator=KNN(1, metric="precomputed", metric_params=Metric[DType.float64]("euclidean")))
+    assert_false(pairwise_input(model))
+    assert_equal(model.score(distances, y), 1.0)
+    _ = model.fit(features, y)
+    assert_false(Bool(model.pairwise_indices_))
+    assert_equal(model.score(features, y), 1.0)
+
+
 def main() raises:
     for algorithm in ["brute", "kd_tree", "ball_tree"]:
         check_copy[DType.float32](algorithm)
         check_copy[DType.float64](algorithm)
     check_probability_shape()
-    print("PASS: KNN component ownership and probability shape")
+    check_pairwise_fit()
+    print("PASS: KNN component ownership, probability shape and pairwise fit")

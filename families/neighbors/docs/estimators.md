@@ -154,6 +154,11 @@ output, including single-output classification. Explicitly copying a
 `KNeighborsClassifier` retains its fitted query and targets. Cloning keeps
 only the configuration. To compose KNN with a multiclass wrapper, use the
 [Int64 binary target configuration](../../../docs/multiclass/family.md#k-nearest-neighbors-components).
+`KNeighborsClassifier` implements `moxie.multiclass.PairwiseInput` so
+one-vs-one composition can subset both axes of precomputed training
+distances. The capability follows the current configuration, including a
+typed built-in `metric_params` override, and can change through `set_params`.
+Native callable metrics declare ordinary feature input.
 Regression preserves target rank; classification flattens a single-column
 target like sklearn. Classification `score` is accuracy (subset accuracy for
 multilabel indicators); multiclass-multioutput scoring raises like sklearn,

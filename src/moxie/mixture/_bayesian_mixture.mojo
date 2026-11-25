@@ -332,23 +332,26 @@ struct BayesianEngine[dtype_: DType](MixtureEMModel, Copyable):
         self.state = state^
 
 
-def mixture_weights[dtype: DType](state: BayesianState[dtype], dirichlet_process: Bool) raises -> NDArray[dtype]:
+def mixture_weights[dtype: DType](
+    concentration_a: NDArray[dtype], concentration_b: NDArray[dtype],
+    dirichlet_process: Bool,
+) raises -> NDArray[dtype]:
     """Return weights_ from the concentration (`_set_parameters`)."""
-    var k = state.concentration_a.shape[0]
+    var k = concentration_a.shape[0]
     var weights = List[Float64](length=k, fill=0.0)
     var total = 0.0
     if dirichlet_process:
         var product = 1.0
         for j in range(k):
-            var a = _get(state.concentration_a, j)
-            var b = _get(state.concentration_b, j)
+            var a = _get(concentration_a, j)
+            var b = _get(concentration_b, j)
             var s = rounded[dtype](a + b)
             weights[j] = rounded[dtype](rounded[dtype](a / s) * product)
             product = rounded[dtype](product * rounded[dtype](b / s))
             total += weights[j]
     else:
         for j in range(k):
-            weights[j] = _get(state.concentration_a, j)
+            weights[j] = _get(concentration_a, j)
             total += weights[j]
     total = rounded[dtype](total)
     for j in range(k):
@@ -439,6 +442,7 @@ struct BayesianGaussianMixture[dtype: DType = DType.float64](MixtureDensity, Cop
     var n_features_in_: Int
     var convergence_warning_: String
     var _fitted: Bool
+    var _fitted_covariance_type: String
 
     def __init__(
         out self,
@@ -499,6 +503,7 @@ struct BayesianGaussianMixture[dtype: DType = DType.float64](MixtureDensity, Cop
         self.n_features_in_ = 0
         self.convergence_warning_ = String("")
         self._fitted = False
+        self._fitted_covariance_type = String("")
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
         return BayesianGaussianMixtureParams[Self.dtype](
@@ -763,13 +768,16 @@ struct BayesianGaussianMixture[dtype: DType = DType.float64](MixtureDensity, Cop
         self.covariances_ = engine.state.covariances.copy()
         self.precisions_cholesky_ = engine.state.precisions_cholesky.copy()
         self.precisions_ = precisions_from_cholesky(self.precisions_cholesky_, self.covariance_type)
-        self.weights_ = mixture_weights(engine.state, dirichlet_process)
+        self.weights_ = mixture_weights(
+            engine.state.concentration_a, engine.state.concentration_b, dirichlet_process,
+        )
         self.converged_ = result.converged
         self.n_iter_ = result.n_iter
         self.lower_bound_ = result.lower_bound
         self.lower_bounds_ = result.lower_bounds.copy()
         self.n_features_in_ = n_features
         self.convergence_warning_ = result.warning
+        self._fitted_covariance_type = self.covariance_type
         self._fitted = True
         return result.labels.copy()
 

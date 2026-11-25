@@ -4,7 +4,8 @@ Executes the pinned sklearn/mixture/{_base,_gaussian_mixture,_bayesian_mixture}.
 (4358542a) with the support wheel as infrastructure (KMeans sources verified
 byte-identical to the pinned revision), SciPy special functions as in the
 reference, and OMP/BLAS threads pinned to 1.
-Environment: MOXIE_WORKSPACE (workspace root), MOXIE_PARITY_REPORT.
+Environment: MOXIE_WORKSPACE (workspace root), MOXIE_PARITY_REPORT,
+MOXIE_BAYESIAN_ROUNDTRIP (set to 1 to restore every fit before inference).
 """
 from pathlib import Path
 import hashlib, importlib.util, json, os, shutil, struct, subprocess, sys, warnings
@@ -14,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 REFERENCE = Path(os.environ.get('MOXIE_WORKSPACE', ROOT.parent)) / 'scikit-learn'
 REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 RUNNER = ROOT / 'builds/tests/mixture/bayesian/parity_runner'
+ROUNDTRIP = os.environ.get('MOXIE_BAYESIAN_ROUNDTRIP') == '1'
 WORK = ROOT / 'builds/mixture/bayesian/parity'
 shutil.rmtree(WORK, ignore_errors=True)
 WORK.mkdir(parents=True, exist_ok=True)
@@ -69,7 +71,10 @@ def run_native(case_id, dtype, params, arrays):
         lines.append(f'array {name} {a.ndim} {" ".join(map(str, a.shape))} {bits(a)}')
     source, target = WORK / f'{case_id}.case', WORK / f'{case_id}.out'
     source.write_text('\n'.join(lines) + '\n')
-    subprocess.run([str(RUNNER), str(source), str(target)], check=True)
+    command = [str(RUNNER), str(source), str(target)]
+    if ROUNDTRIP:
+        command.append('--roundtrip')
+    subprocess.run(command, check=True)
     result = {}
     for line in target.read_text().splitlines():
         parts = line.split(' ')
@@ -248,7 +253,7 @@ def main():
                             counts[compare(case_id, dtype, params, X, T, typed)] += 1
                         except AssertionError as exc:
                             record_float32_drift(case_id, dtype, params, X, T, typed, exc, counts, diverged)
-    report = {'revision': REVISION, 'runner_sha256': hashlib.sha256(RUNNER.read_bytes()).hexdigest(),
+    report = {'revision': REVISION, 'archive_roundtrip': ROUNDTRIP, 'runner_sha256': hashlib.sha256(RUNNER.read_bytes()).hexdigest(),
               'assembly': json.loads((ROOT / 'builds/deps/ASSEMBLY.json').read_text())['modules'],
               'counts': counts, 'diverged': diverged}
     assert report['assembly']['moxie.mixture._bayesian_mixture'] == ['moxie']

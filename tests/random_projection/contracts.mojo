@@ -21,6 +21,7 @@ from moxie.random_projection import (
 )
 from moxie._projection.linalg import pseudoinverse
 from moxie._projection.matrix import project
+from numojo import NDArray, NDArrayStrides, Shape, zeros
 
 
 def close(
@@ -68,7 +69,7 @@ def test_gaussian_lifecycle() raises:
         _ = model.inverse_transform(X)
     with assert_raises():
         _ = model.get_feature_names_out()
-    var transformed = fit_generic(model, X)
+    var transformed = model.fit_transform(X)
     assert_true(model.__sklearn_is_fitted__())
     assert_equal(model.n_components_, 2)
     assert_equal(model.n_features_in_, 4)
@@ -123,7 +124,7 @@ def test_sparse_lifecycle_and_output() raises:
     )
     with assert_raises():
         _ = model.transform(X)
-    var dense = fit_generic(model, X)
+    var dense = model.fit_transform(X)
     assert_true(model.components_.is_sparse)
     assert_false(dense.is_sparse)
     assert_equal(model.density_, 0.5)
@@ -320,6 +321,77 @@ def test_rank_deficient_inverse_and_distribution() raises:
         if value > 0:
             positive += 1
     assert_true(abs(Float64(positive) / Float64(len(sparse.data)) - 0.5) < 0.02)
+
+
+def dense_of[dtype: DType](X: ProjectionMatrix[dtype]) raises -> NDArray[dtype]:
+    var x = X.to_dense()
+    var result = zeros[dtype](Shape(x.rows, x.cols))
+    for i in range(len(x.data)):
+        result.unsafe_set(i, x.data[i])
+    return result^
+
+
+def identical[dtype: DType](a: NDArray[dtype], b: ProjectionMatrix[dtype]) raises:
+    var x = b.to_dense()
+    assert_equal(a.ndim, 2)
+    assert_equal(a.shape[0], x.rows)
+    assert_equal(a.shape[1], x.cols)
+    for i in range(len(x.data)):
+        assert_equal(a.unsafe_get(i), x.data[i])
+
+
+def dense_trait_path[dtype: DType]() raises:
+    # Trait Input/Transformed are NDArray[dtype]; the dense kernel accumulates
+    # in the same order as the ProjectionMatrix kernel, so results are identical.
+    var values: List[Scalar[dtype]] = [1.0, 2.0, 0.0, 4.0, 0.0, 3.0, 2.0, 0.0, 4.0, 0.0, 1.0, 2.0]
+    var X = ProjectionMatrix[dtype](3, 4, values^)
+    var dense = dense_of(X)
+    var gaussian = GaussianRandomProjection[dtype](n_components=2, random_state=42)
+    var g = fit_generic(gaussian, dense)
+    identical(g, gaussian.transform(X))
+    identical(gaussian.inverse_transform(g), gaussian.inverse_transform(gaussian.transform(X)))
+    var sparse = SparseRandomProjection[dtype](n_components=3, density=0.5, random_state=7)
+    var s = fit_generic(sparse, dense)
+    assert_true(sparse.components_.is_sparse)
+    identical(s, sparse.transform(X.to_csr()).to_dense())
+    var backing = zeros[dtype](Shape(3, 9))
+    for row in range(3):
+        for col in range(4):
+            backing.unsafe_set(row * 9 + 7 - col * 2, X[row, col])
+    var strided = backing.view_with_layout(Shape(3, 4), NDArrayStrides(9, -2), 7)
+    identical(gaussian.transform(strided), gaussian.transform(X))
+    identical(sparse.transform(strided), sparse.transform(X))
+    with assert_raises():
+        _ = gaussian.transform(zeros[dtype](Shape(2, 3)))
+    with assert_raises():
+        _ = gaussian.fit(zeros[dtype](Shape(0, 4)))
+    with assert_raises():
+        _ = gaussian.fit(zeros[dtype](Shape(4)))
+    var bad = dense.copy()
+    bad.unsafe_set(1, Scalar[dtype](Float64("nan")))
+    with assert_raises():
+        _ = gaussian.transform(bad)
+    with assert_raises():
+        _ = sparse.fit(bad)
+    identical(sparse.transform(dense), sparse.transform(X))
+    with assert_raises():
+        _ = gaussian.inverse_transform(dense)
+    var refit = clone(gaussian)
+    identical(refit.fit_transform(dense), gaussian.transform(X))
+    # Finite inputs and components can still overflow the input dtype.
+    var large = Scalar[dtype](1e30)
+    comptime if dtype == DType.float64:
+        large = 1e300
+    var overflowing = dense.copy()
+    overflowing.unsafe_set(0, large)
+    gaussian.components_.data[0] = large
+    with assert_raises():
+        _ = gaussian.transform(overflowing)
+
+
+def test_dense_trait_path() raises:
+    dense_trait_path[DType.float32]()
+    dense_trait_path[DType.float64]()
 
 
 def main() raises:

@@ -3,6 +3,8 @@ from std.sys import argv
 from moxie._random import RandomState
 from std.math import isfinite
 from std.testing import assert_equal, assert_raises
+from numojo import NDArray, Shape, zeros
+from moxie.base import clone
 from moxie.random_projection import (
     ProjectionMatrix,
     GaussianRandomProjection,
@@ -81,6 +83,23 @@ def matrix_case[dtype: DType](fields: List[String]) raises:
             assert_equal(actual.indptr[i], Int(indptr[i]))
 
 
+def as_array[dtype: DType](matrix: ProjectionMatrix[dtype]) raises -> NDArray[dtype]:
+    var result = zeros[dtype](Shape(matrix.rows, matrix.cols))
+    for i in range(len(matrix.data)):
+        result.unsafe_set(i, matrix.data[i])
+    return result^
+
+
+def same_dense[dtype: DType](
+    actual: NDArray[dtype], matrix: ProjectionMatrix[dtype]
+) raises:
+    assert_equal(actual.ndim, 2)
+    assert_equal(actual.shape[0], matrix.rows)
+    assert_equal(actual.shape[1], matrix.cols)
+    for i in range(actual.size):
+        assert_equal(actual.unsafe_get(i), matrix.data[i])
+
+
 def model_case[dtype: DType](fields: List[String]) raises:
     var rows = Int(fields[3])
     var cols = Int(fields[4])
@@ -109,8 +128,9 @@ def model_case[dtype: DType](fields: List[String]) raises:
         var transformed = model.fit_transform(X)
         compare(model.components_, fields[14], expected_count, cols, tolerance)
         compare(transformed, fields[15], rows, expected_count, tolerance)
+        var reconstructed = model.inverse_transform(transformed)
         compare(
-            model.inverse_transform(transformed),
+            reconstructed,
             fields[16],
             rows,
             cols,
@@ -120,6 +140,11 @@ def model_case[dtype: DType](fields: List[String]) raises:
         assert_equal(model.n_components_, expected_count)
         assert_equal(model.n_features_in_, cols)
         assert_equal(Bool(model.inverse_components_), cached)
+        if not X.is_sparse:
+            var dense = clone(model)
+            var dense_transformed = dense.fit_transform(as_array(X))
+            same_dense(dense_transformed, transformed)
+            same_dense(dense.inverse_transform(dense_transformed), reconstructed)
         if cached:
             compare(
                 model.inverse_components_.value(),
@@ -140,8 +165,9 @@ def model_case[dtype: DType](fields: List[String]) raises:
         var transformed = model.fit_transform(X)
         compare(model.components_, fields[14], expected_count, cols, tolerance)
         compare(transformed, fields[15], rows, expected_count, tolerance)
+        var reconstructed = model.inverse_transform(transformed)
         compare(
-            model.inverse_transform(transformed),
+            reconstructed,
             fields[16],
             rows,
             cols,
@@ -151,6 +177,11 @@ def model_case[dtype: DType](fields: List[String]) raises:
         assert_equal(model.n_components_, expected_count)
         assert_equal(model.n_features_in_, cols)
         assert_equal(Bool(model.inverse_components_), cached)
+        if not X.is_sparse:
+            var dense = clone(model)
+            var dense_transformed = dense.fit_transform(as_array(X))
+            same_dense(dense_transformed, transformed)
+            same_dense(dense.inverse_transform(dense_transformed), reconstructed)
         if cached:
             compare(
                 model.inverse_components_.value(),
@@ -171,7 +202,7 @@ def inverse_case[dtype: DType](fields: List[String]) raises:
 
 def stream_case[dtype: DType](fields: List[String]) raises:
     var rng = RandomState(42)
-    var X = ProjectionMatrix[dtype](2, 101)
+    var X = zeros[dtype](Shape(2, 101))
     var g = GaussianRandomProjection[dtype](3)
     var s = SparseRandomProjection[dtype](3, density=Float64(fields[2]))
     var tolerance = 2e-6 if dtype == DType.float32 else 3e-13

@@ -13,7 +13,8 @@ from moxie.base import (
 )
 from moxie.utils.validation import check_is_fitted
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
-from ._projection.matrix import ProjectionMatrix, project
+from numojo import NDArray
+from ._projection.matrix import ProjectionMatrix, project, project_dense, validate_dense
 from moxie._random import RandomState, check_random_state
 from ._projection.linalg import pseudoinverse
 from ._projection.math import log64
@@ -234,17 +235,18 @@ struct GaussianRandomProjection[dtype: DType = DType.float64](
     """GaussianRandomProjection for owned dense and CSR float matrices."""
 
     comptime Params = GaussianRandomProjectionParams
-    comptime Input = ProjectionMatrix[Self.dtype]
-    comptime Target = List[Scalar[Self.dtype]]
-    comptime Transformed = ProjectionMatrix[Self.dtype]
+    comptime Input = NDArray[Self.dtype]
+    comptime Target = NDArray[Self.dtype]
+    comptime Transformed = NDArray[Self.dtype]
+    comptime Matrix = ProjectionMatrix[Self.dtype]
     var n_components: ComponentCount
     var eps: Float64
     var compute_inverse_components: Bool
     var random_state: Optional[Int]
     var n_components_: Int
     var n_features_in_: Int
-    var components_: Self.Input
-    var inverse_components_: Optional[Self.Input]
+    var components_: Self.Matrix
+    var inverse_components_: Optional[Self.Matrix]
     var _fitted: Bool
 
     def __init__(
@@ -261,7 +263,7 @@ struct GaussianRandomProjection[dtype: DType = DType.float64](
         self.random_state = random_state
         self.n_components_ = 0
         self.n_features_in_ = 0
-        self.components_ = Self.Input()
+        self.components_ = Self.Matrix()
         self.inverse_components_ = None
         self._fitted = False
 
@@ -316,8 +318,9 @@ struct GaussianRandomProjection[dtype: DType = DType.float64](
         ref[origin] self, ref[x_origin] X: Self.Input,
         y: Optional[Self.Target] = None,
     ) raises -> ref[self] Self:
+        validate_dense(X)
         var handle = check_random_state(self.random_state)
-        self._fit_with_rng(X, handle[])
+        self._fit_with_rng(X.shape[0], X.shape[1], handle[])
         return self
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](
@@ -325,25 +328,51 @@ struct GaussianRandomProjection[dtype: DType = DType.float64](
     ) raises -> ref[self] Self:
         if self.random_state:
             raise Error("ValueError: explicit rng requires random_state=None")
-        self._fit_with_rng(X, rng)
+        validate_dense(X)
+        self._fit_with_rng(X.shape[0], X.shape[1], rng)
         return self
 
-    def _fit_with_rng(mut self, X: Self.Input, mut rng: RandomState) raises:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Matrix,
+        y: Optional[List[Scalar[Self.dtype]]] = None,
+    ) raises -> ref[self] Self:
         X.validate(nonempty=True)
-        var count = _dimensions(self.n_components, self.eps, X.rows, X.cols)
+        var handle = check_random_state(self.random_state)
+        self._fit_with_rng(X.rows, X.cols, handle[])
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Matrix, *, mut rng: RandomState
+    ) raises -> ref[self] Self:
+        if self.random_state:
+            raise Error("ValueError: explicit rng requires random_state=None")
+        X.validate(nonempty=True)
+        self._fit_with_rng(X.rows, X.cols, rng)
+        return self
+
+    def _fit_with_rng(mut self, rows: Int, cols: Int, mut rng: RandomState) raises:
+        var count = _dimensions(self.n_components, self.eps, rows, cols)
         var components = _gaussian_from_rng[Self.dtype](
-            count, X.cols, rng
+            count, cols, rng
         )
-        var inverse: Optional[Self.Input] = None
+        var inverse: Optional[Self.Matrix] = None
         if self.compute_inverse_components:
             inverse = pseudoinverse(components)
         self.components_ = components^
         self.inverse_components_ = inverse^
         self.n_components_ = count
-        self.n_features_in_ = X.cols
+        self.n_features_in_ = cols
         self._fitted = True
 
     def transform(self, X: Self.Input) raises -> Self.Transformed:
+        """Dense input always gives a dense projection, as in sklearn."""
+        check_is_fitted(self)
+        validate_dense(X)
+        if X.shape[1] != self.n_features_in_:
+            raise Error("ValueError: feature count differs from fit")
+        return project_dense(X, self.components_)
+
+    def transform(self, X: Self.Matrix) raises -> Self.Matrix:
         check_is_fitted(self)
         if X.cols != self.n_features_in_:
             raise Error("ValueError: feature count differs from fit")
@@ -355,21 +384,37 @@ struct GaussianRandomProjection[dtype: DType = DType.float64](
         _ = self.fit(X, y)
         return self.transform(X)
 
+    def fit_transform(
+        mut self, X: Self.Matrix, y: Optional[List[Scalar[Self.dtype]]] = None
+    ) raises -> Self.Matrix:
+        _ = self.fit(X, y)
+        return self.transform(X)
+
     def inverse_transform(self, X: Self.Transformed) raises -> Self.Input:
         check_is_fitted(self)
-        if X.cols != self.n_components_:
+        validate_dense(X)
+        self._check_inverse_width(X.shape[1])
+        if self.compute_inverse_components:
+            return project_dense(X, self.inverse_components_.value())
+        return project_dense(X, pseudoinverse(self.components_))
+
+    def inverse_transform(self, X: Self.Matrix) raises -> Self.Matrix:
+        check_is_fitted(self)
+        self._check_inverse_width(X.cols)
+        if self.compute_inverse_components:
+            return project(X, self.inverse_components_.value())
+        return project(X, pseudoinverse(self.components_))
+
+    def _check_inverse_width(self, cols: Int) raises:
+        if cols != self.n_components_:
             raise Error(
                 "ValueError: inverse input must have n_components_ columns"
             )
-        if self.compute_inverse_components:
-            if not self.inverse_components_:
-                raise Error(
-                    "ValueError: inverse components were not computed; refit or"
-                    " disable caching"
-                )
-            return project(X, self.inverse_components_.value())
-        var inverse = pseudoinverse(self.components_)
-        return project(X, inverse)
+        if self.compute_inverse_components and not self.inverse_components_:
+            raise Error(
+                "ValueError: inverse components were not computed; refit or"
+                " disable caching"
+            )
 
     def get_n_features_in(self) raises -> Int:
         """sklearn's `n_features_in_` attribute, which exists only after fit."""
@@ -407,9 +452,10 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
     """SparseRandomProjection for owned dense and CSR float matrices."""
 
     comptime Params = SparseRandomProjectionParams
-    comptime Input = ProjectionMatrix[Self.dtype]
-    comptime Target = List[Scalar[Self.dtype]]
-    comptime Transformed = ProjectionMatrix[Self.dtype]
+    comptime Input = NDArray[Self.dtype]
+    comptime Target = NDArray[Self.dtype]
+    comptime Transformed = NDArray[Self.dtype]
+    comptime Matrix = ProjectionMatrix[Self.dtype]
     var n_components: ComponentCount
     var density: ProjectionDensity
     var eps: Float64
@@ -418,8 +464,8 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
     var random_state: Optional[Int]
     var n_components_: Int
     var n_features_in_: Int
-    var components_: Self.Input
-    var inverse_components_: Optional[Self.Input]
+    var components_: Self.Matrix
+    var inverse_components_: Optional[Self.Matrix]
     var _fitted: Bool
     var density_: Float64
 
@@ -441,7 +487,7 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
         self.random_state = random_state
         self.n_components_ = 0
         self.n_features_in_ = 0
-        self.components_ = Self.Input()
+        self.components_ = Self.Matrix()
         self.inverse_components_ = None
         self._fitted = False
         self.density_ = 0
@@ -509,8 +555,9 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
         ref[origin] self, ref[x_origin] X: Self.Input,
         y: Optional[Self.Target] = None,
     ) raises -> ref[self] Self:
+        validate_dense(X)
         var handle = check_random_state(self.random_state)
-        self._fit_with_rng(X, handle[])
+        self._fit_with_rng(X.shape[0], X.shape[1], handle[])
         return self
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin](
@@ -518,27 +565,53 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
     ) raises -> ref[self] Self:
         if self.random_state:
             raise Error("ValueError: explicit rng requires random_state=None")
-        self._fit_with_rng(X, rng)
+        validate_dense(X)
+        self._fit_with_rng(X.shape[0], X.shape[1], rng)
         return self
 
-    def _fit_with_rng(mut self, X: Self.Input, mut rng: RandomState) raises:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Matrix,
+        y: Optional[List[Scalar[Self.dtype]]] = None,
+    ) raises -> ref[self] Self:
         X.validate(nonempty=True)
-        var count = _dimensions(self.n_components, self.eps, X.rows, X.cols)
-        var density = _density(self.density, X.cols)
+        var handle = check_random_state(self.random_state)
+        self._fit_with_rng(X.rows, X.cols, handle[])
+        return self
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin](
+        ref[origin] self, ref[x_origin] X: Self.Matrix, *, mut rng: RandomState
+    ) raises -> ref[self] Self:
+        if self.random_state:
+            raise Error("ValueError: explicit rng requires random_state=None")
+        X.validate(nonempty=True)
+        self._fit_with_rng(X.rows, X.cols, rng)
+        return self
+
+    def _fit_with_rng(mut self, rows: Int, cols: Int, mut rng: RandomState) raises:
+        var count = _dimensions(self.n_components, self.eps, rows, cols)
+        var density = _density(self.density, cols)
         var components = _sparse_from_rng[Self.dtype](
-            count, X.cols, density, rng
+            count, cols, density, rng
         )
-        var inverse: Optional[Self.Input] = None
+        var inverse: Optional[Self.Matrix] = None
         if self.compute_inverse_components:
             inverse = pseudoinverse(components)
         self.components_ = components^
         self.inverse_components_ = inverse^
         self.n_components_ = count
-        self.n_features_in_ = X.cols
+        self.n_features_in_ = cols
         self._fitted = True
         self.density_ = density
 
     def transform(self, X: Self.Input) raises -> Self.Transformed:
+        """Dense input always gives a dense projection, as in sklearn."""
+        check_is_fitted(self)
+        validate_dense(X)
+        if X.shape[1] != self.n_features_in_:
+            raise Error("ValueError: feature count differs from fit")
+        return project_dense(X, self.components_)
+
+    def transform(self, X: Self.Matrix) raises -> Self.Matrix:
         check_is_fitted(self)
         if X.cols != self.n_features_in_:
             raise Error("ValueError: feature count differs from fit")
@@ -550,21 +623,37 @@ struct SparseRandomProjection[dtype: DType = DType.float64](
         _ = self.fit(X, y)
         return self.transform(X)
 
+    def fit_transform(
+        mut self, X: Self.Matrix, y: Optional[List[Scalar[Self.dtype]]] = None
+    ) raises -> Self.Matrix:
+        _ = self.fit(X, y)
+        return self.transform(X)
+
     def inverse_transform(self, X: Self.Transformed) raises -> Self.Input:
         check_is_fitted(self)
-        if X.cols != self.n_components_:
+        validate_dense(X)
+        self._check_inverse_width(X.shape[1])
+        if self.compute_inverse_components:
+            return project_dense(X, self.inverse_components_.value())
+        return project_dense(X, pseudoinverse(self.components_))
+
+    def inverse_transform(self, X: Self.Matrix) raises -> Self.Matrix:
+        check_is_fitted(self)
+        self._check_inverse_width(X.cols)
+        if self.compute_inverse_components:
+            return project(X, self.inverse_components_.value())
+        return project(X, pseudoinverse(self.components_))
+
+    def _check_inverse_width(self, cols: Int) raises:
+        if cols != self.n_components_:
             raise Error(
                 "ValueError: inverse input must have n_components_ columns"
             )
-        if self.compute_inverse_components:
-            if not self.inverse_components_:
-                raise Error(
-                    "ValueError: inverse components were not computed; refit or"
-                    " disable caching"
-                )
-            return project(X, self.inverse_components_.value())
-        var inverse = pseudoinverse(self.components_)
-        return project(X, inverse)
+        if self.compute_inverse_components and not self.inverse_components_:
+            raise Error(
+                "ValueError: inverse components were not computed; refit or"
+                " disable caching"
+            )
 
     def get_n_features_in(self) raises -> Int:
         """sklearn's `n_features_in_` attribute, which exists only after fit."""

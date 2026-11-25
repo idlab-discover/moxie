@@ -5,7 +5,10 @@ Moxie owns `GaussianRandomProjection`, `SparseRandomProjection`, and
 Import them, `ProjectionMatrix`, and the typed parameter records from
 `moxie.random_projection`. The retired sibling is not a dependency.
 
-Both estimators support Float32/Float64 dense and CSR inputs. Gaussian outputs
+Both estimators support Float32/Float64 dense and CSR inputs. Their trait
+`Input`/`Transformed` types are `NDArray[dtype]`, so they compose with
+Pipeline, FeatureUnion and other Moxie estimators; `ProjectionMatrix` dense/CSR
+overloads are retained. New shared sparse storage remains deferred. Gaussian outputs
 are dense; sparse projection can return CSR. The family-specific matrix,
 projection and pseudoinverse helpers live under `src/moxie/_projection/`.
 See [API](api.md), [numerical decisions](numerics.md), and

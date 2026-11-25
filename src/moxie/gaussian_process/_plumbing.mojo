@@ -10,6 +10,9 @@ struct KernelEvaluation(Movable):
     var covariance: Dense64
     var gradient: Optional[Dense64]
 
+    def take_covariance(deinit self) -> Dense64:
+        return self.covariance^
+
 
 @fieldwise_init
 struct ObjectiveEvaluation(Movable):

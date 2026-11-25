@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REFERENCE = ROOT.parent / 'scikit-learn'
 REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 
-def oracle():
+def oracle(named=False):
     import numpy as np
     import sklearn.multioutput
     from sklearn import config_context
@@ -54,6 +54,11 @@ def oracle():
     labels = np.column_stack([np.arange(4)%2, (np.arange(4)//2)%2])
     query = np.array([[0.4], [1.7], [2.6]])
     expected = {}
+    train_features, query_features = X, query
+    if named:
+        from pandas import DataFrame
+        train_features = DataFrame(X, columns=['time'])
+        query_features = DataFrame(query, columns=['time'])
     for name, base, target in [
         ('MultiOutputRegressor', KNeighborsRegressor(n_neighbors=1), y),
         ('RegressorChain', KNeighborsRegressor(n_neighbors=1), y),
@@ -61,26 +66,34 @@ def oracle():
         ('ClassifierChain', KNeighborsClassifier(n_neighbors=1), labels),
     ]:
         options = {'order': [1, 0]} if name.endswith('Chain') else {}
-        model = getattr(module, name)(base, **options).fit(X, target)
-        expected[name] = model.predict(query).ravel().tolist()
+        model = getattr(module, name)(base, **options).fit(train_features, target)
+        if named:
+            assert model.feature_names_in_.tolist() == ['time'], name
+            try:
+                model.predict(query_features.rename(columns={'time': 'wrong'}))
+            except ValueError as error:
+                assert 'feature names' in str(error), (name, error)
+            else:
+                raise AssertionError(f'{name} accepted a renamed feature')
+        expected[name] = model.predict(query_features).ravel().tolist()
         if name == 'MultiOutputClassifier':
-            for j, probability in enumerate(model.predict_proba(query)):
+            for j, probability in enumerate(model.predict_proba(query_features)):
                 expected[name + 'Proba' + str(j)] = probability.ravel().tolist()
             changed_labels = labels.copy()
             changed_labels[0] = [1, 1]
-            expected[name + 'Score'] = [model.score(X, changed_labels)]
+            expected[name + 'Score'] = [model.score(train_features, changed_labels)]
         if name == 'MultiOutputRegressor':
             changed = y.copy()
             changed[:, 0] += 1
-            expected[name + 'Score'] = [model.score(X, changed)]
-            expected[name + 'WeightedScore'] = [model.score(X, changed, sample_weight=np.arange(1, 5))]
+            expected[name + 'Score'] = [model.score(train_features, changed)]
+            expected[name + 'WeightedScore'] = [model.score(train_features, changed, sample_weight=np.arange(1, 5))]
         if name == 'ClassifierChain':
-            expected[name + 'Proba'] = model.predict_proba(query).ravel().tolist()
+            expected[name + 'Proba'] = model.predict_proba(query_features).ravel().tolist()
             with np.errstate(divide='ignore'):
-                expected[name + 'LogProba'] = model.predict_log_proba(query).ravel().tolist()
+                expected[name + 'LogProba'] = model.predict_log_proba(query_features).ravel().tolist()
             changed_labels = labels.copy()
             changed_labels[0] = [1, 1]
-            expected[name + 'WeightedScore'] = [model.score(X, changed_labels, sample_weight=np.arange(1, 5))]
+            expected[name + 'WeightedScore'] = [model.score(train_features, changed_labels, sample_weight=np.arange(1, 5))]
         if name.endswith('Chain'):
             model = getattr(module, name)(base, order=[1, 0], cv=KFold(n_splits=2)).fit(X, target)
             expected[name + 'CV'] = model.predict(query).ravel().tolist()
@@ -347,12 +360,15 @@ def classifier_components(module, np):
 
 if __name__ == '__main__':
     if '--oracle' in sys.argv:
-        oracle()
+        oracle(named='--named' in sys.argv)
     else:
         # The oracle runtime is validation-only and can be supplied explicitly.
         python = os.environ.get('MOXIE_REFERENCE_PYTHON', sys.executable)
         env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1')
-        reference = json.loads(subprocess.check_output([python, __file__, '--oracle'], env=env, text=True))
+        command = [python, __file__, '--oracle']
+        if '--named' in sys.argv:
+            command.append('--named')
+        reference = json.loads(subprocess.check_output(command, env=env, text=True))
         output = ''.join(subprocess.check_output([str(ROOT/'builds/tests/multioutput'/name)], env=env, text=True)
                          for name in ('test_estimators', 'test_components', 'test_classifier_components'))
         actual = {'ComponentsChainVerbose': verbose_lines(output)}

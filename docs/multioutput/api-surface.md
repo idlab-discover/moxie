@@ -25,6 +25,30 @@ Use explicit type parameters `[Component, dtype, label]` for other numeric
 feature/target dtypes. Regression targets default to the feature dtype;
 classification targets default to Int64.
 
+All four wrappers accept a same-dtype
+[`ColumnTable`](../compose/named-columns.md) backed by one numeric matrix.
+Pass it to `fit` and to prediction, score, and response methods. The two
+independent wrappers also accept it for `partial_fit` when their components
+support incremental updates.
+
+```mojo
+from moxie.compose import ColumnTable
+
+var train = ColumnTable(X, List[String](["height", "width"]))
+_ = model.fit(train, Y)
+var names = model.feature_names_in_.value().copy()
+var predictions = model.predict(ColumnTable(X_test, names))
+```
+
+`feature_names_in_` is an owned `Optional[List[String]]`. An ordinary fit
+replaces the names, and a successful array fit clears them. The first
+`partial_fit` fixes the name state for later batches. A named call checks
+the exact column names and order when the wrapper has fitted names. Array
+calls remain positional and emit no feature-name warning. The wrapper owns
+the names and passes numeric matrices to component calls, including when
+chains add response columns. The shared estimator input type remains
+`NDArray` for generic composition.
+
 Both chains also accept a compile-time `feature_dtype` parameter for the
 features and response columns passed to each component. It defaults to the
 chain's input dtype. For Float32 inputs and a Float64 component, use

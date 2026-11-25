@@ -464,6 +464,9 @@
         "moxie.feature_selection._svc_importance": {
           "file": "src/moxie/feature_selection/_svc_importance.mojo"
         },
+        "moxie.feature_selection._forest_importance": {
+          "file": "src/moxie/feature_selection/_forest_importance.mojo"
+        },
         "moxie.feature_selection._tree_importance": {
           "file": "src/moxie/feature_selection/_tree_importance.mojo"
         },
@@ -812,6 +815,7 @@
           "moxie.feature_selection": {
             "BuiltinScorer": "moxie.feature_selection._univariate_selection",
             "ConfiguredScorer": "moxie.feature_selection._univariate_selection",
+            "ForestImportance": "moxie.feature_selection._forest_importance",
             "DecisionTreeClassifierImportance": "moxie.feature_selection._tree_importance",
             "LinearSVCImportance": "moxie.feature_selection._linear_svc_importance",
             "SVCImportance": "moxie.feature_selection._svc_importance",

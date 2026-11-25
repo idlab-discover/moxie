@@ -4,7 +4,8 @@
 features by their importances. It delegates optimization to the wrapped model.
 The family supplies adapters for the live dense Lasso, ElasticNet, LinearRegression,
 BayesianRidge, Ridge, RidgeClassifier, LinearSVC, linear-kernel SVC,
-LogisticRegression, DecisionTreeClassifier and IncrementalPCA implementations.
+LogisticRegression, DecisionTreeClassifier, RandomForest and ExtraTrees classifiers
+and regressors, and IncrementalPCA implementations.
 Both Float32 and Float64 features are supported.
 
 ```mojo
@@ -103,6 +104,29 @@ for features, targets and weights. The adapter exposes borrowed fluent fit and
 typed parameter records. With RFE and RFECV, `predict(X)` returns the posterior
 mean. For predictive standard deviations, call
 `selector.estimator_().model.predict_std(selector.transform(X))`.
+
+`ForestImportance(model)` adapts the dense RandomForest and ExtraTrees
+estimators to `SelectFromModel`, `RFE`, and
+`RFECV[DenseSupervisedCV[Estimator, Estimator.dtype]]`, where `Estimator` is the
+adapter type. Classifiers use the forest's single-output configuration and
+keep its typed labels and probability column order. The adapter uses the
+forest's feature dtype, which is Float32 for the public classifiers and
+ExtraTreesRegressor, and Float32 or Float64 for RandomForestRegressor. Optional
+weights use the selector's feature dtype and are widened to Float64 for the
+forest. The selector reads owned importances in that same feature dtype through
+`"auto"` or `"feature_importances_"`. The underlying Float64 importances remain
+available via `.model.feature_importances_`. The adapter preserves fitted state
+when copied for `prefit=True` and starts unfitted when cloned.
+
+The focused forest parity driver checks selection, predictions, class order,
+weighted fitting, and three-fold RFECV with the source-built oracle. From the
+assembled root, run `python families/ensemble/tools/prepare_oracle.py`, then
+`OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python tests/feature_selection/parity_forest_importance.py --build-only`
+with the locked Mojo on PATH. Compare the outputs with
+`OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 families/ensemble/builds/oracle-env/bin/python tests/feature_selection/parity_forest_importance.py --compare-only`.
+Masks, ranks, shapes, and labels are exact. Comparisons of floating-point
+values use relative tolerance `2e-6` and absolute tolerance `2e-7` for forest
+reductions and the Float32 importance conversion.
 
 A data-dependent limit implements `FeatureLimitPolicy.resolve[dtype](X)` and is
 passed as `max_features=YourPolicy()`. It is evaluated during fit and stored as

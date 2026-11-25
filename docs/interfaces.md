@@ -120,8 +120,12 @@ raises `UnsetMetadataPassedError` when it receives `sample_weight`; an explicit
 `False` request declines it. An alias must be an ASCII identifier. Passing
 the standard name as an alias is equivalent to `True`.
 
-Isotonic regression exposes these requests directly. Composition forwarding
-depends on the parent and is tracked by the composition owners.
+An estimator can opt into `FitScoreMetadataRequestProvider` from
+`moxie.metadata_routing` to expose both requests to a generic parent via
+`get_metadata_routing()`. The method returns an independently owned snapshot
+and can be called before fit. Isotonic regression implements this trait for
+both dtypes. A parent also needs the corresponding weighted fit or score
+capability to forward a resolved value.
 
 ## Estimator tags
 

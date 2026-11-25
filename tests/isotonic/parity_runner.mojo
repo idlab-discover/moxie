@@ -7,7 +7,11 @@ from moxie.pipeline import make_pipeline
 from moxie.preprocessing import StandardScaler
 from moxie.isotonic_serialization import IsotonicRegressionSchema
 from moxie.serialization import dumps, loads
-from moxie.metadata_routing import SampleWeightRequest, SampleWeightUpdate
+from moxie.metadata_routing import (
+    FitScoreMetadataRequestProvider,
+    SampleWeightRequest,
+    SampleWeightUpdate,
+)
 from std.math import isfinite, isnan
 from moxie.isotonic import (
     IsotonicRegression,
@@ -56,6 +60,15 @@ def check_serialized_request(request: SampleWeightRequest, expected: String) rai
         assert_equal(value[String], expected)
 
 
+def route_sample_weight[E: FitScoreMetadataRequestProvider](
+    estimator: E, method: String, metadata: Dict[String, Int],
+) raises -> Optional[Int]:
+    var requests = estimator.get_metadata_routing()
+    if method == "fit":
+        return requests.fit.route(metadata)
+    return requests.score.route(metadata)
+
+
 def check_routing[dtype: DType](method: String, setting: String, key: String, expected: String) raises:
     var model = IsotonicRegression[dtype]()
     var request = request_update(setting)
@@ -65,8 +78,6 @@ def check_routing[dtype: DType](method: String, setting: String, key: String, ex
         _ = model.set_fit_request(sample_weight=request)
     else:
         _ = model.set_score_request(sample_weight=request)
-    var snapshot = model.get_metadata_routing()
-    var method_request = snapshot.fit.copy() if method == "fit" else snapshot.score.copy()
     var metadata = Dict[String, Int]()
     if key == "sample_weight":
         metadata[key] = 1
@@ -74,9 +85,9 @@ def check_routing[dtype: DType](method: String, setting: String, key: String, ex
         metadata[key] = 2
     if expected == "reject":
         with assert_raises(contains="UnsetMetadataPassedError"):
-            _ = method_request.route(metadata)
+            _ = route_sample_weight(model, method, metadata)
     else:
-        var routed = method_request.route(metadata)
+        var routed = route_sample_weight(model, method, metadata)
         assert_equal(String(routed.or_else(0)) if routed else "-", expected)
 
 

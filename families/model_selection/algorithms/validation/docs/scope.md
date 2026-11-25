@@ -26,6 +26,18 @@ Pass `cv=` to override the adapter's folds with a materialized `List[IndexSplit]
 For bound lists in these overloads, transfer ownership with `scorers^` and
 `cv=folds^`, or pass `scorers.copy()` to reuse the scorer list.
 
+Both `cross_validate[A]` and `cross_val_score[A]` also accept a splitter
+with a `DefaultCVAdapter`. For grouped scoring, pass
+`cv=GroupKFold(3), groups=group_ids.copy()`. The splitter must implement
+`CrossValidator` for an `Int` sample count and return a `SplitCursor`.
+Each call generates folds once on the current rows, preserves their order,
+and checks the count against `get_n_splits`. The estimator target is forwarded
+when its type matches the splitter target type and is copyable. If the types
+differ, supply `split_target=` for a splitter that requires labels, for example
+an Int64 vector for `StratifiedKFold`. This argument affects only the split.
+Pass owned groups and split targets with `^` to transfer them, or use `.copy()`
+to retain them. Fit and score metadata can still be supplied independently.
+
 The positional overload accepts any `CVAdapter` with a scorer list, metric names,
 folds, fit metadata and score metadata. All scores follow the supplied scorer's
 higher-is-better convention.
@@ -49,7 +61,7 @@ Original estimators stay unchanged, including when already fitted.
 With a `DefaultCVAdapter`, call `cross_val_score[A](estimator, X, y, adapter)`
 to use the adapter's default scorer, fold generation and default-constructed
 metadata. Supply both `fit_metadata` and `score_metadata` as keywords for explicit
-metadata, and pass `cv=` with materialized folds to override fold generation.
+metadata, and pass `cv=` with a splitter or materialized folds to override fold generation.
 Use `scoring=` to supply a typed scorer of the adapter's associated scorer type.
 The [dense adapter](../../search/docs/search.md) supplies five unshuffled
 folds with classifier-aware stratification.

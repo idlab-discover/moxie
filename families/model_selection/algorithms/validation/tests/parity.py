@@ -39,6 +39,13 @@ if '--svc-permutations-only' in sys.argv:
     binary = Path(sys.argv[sys.argv.index('--svc-permutations-only') + 1]).resolve()
     check_svc_permutations(prediction_ns, split.StratifiedKFold, ORACLE, binary)
     raise SystemExit()
+if '--splitter-cv-only' in sys.argv:
+    from splitter_cv_parity import check_splitter_cv
+
+    binary = Path(sys.argv[sys.argv.index('--splitter-cv-only') + 1]).resolve()
+    check_splitter_cv(prediction_ns, split, dummy, binary)
+    raise SystemExit()
+
 if '--predictions-only' in sys.argv:
     from prediction_parity import check_predictions
 

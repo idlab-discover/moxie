@@ -12,7 +12,7 @@ from moxie.model_selection._base import CrossValidator, SearchEstimator
 from moxie.model_selection._evaluation import EstimatorScore, TypedScorer, ParameterAdapter
 from moxie.model_selection._validation import (
     DefaultCVAdapter, DenseUnsupervisedAdapter, _NativePredictionAdapter,
-    _cross_validate, _scatter_prediction,
+    _collect_splits, _cross_validate, _scatter_prediction, _splitter_folds,
 )
 from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
 from moxie.model_selection._split import KFold, SplitLabels, check_cv, select_rows
@@ -86,29 +86,6 @@ struct DenseUnsupervisedSearchAdapter[
 
     def default_cv(self, X: Self.X, y: NoneType) raises -> List[IndexSplit]:
         return self._cv.default_cv(X, y)
-
-
-def _collect_splits[C: SplitCursor & Deinitable](var cursor: C) raises -> List[IndexSplit]:
-    var splits = List[IndexSplit]()
-    while True:
-        var pair = cursor.next()
-        if not pair:
-            return splits^
-        splits.append(pair.take())
-
-
-def _search_splits[C: CrossValidator, Y: Movable](
-    cv: C, n_samples: Int, y: Y, var split_target: Optional[C.Target],
-    groups: Optional[C.Groups],
-) raises -> List[IndexSplit] where C.Input == Int and conforms_to(C.Input, Deinitable) and conforms_to(C.Target, Deinitable) and conforms_to(C.Splits, SplitCursor & Deinitable):
-    comptime if Y == C.Target and conforms_to(Y, Copyable):
-        if not split_target:
-            split_target = rebind_var[C.Target](y.copy())
-    var count = cv.get_n_splits(rebind_var[C.Input](n_samples), split_target, groups)
-    var splits = _collect_splits(cv.split(rebind_var[C.Input](n_samples), split_target, groups))
-    if len(splits) != count:
-        raise Error("ValueError: cv.split and cv.get_n_splits returned inconsistent counts")
-    return splits^
 
 
 comptime _IsDenseArray[P: AnyType] = (
@@ -797,7 +774,7 @@ struct GridSearchCV[A: SearchAdapter, R: SearchRefitPolicy = SearchRefit[A.Value
         *, cv: C, var split_target: Optional[C.Target] = None, groups: Optional[C.Groups] = None,
     ) raises -> ref[self] Self where C.Input == Int and conforms_to(C.Input, Deinitable) and conforms_to(C.Target, Deinitable) and conforms_to(C.Splits, SplitCursor & Deinitable):
         self._core.reset()
-        var splits = _search_splits(
+        var splits = _splitter_folds(
             cv, self._core.options.adapter.n_samples(X, y), y, split_target^, groups,
         )
         return self._fit(X, y, fit_metadata, score_metadata, Optional(splits^))
@@ -1039,7 +1016,7 @@ struct RandomizedSearchCV[A: SearchAdapter, D: ParameterDistribution & Copyable 
         *, cv: C, var split_target: Optional[C.Target] = None, groups: Optional[C.Groups] = None,
     ) raises -> ref[self] Self where C.Input == Int and conforms_to(C.Input, Deinitable) and conforms_to(C.Target, Deinitable) and conforms_to(C.Splits, SplitCursor & Deinitable):
         self._core.reset()
-        var splits = _search_splits(
+        var splits = _splitter_folds(
             cv, self._core.options.adapter.n_samples(X, y), y, split_target^, groups,
         )
         return self._fit(X, y, fit_metadata, score_metadata, Optional(splits^))

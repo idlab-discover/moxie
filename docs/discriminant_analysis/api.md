@@ -125,8 +125,8 @@ var restored_qda = load_model[QuadraticDiscriminantAnalysisSchema[]]("qda.moxie"
 ```
 
 Choose the same dtype and label type when saving and loading, for example
-`LinearDiscriminantAnalysisSchema[DType.float32, String]`. The schemas support
-the default `NoCovarianceEstimator` type, including both dtypes, every solver
+`LinearDiscriminantAnalysisSchema[DType.float32, String]`. With the default
+`NoCovarianceEstimator` type, the schemas cover both dtypes, every solver
 and built-in shrinkage choices. The archive
 saves current configuration separately from learned state. A post-fit setting
 change preserves LDA's fitted projection state and QDA's fitted class factors
@@ -173,6 +173,32 @@ Each label has its own length-prefixed record, and the decoder must consume
 the full record. The archive stores the codec ID in LDA version 4 and QDA
 version 3. Loading requires a matching codec selected by the caller at
 compile time, including for unfitted models.
+
+To persist a native `covariance_estimator`, implement
+`DiscriminantCovarianceCodec` and pass it as the `CovarianceCodec` schema
+parameter. Here is a schema using a caller-provided codec.
+
+```mojo
+comptime CustomLDASchema = LinearDiscriminantAnalysisSchema[
+    CovarianceCodec=MyCovarianceCodec,
+]
+```
+
+The codec's associated `Estimator` type determines the model's covariance
+type parameter. The codec writes and validates the constructor configuration
+with `BinaryWriter` and `BinaryReader`. LDA and QDA use temporary clones for
+covariance fitting, so only the current configured estimator is passed to the
+codec. Loading restores the discriminant model's learned state without
+refitting, even if the covariance configuration changed after training.
+
+Give the codec a stable, versioned `TypeId`. LDA version 5 and QDA version 4
+require a matching caller-selected codec even when the covariance parameter is
+`None`. When present, the configuration is stored in a length-prefixed record
+that the codec must consume in full. These versions also support named features
+and custom label codecs.
+
+For a complete codec and round trips for both estimators, see the
+[covariance archive contract](../../tests/discriminant_analysis/covariance_serialization.mojo).
 
 ## Cross-validation and shrinkage search
 

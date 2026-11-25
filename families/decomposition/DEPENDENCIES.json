@@ -27,6 +27,9 @@
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },
+        "moxie.serialization": {
+          "file": "src/moxie/serialization.mojo"
+        },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
         }
@@ -256,6 +259,9 @@
         },
         "moxie.decomposition._truncated_svd": {
           "file": "src/moxie/decomposition/_truncated_svd.mojo"
+        },
+        "moxie.decomposition_serialization": {
+          "file": "src/moxie/decomposition_serialization.mojo"
         }
       },
       "path": "."

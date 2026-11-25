@@ -2172,6 +2172,9 @@
         },
         "moxie.decomposition._truncated_svd": {
           "file": "src/moxie/decomposition/_truncated_svd.mojo"
+        },
+        "moxie.decomposition_serialization": {
+          "file": "src/moxie/decomposition_serialization.mojo"
         }
       },
       "path": "families/decomposition"

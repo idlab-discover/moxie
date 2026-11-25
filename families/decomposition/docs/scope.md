@@ -53,6 +53,7 @@ and threshold sparse coding 144. `pixi run parity` runs the current checks after
 building. See the individual guides for added cases, tolerances and coverage
 limits. Dictionary learning and SparsePCA remain unfinished.
 
-Persistence is not implemented: no decomposition estimator defines a
-`ModelSchema` for the shared `save_model`/`load_model` (see
-`docs/serialization.md`), so fitted models cannot be saved and reloaded yet.
+Runtime PCA and IncrementalPCA support fitted and unfitted native model files.
+See [persistence](serialization.md) for the supported dtypes, schema selection,
+and IncrementalPCA resumption. The other decomposition estimators still need
+schemas.

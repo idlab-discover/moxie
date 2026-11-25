@@ -1,10 +1,13 @@
 from std.sys import argv
 from numojo import Shape, zeros
 from moxie.decomposition import IncrementalPCA
+from moxie.decomposition_serialization import IncrementalPCASchema
+from moxie.serialization import dumps, loads
 from decomposition_testing import emit
 
 
 def evaluate_ipca[dtype: DType]() raises:
+    comptime Schema = IncrementalPCASchema[dtype]
     var args = argv()
     var p = Int(args[3])
     var n = Int(args[2])
@@ -20,6 +23,7 @@ def evaluate_ipca[dtype: DType]() raises:
     if args[8] == "fit":
         var fitted = model.fit_transform_inplace(x)
         emit("fit_transform", fitted)
+        model = Schema.decode(loads(dumps(Schema.encode(model))))
     else:
         var step = Int(args[5])
         var start = 0
@@ -29,6 +33,7 @@ def evaluate_ipca[dtype: DType]() raises:
             for i in range(stop - start):
                 for j in range(p): batch.unsafe_set(i * p + j, x.unsafe_get((start + i) * p + j))
             model.partial_fit_inplace(batch)
+            model = Schema.decode(loads(dumps(Schema.encode(model))))
             for i in range(stop - start):
                 for j in range(p): x.unsafe_set((start + i) * p + j, batch.unsafe_get(i * p + j))
             start = stop

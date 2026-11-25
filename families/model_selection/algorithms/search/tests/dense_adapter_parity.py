@@ -30,10 +30,11 @@ X = rows.astype(np.float32).reshape(-1, 1)
 y = (rows % 5).astype(np.float32)
 weights = (rows + 1).astype(np.float32)
 
-expected = {'score': [], 'index': []}
+expected = {'score': [], 'train_score': [], 'index': []}
 for fold, (train, test) in enumerate(split.check_cv(None, y).split(X, y)):
     model = dummy.DummyRegressor().fit(X[train], y[train], sample_weight=weights[train])
     expected['score'].append([fold, model.score(X[test], y[test], sample_weight=weights[test])])
+    expected['train_score'].append([fold, model.score(X[train], y[train], sample_weight=weights[train])])
     expected['index'].extend([fold, row] for row in test)
 model = dummy.DummyRegressor().fit(X, y, sample_weight=weights)
 expected['prediction'] = [[model.predict(X)[0]]]
@@ -45,6 +46,6 @@ for line in subprocess.check_output([sys.argv[1]], text=True).splitlines():
 assert actual.keys() == expected.keys()
 for key, values in expected.items():
     # Float32 predictions and score inputs can differ by rounding of the weighted mean.
-    atol = 2e-6 if key in ('score', 'prediction') else 0
+    atol = 0 if key == 'index' else 2e-6
     np.testing.assert_allclose(actual[key], values, rtol=0, atol=atol, err_msg=key)
 print(f'PASS pinned dense adapter parity with {REVISION}')

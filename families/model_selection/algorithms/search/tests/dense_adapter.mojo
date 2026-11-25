@@ -1,6 +1,8 @@
 from moxie.base import clone
 from moxie.dummy import DummyRegressor
-from moxie.model_selection import DenseSupervisedAdapter, GridSearchCV, IndexArray, cross_val_score
+from moxie.model_selection import (
+    DenseSupervisedAdapter, GridSearchCV, IndexArray, IndexSplit, cross_val_score, cross_validate,
+)
 from numojo import NDArray, Shape, Item, zeros
 from std.testing import assert_equal, assert_false, assert_raises
 
@@ -25,19 +27,40 @@ def main() raises:
     var scores = cross_val_score[Adapter](
         model, X, y, adapter, fit_metadata=sample_weight, score_metadata=sample_weight,
     )
+    var scorers: List[Adapter.Scorer] = [adapter.default_scorer()]
+    var metrics: List[String] = ["weighted_r2"]
+    var validation = cross_validate[Adapter](
+        model, X, y, adapter, scorers.copy(), metrics, fit_metadata=sample_weight,
+        score_metadata=sample_weight, return_train_score=True, return_indices=True,
+    )
+    assert_equal(validation.scores.metric_names[0], "weighted_r2")
     assert_equal(scores.size, 5)
     var supplied = adapter.default_cv(X, y)
     _ = supplied.pop()
+    var override_cv = Optional[List[IndexSplit]](supplied^)
     var explicit_scores = cross_val_score[Adapter](
-        model, X, y, adapter, cv=supplied^, fit_metadata=sample_weight, score_metadata=sample_weight,
+        model, X, y, adapter, cv=override_cv, fit_metadata=sample_weight, score_metadata=sample_weight,
     )
     assert_equal(explicit_scores.size, 4)
+    var explicit_validation = cross_validate[Adapter](
+        model, X, y, adapter, scorers.copy(), metrics, cv=override_cv^,
+    )
+    assert_equal(len(explicit_validation.status), 4)
     for fold in range(explicit_scores.size):
         assert_equal(scores[Item(fold)], explicit_scores[Item(fold)])
     for fold in range(len(folds)):
+        assert_equal(scores[Item(fold)], validation.scores.test_scores.item(0, fold, 0))
+        print("train_score", fold, validation.scores.train_scores.value().item(0, fold, 0))
         print("score", fold, scores[Item(fold)])
-        for row in range(folds[fold].test.size):
-            print("index", fold, folds[fold].test.item(row))
+        ref test = validation.indices.value()[fold].test
+        assert_equal(test.size, folds[fold].test.size)
+        for row in range(test.size):
+            print("index", fold, test.item(row))
+
+    with assert_raises(contains="at least one split"):
+        _ = cross_validate[Adapter](model, X, y, adapter, cv=List[IndexSplit]())
+    with assert_raises(contains="scorers and metric names"):
+        _ = cross_validate[Adapter](model, X, y, adapter, scorers^, ["one", "two"])
 
     var grid = Dict[String, List[Float64]]()
     var search = GridSearchCV[Adapter](model, grid, adapter)
@@ -53,6 +76,10 @@ def main() raises:
     with assert_raises(contains="one value per sample"):
         _ = cross_val_score[Adapter](
             model, X, y, adapter, fit_metadata=incompatible.copy(), score_metadata=None,
+        )
+    with assert_raises(contains="one value per sample"):
+        _ = cross_validate[Adapter](
+            model, X, y, adapter, fit_metadata=None, score_metadata=incompatible.copy(),
         )
     with assert_raises(contains="one value per sample"):
         _ = search.fit(X, y, None, incompatible.copy())

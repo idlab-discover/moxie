@@ -1,5 +1,5 @@
 from moxie.dummy import DummyRegressor as _DummyRegressor
-from moxie.model_selection import TypedScorer, ParameterAdapter, CVAdapter, PredictionAdapter, cross_validate, cross_val_score, cross_val_predict, KFold, IndexArray, IndexSplit, ErrorPolicy
+from moxie.model_selection import TypedScorer, ParameterAdapter, DefaultCVAdapter, PredictionAdapter, cross_validate, cross_val_score, cross_val_predict, KFold, IndexArray, IndexSplit, ErrorPolicy
 from moxie.model_selection._split import _rows
 from numojo import NDArray, Shape, Item, zeros
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
@@ -19,7 +19,7 @@ struct Scorer(TypedScorer):
             raise Error("intentional scoring failure")
         return estimator.score(X, y, metadata)
 
-struct Adapter(PredictionAdapter, ParameterAdapter):
+struct Adapter(PredictionAdapter, DefaultCVAdapter, ParameterAdapter):
     comptime Scorer = Scorer
     comptime Value = String
     comptime PredictionDType = DType.float64
@@ -49,6 +49,16 @@ struct Adapter(PredictionAdapter, ParameterAdapter):
         _ = estimator.set_params(strategy=params["strategy"].copy())
     def predict(self, estimator: DummyRegressor, X: Dense) raises -> Dense:
         return estimator.predict(X)
+    def default_scorer(self) -> Scorer:
+        return Scorer(False)
+    def default_cv(self, X: Dense, y: Dense) raises -> List[IndexSplit]:
+        var splits = List[IndexSplit]()
+        var cursor = KFold(4).split(self.n_samples(X, y))
+        while True:
+            var pair = cursor.next()
+            if not pair:
+                return splits^
+            splits.append(pair.take())
 
 
 def main() raises:
@@ -57,15 +67,13 @@ def main() raises:
     for i in range(8):
         y[Item(i)] = Float64(i)
     var estimator = DummyRegressor()
-    var splits = List[IndexSplit]()
-    var cursor = KFold(4).split(8)
-    while True:
-        var pair = cursor.next()
-        if not pair:
-            break
-        splits.append(pair.value().copy())
+    var splits = Adapter().default_cv(X, y)
     var scorers: List[Scorer] = [Scorer(False), Scorer(True)]
-    var result = cross_validate[Adapter](estimator, X, y, Adapter(), scorers, List[String](["r2", "bad"]), splits, None, None, return_train_score=True, return_estimator=True, return_indices=True, error_score=ErrorPolicy(False, -999))
+    var result = cross_validate[Adapter](
+        estimator, X, y, Adapter(), scorers^, ["r2", "bad"],
+        return_train_score=True, return_estimator=True, return_indices=True,
+        error_score=ErrorPolicy(False, -999),
+    )
     assert_false(estimator.__sklearn_is_fitted__())
     assert_equal(len(result.estimators.value()), 4)
     assert_equal(len(result.indices.value()), 4)
@@ -86,6 +94,10 @@ def main() raises:
         print("prediction", row, prediction[Item(row)])
     with assert_raises():
         _ = cross_val_score[Adapter](estimator, X, y, Adapter(), Scorer(True), splits, None, None, error_score=ErrorPolicy(True, 0))
+    with assert_raises(contains="intentional scoring failure"):
+        _ = cross_val_score[Adapter](
+            estimator, X, y, Adapter(), scoring=Scorer(True), error_score=ErrorPolicy(True, 0),
+        )
     var weights = Dense(Shape(8))
     for i in range(8):
         weights[Item(i)] = Float64(i + 1)

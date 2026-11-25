@@ -13,14 +13,22 @@ Calls specialize on an adapter type, e.g. `cross_validate[MyAdapter](...)`.
 `metadata_rows`. Adapters can override `validate_metadata` for full-length
 checks before scoring or curve evaluation. Input slicing receives both selected rows and training rows so
 an adapter can explicitly implement pairwise-kernel indexing. Metadata slicing
-must separate sample weights from unsliced options. Associated inputs, targets,
-metadata and scorers must be deinitializable; the engine states these constraints
-without changing the inherited foundation or family fit/scorer traits.
+must separate sample weights from unsliced options. `TypedScorer` defines the
+ownership requirements for its associated input, target and metadata types.
 
-Pass the estimator, X, y, adapter, a list of typed scorers, matching metric names,
-a materialized `List[IndexSplit]`, fit metadata and score metadata. The splitter
-cursor supplies the pairs; `check_cv` remains a separate explicit selection step.
-All scores follow the supplied scorer's higher-is-better convention.
+With a `DefaultCVAdapter`, call `cross_validate[A](estimator, X, y, adapter)`
+to generate folds from the supplied data and evaluate the adapter's scorer
+under the metric name `"score"`. The short form requires default-constructible
+metadata. Pass a typed scorer list and matching metric names after the adapter
+to evaluate multiple metrics. To route metadata explicitly, supply both
+`fit_metadata=` and `score_metadata=`.
+Pass `cv=` to override the adapter's folds with a materialized `List[IndexSplit]`.
+For bound lists in these overloads, transfer ownership with `scorers^` and
+`cv=folds^`, or pass `scorers.copy()` to reuse the scorer list.
+
+The positional overload accepts any `CVAdapter` with a scorer list, metric names,
+folds, fit metadata and score metadata. All scores follow the supplied scorer's
+higher-is-better convention.
 
 `cross_validate` fits one independent unfitted clone per fold, then calls every
 scorer on that fitted clone. It returns `CVResult`: a ScoreTable with candidate
@@ -42,6 +50,7 @@ With a `DefaultCVAdapter`, call `cross_val_score[A](estimator, X, y, adapter)`
 to use the adapter's default scorer, fold generation and default-constructed
 metadata. Supply both `fit_metadata` and `score_metadata` as keywords for explicit
 metadata, and pass `cv=` with materialized folds to override fold generation.
+Use `scoring=` to supply a typed scorer of the adapter's associated scorer type.
 The [dense adapter](../../search/docs/search.md) supplies five unshuffled
 folds with classifier-aware stratification.
 `cross_val_predict` fits independent clones, validates that held-out indices

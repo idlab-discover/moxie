@@ -6,7 +6,7 @@ from moxie.svm import SVC
 from moxie.preprocessing import StandardScaler
 from moxie.pipeline import Pipeline
 from moxie.model_selection import (
-    DenseSupervisedAdapter, GridSearchCV, cross_val_score,
+    DenseSupervisedAdapter, GridSearchCV, cross_val_score, cross_validate,
 )
 
 comptime Dense = NDArray[DType.float64]
@@ -44,7 +44,10 @@ def main() raises:
     ref y = data[1]
     var pipe = Pipeline(StandardScaler(), Pipeline(PCA(), SVC()))
     var adapter = ReducedSearch(configure, classifier=True)
-    var folds = adapter.default_cv(X, y)
+    var validation = cross_validate[ReducedSearch](
+        pipe, X, y, adapter, return_train_score=True, return_estimator=True, return_indices=True,
+    )
+    ref folds = validation.indices.value()
     var svc_folds = DenseSupervisedAdapter[SVC[], Labels]().default_cv(X, y)
     assert_equal(len(folds), 5)
     assert_equal(len(svc_folds), len(folds))
@@ -52,8 +55,11 @@ def main() raises:
         for row in range(folds[fold].test.size):
             assert_equal(folds[fold].test.item(row), svc_folds[fold].test.item(row))
             print("nested_pca_test_index", fold, folds[fold].test.item(row))
-    var cv = cross_val_score[ReducedSearch](pipe, X, y, adapter)
+    var cv = cross_val_score[ReducedSearch](pipe, X, y, adapter, scoring=adapter.default_scorer())
     for i in range(cv.size):
+        assert_equal(cv.item(i), validation.scores.test_scores.item(0, i, 0))
+        print("nested_pca_train", validation.scores.train_scores.value().item(0, i, 0))
+        print("nested_pca_fitted_score", validation.estimators.value()[i].score(X, y))
         print("nested_pca_cv", cv.item(i))
     var grid = Dict[String, List[Float64]]()
     grid["pca__n_components"] = [1.0, 2.0]

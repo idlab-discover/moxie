@@ -33,6 +33,12 @@ split_spec = importlib.util.spec_from_file_location('sklearn.model_selection._mo
 split = importlib.util.module_from_spec(split_spec)
 split_spec.loader.exec_module(split)
 prediction_ns = dict(ns, check_cv=split.check_cv)
+if '--svc-permutations-only' in sys.argv:
+    from permutation_parity import check_svc_permutations
+
+    binary = Path(sys.argv[sys.argv.index('--svc-permutations-only') + 1]).resolve()
+    check_svc_permutations(prediction_ns, split.StratifiedKFold, ORACLE, binary)
+    raise SystemExit()
 if '--predictions-only' in sys.argv:
     from prediction_parity import check_predictions
 

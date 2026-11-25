@@ -103,12 +103,13 @@ def native(*args):
 
 def native_fit(X, init, *, operation="fit", components=2, metric="euclidean", max_iter=300,
                exaggeration=1, lr=2, min_grad=0, patience=300, seed=0, perplexity=4,
-               method="exact", angle=0.5):
+               method="exact", angle=0.5, feature_weights=None):
     path = matrix("X", X)
     dtype = init.dtype if isinstance(init, np.ndarray) else np.dtype("float32")
     init = matrix("init", init) if isinstance(init, np.ndarray) else init
+    options = [] if feature_weights is None else [matrix("weights", feature_weights[None, :])]
     lines = native(operation, X.dtype, dtype, path, init, components, metric, max_iter,
-                   exaggeration, lr, min_grad, patience, seed, perplexity, method, angle).splitlines()
+                   exaggeration, lr, min_grad, patience, seed, perplexity, method, angle, *options).splitlines()
     if operation == "init":
         return np.asarray(lines, dtype=dtype).reshape(len(X), components)
     iteration, kl, rate, features = lines[0].split()
@@ -289,6 +290,33 @@ def matching_fit_checks(reference):
             model.set_params(method="barnes_hut").fit(data)
 
 
+def weighted_hamming_checks(reference):
+    rng = np.random.RandomState(81)
+    X = rng.randint(-2, 3, size=(24, 5))
+    init = rng.normal(scale=0.1, size=(len(X), 2)).astype(np.float32)
+    for dtype in (np.float32, np.float64):
+        data = X.astype(dtype)
+        weights = np.array([0, 1, 2, 4, 3], dtype=dtype)
+        for metric in ("hamming", "matching"):
+            expected_distances = pairwise_distances(data, metric=metric, w=weights)
+            values = native("distances", data.dtype, matrix("X", data), metric,
+                            matrix("weights", weights[None, :]))
+            distances = np.fromstring(values, sep="\n", dtype=np.float32).reshape(len(X), len(X))
+            np.testing.assert_array_equal(distances, (expected_distances ** 2).astype(np.float32))
+            model = reference.TSNE(
+                method="exact", metric=metric, metric_params={"w": weights}, init=init.copy(),
+                perplexity=4, max_iter=275, early_exaggeration=1, learning_rate=0.5,
+                min_grad_norm=0, random_state=0,
+            )
+            expected = model.fit_transform(data)
+            iteration, kl, rate, features, got = native_fit(
+                data, init, metric=metric, feature_weights=weights, max_iter=275, lr=0.5,
+            )
+            assert (iteration, rate, features) == (model.n_iter_, model.learning_rate_, model.n_features_in_)
+            np.testing.assert_allclose(kl, model.kl_divergence_, atol=5e-6, rtol=0)
+            np.testing.assert_allclose(got, expected, atol=2e-5, rtol=0)
+
+
 def initialization_checks(reference):
     rng = np.random.RandomState(1)
     X = rng.standard_normal((25, 4))
@@ -419,6 +447,8 @@ def main():
     print(f"PASS: {bray_curtis_count} exact and Barnes–Hut Bray–Curtis fits on signed inputs")
     matching_fit_checks(reference)
     print("PASS: 2 exact matching fits and 2 Barnes–Hut matching rejections")
+    weighted_hamming_checks(reference)
+    print("PASS: 4 weighted Hamming/matching distance matrices and 4 exact fits")
     patience_check(reference)
     print("PASS: no-progress stopping against pinned sklearn gradient descent")
     draws, seeds = initialization_checks(reference)

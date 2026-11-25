@@ -111,8 +111,43 @@ struct _CallableDistance[input_dtype: DType](DenseMetric):
         return distance
 
 
+struct _WeightedHamming[input_dtype: DType](DenseMetric):
+    comptime dtype = Self.input_dtype
+    var _weights: List[Float64]
+
+    def __init__(out self, weights: NDArray[Self.dtype]) raises:
+        if weights.ndim != 1:
+            raise Error("ValueError: Hamming weights must be a vector")
+        var normalized = List[Float64](capacity=weights.shape[0])
+        var total: Float64 = 0
+        for feature in range(weights.shape[0]):
+            var weight = Float64(weights.unsafe_get(feature * Int(weights.strides[0])))
+            if not isfinite(weight) or weight < 0:
+                raise Error("ValueError: Hamming weights must be finite and nonnegative")
+            total += weight
+            normalized.append(weight)
+        if not isfinite(total) or total == 0:
+            raise Error("ValueError: Hamming weights must have a finite positive sum")
+        for feature in range(len(normalized)):
+            normalized[feature] /= total
+        self._weights = normalized^
+
+    def validate_features(self, n_features: Int) raises:
+        if len(self._weights) != n_features:
+            raise Error("ValueError: Hamming weights must match features")
+
+    def distance(
+        self, x: NDArray[Self.dtype], i: Int, y: NDArray[Self.dtype], j: Int,
+    ) raises -> Float64:
+        var mismatch: Float64 = 0
+        for feature in range(len(self._weights)):
+            if at(x, i, feature) != at(y, j, feature):
+                mismatch += self._weights[feature]
+        return mismatch
+
+
 struct TSNEMetricParams[dtype: DType](Copyable, Movable):
-    """Dense metric options forwarded to the neighbors distance engine."""
+    """Typed options for dense t-SNE metrics."""
 
     var p: Optional[Float64]
     var w: Optional[NDArray[Self.dtype]]
@@ -530,6 +565,14 @@ def _squared_distances[dtype: DType](
 
     # SciPy's exact pairwise path accepts "matching" as an alias for Hamming.
     # NearestNeighbors does not accept the alias in the Barnes–Hut path.
+    if (name == "hamming" or name == "matching") and options:
+        ref params = options.value()
+        if params.w:
+            if params.p or params.V or params.VI or params.missing_values:
+                raise Error("ValueError: metric_params do not match the selected metric")
+            var weighted = _WeightedHamming(params.w.value())
+            weighted.validate_features(X.shape[1])
+            return _symmetric_squared_distances(weighted, X, name)
     var kernel = _metric("hamming" if name == "matching" else name, options, squared_euclidean=True)
     kernel.validate_features(X.shape[1])
     kernel = kernel.self_query_metric(X)

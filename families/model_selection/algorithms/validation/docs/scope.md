@@ -53,6 +53,18 @@ metadata, and pass `cv=` with materialized folds to override fold generation.
 Use `scoring=` to supply a typed scorer of the adapter's associated scorer type.
 The [dense adapter](../../search/docs/search.md) supplies five unshuffled
 folds with classifier-aware stratification.
+
+For a Float32 or Float64 feature matrix and an estimator implementing
+`UnsupervisedScorer`, call `cross_val_score(estimator, X)`. Each fold fits an
+unfitted clone and calls its `score(X_test)` with the target omitted. The
+result contains five Float64 scores in unshuffled KFold order. Pass `cv=3`
+for a different fold count or `cv=folds` with a borrowed `List[IndexSplit]`
+for explicit train/test rows. `error_score` uses the typed `ErrorPolicy`.
+The same `DenseUnsupervisedAdapter[Estimator, dtype]` works with the explicit
+`cross_validate` API using `None` for the target and both metadata values.
+These calls select ordinary sample rows. Use an explicit pairwise adapter
+when the estimator's input represents sample-by-sample values.
+
 `cross_val_predict` fits independent clones, validates that held-out indices
 partition all rows exactly once before fitting, and restores predictions to
 original row order. Numeric, String and class-response adapters are described

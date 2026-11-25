@@ -9,7 +9,7 @@ the variational updates match sklearn; it is not a general-purpose digamma.
 from numojo import NDArray, Shape, zeros
 from std.math import lgamma, abs, isfinite
 from std.utils.numerics import nan
-from moxie.base import UnsupervisedEstimator
+from moxie.base import UnsupervisedScorer
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import RandomState
 from ._base import DecompositionTransformer
@@ -138,7 +138,7 @@ struct LatentDirichletAllocationParams(Copyable, Movable):
     var random_state: Optional[Int]
 
 
-struct LatentDirichletAllocation[dtype: DType = DType.float64](DecompositionTransformer, UnsupervisedEstimator, FeatureNamesOut, InputFeatureCount):
+struct LatentDirichletAllocation[dtype: DType = DType.float64](DecompositionTransformer, UnsupervisedScorer, FeatureNamesOut, InputFeatureCount):
     """Topic model on dense non-negative document-term counts (n_samples, n_features).
 
     `components_` holds topic-word variational parameters (not normalized

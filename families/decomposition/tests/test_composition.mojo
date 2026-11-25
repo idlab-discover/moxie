@@ -189,7 +189,7 @@ def chained_pca[dtype: DType]() raises:
 
 
 struct PCALogLikelihood(SearchScorer):
-    """sklearn's default scorer for an unsupervised estimator: estimator.score(X)."""
+    """Scikit-learn's default scorer for an unsupervised estimator: estimator.score(X)."""
     comptime Estimator = PCA[]
     comptime Input = Dense
     comptime Target = Dense
@@ -244,60 +244,6 @@ struct PCASearch(SearchAdapter):
         return kfold(X.shape[0])
 
 
-struct FALogLikelihood(SearchScorer):
-    comptime Estimator = FactorAnalysis[]
-    comptime Input = Dense
-    comptime Target = Dense
-    comptime Metadata = NoneType
-
-    def __init__(out self):
-        pass
-
-    def __init__(out self, *, copy: Self):
-        pass
-
-    def score(self, estimator: FactorAnalysis[], X: Dense, y: Dense, metadata: NoneType) raises -> Float64:
-        return estimator.score(X)
-
-
-struct FACV(SearchAdapter):
-    comptime Scorer = FALogLikelihood
-    comptime Value = Int
-
-    def __init__(out self):
-        pass
-
-    def __init__(out self, *, copy: Self):
-        pass
-
-    def n_samples(self, X: Dense, y: Dense) raises -> Int:
-        return X.shape[0]
-
-    def input_rows(self, X: Dense, rows: IndexArray, train: IndexArray) raises -> Dense:
-        return _rows(X, rows)
-
-    def target_rows(self, y: Dense, rows: IndexArray) raises -> Dense:
-        return _rows(y, rows)
-
-    def metadata_rows(self, metadata: NoneType, rows: IndexArray) raises -> NoneType:
-        return None
-
-    def fit(self, mut estimator: FactorAnalysis[], X: Dense, y: Dense, metadata: NoneType) raises:
-        _ = estimator.fit(X)
-
-    def configure(self, mut estimator: FactorAnalysis[], params: Dict[String, Int]) raises:
-        for key in params.keys():
-            if key != "n_components":
-                raise Error("ValueError: Invalid parameter " + key + " for estimator FactorAnalysis")
-            _ = estimator.set_params(n_components=Optional[Int](params[key]))
-
-    def default_scorer(self) raises -> FALogLikelihood:
-        return FALogLikelihood()
-
-    def default_cv(self, X: Dense, y: Dense) raises -> List[IndexSplit]:
-        return kfold(X.shape[0])
-
-
 def model_selection() raises:
     var x = low_rank[DType.float64](60, 8)
     var y = zeros[DType.float64](Shape(60))  # ignored, as sklearn's y=None
@@ -306,7 +252,7 @@ def model_selection() raises:
     var pca_means = List[Float64]()
     for r in ranks:
         var template = PCA(r, svd_solver="full")
-        var scores = cross_val_score[PCASearch](template, x, y, PCASearch(), PCALogLikelihood(), splits, None, None)
+        var scores = cross_val_score(template, x)
         assert_equal(scores.size, 5)
         var total: Float64 = 0
         for k in range(5):
@@ -316,7 +262,7 @@ def model_selection() raises:
             total += scores.item(k)
         pca_means.append(total / 5)
         var fa_template = FactorAnalysis(r)
-        var fa_scores = cross_val_score[FACV](fa_template, x, y, FACV(), FALogLikelihood(), splits, None, None)
+        var fa_scores = cross_val_score(fa_template, x)
         for k in range(5):
             var fold = clone(fa_template)
             _ = fold.fit(_rows(x, splits[k].train))
@@ -325,7 +271,7 @@ def model_selection() raises:
     var grid = Dict[String, List[Int]]()
     grid["n_components"] = ranks.copy()
     var search = GridSearchCV[PCASearch](PCA(svd_solver="full"), grid, PCASearch())
-    search.fit(x, y, None, None)
+    _ = search.fit(x, y, None, None)
     var results = search.cv_results_().copy()
     assert_equal(len(results.params), 5)
     var best = 0

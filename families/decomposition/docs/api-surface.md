@@ -36,8 +36,9 @@ Every implemented estimator declares the shared `FeatureNamesOut` and
 `moxie.pipeline` `Pipeline` transformer and as a `FeatureUnion`/`make_union`
 branch, with sklearn's `<step>__<name>` output names and `n_features_in_()`
 delegation; `get_n_features_in()` raises an `AttributeError`-prefixed error
-before fit, like sklearn's absent attribute. `moxie.model_selection`
-cross-validation and search take a typed adapter per estimator;
+before fit, like sklearn's absent attribute. Call
+`moxie.model_selection.cross_val_score(estimator, X)` to use the default score
+on PCA, FactorAnalysis or LatentDirichletAllocation. Search uses a typed adapter.
 `tests/test_composition.mojo` covers PCA regression/classification
 pipelines, a PCA + TruncatedSVD union, clone with nested `set_params`, and the
 PCA/FactorAnalysis log-likelihood `cross_val_score` and
@@ -46,6 +47,13 @@ PCA/FactorAnalysis log-likelihood `cross_val_score` and
 `make_pipeline(StandardScaler(), PCA())` and three-step principal-component
 regression. In Mojo the three steps use a nested pipeline, written as
 `make_pipeline(StandardScaler(), make_pipeline(PCA(), LinearRegression()))`.
+
+To check targetless CV against the pinned reference, build
+`tests/unsupervised_cv/driver.mojo` with `-O3 --fp-mode=contract=off`, the
+assembled dependency directory, and `-I tests/support`. Set
+`MOXIE_UNSUPERVISED_CV_DRIVER` to the binary path and run
+`python tests/unsupervised_cv/parity.py`. The checks cover default, integer
+and explicit folds, the estimator's own score, and fitted-state isolation.
 
 The remaining `_api.mojo` declarations retain recorded reference signatures and
 raise descriptive NotImplementedError messages. Historical scaffold locks and

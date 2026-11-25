@@ -17,6 +17,12 @@ trait ConfiguredScorer(UnivariateScorer, Copyable, Movable):
     def clone_config(self) -> Self:
         ...
 
+def _int_list_target(values: List[Int]) raises -> nm.NDArray[DType.int64]:
+    var target = nm.zeros[DType.int64](nm.Shape(len(values)))
+    for i in range(len(values)):
+        target.unsafe_set(i, Int64(values[i]))
+    return target^
+
 struct BuiltinScorer[dt: DType = DType.float64, target_dt: DType = dt, target_type: Copyable = nm.NDArray[target_dt]](ConfiguredScorer):
     comptime dtype = Self.dt
     comptime score_dtype = DType.float64
@@ -41,27 +47,37 @@ struct BuiltinScorer[dt: DType = DType.float64, target_dt: DType = dt, target_ty
     def score(self, x: nm.NDArray[Self.dtype], y: Optional[Self.Target]) raises -> ScoreResult[Self.score_dtype]:
         comptime assert (
             Self.Target == StringTarget
+            or Self.Target == List[String]
+            or Self.Target == List[Int]
             or Self.Target == nm.NDArray[Self.target_dt]
             or Self.Target == List[Scalar[Self.target_dt]]
-        ), "Built-in scorer targets must be StringTarget, an NDArray, or a list of matching numeric scalars"
+        ), "Built-in scorer targets must be StringTarget, an NDArray, or a supported list"
         if not y:
             raise Error("ValueError: selected scorer requires y")
         ref target = y.value()
         comptime if Self.Target == StringTarget:
-            ref labels = rebind[StringTarget](target)
-            if self.name == "f_classif":
-                return f_classif(x, labels)
-            if self.name == "chi2":
-                return chi2(x, labels)
-            raise Error("ValueError: string targets require a classification scorer")
+            return self._score_strings(x, rebind[StringTarget](target))
+        elif Self.Target == List[String]:
+            return self._score_strings(x, StringTarget(rebind[List[String]](target)))
+        elif Self.Target == List[Int]:
+            return self._score_numeric(x, _int_list_target(rebind[List[Int]](target)))
         elif Self.Target == List[Scalar[Self.target_dt]]:
             ref labels = rebind[List[Scalar[Self.target_dt]]](target)
             return self._score_numeric(x, nm.array[Self.target_dt](labels, [len(labels)]))
         else:
             return self._score_numeric(x, rebind[nm.NDArray[Self.target_dt]](target))
 
-    def _score_numeric(
-        self, x: nm.NDArray[Self.dtype], y: nm.NDArray[Self.target_dt],
+    def _score_strings(
+        self, x: nm.NDArray[Self.dtype], y: StringTarget,
+    ) raises -> ScoreResult[Self.score_dtype]:
+        if self.name == "f_classif":
+            return f_classif(x, y)
+        if self.name == "chi2":
+            return chi2(x, y)
+        raise Error("ValueError: string targets require a classification scorer")
+
+    def _score_numeric[target_dtype: DType](
+        self, x: nm.NDArray[Self.dtype], y: nm.NDArray[target_dtype],
     ) raises -> ScoreResult[Self.score_dtype]:
         if self.name == "f_classif":
             return f_classif(x, y)

@@ -130,7 +130,7 @@ def main():
         tiny_y = (generator.normal(size=24) * 1e-18).astype(dtype)
         cases.append(('regression', generator.normal(size=(24, 2)).astype(dtype), tiny_y, False, 3, False))
     cases.append(('classif', np.array([[3., 0.]]), np.array([2.]), True, 999, False))
-    header = ['import numojo as nm', 'from moxie.feature_selection import mutual_info_classif, mutual_info_regression, DiscreteFeatures']
+    header = ['import numojo as nm', 'from moxie.feature_selection import mutual_info_classif, mutual_info_regression, DiscreteFeatures, MutualInfoScorer']
     expected, metadata, bodies = [], [], []
     for index, (task, x, y, discrete, k, reverse) in enumerate(cases):
         dt, yt = x.dtype.name, y.dtype.name
@@ -158,6 +158,17 @@ def main():
             warnings.simplefilter('ignore')
             reference_x = x.copy()
             scores = namespace[f'mutual_info_{task}'](reference_x, y.copy(), discrete_features=discrete, n_neighbors=k, random_state=42, copy=False)
+        if task == 'regression' and k == 3 and discrete == 'auto':
+            values = ', '.join(repr(float(v)) for v in y)
+            body += [
+                f'    var list_y: List[Scalar[DType.{yt}]] = [{values}]',
+                f'    var scorer = MutualInfoScorer[DType.{dt}, DType.{yt}, List[Scalar[DType.{yt}]]](classification=False, random_state=42)',
+                '    var list_result = scorer.score(backing, list_y^)',
+            ]
+            for j, score in enumerate(scores):
+                body.append(f'    print(list_result.scores.unsafe_get({j}))')
+                expected.append(float(score))
+                metadata.append((index, task, dt, 'list score'))
         body.append(f'    var scores = mutual_info_{task}(x, y, discrete_features={expression}, n_neighbors={k}, random_state=42, copy=False)')
         for j in range(x.shape[1]):
             body.append(f'    print(scores.unsafe_get({j}))')

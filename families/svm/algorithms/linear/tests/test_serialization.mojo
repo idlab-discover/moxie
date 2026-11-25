@@ -2,7 +2,8 @@ import numojo as nm
 from std.math import inf
 from std.testing import assert_equal, assert_raises, assert_true
 from moxie.base import clone
-from moxie.serialization import dumps, loads, load_model, save_model
+from moxie.metadata_routing import FitScoreMetadataRequest
+from moxie.serialization import ModelArchive, dumps, loads, load_model, save_model
 from moxie.svm import ClassWeight, LinearSVC, LinearSVR
 from moxie.svm._contracts import Dense
 from moxie.svm.linear_serialization import LinearSVCSchema, LinearSVRSchema
@@ -26,6 +27,22 @@ def _check_label_type[Label: Copyable & Comparable & Deinitable](
     _equal_array(restored.decision_function(X), model.decision_function(X))
 
 
+def _check_requests_unset(requests: FitScoreMetadataRequest) raises:
+    var metadata = Dict[String, Int]()
+    metadata["sample_weight"] = 7
+    with assert_raises(contains="UnsetMetadataPassedError"):
+        _ = requests.fit.route(metadata)
+    with assert_raises(contains="UnsetMetadataPassedError"):
+        _ = requests.score.route(metadata)
+
+
+def _as_version_one(mut archive: ModelArchive):
+    # The v2 extension is two unset requests, each stored as one 64-bit tag.
+    for _ in range(16):
+        _ = archive.manifest.pop()
+    archive.schema_version = 1
+
+
 def _check_classifier(X: Dense) raises:
     comptime Schema = LinearSVCSchema[String]
     var y: List[String] = ["z", "z", "a", "a", "β\x00", "β\x00"]
@@ -35,9 +52,28 @@ def _check_classifier(X: Dense) raises:
         class_weight=ClassWeight[String](weight_labels, weights), tol=1e-7, C=0.5,
     )
     var path = "builds/linear-svc.moxie"
+    _check_requests_unset(model.get_metadata_routing())
+    var legacy = Schema.encode(model)
+    _as_version_one(legacy)
+    _check_requests_unset(Schema.decode(legacy).get_metadata_routing())
+
+    _ = model.set_fit_request(sample_weight="training_weight").set_score_request(
+        sample_weight=False
+    )
+    _ = model.set_fit_request()
+    with assert_raises(contains="metadata alias"):
+        _ = model.set_fit_request(sample_weight="invalid-name")
+    var metadata = Dict[String, Int]()
+    metadata["training_weight"] = 7
+    metadata["sample_weight"] = 3
     save_model[Schema](model, path)
     var unfitted = load_model[Schema](path)
     assert_true(not unfitted.__sklearn_is_fitted__())
+    var requests = unfitted.get_metadata_routing()
+    assert_equal(requests.fit.route(metadata).value(), 7)
+    assert_true(not requests.score.route(metadata))
+    requests.fit.set(False)
+    assert_equal(unfitted.get_metadata_routing().fit.route(metadata).value(), 7)
     assert_equal(len(unfitted.fit_warnings), 0)
     assert_true(unfitted.class_weight.labels == weight_labels)
     assert_true(unfitted.class_weight.values == weights)
@@ -69,7 +105,14 @@ def _check_classifier(X: Dense) raises:
     assert_equal(restored.score(X, y), model.score(X, y))
     _equal_array(restored.decision_function(X), model.decision_function(X))
     _equal_array(restored.intercept_, model.intercept_)
-    assert_true(not clone(restored).__sklearn_is_fitted__())
+    var cloned = clone(restored)
+    assert_true(not cloned.__sklearn_is_fitted__())
+    assert_equal(cloned.get_metadata_routing().fit.route(metadata).value(), 7)
+    assert_true(not cloned.get_metadata_routing().score.route(metadata))
+    _ = cloned.set_fit_request(sample_weight=None)
+    with assert_raises(contains="UnsetMetadataPassedError"):
+        _ = cloned.get_metadata_routing().fit.route(metadata)
+    assert_equal(restored.get_metadata_routing().fit.route(metadata).value(), 7)
     assert_true(dumps(Schema.encode(restored)) == dumps(Schema.encode(model)))
     restored.coef_.unsafe_set(0, 999.0)
     assert_true(model.coef_.unsafe_get(0) != 999.0)
@@ -126,9 +169,26 @@ def _check_regressor(X: Dense) raises:
     _check_regressor_warnings(X, y)
     var model = LinearSVR(epsilon=0.05, random_state=9, intercept_scaling=2.0)
     var path = "builds/linear-svr.moxie"
+    var legacy = LinearSVRSchema.encode(model)
+    _as_version_one(legacy)
+    _check_requests_unset(LinearSVRSchema.decode(legacy).get_metadata_routing())
+    var malformed = LinearSVRSchema.encode(model)
+    # The final v2 tag is the score request. Four is not a recognized tag.
+    malformed.manifest[len(malformed.manifest) - 8] = 4
+    with assert_raises(contains="metadata request tag"):
+        _ = LinearSVRSchema.decode(malformed)
+
+    _ = model.set_fit_request(sample_weight=True).set_score_request(
+        sample_weight="evaluation_weight"
+    )
+    var metadata = Dict[String, Int]()
+    metadata["sample_weight"] = 3
+    metadata["evaluation_weight"] = 7
     save_model[LinearSVRSchema](model, path)
     var unfitted = load_model[LinearSVRSchema](path)
     assert_true(not unfitted.__sklearn_is_fitted__())
+    assert_equal(unfitted.get_metadata_routing().fit.route(metadata).value(), 3)
+    assert_equal(unfitted.get_metadata_routing().score.route(metadata).value(), 7)
     assert_equal(unfitted.epsilon, 0.05)
     assert_equal(unfitted.intercept_scaling, 2.0)
     with assert_raises():
@@ -146,7 +206,12 @@ def _check_regressor(X: Dense) raises:
     _equal_array(restored.predict(X), model.predict(X))
     _equal_array(restored.predict(X.astype[DType.float32]()), model.predict(X.astype[DType.float32]()))
     assert_equal(restored.score(X, y), model.score(X, y))
-    assert_true(not clone(restored).__sklearn_is_fitted__())
+    var cloned = clone(restored)
+    assert_true(not cloned.__sklearn_is_fitted__())
+    assert_equal(cloned.get_metadata_routing().score.route(metadata).value(), 7)
+    _ = cloned.set_score_request(sample_weight=False)
+    assert_true(not cloned.get_metadata_routing().score.route(metadata))
+    assert_equal(restored.get_metadata_routing().score.route(metadata).value(), 7)
 
     var backing = nm.zeros[DType.float64](nm.Shape(4))
     backing.unsafe_set(3, model.coef_.unsafe_get(0))

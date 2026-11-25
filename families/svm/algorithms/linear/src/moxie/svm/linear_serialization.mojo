@@ -3,6 +3,7 @@
 import numojo as nm
 from std.math import floor, isfinite
 from moxie._random import RandomState
+from moxie.metadata_routing import FitScoreMetadataRequest, SampleWeightRequest
 from moxie.serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema
 from moxie.svm._contracts import Dense
 from moxie.svm._linear import ClassWeight, Dual, LinearSVC, LinearSVR, _linear_fit_warnings
@@ -184,12 +185,38 @@ def _read_rng(mut reader: BinaryReader[_]) raises -> RandomState:
     return rng^
 
 
+def _write_request(mut writer: BinaryWriter, request: SampleWeightRequest):
+    var value = request.value()
+    if value.isa[NoneType]():
+        writer.integer(0)
+    elif value.isa[Bool]():
+        writer.integer(2 if value[Bool] else 1)
+    else:
+        writer.integer(3)
+        writer.string(value[String])
+
+
+def _read_request(mut reader: BinaryReader[_]) raises -> SampleWeightRequest:
+    var request = SampleWeightRequest()
+    var tag = reader.integer()
+    if tag == 1 or tag == 2:
+        request.set(tag == 2)
+    elif tag == 3:
+        var alias_name = reader.string(reader.remaining())
+        request.set(alias_name)
+        if not request.value().isa[String]():
+            raise Error("ModelSchemaError: invalid linear SVM metadata alias")
+    elif tag != 0:
+        raise Error("ModelSchemaError: invalid linear SVM metadata request tag")
+    return request^
+
+
 struct LinearSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](ModelSchema):
-    """Version 1 state for a dense classifier with the specified label type."""
+    """Version 2 state for a dense classifier with the specified label type."""
 
     comptime Model = LinearSVC[Self.Label]
     comptime TypeId = "moxie.svm.LinearSVC"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -220,12 +247,17 @@ struct LinearSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](Mode
         var coef_shape: List[Int] = [rows, state.features] if rows else [0]
         _write_array(archive, "coef_", model.coef_, coef_shape)
         _write_array(archive, "intercept_", model.intercept_, [rows])
+        _write_request(writer, model._metadata.fit)
+        _write_request(writer, model._metadata.score)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        if archive.schema_version == 1:
+            archive.expect(Self.TypeId, 1)
+        else:
+            archive.expect(Self.TypeId, Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.string() != _label_type[Self.Label]():
@@ -255,6 +287,10 @@ struct LinearSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](Mode
         var state = _FitState.read(reader)
         model._rng = _read_rng(reader)
         model.classes_ = _read_labels[Self.Label](reader)
+        if archive.schema_version == Self.StateVersion:
+            model._metadata = FitScoreMetadataRequest(
+                _read_request(reader), _read_request(reader)
+            )
         reader.finish()
         var rows = _class_rows(model.classes_, state.features > 0)
         if len(archive.payloads) != (2 if rows else 0):
@@ -270,11 +306,11 @@ struct LinearSVCSchema[Label: Copyable & Comparable & Deinitable = Float64](Mode
 
 
 struct LinearSVRSchema(ModelSchema):
-    """Version 1 state for the dense linear regressor."""
+    """Version 2 state for the dense linear regressor."""
 
     comptime Model = LinearSVR
     comptime TypeId = "moxie.svm.LinearSVR"
-    comptime StateVersion = 1
+    comptime StateVersion = 2
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
@@ -295,12 +331,17 @@ struct LinearSVRSchema(ModelSchema):
         _write_rng(writer, model._rng)
         _write_array(archive, "coef_", model.coef_, [state.features])
         _write_array(archive, "intercept_", model.intercept_, [1 if state.features else 0])
+        _write_request(writer, model._metadata.fit)
+        _write_request(writer, model._metadata.score)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        if archive.schema_version == 1:
+            archive.expect(Self.TypeId, 1)
+        else:
+            archive.expect(Self.TypeId, Self.StateVersion)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         var model = Self.Model(
@@ -317,6 +358,10 @@ struct LinearSVRSchema(ModelSchema):
         )
         var state = _FitState.read(reader)
         model._rng = _read_rng(reader)
+        if archive.schema_version == Self.StateVersion:
+            model._metadata = FitScoreMetadataRequest(
+                _read_request(reader), _read_request(reader)
+            )
         reader.finish()
         if len(archive.payloads) != (2 if state.features else 0):
             raise Error("ModelSchemaError: unexpected LinearSVR array count")

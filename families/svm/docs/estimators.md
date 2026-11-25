@@ -69,7 +69,8 @@ constant-target behavior. OneClassSVM has no classifier/regressor score contract
 No estimator supports incremental fitting or warm starts. All expose typed
 parameter access and unfitted configuration cloning; copying learned arrays is
 a separate operation. Native fit/set_params return a mutable borrow.
-Feature-name metadata, reflection, metadata routing, pandas, Python serialization,
+The linear estimators expose [sample-weight requests](../algorithms/linear/docs/api.md#sample-weight-requests).
+Feature-name metadata, reflection, pandas, Python serialization,
 Python callable objects and estimator repr are future binding work.
 
 ## Dense acceptance obligations for each child

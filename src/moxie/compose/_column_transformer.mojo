@@ -28,7 +28,7 @@ from moxie.compose._column_keys import ColumnKey, KeyKind, KeyType, make_column_
 
 
 comptime ColumnComponent = TransformerMixin & Copyable & Deinitable
-"""Column transformers with numeric or typed categorical inputs and dense output.
+"""Column transformers with numeric, categorical, or text inputs and dense output.
 
 A component must conform to `FitTransformer` or `UnsupervisedEstimator`.
 ColumnTransformer prefers `fit_transform` when both are available.
@@ -419,7 +419,7 @@ struct _ColumnSource[dtype: DType, origin: ImmOrigin](Copyable, Movable):
         if self._array:
             return _select(self._array.value()[], indices, scalar)
         ref table = self._table.value()[]
-        if len(table._categories) == 0:
+        if len(table._non_numeric) == 0:
             return _select(table._data, indices, scalar)
         return _select(table._data, table._numeric_indices(indices), scalar)
 
@@ -431,6 +431,13 @@ struct _ColumnSource[dtype: DType, origin: ImmOrigin](Copyable, Movable):
         if scalar:
             raise Error(_1D_MESSAGE)
         return self._table.value()[].categorical_columns[Domain](indices)
+
+    def text(self, indices: List[Int], scalar: Bool) raises -> List[String]:
+        if not self._table:
+            raise Error("TypeError: text components require a ColumnTable")
+        if not scalar:
+            raise Error("ValueError: text components require a scalar column key")
+        return self._table.value()[].string_column(indices[0])
 
 
 def _numeric_category_dtype[Input: Movable]() -> DType:
@@ -702,6 +709,8 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
                 try:
                     comptime if Self.E.Input == NDArray[Self.dtype]:
                         block = _fit_transform_one[Self.dtype](estimator, X.numeric(self.indices_, scalar), y)
+                    elif Self.E.Input == List[String]:
+                        block = _fit_transform_one[Self.dtype](estimator, X.text(self.indices_, scalar), y)
                     elif Self.E.Input == List[StringColumn]:
                         block = _fit_transform_one[Self.dtype](
                             estimator, X.categorical[StringCategories](self.indices_, scalar), y,
@@ -746,6 +755,8 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
                 try:
                     comptime if Self.E.Input == NDArray[Self.dtype]:
                         block = _transform_one[Self.dtype](self.fitted_.value(), X.numeric(indices, scalar))
+                    elif Self.E.Input == List[String]:
+                        block = _transform_one[Self.dtype](self.fitted_.value(), X.text(indices, scalar))
                     elif Self.E.Input == List[StringColumn]:
                         block = _transform_one[Self.dtype](
                             self.fitted_.value(), X.categorical[StringCategories](indices, scalar),

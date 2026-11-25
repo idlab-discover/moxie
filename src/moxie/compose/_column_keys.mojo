@@ -32,7 +32,7 @@ struct KeyType:
 struct make_column_selector(Copyable, Movable, Writable):
     """Column-selector configuration with native dtype filtering.
 
-    Native ColumnTable and ColumnSchema support numeric and categorical dtype filters. Unnamed
+    Native ColumnTable and ColumnSchema support numeric, categorical, and string dtype filters. Unnamed
     arrays raise the reference error. Regex patterns raise explicitly pending
     the shared native regex capability; no substring approximation is used.
     """
@@ -97,7 +97,7 @@ def _canonical_dtype(dtype: String) -> String:
 def _validate_dtype(dtype: String) raises:
     var known = List[String]("number", "floating", "float", "float32", "float64", "single", "double",
                              "integer", "signedinteger", "unsignedinteger", "int", "int8", "int16", "int32",
-                             "int64", "uint8", "uint16", "uint32", "uint64", "bool", "object", "category", __list_literal__=None)
+                             "int64", "uint8", "uint16", "uint32", "uint64", "bool", "object", "category", "string", __list_literal__=None)
     for item in known:
         if item == dtype:
             return

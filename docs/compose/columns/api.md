@@ -45,7 +45,7 @@ unnamed arrays as sklearn does. Regex patterns are not yet supported. See
 a copyable `TransformerMixin` with `NDArray[dtype]` target and result.
 Its input is `NDArray[dtype]` for numeric selections or
 `List[CategoricalColumn[Domain]]` for categorical selections of one supported
-domain.
+domain, or `List[String]` for a scalar raw text selection.
 ColumnTransformer passes `y` to `FitTransformer.fit_transform` when
 available. Otherwise it calls `UnsupervisedEstimator.fit` then `transform`.
 

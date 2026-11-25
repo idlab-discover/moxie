@@ -79,6 +79,10 @@ out['pipeline_cv'] = cross_val_score(scaled, X, y, cv=kf).tolist()
 scaled_search = GridSearchCV(clone(scaled), {'svc__C': [0.1, 1.0, 10.0]}, cv=kf).fit(X, y)
 pca_search = GridSearchCV(Pipeline([('pca', PCA()), ('svc', SVC())]),
                  {'pca__n_components': [1, 2], 'svc__C': [0.1, 10.0]}, cv=kf).fit(X, y)
+scaled_pca = Pipeline([('standardscaler', StandardScaler()), ('pca', PCA()), ('svc', SVC())])
+scaled_pca_search = GridSearchCV(scaled_pca,
+    {'pca__n_components': [1, 2], 'svc__C': [0.1, 10.0]}, cv=kf).fit(X, y)
+out['nested_pca_cv'] = cross_val_score(scaled_pca, X, y, cv=kf)
 inner = GridSearchCV(SVC(), {'C': [0.1, 1.0, 10.0]}, cv=KFold(3))
 out['nested_cv'] = cross_val_score(inner, X, y, cv=kf).tolist()
 nested_best = []
@@ -124,6 +128,12 @@ scaled_native = records(binary_dir / 'pipeline_model_selection')
 compare(scaled_native, 'pipeline_cv', out['pipeline_cv'])
 search_checks(scaled_native, 'pipeline', scaled_search)
 search_checks(scaled_native, 'pca', pca_search)
+nested_pca_native = records(binary_dir / 'nested_pca')
+compare(nested_pca_native, 'nested_pca_cv', out['nested_pca_cv'])
+search_checks(nested_pca_native, 'nested_pca', scaled_pca_search)
+compare(nested_pca_native, 'nested_pca_weighted_score',
+        scaled_pca_search.best_estimator_.score(X, y, sample_weight=np.arange(1, len(y) + 1)),
+        atol=1e-12)
 nested_native = records(binary_dir / 'nested_search')
 compare(nested_native, 'nested_cv', out['nested_cv'])
 compare(nested_native, 'nested_best', list(enumerate(out['nested_best_C'])))

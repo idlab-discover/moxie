@@ -1,6 +1,6 @@
 """Native splitters. Adapted from scikit-learn; see LICENSES/scikit-learn.txt."""
 from numojo import NDArray, Shape, Item, zeros
-from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor
+from moxie.model_selection._indices import IndexArray, IndexSplit, SplitCursor, validate_indices
 from moxie._random import RandomState
 from moxie.model_selection._base import CrossValidator
 from moxie._labels import StringTarget, encode_column, type_of_target
@@ -1313,6 +1313,23 @@ def _rows[dtype: DType](X: NDArray[dtype], indices: IndexArray) raises -> NDArra
     for i in range(indices.size):
         for j in range(X.shape[1]):
             result[Item(i, j)] = X[Item(Int(indices[Item(i)]), j)]
+    return result^
+
+
+def select_rows[dtype: DType](X: NDArray[dtype], indices: IndexArray) raises -> NDArray[dtype]:
+    """Copy selected rows from a rank-one or rank-two array, in index order."""
+    if X.ndim != 1 and X.ndim != 2:
+        raise Error("ValueError: dense row splitting supports rank one or two")
+    validate_indices(indices, X.shape[0])
+    return _rows(X, indices)
+
+
+def select_rows[T: Copyable & Deinitable](X: List[T], indices: IndexArray) raises -> List[T]:
+    """Copy selected list elements, in index order."""
+    validate_indices(indices, len(X))
+    var result = List[T](capacity=indices.size)
+    for i in range(indices.size):
+        result.append(X[Int(indices[Item(i)])].copy())
     return result^
 
 

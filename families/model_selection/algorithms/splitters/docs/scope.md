@@ -16,6 +16,13 @@ GroupShuffleSplit's five iterations. Stratification counts classes in
 first-occurrence order for StratifiedKFold and sorted-label order for
 StratifiedShuffleSplit/StratifiedGroupKFold.
 
+Custom CV adapters can import `select_rows` from `moxie.model_selection`.
+It supports rank-one and rank-two NuMojo arrays and lists of copyable elements.
+Pass a rank-one Int64 `IndexArray` of nonnegative row coordinates. The result
+owns its data and preserves row order, duplicates, array dtype, and trailing
+shape. Empty index arrays select zero rows. Use a custom adapter for pairwise
+kernels that need both row and column selection.
+
 ## Labels and groups
 
 Rank-one Int64 `IndexArray` labels and groups keep their original signatures.

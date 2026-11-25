@@ -1,21 +1,13 @@
 """Tune a real DummyRegressor with the native typed search API."""
 from moxie.dummy import DummyRegressor as _DummyRegressor
-from moxie.model_selection import GridSearchCV, RandomizedSearchCV, ParameterGrid, SearchAdapter, SearchScorer, IndexArray, IndexSplit, KFold
-from moxie.model_selection._split import _rows
+from moxie.model_selection import GridSearchCV, RandomizedSearchCV, ParameterGrid, SearchAdapter, EstimatorScore, IndexArray, IndexSplit, KFold, select_rows
 from numojo import NDArray, Shape, Item
 comptime DummyRegressor = _DummyRegressor[]  # Bind default parameters to the concrete estimator.
 
 comptime Dense = NDArray[DType.float64]
 
-struct R2(SearchScorer):
-    comptime Estimator = DummyRegressor
-    comptime Input = Dense
-    comptime Target = Dense
-    comptime Metadata = Optional[Dense]
-    def __init__(out self):
-        pass
-    def score(self, estimator: DummyRegressor, X: Dense, y: Dense, metadata: Self.Metadata) raises -> Float64:
-        return estimator.score(X, y, metadata)
+comptime R2 = EstimatorScore[DummyRegressor, Dense, Dense]
+
 
 struct RegressionAdapter(SearchAdapter):
     comptime Scorer = R2
@@ -27,12 +19,12 @@ struct RegressionAdapter(SearchAdapter):
             raise Error("ValueError: expected aligned matrix and vector")
         return y.shape[0]
     def input_rows(self, X: Dense, rows: IndexArray, train: IndexArray) raises -> Dense:
-        return _rows(X, rows)
+        return select_rows(X, rows)
     def target_rows(self, y: Dense, rows: IndexArray) raises -> Dense:
-        return _rows(y, rows)
+        return select_rows(y, rows)
     def metadata_rows(self, metadata: Optional[Dense], rows: IndexArray) raises -> Optional[Dense]:
         if metadata:
-            return _rows(metadata.value(), rows)
+            return select_rows(metadata.value(), rows)
         return None
     def fit(self, mut estimator: DummyRegressor, X: Dense, y: Dense, metadata: Optional[Dense]) raises:
         if metadata:

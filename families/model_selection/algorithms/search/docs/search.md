@@ -172,16 +172,18 @@ sources and run the Pipeline and nested SVC comparisons.
 ```sh
 python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
 mkdir -p builds/search-composition
-for name in pipeline_model_selection nested_search; do
+for name in pipeline_model_selection nested_search nested_pca; do
     mojo build -O3 --fp-mode=contract=off -I builds/deps \
         "tests/pipeline/test_$name.mojo" -o "builds/search-composition/$name"
 done
 python tests/pipeline/composition_parity.py builds/search-composition
 ```
 
-The comparison loads the pinned sklearn search and validation sources.
-Candidate order, folds, ranks, best selections and refit predictions match
-exactly. Float64 candidate means allow an absolute tolerance of 1e-12 for
+The comparison loads the pinned sklearn search, validation and Pipeline sources.
+It covers StandardScaler/SVC, PCA/SVC, StandardScaler/PCA/SVC, nested SVC search
+and search as a Pipeline final step. Candidate order, folds, ranks, best
+selections and refit predictions match exactly. Float64 candidate means and
+the weighted `EstimatorScore` allow an absolute tolerance of 1e-12 for
 reduction rounding.
 
 ## Failures and supported scope

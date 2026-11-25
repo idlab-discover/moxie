@@ -36,7 +36,7 @@ def load_reference():
     return module
 
 
-def fixtures(module):
+def fixtures(module, warm_start):
     rows = np.arange(8)
     for dtype in (np.float32, np.float64):
         X = np.column_stack([(rows - 3) / 4, (rows**2 % 7 - 3) / 4]).astype(dtype)
@@ -44,7 +44,7 @@ def fixtures(module):
         for solver in ("lbfgs", "sgd", "adam"):
             params = dict(
                 hidden_layer_sizes=(4, 3), activation="tanh", solver=solver,
-                alpha=0.03, batch_size=3, max_iter=6, random_state=42, tol=0.0,
+                alpha=0.03, batch_size=3, max_iter=6, random_state=42, tol=0.0, warm_start=warm_start,
             )
             for weighted in (False, True):
                 for classes in (1, 2, 3):
@@ -58,29 +58,39 @@ def fixtures(module):
                     yield module.MLPRegressor(loss=loss, **params), X, y, weights, weighted, False
 
 
-def fitted_snapshots(reference):
-    for model, X, y, weights, weighted, classifier in fixtures(reference):
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            model.fit(X, y, sample_weight=weights if weighted else None)
-        yield model, X, y, weights, weighted, classifier, caught, None
+def fitted_snapshots(reference, *, warm_start=False):
+    for model, X, y, weights, weighted, classifier in fixtures(reference, warm_start):
+        for step in range(3 if warm_start else 1):
+            if step == 1:
+                model.set_params(alpha=0.06, learning_rate_init=0.02)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                model.fit(X, y, sample_weight=weights if weighted else None)
+            yield model, X, y, weights, weighted, classifier, caught, None
 
 
-def compare(actual, snapshots):
+def compare(actual, snapshots, *, expect_end=True):
     worst = {}
+    previous_model = None
     for case, (model, X, y, weights, weighted, classifier, caught, rng_draw) in enumerate(snapshots):
         dtype = X.dtype
         tol = 2e-5 if dtype == np.float32 and model.solver == "lbfgs" else (
             3e-6 if dtype == np.float32 else 2e-11
         )
+        # Roundoff in the first Float32 solve changes the starting point for
+        # later line searches. Bound that drift separately from ordinary fits.
+        warm_lbfgs32 = model is previous_model and model.solver == "lbfgs" and dtype == np.float32
+        parameter_tol = 1e-3 if warm_lbfgs32 else tol
+        prediction_tol = 5e-4 if warm_lbfgs32 else tol
+        previous_model = model
         context = f"{case=} {dtype=} {model.solver=} {weighted=} {classifier=}"
 
-        def close(observed, expected):
-            np.testing.assert_allclose(observed, expected, rtol=tol, atol=tol, err_msg=context)
+        def close(observed, expected, *, atol=tol):
+            np.testing.assert_allclose(observed, expected, rtol=tol, atol=atol, err_msg=context)
             error = np.max(np.abs(np.asarray(observed) - expected), initial=0)
             worst[dtype] = max(worst.get(dtype, 0), error)
 
-        def stack(expected, *, exact=False):
+        def stack(expected, *, exact=False, atol=tol):
             ndim = int(next(actual))
             shape = tuple(int(next(actual)) for _ in range(ndim))
             assert shape == expected.shape, context
@@ -88,7 +98,7 @@ def compare(actual, snapshots):
             if exact:
                 np.testing.assert_array_equal(values, expected, err_msg=context)
             else:
-                close(values, expected)
+                close(values, expected, atol=atol)
 
         assert next(actual) == ("True" if model.coefs_[0].dtype == np.float64 else "False"), context
         metadata = (model.n_iter_, model.t_, model.n_outputs_, model.n_layers_, model.n_features_in_)
@@ -101,7 +111,7 @@ def compare(actual, snapshots):
         assert int(next(actual)) == len(curve), context
         close(np.array([float(next(actual)) for _ in curve]), curve)
         for coefficients in [*model.coefs_, *model.intercepts_]:
-            stack(coefficients)
+            stack(coefficients, atol=parameter_tol)
         # Dense rank-two column labels are normalized without a Python warning.
         fit_warnings = [item for item in caught if item.category.__name__ != "DataConversionWarning"]
         assert int(next(actual)) == len(fit_warnings), context
@@ -110,19 +120,20 @@ def compare(actual, snapshots):
             assert next(actual) == str(item.message).replace("\n", r"\n"), context
         if classifier:
             stack(model.classes_, exact=True)
-        stack(model.predict(X), exact=classifier)
+        stack(model.predict(X), exact=classifier, atol=prediction_tol)
         if classifier:
-            stack(model.predict_proba(X))
-            stack(model.predict_log_proba(X))
+            stack(model.predict_proba(X), atol=prediction_tol)
+            stack(model.predict_log_proba(X), atol=prediction_tol)
         if model.solver == "lbfgs" and dtype == np.float32:
             if classifier:
-                stack(model.predict_proba(X))
-                stack(model.predict_log_proba(X))
+                stack(model.predict_proba(X), atol=prediction_tol)
+                stack(model.predict_log_proba(X), atol=prediction_tol)
             else:
-                stack(model.predict(X))
+                stack(model.predict(X), atol=prediction_tol)
         if rng_draw is not None:
             assert int(next(actual)) == rng_draw, context
-    assert next(actual, None) is None
+    if expect_end:
+        assert next(actual, None) is None
     return case + 1, worst
 
 
@@ -131,9 +142,14 @@ def main():
     parser.add_argument("--binary", type=Path, default=FAMILY / "builds/mlp_dump")
     args = parser.parse_args()
     actual = iter(subprocess.check_output([args.binary], text=True).splitlines())
-    count, worst = compare(actual, fitted_snapshots(load_reference()))
-    print(f"PASS {count} public MLP fits against pinned sklearn")
-    print("Maximum absolute differences", {str(dtype): float(error) for dtype, error in worst.items()})
+    reference = load_reference()
+    for warm_start in (False, True):
+        count, worst = compare(
+            actual, fitted_snapshots(reference, warm_start=warm_start), expect_end=warm_start,
+        )
+        description = "warm-start sequence snapshots" if warm_start else "ordinary fits"
+        print(f"PASS {count} public MLP {description} against pinned sklearn")
+        print("Maximum absolute differences", {str(dtype): float(error) for dtype, error in worst.items()})
 
 
 if __name__ == "__main__":

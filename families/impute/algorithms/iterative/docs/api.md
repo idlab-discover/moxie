@@ -149,10 +149,13 @@ MissingIndicator and shared RandomState. Numax `stats.corrcoef` takes a
 Numax Tensor. With NuMojo storage, an adapter would require materializing and
 converting the training array for that operation. Correlation uses the approved
 NuMojo rank-two product over a centered Float64 workspace, followed by
-normalization in the Gram buffer. The convergence loop combines ordered
-row sums and the snapshot update in one pass. Numax `core.rowwise.sum_axis`
-reassociates sums, and Moxie's `sum_axis2d` widens Float32 sums. Both can
-change the stopping decision at a rounding boundary. Integer promotion uses NuMojo
+normalization in the Gram buffer. The convergence loop writes each row of
+absolute differences into a reusable scratch vector while updating the
+snapshot. It calls the existing `pairwise_sum_in` reduction to match NumPy's
+contiguous row summation order in the input dtype. This uses one scratch
+element per feature. Numax `core.rowwise.sum_axis` reassociates sums,
+and Moxie's `sum_axis2d` widens Float32 sums. Both can change the stopping
+decision at a rounding boundary. Integer promotion uses NuMojo
 `astype` for contiguous inputs and `contiguous` followed by `astype` for
 strided inputs because the cast traverses physical storage.
 Posterior sampling composes Moxie's existing Cephes normal CDF and quantile
@@ -173,7 +176,8 @@ Parity compares training fills, held-out replay, initial statistics, round
 counts, estimator ordering, sampled predictor indices, RNG draws and feature names
 against the pinned iterative, simple and Bayesian regression sources.
 The stopping cases compare exact round counts where dtype rounding affects
-the scaled tolerance or the sum of changes within a row.
+the scaled tolerance or the sum of changes within a row. The eight-feature
+fixtures exercise pairwise summation in Float32 and Float64.
 Replay diagnostics are compared by event and round count, including
 summary-only output, early returns and a fitted sequence with zero steps.
 Integer cases compare signed and unsigned input layouts, mixed integer and

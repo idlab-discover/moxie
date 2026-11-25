@@ -4,7 +4,7 @@ from std.iter import downcast
 from moxie._feature_metadata import InputFeatureCount
 from moxie.base import (
     BaseEstimator, SupervisedEstimator, UnsupervisedEstimator, Predictor,
-    TransformerMixin, FitTransformer, SupervisedScorer, clone,
+    TransformerMixin, FitTransformer, InverseTransformer, SupervisedScorer, clone,
     ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, SampleScorer,
 )
 from moxie._pipeline import validate_names
@@ -245,7 +245,15 @@ def _fit_optional_step[P: TransformerMixin & UnsupervisedEstimator, T: Copyable 
 struct TransformerPipeline[
     P: TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable,
     E: TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable,
-](TransformingPipeline, UnsupervisedEstimator, FitTransformer, Copyable, UnionFeatureNames):
+](
+    TransformingPipeline,
+    TransformerMixin,
+    UnsupervisedEstimator,
+    FitTransformer,
+    Copyable,
+    UnionFeatureNames,
+    InverseTransformer where conforms_to(P, InverseTransformer) and conforms_to(E, InverseTransformer),
+):
     """Two named transformer stages, nestable as ordinary transformers."""
 
     comptime Input = Self.P.Input
@@ -326,6 +334,17 @@ struct TransformerPipeline[
         comptime if conforms_to(Self.P.Transformed, Deinitable):
             var transformed = self.transformer.transform(X)
             return self.estimator.transform(rebind[Self.E.Input](transformed))
+        else:
+            comptime assert False, "pipeline needs destructible intermediate values"
+
+    def inverse_transform(
+        self, X: Self.Transformed,
+    ) raises -> Self.Input where conforms_to(Self.P, InverseTransformer) and conforms_to(Self.E, InverseTransformer):
+        """Apply the children’s inverse transforms in reverse order."""
+        check_is_fitted(self)
+        comptime if conforms_to(Self.E.Input, Deinitable):
+            var intermediate = self.estimator.inverse_transform(X)
+            return self.transformer.inverse_transform(rebind[Self.P.Transformed](intermediate))
         else:
             comptime assert False, "pipeline needs destructible intermediate values"
 

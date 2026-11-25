@@ -146,8 +146,15 @@ with curves and grid/random search. Neither the curve engine nor this capability
 requires prediction, classifier detection, or a concrete estimator import.
 
 Pass one typed `scoring` value, explicit materialized `cv` splits, fit metadata
-and score metadata, plus keyword-only `param_name` and `param_range`. Use explicit folds and the typed scorer when calling this function. Use `check_cv` or a splitter to
-choose folds; groups enter that selection, not curve fitting.
+and score metadata positionally after the adapter, plus keyword-only
+`param_name` and `param_range`. With a `DefaultCVAdapter`, both curve functions
+also accept `scoring=` and `cv=` overrides by keyword. Omitted values come
+from the adapter. `DenseSupervisedAdapter` uses the estimator's score and five
+unshuffled folds, stratified for binary and multiclass classifiers. The keyword
+form accepts `fit_metadata=` and `score_metadata=` together or constructs both
+when the metadata type is default-constructible. Transfer a materialized fold
+list with `cv=folds^` if you have an owned list. Pass groups to the splitter
+when preparing grouped folds.
 
 The result is `(train_scores, test_scores)`, two owned Float64 arrays shaped
 `(len(param_range), len(cv))`. Values retain their input order, including
@@ -181,6 +188,14 @@ var scores = validation_curve[RegressionAdapter](
 Run `pixi run test` here to compile and execute the complete example, including
 its explicit adapter and fold construction.
 
+With a dense adapter configured to apply the strategy parameter, use:
+
+```mojo
+var scores = validation_curve[DenseAdapter](
+    estimator, X, y, adapter, param_name="strategy", param_range=strategies,
+)
+```
+
 ## Learning curves
 
 `learning_curve[A, size_dtype=DType.float64]` needs only `CVAdapter`. Pass the
@@ -189,6 +204,8 @@ and score metadata, as with validation curves. Prediction and parameter-setting
 capabilities are not required. Targets may be optional or multioutput when the
 adapter supports them; pairwise adapters receive the actual training prefix for
 both square training kernels and test-vs-training rectangles.
+With a `DefaultCVAdapter` whose metadata has a default constructor, the short
+form is `learning_curve[DenseAdapter](estimator, X, y, adapter)`.
 
 The keyword `train_sizes` accepts an optional NuMojo vector. With the default
 `size_dtype=DType.float64`, values are fractions in `(0, 1]`; specialize with
@@ -219,9 +236,9 @@ Failed fits have zero score time. Durations depend on the machine and are not
 expected to numerically match Python's timings (which also include input slicing).
 
 `shuffle=False` is the default and consumes no RNG draws. With `shuffle=True`,
-an integer `random_state` reconstructs a stream each call. Alternatively, pass a
-`mut RandomState` immediately after score metadata; that stream advances across
-calls. Each entire training fold is permuted once, before any fits, and all sizes
+an integer `random_state` reconstructs a stream each call. The positional form
+also accepts a `mut RandomState` immediately after score metadata, which advances
+across calls. Each entire training fold is permuted once, before any fits, and all sizes
 use prefixes of that permutation. Caller splits are never shuffled in place.
 The adopted RNG snapshot has no shared default stream: `shuffle=True` without
 an integer seed or explicit mutable stream raises, consistent with this family's
@@ -240,8 +257,8 @@ Duplicate removal and partial failures do not emit Python warnings.
 once per fold, passes only each new training chunk to partial_fit, and scores
 the accumulated prefix. Adapters receive the full target to establish classes.
 Partial-fit failures propagate; numeric error_score applies to scoring failures.
-Sparse data, implicit CV/scorer discovery, parallelism, Python routing and
-verbosity remain unsupported.
+Sparse data, string scorer names, parallelism, Python routing and verbosity
+remain unsupported.
 
 The runnable [learning-curve example](../examples/learning_curve.mojo) reuses the
 explicit dense regression adapter from the validation-curve example:
@@ -262,6 +279,18 @@ list and separate fit/score metadata as the other CV functions. Defaults are
 `n_permutations=100` and integer `random_state=0`. An overload accepts a mutable
 `RandomState` after score metadata. A process-global `None` seed is not exposed
 by the adopted RNG snapshot.
+
+With a `DefaultCVAdapter`, use `permutation_test_score[A](estimator, X, y,
+adapter, n_permutations=100, random_state=0)`. The dense supervised adapter
+supplies five unshuffled folds, with stratification for binary and multiclass
+classification targets. Omitted folds are regenerated for the original target
+and for each shuffled target. In this form, `groups` restricts the shuffle
+within each group. Use a custom provider when the split itself needs groups.
+Pass `cv=` for fixed folds or `scoring=` for a typed scorer override.
+The short form uses default-constructed metadata. Pass both
+`fit_metadata=` and `score_metadata=` to supply metadata explicitly.
+The short form takes an integer seed. The positional provider and fold-list
+forms also accept a borrowed mutable RNG.
 
 The returned `PermutationTestResult` contains `score` (the unweighted mean fold
 score), an owned Float64 `permutation_scores` vector, and `pvalue`. The latter
@@ -352,6 +381,10 @@ explicit incremental-mode rejection. Capability probes exercise a CV-only adapte
 with Float32 pairwise kernels and optional/multioutput targets; these probes are
 not implemented estimators. These checks do not establish arbitrary-estimator
 or sparse parity.
+Dense adapter parity also exercises both curve APIs with omitted folds, including
+an unweighted Float32 strategy sweep and weighted Float32 learning curves with
+exact training sizes. The learning scores allow `rtol=2e-7` and `atol=2e-6` for
+rounding in weighted prefixes.
 Permutation parity compares real DummyRegressor observed/null scores, exact
 p-values and subsequent RNG state for unrestricted, String-grouped, singleton,
 weighted and dynamically stratified cases. Lifecycle probes check one clone per

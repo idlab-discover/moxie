@@ -24,8 +24,9 @@ from .discriminant_analysis_serialization import (
 )
 from .isotonic_serialization import IsotonicRegressionSchema
 from .model_selection import KFold, LeaveOneOut, StratifiedKFold
-from .naive_bayes import ComplementNB, GaussianNB, MultinomialNB
+from .naive_bayes import BernoulliNB, ComplementNB, GaussianNB, MultinomialNB
 from .naive_bayes_serialization import (
+    BernoulliNBSchema,
     ComplementNBSchema,
     GaussianNBSchema,
     MultinomialNBSchema,
@@ -308,6 +309,29 @@ struct _ComplementNBCodec(_AdapterCodec):
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Adapter:
         return adapt_classifier(ComplementNBSchema[].decode(archive))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().n_features_in_
+
+
+struct _BernoulliNBCodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[BernoulliNB[]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.BernoulliNB"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in BernoulliNB adapter"
+            )
+        return BernoulliNBSchema[].encode(adapter.estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(BernoulliNBSchema[].decode(archive))
 
     @staticmethod
     def feature_count(adapter: Self.Adapter) -> Int:
@@ -605,5 +629,6 @@ comptime CalibratedSVCClassifierCVSchema = _CalibrationSchema[_SVCCodec]
 comptime CalibratedGaussianNBClassifierCVSchema = _CalibrationSchema[_GaussianNBCodec]
 comptime CalibratedMultinomialNBClassifierCVSchema = _CalibrationSchema[_MultinomialNBCodec]
 comptime CalibratedComplementNBClassifierCVSchema = _CalibrationSchema[_ComplementNBCodec]
+comptime CalibratedBernoulliNBClassifierCVSchema = _CalibrationSchema[_BernoulliNBCodec]
 comptime CalibratedLDAClassifierCVSchema = _CalibrationSchema[_LDACodec]
 comptime CalibratedQDAClassifierCVSchema = _CalibrationSchema[_QDACodec]

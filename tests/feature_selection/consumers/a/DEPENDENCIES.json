@@ -153,7 +153,12 @@
             "f_regression": "moxie.feature_selection._univariate_selection",
             "mutual_info_classif": "moxie.feature_selection._mutual_info",
             "mutual_info_regression": "moxie.feature_selection._mutual_info",
-            "r_regression": "moxie.feature_selection._univariate_selection"
+            "r_regression": "moxie.feature_selection._univariate_selection",
+            "LogisticRegressionImportance": "moxie.feature_selection._logistic_importance"
+          },
+          "moxie.linear_model": {
+            "LogisticRegression": "moxie.linear_model._logistic",
+            "LogisticRegressionParams": "moxie.linear_model._logistic"
           }
         },
         "schema": 1
@@ -261,6 +266,21 @@
         },
         "moxie._feature_metadata": {
           "file": "src/moxie/_feature_metadata.mojo"
+        },
+        "moxie.feature_selection._logistic_importance": {
+          "file": "src/moxie/feature_selection/_logistic_importance.mojo"
+        },
+        "moxie.linear_model._linear_loss": {
+          "file": "src/moxie/linear_model/_linear_loss.mojo"
+        },
+        "moxie.linear_model._logistic": {
+          "file": "src/moxie/linear_model/_logistic.mojo"
+        },
+        "moxie.linear_model._logistic_solver": {
+          "file": "src/moxie/linear_model/_logistic_solver.mojo"
+        },
+        "moxie.linear_model._ridge_labels": {
+          "file": "src/moxie/linear_model/_ridge_labels.mojo"
         }
       },
       "path": "../../../.."
@@ -947,6 +967,23 @@
       },
       "path": "../../../../../.worktrees/mojo-linalg-linear_model",
       "revision": "a3c4f91ad4639eda64eb0214f74699e1dfa97a0f"
+    },
+    {
+      "id": "mojo-optimize",
+      "path": "../../../../../.worktrees/mojo-optimize-linear_model",
+      "modules": {},
+      "assets": {
+        "mojo_optimize/__init__.mojo": "src/mojo_optimize/__init__.mojo",
+        "mojo_optimize/_lbfgsb_core.mojo": "src/mojo_optimize/_lbfgsb_core.mojo",
+        "mojo_optimize/_vectors.mojo": "src/mojo_optimize/_vectors.mojo",
+        "mojo_optimize/contracts.mojo": "src/mojo_optimize/contracts.mojo",
+        "mojo_optimize/history.mojo": "src/mojo_optimize/history.mojo",
+        "mojo_optimize/lbfgs.mojo": "src/mojo_optimize/lbfgs.mojo",
+        "mojo_optimize/lbfgsb.mojo": "src/mojo_optimize/lbfgsb.mojo",
+        "mojo_optimize/line_search.mojo": "src/mojo_optimize/line_search.mojo",
+        "mojo_optimize/nnls.mojo": "src/mojo_optimize/nnls.mojo"
+      },
+      "exports": null
     }
   ],
   "schema": 1

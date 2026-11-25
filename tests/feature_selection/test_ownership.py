@@ -8,7 +8,7 @@ for consumer in [ROOT, *(ROOT / 'tests/feature_selection/consumers' / name for n
     manifest = json.loads((consumer / 'DEPENDENCIES.json').read_text())
     owner = next(project for project in manifest['projects'] if project['id'] == 'moxie')
     assert (consumer / owner['path']).resolve() == ROOT
-    assert PUBLIC | {'LinearSVCImportance'} <= owner['exports']['packages']['moxie.feature_selection'].keys()
+    assert PUBLIC | {'LinearSVCImportance', 'LogisticRegressionImportance'} <= owner['exports']['packages']['moxie.feature_selection'].keys()
     report = json.loads((consumer / 'builds/deps/ASSEMBLY.json').read_text())
     for project in manifest['projects']:
         assert 'moxie-feature_selection' not in project['path']
@@ -18,4 +18,4 @@ for consumer in [ROOT, *(ROOT / 'tests/feature_selection/consumers' / name for n
             assert report['modules'][name] == ['moxie'], name
             relative = Path(*name.split('.')).with_suffix('.mojo')
             assert (consumer / 'builds/deps' / relative).read_bytes() == (ROOT / module['file']).read_bytes(), name
-print('The 19 sklearn exports and LinearSVCImportance resolve to live Moxie sources in the root and both consumers')
+print('The 19 sklearn exports and classifier adapters resolve to live Moxie sources in the root and both consumers')

@@ -33,6 +33,9 @@
         },
         "moxie.utils.validation": {
           "file": "src/moxie/utils/validation.mojo"
+        },
+        "moxie.serialization": {
+          "file": "src/moxie/serialization.mojo"
         }
       },
       "path": "../.."
@@ -259,6 +262,9 @@
         },
         "moxie.svm._linear": {
           "file": "src/moxie/svm/_linear.mojo"
+        },
+        "moxie.svm.linear_serialization": {
+          "file": "src/moxie/svm/linear_serialization.mojo"
         }
       },
       "path": "algorithms/linear"
@@ -337,6 +343,20 @@
             "NuSVRParams": "moxie.svm._nu_svm"
           }
         }
+      }
+    },
+    {
+      "id": "svm-kernel-persistence",
+      "path": ".",
+      "modules": {
+        "moxie.svm.kernel_serialization": {
+          "file": "src/moxie/svm/kernel_serialization.mojo"
+        }
+      },
+      "assets": {},
+      "exports": {
+        "schema": 1,
+        "packages": {}
       }
     },
     {

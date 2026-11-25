@@ -2897,12 +2897,6 @@
       "id": "manifold",
       "path": "families/manifold",
       "modules": {
-        "moxie.manifold._api": {
-          "file": "src/moxie/manifold/_api.mojo"
-        },
-        "moxie.manifold._api_types": {
-          "file": "src/moxie/manifold/_api_types.mojo"
-        },
         "moxie.manifold._barnes_hut_tsne": {
           "file": "src/moxie/manifold/_barnes_hut_tsne.mojo"
         },
@@ -2915,11 +2909,26 @@
         "moxie.manifold._isomap": {
           "file": "src/moxie/manifold/_isomap.mojo"
         },
+        "moxie.manifold._mds": {
+          "file": "src/moxie/manifold/_mds.mojo"
+        },
+        "moxie.manifold._smacof": {
+          "file": "src/moxie/manifold/_smacof.mojo"
+        },
         "moxie.manifold._plumbing": {
           "file": "src/moxie/manifold/_plumbing.mojo"
         },
         "moxie.manifold._t_sne": {
           "file": "src/moxie/manifold/_t_sne.mojo"
+        },
+        "moxie.manifold._lle_reconstruction": {
+          "file": "src/moxie/manifold/_lle_reconstruction.mojo"
+        },
+        "moxie.manifold._locally_linear": {
+          "file": "src/moxie/manifold/_locally_linear.mojo"
+        },
+        "moxie.manifold._spectral_embedding": {
+          "file": "src/moxie/manifold/_spectral_embedding.mojo"
         }
       },
       "assets": {
@@ -2932,19 +2941,27 @@
           "moxie.manifold": {
             "EmbeddingEstimator": "moxie.manifold._base",
             "OutOfSampleEmbedding": "moxie.manifold._base",
-            "MDS": "moxie.manifold._api",
+            "MDS": "moxie.manifold._mds",
+            "MDSMetric": "moxie.manifold._mds",
+            "MDSMetricParams": "moxie.manifold._mds",
+            "MDSParams": "moxie.manifold._mds",
+            "NormalizedStress": "moxie.manifold._smacof",
+            "SMACOFResult": "moxie.manifold._smacof",
             "TSNE": "moxie.manifold._t_sne",
             "TSNEParams": "moxie.manifold._t_sne",
             "TSNEMetricParams": "moxie.manifold._t_sne",
             "ClassicalMDS": "moxie.manifold._classical_mds",
             "Isomap": "moxie.manifold._isomap",
             "IsomapParams": "moxie.manifold._isomap",
-            "LocallyLinearEmbedding": "moxie.manifold._api",
-            "SpectralEmbedding": "moxie.manifold._api",
-            "locally_linear_embedding": "moxie.manifold._api",
-            "smacof": "moxie.manifold._api",
-            "spectral_embedding": "moxie.manifold._api",
-            "trustworthiness": "moxie.manifold._t_sne"
+            "LocallyLinearEmbedding": "moxie.manifold._locally_linear",
+            "SpectralEmbedding": "moxie.manifold._spectral_embedding",
+            "locally_linear_embedding": "moxie.manifold._locally_linear",
+            "smacof": "moxie.manifold._smacof",
+            "spectral_embedding": "moxie.manifold._spectral_embedding",
+            "trustworthiness": "moxie.manifold._t_sne",
+            "LocallyLinearEmbeddingParams": "moxie.manifold._locally_linear",
+            "LocallyLinearEmbeddingResult": "moxie.manifold._locally_linear",
+            "SpectralEmbeddingParams": "moxie.manifold._spectral_embedding"
           }
         }
       }

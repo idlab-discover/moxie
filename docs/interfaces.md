@@ -28,6 +28,7 @@ recorded revision when adding algorithms; upstream main may have changed.
 | Prediction | `Predictor` | `predict(X)` preserves row order |
 | Pairwise input | `moxie.multiclass.PairwiseInput` | Query the current configuration to determine whether CV must slice both axes |
 | Classification | `ClassifierMixin` | `score(X, y, sample_weight=None)` is accuracy |
+| Ordered numeric classes | `NumericClassifierClasses` | `get_classes()` returns the fitted class order as an owned value in the estimator's target representation. `ClassLabelDType` specifies the scalar type used to select a label. |
 | Regression | `RegressorMixin` | Default score semantics are R2 |
 | Probability | `ProbabilityPredictor`, `LogProbabilityPredictor` | Columns follow `classes_`; rows normalize |
 | Decision values | `DecisionFunction` | Shape/sign follow the individual estimator |

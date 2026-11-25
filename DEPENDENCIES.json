@@ -1610,6 +1610,9 @@
         "moxie.model_selection._evaluation": {
           "file": "src/moxie/model_selection/_evaluation.mojo"
         },
+        "moxie.model_selection._classification_threshold": {
+          "file": "src/moxie/model_selection/_classification_threshold.mojo"
+        },
         "moxie.model_selection._api": {
           "file": "src/moxie/model_selection/_api.mojo"
         },
@@ -1644,7 +1647,8 @@
             "Candidate": "moxie.model_selection._candidates",
             "ParameterCandidates": "moxie.model_selection._candidates",
             "ParameterDistribution": "moxie.model_selection._candidates",
-            "FixedThresholdClassifier": "moxie.model_selection._api",
+            "FixedThresholdClassifier": "moxie.model_selection._classification_threshold",
+            "FixedThresholdParams": "moxie.model_selection._classification_threshold",
             "HalvingGridSearchCV": "moxie.model_selection._api",
             "HalvingRandomSearchCV": "moxie.model_selection._api",
             "TunedThresholdClassifierCV": "moxie.model_selection._api",

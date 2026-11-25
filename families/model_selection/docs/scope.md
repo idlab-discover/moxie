@@ -48,7 +48,8 @@ evaluation with CV; it returns train/test scores in parameter-by-split order.
 Serial `learning_curve` returns sorted training sizes and train/test
 scores, with optional timings, seeded shuffling and explicit weighted adapters.
 Serial `permutation_test_score` adds grouped target shuffling, dynamic CV and
-empirical p-values. Threshold estimators and successive halving remain deferred. Native displays
+empirical p-values. [Fixed thresholds](fixed-threshold.md) work over dense
+binary classifiers. Threshold tuning and successive halving remain deferred. Native displays
 produce SVG and typed artist data; they do not implement matplotlib objects. Passing splitter tests
 never establishes completion of this family or of the full requested queue.
 

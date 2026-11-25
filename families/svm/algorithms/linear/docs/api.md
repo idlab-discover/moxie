@@ -106,6 +106,21 @@ the Python warnings. The fitted estimator owns its
 clears it, a failed fit preserves it, and an unfitted clone starts with
 `None`.
 
+Pass a [`ColumnTable`](../../../../../docs/compose/named-columns.md) to the
+same methods to read the feature names from the table. Both Float32 and
+Float64 constructor matrices are supported, including strided data. The
+table must have unique names and all columns must belong to its constructor
+matrix. Added columns raise an error. `LinearSVC` takes a native label list
+on the table overload. The estimator traits continue to use their dense
+array input type.
+
+```mojo
+from moxie.compose import ColumnTable
+
+var table = ColumnTable(X, names)
+var predictions = classifier.fit(table, y).predict(table)
+```
+
 ## Native model files
 
 Use the experimental [model file API](../../../../../docs/serialization.md)

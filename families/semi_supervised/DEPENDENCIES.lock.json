@@ -5,6 +5,9 @@
       "assets": {},
       "exports": {
         "packages": {
+          "moxie.compose": {
+            "ColumnTable": "moxie.compose._table"
+          },
           "moxie": {
             "BaseEstimator": "moxie.base",
             "ClassifierMixin": "moxie.base",
@@ -46,6 +49,12 @@
       "modules": {
         "moxie.warnings": {
           "file": "src/moxie/warnings.mojo"
+        },
+        "moxie._categorical": {
+          "file": "src/moxie/_categorical.mojo"
+        },
+        "moxie.compose._table": {
+          "file": "src/moxie/compose/_table.mojo"
         },
         "moxie.base": {
           "file": "src/moxie/base.mojo"

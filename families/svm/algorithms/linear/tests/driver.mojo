@@ -1,6 +1,9 @@
 """Validation-only text bridge to public Mojo estimators."""
 from std.sys import argv
+from std.testing import assert_raises, assert_true
 import numojo as nm
+from moxie.base import clone
+from moxie.compose import ColumnTable
 from moxie.svm import LinearSVC, LinearSVR, Dual, ClassWeight
 from moxie.svm._contracts import Dense
 from moxie.serialization import dumps, loads
@@ -9,6 +12,15 @@ from moxie.svm.linear_serialization import LinearSVCSchema, LinearSVRSchema
 def emit(a: Dense) raises:
     for i in range(a.size):
         print(a.unsafe_get(i))
+
+def strided_float32(X: Dense) raises -> nm.NDArray[DType.float32]:
+    var width = X.shape[1]
+    var storage = nm.zeros[DType.float32](nm.Shape(X.shape[0], width + 1))
+    for i in range(X.shape[0]):
+        for j in range(width):
+            storage.unsafe_set(i * (width + 1) + j + 1, Float32(X.unsafe_get(i * width + j)))
+    return storage.view_with_layout(X.shape, storage.strides, 1)
+
 
 def main() raises:
     var args = argv()
@@ -56,17 +68,49 @@ def main() raises:
             costs.values.append(Float64(t[cursor+1]))
             cursor += 2
     var named = len(args) > 2
+    var table_input = named and args[2] == "table"
     var names = List[String]()
     if named:
         for i in range(p):
             names.append(String("feature_") + String(i))
+    var table = Optional[ColumnTable[]]()
+    var table32 = Optional[ColumnTable[DType.float32]]()
+    var reordered = Optional[ColumnTable[]]()
+    var mixed = Optional[ColumnTable[]]()
+    if table_input:
+        table = ColumnTable(x, names)
+        var reversed_names: List[String] = [names[1].copy(), names[0].copy()]
+        reordered = ColumnTable(x, reversed_names)
+        var mixed_table = table.value().copy()
+        mixed_table.add_strings("added", List[String](length=n, fill="text"))
+        mixed = mixed_table^
+        if single:
+            table32 = ColumnTable(strided_float32(x), names)
     if regression:
         var model = LinearSVR(loss=loss, dual=dual.copy(), C=c, epsilon=epsilon, tol=tol, fit_intercept=fit, intercept_scaling=scale, max_iter=limit, random_state=seed)
         # Requests govern parent routing only. Direct weighted calls still work.
         _ = model.set_fit_request(sample_weight=False).set_score_request(
             sample_weight="evaluation_weight"
         )
-        if named:
+        if table_input:
+            with assert_raises(contains="NotFittedError"):
+                _ = model.predict(table.value())
+            if single:
+                _ = model.fit(table32.value(), y, sample_weight=sw.copy())
+            else:
+                _ = model.fit(table.value(), y, sample_weight=sw.copy())
+            with assert_raises(contains="same order"):
+                _ = model.predict(reordered.value())
+            with assert_raises(contains="mixed ColumnTable"):
+                _ = model.fit(mixed.value(), y)
+            assert_true(model.feature_names_in_.value() == names)
+            var cloned = clone(model)
+            assert_true(not cloned.feature_names_in_)
+            _ = cloned.fit(x, y)
+            _ = cloned.predict(table.value())
+            _ = cloned.fit(table.value(), y).fit(x, y)
+            assert_true(not cloned.feature_names_in_)
+        elif named:
             if single:
                 _ = model.fit(
                     x.astype[DType.float32](), y, feature_names=names, sample_weight=sw.copy()
@@ -86,7 +130,14 @@ def main() raises:
         print("RESULT", 1, p, model.n_iter_, model.fit_status_)
         emit(model.coef_)
         emit(model.intercept_)
-        if named:
+        if table_input:
+            if single:
+                emit(model.predict(table32.value()))
+                print(model.score(table32.value(), y, sw.copy()))
+            else:
+                emit(model.predict(table.value()))
+                print(model.score(table.value(), y, sw.copy()))
+        elif named:
             emit(model.predict(x, feature_names=names))
             print(model.score(x, y, feature_names=names, sample_weight=sw.copy()))
         else:
@@ -98,7 +149,25 @@ def main() raises:
         _ = model.set_fit_request(sample_weight=False).set_score_request(
             sample_weight="evaluation_weight"
         )
-        if named:
+        if table_input:
+            with assert_raises(contains="NotFittedError"):
+                _ = model.predict(table.value())
+            if single:
+                _ = model.fit(table32.value(), labels, sample_weight=sw.copy())
+            else:
+                _ = model.fit(table.value(), labels, sample_weight=sw.copy())
+            with assert_raises(contains="same order"):
+                _ = model.predict(reordered.value())
+            with assert_raises(contains="mixed ColumnTable"):
+                _ = model.fit(mixed.value(), labels)
+            assert_true(model.feature_names_in_.value() == names)
+            var cloned = clone(model)
+            assert_true(not cloned.feature_names_in_)
+            _ = cloned.fit(x, labels)
+            _ = cloned.predict(table.value())
+            _ = cloned.fit(table.value(), labels).fit(x, labels)
+            assert_true(not cloned.feature_names_in_)
+        elif named:
             if single:
                 _ = model.fit(
                     x.astype[DType.float32](), labels, feature_names=names, sample_weight=sw.copy()
@@ -118,14 +187,30 @@ def main() raises:
         print("RESULT", model.coef_.shape[0], p, model.n_iter_, model.fit_status_)
         emit(model.coef_)
         emit(model.intercept_)
-        if named:
+        if table_input:
+            if single:
+                emit(model.decision_function(table32.value()))
+            else:
+                emit(model.decision_function(table.value()))
+        elif named:
             emit(model.decision_function(x, feature_names=names))
         else:
             emit(model.decision_function(x))
-        var predicted = model.predict(x, feature_names=names) if named else model.predict(x)
+        var predicted: List[Float64]
+        if table_input:
+            predicted = model.predict(table32.value()) if single else model.predict(table.value())
+        elif named:
+            predicted = model.predict(x, feature_names=names)
+        else:
+            predicted = model.predict(x)
         for i in range(len(predicted)):
             print(predicted[i])
-        if named:
+        if table_input:
+            if single:
+                print(model.score(table32.value(), labels, sw.copy()))
+            else:
+                print(model.score(table.value(), labels, sw.copy()))
+        elif named:
             print(model.score(x, labels, feature_names=names, sample_weight=sw.copy()))
         else:
             print(model.score(x, labels, sw.copy()))

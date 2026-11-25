@@ -5,6 +5,7 @@ compiled locally (tests/support/oracle.py) so the coordinate-descent code under
 comparison is the pinned source too. Same seeds give the same NNDSVD/random
 initialization and shuffles, so W and H are compared directly.
 """
+import os
 import sys
 import warnings
 from pathlib import Path
@@ -15,12 +16,29 @@ from oracle import ROOT, REVISION, load_pinned, run_native, assert_close, compil
 
 cdnmf = compile_pinned_extension("sklearn/decomposition/_cdnmf_fast.pyx")
 module = load_pinned("sklearn/decomposition/_nmf.py", extensions={"_cdnmf_fast": cdnmf})
-DRIVER = ROOT / "builds/nmf_driver"
+DRIVER = Path(os.environ.get("MOXIE_NMF_DRIVER", ROOT / "builds/nmf_driver"))
 count = 0
 
 
 def code(k):
     return -1 if k == "auto" else -2 if k is None else k
+
+
+def transform(ref, x):
+    # NMF.transform is a read-only native API. Compare fit diagnostics here.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return ref.transform(x)
+
+
+def check_warnings(got, diagnostics, label, prefix="warning"):
+    observed = [
+        tuple(bytes(got[f"{prefix}_{field}_{i}"].astype(np.uint8)).decode()
+              for field in ("category", "message"))
+        for i in range(int(got[f"{prefix}_count"][0]))
+    ]
+    expected = [(item.category.__name__, str(item.message)) for item in diagnostics]
+    assert observed == expected, (label, observed, expected)
 
 
 def compare(x, kind="nmf", k="auto", init=None, solver="cd", beta="frobenius", tol=1e-4, max_iter=200, seed=0,
@@ -31,8 +49,8 @@ def compare(x, kind="nmf", k="auto", init=None, solver="cd", beta="frobenius", t
                   alpha_H=alpha_H, l1_ratio=l1_ratio)
     Wr = None if W0 is None else W0.copy()
     Hr = None if H0 is None else H0.copy()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with warnings.catch_warnings(record=True) as diagnostics:
+        warnings.simplefilter("always")
         if kind == "function":
             W, H, n_iter = module.non_negative_factorization(x, Wr, Hr, k, solver=solver, update_H=update_H,
                                                                shuffle=shuffle, **common)
@@ -40,23 +58,28 @@ def compare(x, kind="nmf", k="auto", init=None, solver="cd", beta="frobenius", t
         elif kind == "nmf":
             ref = module.NMF(k, solver=solver, shuffle=shuffle, **common)
             W = ref.fit_transform(x, W=Wr, H=Hr)
-            expected = dict(W=W, H=ref.components_, n_iter=ref.n_iter_, err=ref.reconstruction_err_, transform=ref.transform(x))
+            expected = dict(W=W, H=ref.components_, n_iter=ref.n_iter_, err=ref.reconstruction_err_, transform=transform(ref, x))
         else:
             ref = module.MiniBatchNMF(k, batch_size=batch_size, forget_factor=forget, fresh_restarts=fresh, **common)
             if kind == "partial":
                 ref.partial_fit(x, W=Wr, H=Hr)
+                first_diagnostics = diagnostics.copy()
+                diagnostics.clear()
                 ref.partial_fit(x)
-                expected = dict(H=ref.components_, n_steps=ref.n_steps_, transform=ref.transform(x))
+                expected = dict(H=ref.components_, n_steps=ref.n_steps_, transform=transform(ref, x))
             else:
                 W = ref.fit_transform(x, W=Wr, H=Hr)
                 expected = dict(W=W, H=ref.components_, n_iter=ref.n_iter_, n_steps=ref.n_steps_,
-                                err=ref.reconstruction_err_, transform=ref.transform(x))
+                                err=ref.reconstruction_err_, transform=transform(ref, x))
     W0 = np.ones((1, 1)) if W0 is None else W0
     H0 = np.ones((1, 1)) if H0 is None else H0
     got = run_native(DRIVER, x.dtype, [x, W0, H0], kind, code(k), init or "none", solver, beta, tol, max_iter, seed,
                      alpha_W, -1 if alpha_H == "same" else alpha_H, l1_ratio, int(shuffle), batch_size, forget,
-                     int(fresh), int(update_H))
+                     int(fresh), int(update_H), int(Wr is not None), int(Hr is not None))
     label = f"{x.dtype} {x.shape} {kind} {k=} {init} {solver} {beta} {tol=} {max_iter=} {alpha_W=} {alpha_H=} {l1_ratio=} {shuffle=} {batch_size=} {fresh=} {update_H=}"
+    check_warnings(got, diagnostics, label)
+    if kind == "partial":
+        check_warnings(got, first_diagnostics, label, "first_warning")
     t = rtol or (1e-7 if x.dtype == np.float64 else 3e-3)
     for key in ("n_iter", "n_steps"):
         if key in expected:
@@ -96,6 +119,17 @@ for dtype in (np.float64, np.float32):
         compare(x, "minibatch", k=k, batch_size=5, fresh=True, init="nndsvda")
         compare(x, "minibatch", k=k, batch_size=6, alpha_W=0.01, l1_ratio=0.5, init="nndsvda")
         compare(x, "partial", k=k, batch_size=5, init="nndsvda")
+    # Exercise exact warning order, each ignored-factor path, and a fit
+    # that stops before its step budget but in the last counted epoch.
+    x = np.array([[1, 2], [2, 4], [3, 6], [4, 8]], dtype=dtype)
+    w0 = np.ones((4, 1), dtype=dtype)
+    h0 = np.ones((1, 2), dtype=dtype)
+    compare(x, k=1, init="nndsvd", solver="mu", max_iter=1, W0=w0)
+    compare(x, "function", k=1, init="random", max_iter=1, H0=h0)
+    compare(x, "function", k=1, init="custom", max_iter=1, W0=w0, H0=h0, update_H=False)
+    compare(x, "minibatch", k=1, init="random", max_iter=1, batch_size=1, tol=10, W0=w0)
+    compare(x, "minibatch", k=1, init="nndsvd", max_iter=1, tol=0)
+    compare(x, "partial", k=1, init="random", max_iter=1, W0=w0)
     # Itakura-Saito needs strictly positive data.
     y = (np.abs(rng.normal(size=(20, 6))) + 0.1).astype(dtype)
     compare(y, k=3, solver="mu", beta="itakura-saito", init="nndsvda")

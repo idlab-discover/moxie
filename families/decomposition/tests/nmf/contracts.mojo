@@ -96,7 +96,39 @@ def check[dtype: DType]() raises:
         bad.fit(x)
 
 
+def check_warning_lifecycle[dtype: DType]() raises:
+    var x = counts[dtype](12, 5)
+    var model = NMF[dtype](2, max_iter=1, random_state=0)
+    assert_equal(len(model.fit_warnings), 0)
+    _ = model.fit(x)
+    assert_equal(len(model.fit_warnings), 1)
+    assert_equal(model.fit_warnings[0].category, "ConvergenceWarning")
+    assert_equal(len(clone(model).fit_warnings), 0)
+    _ = model.transform(x)
+    assert_equal(len(model.fit_warnings), 1)
+    _ = model.set_params(tol=0.0)
+    with assert_raises(contains="ValueError"):
+        _ = model.fit(zeros[dtype](Shape(0, 5)))
+    assert_equal(len(model.fit_warnings), 1)
+    _ = model.fit(x)
+    assert_equal(model.n_iter_, 1)
+    assert_equal(len(model.fit_warnings), 0)
+
+    var online = MiniBatchNMF[dtype](2, max_iter=1, random_state=0)
+    assert_equal(len(online.fit_warnings), 0)
+    _ = online.fit(x)
+    assert_equal(len(online.fit_warnings), 1)
+    assert_equal(online.fit_warnings[0].category, "ConvergenceWarning")
+    assert_equal(len(clone(online).fit_warnings), 0)
+    _ = online.transform(x)
+    assert_equal(len(online.fit_warnings), 1)
+    _ = online.partial_fit(x)
+    assert_equal(len(online.fit_warnings), 0)
+
+
 def main() raises:
     check[DType.float32]()
     check[DType.float64]()
+    check_warning_lifecycle[DType.float32]()
+    check_warning_lifecycle[DType.float64]()
     print("PASS: NMF contracts in Float32 and Float64")

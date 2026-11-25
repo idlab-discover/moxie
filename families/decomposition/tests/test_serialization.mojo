@@ -445,6 +445,7 @@ def test_nmf[dtype: DType](path: String) raises:
     var W = model.transform(X)
     var params = model.get_params()
     params.config.n_components = NoneType()
+    params.config.max_iter = 11
     params.solver = "mu"
     params.config.beta_loss = 1.5
     _ = model.set_params(params)
@@ -453,6 +454,16 @@ def test_nmf[dtype: DType](path: String) raises:
     assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
     assert_true(restored.n_components.isa[NoneType]())
     assert_equal(restored.n_components_, 4)
+    assert_equal(restored.max_iter, 11)
+    assert_equal(len(restored.fit_warnings), 1)
+    assert_equal(restored.fit_warnings[0].message, "Maximum number of iterations 5 reached. Increase it to improve convergence.")
+    var legacy = Schema.encode(model)
+    legacy.schema_version = 1
+    for _ in range(8):
+        _ = legacy.manifest.pop()
+    var restored_legacy = Schema.decode(legacy)
+    assert_equal(len(restored_legacy.fit_warnings), 0)
+    same_array(restored_legacy.inverse_transform(W), model.inverse_transform(W))
     assert_equal(restored.beta_loss[Float64], 1.5)
     params.config.n_components = 4
     _ = model.set_params(params)
@@ -465,13 +476,17 @@ def test_nmf[dtype: DType](path: String) raises:
     same_array(restored.inverse_transform(W), inverse)
 
     var archive = Schema.encode(restored)
-    archive.schema_version = 2
+    archive.schema_version = 3
     with assert_raises(contains="unsupported estimator type or state schema"):
         _ = Schema.decode(archive)
-    archive.schema_version = 1
+    archive.schema_version = 2
     archive.payloads[0].shape = [3, 4]
     with assert_raises(contains="invalid shape for components_"):
         _ = Schema.decode(archive)
+    restored.fit_warnings[0].message = "invalid"
+    with assert_raises(contains="invalid NMF fit warnings"):
+        _ = Schema.encode(restored)
+    restored.fit_warnings = []
     restored.components_.value().unsafe_set(0, -1)
     with assert_raises(contains="invalid value in components_"):
         _ = Schema.encode(restored)
@@ -490,7 +505,21 @@ def test_minibatch_nmf[dtype: DType](path: String) raises:
     assert_equal(dumps(Schema.encode(fresh)), dumps(Schema.encode(model)))
     with assert_raises(contains="NotFittedError: This MiniBatchNMF"):
         _ = fresh.transform(X)
-    _ = model.partial_fit(X)
+    var initial = X.copy()
+    _ = model.partial_fit(X, initial^, None)
+    assert_equal(len(model.fit_warnings), 1)
+    assert_equal(model.fit_warnings[0].category, "RuntimeWarning")
+    var legacy = Schema.encode(model)
+    legacy.schema_version = 1
+    for _ in range(8):
+        _ = legacy.manifest.pop()
+    var restored_legacy = Schema.decode(legacy)
+    assert_equal(len(restored_legacy.fit_warnings), 0)
+    same_array(restored_legacy.transform(X), model.transform(X))
+    var invalid_warnings = Schema.encode(model)
+    invalid_warnings.manifest[len(invalid_warnings.manifest) - 8] = 4
+    with assert_raises(contains="invalid NMF fit warnings"):
+        _ = Schema.decode(invalid_warnings)
     var params = model.get_params()
     params.config.n_components = String("auto")
     params.config.beta_loss = String("frobenius")
@@ -501,6 +530,8 @@ def test_minibatch_nmf[dtype: DType](path: String) raises:
     var restored = load_model[Schema](path)
     assert_equal(dumps(Schema.encode(restored)), dumps(Schema.encode(model)))
     assert_equal(restored.n_steps_, 1)
+    assert_equal(len(restored.fit_warnings), 1)
+    assert_equal(restored.fit_warnings[0].message, model.fit_warnings[0].message)
     assert_equal(restored.n_iter_, 0)
     assert_equal(restored._beta, 1.5)
     assert_equal(restored._transform_max_iter, 4)
@@ -513,10 +544,10 @@ def test_minibatch_nmf[dtype: DType](path: String) raises:
     same_array(restored.transform(X), model.transform(X))
 
     var archive = Schema.encode(restored)
-    archive.schema_version = 2
+    archive.schema_version = 3
     with assert_raises(contains="unsupported estimator type or state schema"):
         _ = Schema.decode(archive)
-    archive.schema_version = 1
+    archive.schema_version = 2
     archive.payloads[2].shape = [3, 2]
     with assert_raises(contains="invalid shape for _components_denominator"):
         _ = Schema.decode(archive)
@@ -648,6 +679,13 @@ def main() raises:
         test_factor_analysis[DType.float32](path)
         test_factor_analysis[DType.float64](path)
         print("PASS: FactorAnalysis serialization in Float32 and Float64")
+        return
+    if len(argv()) == 3 and argv()[2] == "nmf":
+        test_nmf[DType.float32](path)
+        test_nmf[DType.float64](path)
+        test_minibatch_nmf[DType.float32](path)
+        test_minibatch_nmf[DType.float64](path)
+        print("PASS: NMF and MiniBatchNMF serialization in Float32 and Float64")
         return
     test_pca[DType.float32](path)
     test_pca[DType.float64](path)

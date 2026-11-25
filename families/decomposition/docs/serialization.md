@@ -50,7 +50,8 @@ NMF and MiniBatchNMF preserve the learned rank, reconstruction error, and
 iteration count. MiniBatchNMF also restores the numerator and denominator
 accumulators, step count, and fit-time settings needed to continue
 `partial_fit`. A MiniBatchNMF model trained only by `partial_fit` can have
-`n_steps_ > 0` and `n_iter_ == 0`.
+`n_steps_ > 0` and `n_iter_ == 0`. Both schemas preserve `fit_warnings` in
+version 2. Version 1 files load with empty warning lists.
 LatentDirichletAllocation restores both topic matrices, the fitted priors,
 iteration counters, bound and its owned MT19937 stream, including any cached
 normal. This preserves the next `partial_fit` update even after a change to

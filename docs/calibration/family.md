@@ -27,6 +27,8 @@ adapters. Contiguous inputs use NuMojo's `astype`, and strided inputs use
 coordinate indexing to preserve their logical order. The associated `Input`
 type used by generic estimators and displays is Float64. Targets, weights,
 learned classes, predicted labels and probabilities also use Float64 arrays.
+The estimator's `fit` and `score` accept strided target views and copy those
+views into contiguous arrays in logical sample order.
 Inputs must be finite and nonempty. Class labels are integer-valued numbers
 with magnitude at most `2**53 - 1`. Weights must be nonnegative with positive
 finite sum. Learned arrays do not alias input arrays.
@@ -337,6 +339,9 @@ rounding. Default LinearSVC cases cover all three calibrators, weighted and
 unweighted fitting, and every ensemble setting. Frozen production cases use
 disjoint training and calibration data and check that cloning preserves fitted
 state and that automatic ensemble selection fits one calibrator.
+Weighted LinearSVC cases with Int64 and Float32 component labels check
+positive-stride targets against scikit-learn. The native contract also checks
+negative-stride targets, weighted scoring and fitted-state retention.
 Float32 estimator cases cover all three calibration methods with both response
 types, pooled and ensemble fitting, and weighted scores. The reference receives
 Float32 features for default LinearSVC and features widened from Float32 for

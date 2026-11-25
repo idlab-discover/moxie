@@ -397,7 +397,9 @@ def main():
             ('list_float32', 2**24, 2),
         ]:
             for method in ('sigmoid', 'isotonic', 'temperature'):
-                y = codes if method == 'temperature' else offset + spacing * codes
+                backing = np.full(2 * len(codes), np.nan)
+                y = backing[1::2]
+                y[:] = codes if method == 'temperature' else offset + spacing * codes
                 for ensemble in (False, True):
                     model = ref.CalibratedClassifierCV(
                         ref.LinearSVC(dual=False, random_state=0, tol=1e-10),

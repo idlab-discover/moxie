@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Dense multidimensional scaling estimator."""
 from numojo import NDArray, Shape, zeros
-from std.math import abs, isfinite, nan
+from std.math import isfinite, nan
 from std.utils import Variant
 from moxie._feature_metadata import InputFeatureCount
 from moxie.manifold._base import EmbeddingEstimator
@@ -12,7 +12,7 @@ from moxie.manifold._smacof import (
     NormalizedStress, _copy_initial, _initial_warning,
     _row_major_cast, _smacof, _smacof_options, _validate_dissimilarities,
 )
-from moxie.manifold._t_sne import TSNEMetricParams
+from moxie.manifold._t_sne import TSNEMetricParams, _scipy_bray_curtis
 from moxie.neighbors._distance import Metric, at
 from moxie.warnings import FitWarning
 
@@ -36,18 +36,6 @@ struct MDSParams[dtype: DType](Copyable, Movable):
     var metric: MDSMetric
     var metric_params: Optional[MDSMetricParams[Self.dtype]]
     var normalized_stress: NormalizedStress
-
-
-def _braycurtis[dtype: DType](X: NDArray[dtype], i: Int, j: Int) raises -> Float64:
-    # The neighbors convention uses |x| + |y|. SciPy uses |x + y|.
-    var numerator: Float64 = 0
-    var denominator: Float64 = 0
-    for c in range(X.shape[1]):
-        var left = at(X, i, c)
-        var right = at(X, j, c)
-        numerator += abs(left - right)
-        denominator += abs(left + right)
-    return numerator / denominator
 
 
 def _pairwise[dtype: DType](
@@ -79,7 +67,7 @@ def _pairwise[dtype: DType](
     var dissimilarities = zeros[dtype](Shape(n, n))
     for i in range(n):
         for j in range(i):
-            var distance = _braycurtis(X, i, j) if name == "braycurtis" else kernel.distance(X, i, X, j)
+            var distance = _scipy_bray_curtis(X, i, j) if name == "braycurtis" else kernel.distance(X, i, X, j)
             var value = distance.cast[dtype]()
             if not isfinite(value):
                 raise Error("ValueError: MDS requires finite pairwise distances")

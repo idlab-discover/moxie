@@ -455,6 +455,18 @@ struct TSNE[dtype: DType = DType.float64, embedding_dtype: DType = DType.float32
         return coordinates^
 
 
+def _scipy_bray_curtis[dtype: DType](X: NDArray[dtype], i: Int, j: Int) raises -> Float64:
+    # The neighbors convention uses |x| + |y|. SciPy uses |x + y|.
+    var numerator: Float64 = 0
+    var denominator: Float64 = 0
+    for c in range(X.shape[1]):
+        var left = at(X, i, c)
+        var right = at(X, j, c)
+        numerator += abs(left - right)
+        denominator += abs(left + right)
+    return numerator / denominator
+
+
 def _metric[dtype: DType](
     name: String, options: Optional[TSNEMetricParams[dtype]], *, squared_euclidean: Bool = False,
 ) raises -> Metric[dtype]:
@@ -462,7 +474,7 @@ def _metric[dtype: DType](
     # sklearn's dense pairwise distances.
     if name not in [
         "euclidean", "l2", "sqeuclidean", "manhattan", "l1", "cityblock",
-        "cosine", "chebyshev", "minkowski", "canberra", "correlation", "hamming",
+        "cosine", "chebyshev", "minkowski", "braycurtis", "canberra", "correlation", "hamming",
         "jaccard", "dice", "rogerstanimoto", "russellrao", "sokalsneath", "yule",
         "seuclidean", "mahalanobis", "nan_euclidean", "haversine",
     ]:
@@ -528,10 +540,13 @@ def _symmetric_squared_distances[M: DenseMetric](
     var n = X.shape[0]
     var squared = zeros[DType.float32](Shape(n, n))
     var callable_metric = name == "callable"
+    var scipy_bray_curtis = name == "braycurtis"
     var round_before_squaring = callable_metric or name == "l2" or name == "cosine" or name == "nan_euclidean"
     for i in range(n):
         for j in range(i if callable_metric else i + 1, n):
-            var distance = kernel.distance(X, i, X, j)
+            var distance = (
+                _scipy_bray_curtis(X, i, j) if scipy_bray_curtis else kernel.distance(X, i, X, j)
+            )
             var value = Float32(distance)
             if round_before_squaring:
                 # These sklearn kernels return Float32 for Float32 inputs.

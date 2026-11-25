@@ -1,8 +1,8 @@
 # Linear models
 
 Moxie owns the dense Float32/Float64 implementations of `LinearRegression`,
-`Ridge`, `RidgeClassifier`, `ridge_regression`, `ElasticNet`, `Lasso`, and
-`BayesianRidge`. Import them from `moxie.linear_model`. Implementation modules
+`Ridge`, `RidgeClassifier`, `ridge_regression`, `ElasticNet`, `Lasso`,
+`BayesianRidge`, and `LogisticRegression`. Import them from `moxie.linear_model`. Implementation modules
 live in `../../src/moxie/linear_model`; this directory owns their tests,
 examples, documentation, and internal-engine validation.
 
@@ -24,7 +24,8 @@ The family is partial. ElasticNet/Lasso support cyclic residual solving;
 random selection and Gram precomputation raise explicit errors. Ridge supports
 auto, svd, cholesky, lsqr, sparse_cg on dense inputs, and positive lbfgs;
 sag/saga remain unimplemented. BayesianRidge supports posterior covariance
-and predictive uncertainty; ARDRegression is unimplemented. See the
+and predictive uncertainty. LogisticRegression supports binary and multinomial
+L-BFGS fits. See the
 [coverage table](docs/coverage.md), [scope](docs/scope.md), and
 [public API](docs/api-surface.md) for the supported contract.
 

@@ -1,6 +1,6 @@
 # Supported public API
 
-`moxie.linear_model` exports six implemented estimators and one solver function:
+`moxie.linear_model` exports seven implemented estimators and one solver function:
 
 | Public names | Contract |
 | --- | --- |
@@ -8,6 +8,7 @@
 | Ridge, RidgeParams, RidgeClassifier, RidgeClassifierParams, ridge_regression, RidgeRegressionResult, ClassWeight | [Ridge](../algorithms/ridge/docs/api.md) |
 | ElasticNet, ElasticNetParams, Lasso, LassoParams | [Cyclic coordinate estimators](../algorithms/elastic_net/docs/api.md) |
 | BayesianRidge, BayesianRidgeParams | [Bayesian ridge](../algorithms/bayesian/docs/api.md) |
+| LogisticRegression, LogisticRegressionParams | [Logistic regression](../algorithms/logistic/docs/api.md) |
 
 The capability traits `LinearRegressor`, `LinearClassifier`,
 `ProbabilisticLinearClassifier`, `OnlineLinearRegressor`, and

@@ -24,8 +24,26 @@ def assemble(c,lock=None,ok=True):
 def compile(source,out,c=ROOT):
     run(['mojo','build','-O3','--fp-mode=contract=off','-I',c/'builds/deps','-I',ROOT/'examples',source,'-o',out],c)
 
+def logistic_check(action):
+    from childcheck import FLAGS, SUPPORT, run as child_run
+    child = ROOT / 'algorithms/logistic'
+    output = ROOT / 'builds/logistic'
+    output.mkdir(parents=True, exist_ok=True)
+    if not action.endswith('-only'):
+        for name in ('contracts', 'parity_driver'):
+            child_run(ROOT, 'mojo', 'build', *FLAGS, '-I', ROOT/'builds/deps', '-I', SUPPORT,
+                      child/f'tests/{name}.mojo', '-o', output/name)
+    if action.removesuffix('-only') == 'test':
+        child_run(ROOT, output/'contracts')
+    if action.removesuffix('-only') == 'parity':
+        child_run(ROOT, sys.executable, child/'tests/parity.py')
+
+
 def main():
     action=sys.argv[1]
+    focused = action.startswith('logistic-')
+    if focused:
+        action = action.removeprefix('logistic-')
     assert action in ('build','test','start','parity','test-only','parity-only')
     build = not action.endswith('-only')
     mode = action.removesuffix('-only')
@@ -33,6 +51,12 @@ def main():
     assert version.returncode == 0 and version.stdout.startswith('Mojo 1.0.0 ')
     metadata=list(Path(sys.prefix,'conda-meta').glob('max-core-*.json'))
     assert len(metadata)==1 and json.loads(metadata[0].read_text())['version']=='26.5.0'
+    if focused:
+        assert action != 'start'
+        if not action.endswith('-only'):
+            assemble(ROOT)
+        logistic_check(action)
+        return
     consumers=[ROOT/'tests/consumers'/n for n in ('a','b')]
     for c in ([ROOT]+consumers if build else []):
         assemble(c)
@@ -53,6 +77,7 @@ def main():
             child=ROOT/'algorithms'/name
             run([sys.executable, child/'tools/check.py', action],child)
     if mode in ('build', 'test', 'parity'):
+        logistic_check(action)
         child=ROOT/'shared/coordinate_engine'
         run([sys.executable, child/'tools/check.py', action],child)
     if mode=='test':

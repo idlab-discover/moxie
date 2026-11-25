@@ -41,9 +41,12 @@ def main(runner):
         dtype = np.float32 if name in {"PLSRegression", "PLSSVD"} else np.float64
         i = np.arange(18)
         columns = ["mass", "âge", "taux"]
-        x = pd.DataFrame(
-            ((i * i + 3 * i) % 19 - 9).reshape(6, 3), columns=columns, dtype=dtype
-        )
+        values = ((i * i + 3 * i) % 19 - 9).reshape(6, 3)
+        x = pd.DataFrame({
+            columns[0]: values[:, 0],
+            columns[1]: values[:, 1].astype(dtype),
+            columns[2]: values[:, 2].astype(np.float64),
+        })
         i = np.arange(6 if name == "PLSRegression" else 12)
         y = ((i * i + 2 * i) % 13 - 6).astype(dtype)
         if name != "PLSRegression":
@@ -61,7 +64,9 @@ def main(runner):
         np.testing.assert_array_equal(fit_y_scores, projected_y)
         assert projected_x.columns.tolist() == components.split(","), name
         assert all(projected_x.dtypes == np.float64), name
-        # Float32 PLS inference normalizes in the input dtype.
+        # The Float32 native table materializes in its configured dtype. Pandas
+        # promotes these mixed columns to Float64, so PLS inference may round
+        # standardization differently before multiplication.
         tol = 1e-7 if dtype == np.float32 else 1e-10
         for values, expected in zip((x_scores, y_scores), (projected_x, projected_y), strict=True):
             np.testing.assert_allclose(

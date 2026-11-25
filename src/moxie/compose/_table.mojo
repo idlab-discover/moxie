@@ -145,6 +145,18 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
             raise Error("TypeError: mixed ColumnTable cannot be borrowed as a numeric matrix")
         return self._data
 
+    def _numeric_input(self) raises -> NDArray[Self.dtype]:
+        """Provide all columns in schema order for a read-only dense consumer."""
+        self._check_shape()
+        if len(self._added_columns) == 0:
+            return self._data.view_with_layout(
+                self._data.shape, self._data.strides, self._data.offset,
+            )
+        var indices = List[Int](capacity=len(self._schema.names))
+        for index in range(len(self._schema.names)):
+            indices.append(index)
+        return self._select_numeric(indices, False)
+
     def rows(self) raises -> Int:
         return self._data.shape[0]
 

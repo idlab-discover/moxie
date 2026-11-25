@@ -93,8 +93,8 @@ var scores = model.fit(table, y).transform(table, y)
 var learned_names = model.feature_names_in_.copy()
 ```
 
-All four estimators accept a same-dtype `ColumnTable` backed by its constructor
-matrix in `fit`, `fit_transform` and both `transform` forms. PLSRegression,
+All four estimators accept a `ColumnTable` with the estimator's input dtype
+in `fit`, `fit_transform` and both `transform` forms. PLSRegression,
 PLSCanonical and CCA also accept it in `predict` and `score`. Targets remain
 NuMojo arrays. Table column names are unique strings under the
 [named table contract](../compose/named-columns.md).
@@ -109,10 +109,13 @@ and proceeds without emitting Python's name-presence warning. Supplying
 names when present and the fitted width otherwise. Component names still use
 the estimator class prefix.
 
-Named overloads borrow the numeric matrix and use the estimator's copying path.
-The `*_inplace` methods take NuMojo arrays. To use a mixed table, select a
-numeric block first. Generic compositions still use the estimator's
-NDArray-associated traits.
+Named overloads use the estimator's copying path. A table backed by its
+constructor matrix is read directly. For tables with added columns, Float32,
+Float64, Int64 and Bool columns are gathered in schema order and converted to
+the table's configured dtype. Select Float64 when Float32 conversion would
+lose precision. String and categorical columns raise a type error. The
+`*_inplace` methods take NuMojo arrays. Generic compositions use the
+estimator's NDArray-associated traits.
 
 ## Labeled projections
 

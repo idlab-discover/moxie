@@ -2,7 +2,7 @@
 
 The private `moxie.ensemble._hist_gradient_boosting.binning._BinMapper` fits the
 byte bins used by histogram gradient boosting. It lives in the ensemble
-package alongside the future histogram and grower modules. The public
+package alongside the [node histogram module](hgb-histograms.md). The public
 `HistGradientBoostingClassifier` and `HistGradientBoostingRegressor` remain
 raising declarations.
 

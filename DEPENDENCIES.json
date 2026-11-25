@@ -544,6 +544,9 @@
         },
         "moxie.ensemble._hist_gradient_boosting.binning": {
           "file": "src/moxie/ensemble/_hist_gradient_boosting/binning.mojo"
+        },
+        "moxie.ensemble._hist_gradient_boosting.histogram": {
+          "file": "src/moxie/ensemble/_hist_gradient_boosting/histogram.mojo"
         }
       },
       "assets": {

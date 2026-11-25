@@ -1,4 +1,5 @@
 """Multiclass meta-estimators following sklearn.multiclass; see docs/multiclass/family.md."""
+from moxie._classifier_binary_adapter import BinaryAdapter
 from moxie._multiclass_contracts import (
     PairwiseInput,
     pairwise_input,

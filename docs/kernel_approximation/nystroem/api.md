@@ -53,6 +53,8 @@ Language adaptations (tested in `tests/kernel_approximation/nystroem/contracts.m
 - The kernel engine rejects nonfinite kernel values; sklearn would propagate them.
 - Typed `get_params()`/`set_params`, `clone` (unfitted, copies the callable),
   `nystroem<k>` feature names.
+- `copy()` preserves fitted state and owns separate basis, index and
+  normalization arrays.
 
 Exactly symmetric RBF basis matrices use mojo-linalg's `symmetric_eigh` when
 every eigenvalue clears the clipping floor by a roundoff margin. For these

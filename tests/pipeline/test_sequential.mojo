@@ -3,7 +3,7 @@ from moxie.base import SupervisedEstimator, UnsupervisedEstimator, TransformerMi
 from moxie.pipeline import Pipeline, PredictivePipeline
 
 
-struct Shift(SupervisedEstimator, Predictor, TransformerMixin):
+struct Shift(SupervisedEstimator, Predictor, TransformerMixin, Copyable):
     comptime Input = Int
     comptime Target = Int
     comptime Transformed = Int
@@ -212,6 +212,7 @@ def check_final_transformers() raises:
 def main() raises:
     check_final_transformers()
     var pipe = Pipeline(Shift(), Recorder(), transformer_name="shift", estimator_name="record")
+    comptime assert not conforms_to(type_of(pipe), Copyable)
     with assert_raises():
         _ = pipe.predict(1)
     _ = pipe.fit(5, 7)

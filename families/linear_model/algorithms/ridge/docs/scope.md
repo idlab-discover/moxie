@@ -1,18 +1,19 @@
 # Ridge dense scope
 
-Implemented and validated: `Ridge`, `RidgeClassifier`, `ridge_regression` on
-dense Float32/Float64 with solvers auto/svd/cholesky (primal, dual, fallbacks),
-lsqr (with `n_iter_`), sparse_cg, lbfgs (positive=True); scalar or per-target
-alpha, nonnegative sample weights, vector/matrix targets, class_weight
-(balanced / explicit), binary/multiclass/multilabel classification.
+`Ridge`, `RidgeClassifier` and `ridge_regression` support dense Float32 and
+Float64 with auto, SVD, Cholesky, LSQR, CG, SAG, SAGA and positive L-BFGS-B.
+The API supports scalar and per-target alpha, sample weights and vector or
+matrix targets. Classification supports binary, multiclass and multilabel
+inputs with balanced or explicit class weights.
+`ridge_regression(return_intercept=True)` uses SAG to fit an intercept.
 
-Checks: `tests/contracts.mojo` (solver agreement, positivity, shapes,
-per-target alpha errors, weights vs repetition, kernel path, invalid
-solver/positive/lbfgs/sag/alpha/max_iter, unfitted errors, clone, classifier
-classes/multiclass/multilabel/class weights). `tests/parity.py`: 149 cases vs
-pinned sklearn `_ridge.py`/`_base.py`, tolerances documented in the script
-(observed max 2.2e-14 Float64, 2.4e-6 Float32), exact `n_iter_` and `solver_`.
+The [API](api.md) records result shapes, seed semantics and solver-specific
+weight handling. Sparse inputs remain deferred. Native diagnostics omit
+Python verbosity and input validation always runs.
 
-Unfinished: `sag`/`saga` (need the SAG engine; tracked in the family handoff).
-Deferred (dense-only scope): sparse X including the sparse intercept paths.
-Not native: `verbose`, `random_state` (only used by sag), `check_input=False`.
+Run `python families/linear_model/algorithms/ridge/tools/check.py test`, then
+`python families/linear_model/algorithms/ridge/tools/check.py parity-only`
+with the locked toolchain. Contracts cover both dtypes, solver dispatch,
+repeat fits, clone, invalid inputs and the optional result fields. The parity
+suite uses pinned `_ridge.py`, `_base.py` and the compiled SAG sources.
+The script records tolerances and checks solver selection and epoch counts.

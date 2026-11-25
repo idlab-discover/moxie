@@ -47,7 +47,7 @@ Single-target intercepts remain length-one arrays. Ridge ravels single-column
 coefficients and predictions, as does this pinned reference; LinearRegression
 preserves the target rank. Integer-valued numeric classifier labels only.
 
-Unfinished dense work: Ridge SAG/SAGA, RidgeCV/RidgeClassifierCV,
+Unfinished dense work includes RidgeCV/RidgeClassifierCV,
 multi-task paths, multi-task estimators, coordinate CV, SGD/Perceptron, LogisticRegressionCV and
 remaining family algorithms. The residual and Gram coordinate engines are consumed by
 ElasticNet/Lasso (see algorithms/elastic_net/docs/scope.md). Smooth and SGD

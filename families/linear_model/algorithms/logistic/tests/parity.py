@@ -1,16 +1,13 @@
 """Dense logistic differential checks against the pinned sklearn estimator and loss."""
 from contextlib import redirect_stdout
-from importlib.util import module_from_spec, spec_from_file_location
 from io import StringIO
 from pathlib import Path
 import runpy
 import subprocess
 import sys
-from sysconfig import get_config_var
 from unittest.mock import patch
 import warnings
 
-from Cython import Tempita
 import numpy as np
 from scipy.linalg import LinAlgWarning
 from sklearn import __version__ as support_version
@@ -24,6 +21,7 @@ FAMILY = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(FAMILY / "tools"))
 from parity_io import REFERENCE, case_line, close, load_pinned, parse_results, pinned_code, verify_reference
 from pinned_coordinate import load as load_pinned_coordinate
+from pinned_sag import SOURCES as SAG_SOURCES, load as load_pinned_sag
 
 LOSS = "sklearn/linear_model/_linear_loss.py"
 LOGISTIC = "sklearn/linear_model/_logistic.py"
@@ -33,65 +31,7 @@ SVM_BASE = "sklearn/svm/_base.py"
 LIBLINEAR = "sklearn/svm/src/liblinear"
 LINEAR_BASE = "sklearn/linear_model/_base.py"
 EXTMATH = "sklearn/utils/extmath.py"
-SAG = "sklearn/linear_model/_sag.py"
-SAG_FAST = "sklearn/linear_model/_sag_fast.pyx.tp"
-DATASET = "sklearn/utils/_seq_dataset"
 OUTPUT = FAMILY / "builds/logistic"
-
-
-def pinned_sag():
-    """Compile the pinned stochastic engine and its dataset sampler."""
-    folder = OUTPUT / "sag_reference"
-    templates = {
-        SAG_FAST: "pinned_sag_fast.pyx",
-        f"{DATASET}.pyx.tp": f"{DATASET}.pyx",
-        f"{DATASET}.pxd.tp": f"{DATASET}.pxd",
-    }
-    for source, destination in templates.items():
-        path = folder / destination
-        path.parent.mkdir(parents=True, exist_ok=True)
-        rendered = Tempita.Template((REFERENCE / source).read_text()).substitute()
-        if not path.exists() or path.read_text() != rendered:
-            path.write_text(rendered)
-
-    setup = folder / "setup.py"
-    setup.write_text(
-        "from setuptools import setup, Extension\n"
-        "from Cython.Build import cythonize\n"
-        "from numpy import get_include\n"
-        "setup(ext_modules=cythonize([\n"
-        f"    Extension('sklearn.utils._seq_dataset', ['{DATASET}.pyx'], "
-        "include_dirs=[get_include()], extra_compile_args=['-ffp-contract=off']),\n"
-        "    Extension('pinned_sag_fast', ['pinned_sag_fast.pyx'], "
-        "include_dirs=[get_include()], extra_compile_args=['-ffp-contract=off']),\n"
-        f"], include_path=['.', {str(REFERENCE)!r}], build_dir='cython'))\n"
-    )
-    with (folder / "compile.log").open("w") as log:
-        subprocess.run(
-            [sys.executable, setup.name, "build_ext", "--build-lib", "extensions"],
-            cwd=folder, stdout=log, stderr=subprocess.STDOUT, check=True,
-        )
-
-    def load_extension(name):
-        library = folder / "extensions" / (name.replace(".", "/") + get_config_var("EXT_SUFFIX"))
-        spec = spec_from_file_location(name, library)
-        module = module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-
-    base = load_pinned(LINEAR_BASE)
-    dataset = load_extension("sklearn.utils._seq_dataset")
-    with patch.dict(sys.modules, {"sklearn.utils._seq_dataset": dataset}):
-        native = load_extension("pinned_sag_fast")
-    base.ArrayDataset32 = dataset.ArrayDataset32
-    base.ArrayDataset64 = dataset.ArrayDataset64
-    sag = load_pinned(SAG)
-    sag.make_dataset = base.make_dataset
-    sag.sag32 = native.sag32
-    sag.sag64 = native.sag64
-    pinned_code(sag.sag_solver, SAG)
-    pinned_code(sag.make_dataset, LINEAR_BASE)
-    return sag.sag_solver
 
 
 def pinned_liblinear():
@@ -132,7 +72,7 @@ def oracle(*, coordinate=False):
         LOSS, LOGISTIC, NEWTON, OPTIMIZE, SVM_BASE, "sklearn/svm/_liblinear.pyx",
         f"{LIBLINEAR}/linear.cpp", f"{LIBLINEAR}/linear.h", f"{LIBLINEAR}/tron.cpp",
         f"{LIBLINEAR}/tron.h", "sklearn/svm/src/newrand/newrand.h",
-        LINEAR_BASE, EXTMATH, SAG, SAG_FAST, f"{DATASET}.pxd.tp", f"{DATASET}.pyx.tp",
+        LINEAR_BASE, EXTMATH, *SAG_SOURCES,
         "sklearn/_loss/_loss.pxd", "sklearn/utils/_random.pxd", "sklearn/utils/_typedefs.pxd",
     ])
     print(f"scikit-learn source SHA256 {hashes}, support wheel {support_version}")
@@ -159,7 +99,7 @@ def oracle(*, coordinate=False):
         newton._pre_fit = coordinate_module._pre_fit
         pinned_code(newton.NewtonCDSolver.inner_solve, NEWTON)
         assert estimator.NewtonCDSolver is newton.NewtonCDSolver
-    estimator.sag_solver = pinned_sag()
+    estimator.sag_solver = load_pinned_sag(OUTPUT / "sag_reference")
     estimator._fit_liblinear = load_pinned(SVM_BASE)._fit_liblinear
     pinned_code(estimator._fit_liblinear, SVM_BASE)
     pinned_code(loss.LinearModelLoss.loss_gradient, LOSS)

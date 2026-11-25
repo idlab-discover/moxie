@@ -62,15 +62,18 @@ def run[dtype: DType](fx: Fixture) raises:
     var kind = fx.text("kind")
     var X = fx.array[dtype]("X")
     var out = ResultLine(fx.id)
+    var random_state = Optional(Int(fx.number("random_state")))
     if kind == "function":
         var sw = Optional[NDArray[dtype]](None)
         if fx.has("sw"):
             sw = fx.array[dtype]("sw")
-        var result = ridge_regression(X, fx.array[dtype]("y"), alpha_of(fx), sample_weight=sw, solver=fx.text("solver"), max_iter=max_iter_of(fx), tol=fx.number("tol"), positive=fx.flag("positive"), return_n_iter=True)
+        var result = ridge_regression(X, fx.array[dtype]("y"), alpha_of(fx), sample_weight=sw, solver=fx.text("solver"), max_iter=max_iter_of(fx), tol=fx.number("tol"), positive=fx.flag("positive"), return_n_iter=True, return_intercept=fx.flag("return_intercept"), random_state=random_state)
         out.add("coef", result.coef)
         out.add("n_iter", iterations(result.n_iter))
+        if result.intercept:
+            out.add("intercept", result.intercept.value())
     elif kind == "ridge":
-        var model = Ridge[dtype](alpha_of(fx), fit_intercept=fx.flag("fit_intercept"), max_iter=max_iter_of(fx), tol=fx.number("tol"), solver=fx.text("solver"), positive=fx.flag("positive"))
+        var model = Ridge[dtype](alpha_of(fx), fit_intercept=fx.flag("fit_intercept"), max_iter=max_iter_of(fx), tol=fx.number("tol"), solver=fx.text("solver"), positive=fx.flag("positive"), random_state=random_state)
         if fx.has("sw"):
             model.fit(X, fx.array[dtype]("y"), sample_weight=fx.array[dtype]("sw"))
         else:
@@ -83,7 +86,7 @@ def run[dtype: DType](fx: Fixture) raises:
         out.add("pred", model.predict(Z))
         out.scalar("score", model.score(Z, fx.array[dtype]("yz")))
     else:
-        var model = RidgeClassifier[dtype](alpha_of(fx), fit_intercept=fx.flag("fit_intercept"), max_iter=max_iter_of(fx), tol=fx.number("tol"), class_weight=class_weight_of(fx), solver=fx.text("solver"), positive=fx.flag("positive"))
+        var model = RidgeClassifier[dtype](alpha_of(fx), fit_intercept=fx.flag("fit_intercept"), max_iter=max_iter_of(fx), tol=fx.number("tol"), class_weight=class_weight_of(fx), solver=fx.text("solver"), positive=fx.flag("positive"), random_state=random_state)
         var y = labels(fx, "y")
         if fx.has("sw"):
             model.fit(X, y, sample_weight=fx.array[dtype]("sw"))
@@ -91,6 +94,7 @@ def run[dtype: DType](fx: Fixture) raises:
             model.fit(X, y)
         out.add("coef", model.coef_)
         out.add("intercept", model.intercept_)
+        out.add("n_iter", iterations(model.n_iter_))
         out.integer("solver", solver_code(model.solver_))
         var Z = fx.array[dtype]("Z")
         var classes = model.classes_.copy()

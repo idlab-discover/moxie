@@ -694,7 +694,10 @@ struct GenericGaussianProcessRegressor[
         return Xd^
 
     def predict(self, X: Self.Input) raises -> Dense64:
-        """Posterior (or prior) mean: `(n,)` for one target, `(n, t)` otherwise."""
+        """Mean of shape `(n,)` for one target and `(n, t)` for multiple targets.
+
+        A multi-target prior with one query returns `(t,)`, as in sklearn.
+        """
         return self.predict(X, return_std=False).mean.copy()
 
     def predict(
@@ -709,7 +712,12 @@ struct GenericGaussianProcessRegressor[
         if not self._fitted:
             var kernel = self.kernel.value().copy() if self.kernel else _prior_kernel()
             var t = self.n_targets.value() if self.n_targets else 1
-            var mean = zeros[DType.float64](Shape(m)) if t == 1 else zeros[DType.float64](Shape(m, t))
+            var mean_shape = Shape(m, t)
+            if t == 1:
+                mean_shape = Shape(m)
+            elif m == 1:
+                mean_shape = Shape(t)
+            var mean = zeros[DType.float64](mean_shape)
             if return_cov:
                 var cov = kernel(Xd)
                 if t == 1:
@@ -809,15 +817,16 @@ struct GenericGaussianProcessRegressor[
         var prediction = self.predict(X, return_std=False, return_cov=True)
         ref mean = prediction.mean
         ref cov = prediction.covariance.value()
-        var m = mean.shape[0]
-        if mean.ndim == 1:
+        # The covariance retains the sample and target axes for singleton priors.
+        var m = cov.shape[0]
+        if cov.ndim == 2:
             var draws = random_state.multivariate_normal(mean, cov, n_samples, check_valid="warn")  # (s, m)
             var out = zeros[DType.float64](Shape(m, n_samples))
             for s in range(n_samples):
                 for i in range(m):
                     out.unsafe_set(i * n_samples + s, draws.unsafe_get(s * m + i))
             return out^
-        var t = mean.shape[1]
+        var t = cov.shape[2]
         var out = zeros[DType.float64](Shape(m, t, n_samples))
         for k in range(t):
             var mk = zeros[DType.float64](Shape(m))

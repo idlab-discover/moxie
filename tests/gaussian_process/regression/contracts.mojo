@@ -99,6 +99,22 @@ def test_fit_shapes_single_and_multi_target() raises:
     assert_true(c.unsafe_get(0) != d.unsafe_get(0))
 
 
+def test_singleton_prior_sampling_keeps_sample_and_target_axes() raises:
+    var query = zeros[DType.float64](Shape(1, 2))
+    var single = GaussianProcessRegressor()
+    assert_equal(single.predict(query).shape, Shape(1))
+    assert_equal(single.sample_y(query, 3).shape, Shape(1, 3))
+
+    var multi = GaussianProcessRegressor(n_targets=2)
+    var draws = multi.sample_y(query, 3, 5)
+    assert_equal(draws.shape, Shape(1, 2, 3))
+    assert_equal(multi.sample_y(query, 0).shape, Shape(1, 2, 0))
+    var rng = RandomState(5)
+    # The unit covariance preserves each standard normal's magnitude.
+    for i in range(draws.size):
+        assert_equal(abs(draws.unsafe_get(i)), abs(rng.standard_normal()))
+
+
 def test_column_target_squeezes() raises:
     var X = data(8, 2)
     var y = zeros[DType.float64](Shape(8, 1))

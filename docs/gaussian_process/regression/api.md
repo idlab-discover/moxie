@@ -97,6 +97,11 @@ for a cross-validation and search example.
   replicates prior outputs.
 - Shapes: single target mean/std `(n,)`, cov `(n, n)`, samples `(n, s)` (also for
   `(n, 1)` y); t>1 targets `(n, t)`, `(n, n, t)`, `(n, t, s)`.
+- For one query and multiple targets, the unfitted mean has shape `(t,)`, as in
+  scikit-learn. Standard deviation has shape `(1, t)` and covariance has shape
+  `(1, 1, t)`. Native `sample_y` handles the squeezed mean and returns `(1, t, s)`.
+  For a single target, Moxie keeps the prior mean as a one-dimensional array,
+  including for one query where scikit-learn returns a zero-dimensional array.
 - normalize_y uses mean/population std with sklearn's zero-scale guard.
 - Optimization: SciPy-faithful L-BFGS-B (mojo-optimize) on the negative LML with
   analytic gradients; restarts draw `rng.uniform(bounds[:,0], bounds[:,1])`; the

@@ -78,6 +78,7 @@ def cases():
         yield f'restarts_normalize_{kind}', 1, kind, X, y, Xt
         yield f'matern_multi_alpha_{kind}', 2, kind, X, Y2, Xt
         yield f'periodic_{kind}', 3, kind, P, yp, Pt
+        yield f'singleton_two_target_prior_{kind}', 8, kind, X, Y2, Xt[:1]
     yield 'dot_product_normalize', 4, 'f64', L, yl, Lt
     yield 'no_optimizer', 5, 'f64', X, y, Xt
     yield 'matern_general_nu', 6, 'f64', X, y, Xt
@@ -99,6 +100,9 @@ def reference(case_id, kind, X, y, Xt):
     gpr = configure(case_id, X.shape[0])
     out = {}
     out['prior_mean'], out['prior_std'] = gpr.predict(Xt, return_std=True)
+    if len(Xt) == 1 and case_id == 8:
+        out['prior_mean_plain'] = gpr.predict(Xt)
+        out['prior_mean_with_cov'], out['prior_cov'] = gpr.predict(Xt, return_cov=True)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         gpr.fit(X, y)
@@ -176,7 +180,7 @@ def main():
                 tol = opt_tol
             elif key == 'warnings':
                 tol = 0
-            elif key in ('prior_mean', 'prior_std'):
+            elif key.startswith('prior_'):
                 tol = 1e-12
             else:
                 tol = opt_tol * 10

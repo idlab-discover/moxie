@@ -107,6 +107,11 @@ def run_case[dtype: DType](
     var prior = gpr.predict(Xtn, return_std=True)
     emit(name, "prior_mean", prior.mean)
     emit(name, "prior_std", prior.std.value())
+    if Xtn.shape[0] == 1 and case_id == 8:
+        var prior_with_cov = gpr.predict(Xtn, return_std=False, return_cov=True)
+        emit(name, "prior_mean_plain", gpr.predict(Xtn))
+        emit(name, "prior_mean_with_cov", prior_with_cov.mean)
+        emit(name, "prior_cov", prior_with_cov.covariance.value())
     _ = gpr.fit(Xn, yn)
     if roundtrip:
         gpr = Schema.decode(loads(dumps(Schema.encode(gpr))))

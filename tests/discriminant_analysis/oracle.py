@@ -3,8 +3,9 @@
 Executes the unmodified pinned `sklearn/discriminant_analysis.py`, the covariance
 helpers it calls (`empirical_covariance`, `shrunk_covariance`, `ledoit_wolf`),
 `StandardScaler`, the inherited `LinearClassifierMixin` decision/predict bodies,
-`ClassifierMixin.score` and `softmax`. The wheel (1.9.1) lacks four newer private
-array-API helpers; those are taken from the pinned `_array_api.py` as well.
+`ClassifierMixin.score`, `softmax`, and model-selection search and splitting.
+The wheel (1.9.1) lacks four newer private array-API helpers; those are taken
+from the pinned `_array_api.py` as well.
 """
 import ast
 import hashlib
@@ -25,7 +26,8 @@ REVISION = '4358542a1bd39af2e7e1cbace8b9fed067473c5b'
 FILES = ['sklearn/discriminant_analysis.py', 'sklearn/covariance/_empirical_covariance.py',
          'sklearn/covariance/_shrunk_covariance.py', 'sklearn/preprocessing/_data.py',
          'sklearn/utils/_array_api.py', 'sklearn/utils/extmath.py', 'sklearn/linear_model/_base.py',
-         'sklearn/base.py', 'sklearn/tests/test_discriminant_analysis.py', 'sklearn/pipeline.py']
+         'sklearn/base.py', 'sklearn/tests/test_discriminant_analysis.py', 'sklearn/pipeline.py',
+         'sklearn/model_selection/_search.py', 'sklearn/model_selection/_split.py']
 
 
 def _module(name, relative):
@@ -78,5 +80,9 @@ def load():
     sklearn.base.ClassifierMixin.score = score
     for cls in [da.LinearDiscriminantAnalysis, da.QuadraticDiscriminantAnalysis]:
         assert cls.fit.__wrapped__.__code__.co_filename == str(SOURCE / FILES[0])
-    return dict(da=da, empirical=empirical, shrunk=shrunk, data=data, pipeline=pipeline,
+    split = _module('sklearn.model_selection._da_pinned_split', 'sklearn/model_selection/_split.py')
+    search = _module('sklearn.model_selection._da_pinned_search', 'sklearn/model_selection/_search.py')
+    search.check_cv = split.check_cv
+    return dict(da=da, empirical=empirical, shrunk=shrunk, data=data,
+                pipeline=pipeline, split=split, search=search,
                 hashes={f: hashlib.sha256((SOURCE / f).read_bytes()).hexdigest() for f in FILES})

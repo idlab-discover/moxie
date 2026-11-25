@@ -13,6 +13,7 @@ from ._plumbing import ColumnSelection
 from ._table import ColumnTable
 from ._column_transformer import ColumnTransformer
 from ._column_transformer import ColumnTransformerParams
+from ._column_transformer import TableColumnTransformer
 from ._column_transformer import Columns
 from ._plumbing import DenseBlockAssembler
 from ._column_transformer import EndColumns

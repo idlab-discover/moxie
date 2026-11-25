@@ -221,7 +221,34 @@ branch chains dense OneHotEncoder with SelectPercentile using a chi-squared
 scorer. Pass a Float64 target array to the table preprocessor and use the
 original Int64 labels when fitting the downstream LogisticRegression.
 
-Table overloads supplement the existing NDArray-associated estimator traits;
-generic pipeline wrappers do not automatically acquire schema routing. Native
-schema validation reports descriptive ValueError messages rather than reproducing
-pandas/narwhals-specific exception types and Python set formatting.
+## Predictive pipelines on mixed tables
+
+Use `as_table_transformer()` when a generic pipeline needs
+`ColumnTable[dtype]` as its associated input. The method moves a
+`ColumnTransformer` and its fitted state, if present, into a
+`TableColumnTransformer`. Its dense output becomes the input of the next
+stage. The example reuses the numeric and categorical entries above.
+
+```mojo
+from moxie.linear_model import Ridge
+
+var pipe = make_pipeline(model^.as_table_transformer(), Ridge())
+_ = pipe.fit(table, y)
+var predictions = pipe.predict(test_table)
+var names = pipe.transformer.get_feature_names_out()
+var spans = pipe.transformer.columns.output_indices_
+```
+
+Access the underlying transformer through `pipe.transformer.columns`.
+Pipeline parameter records expose the same ColumnTransformer configuration,
+and cloning the pipeline clones that configuration into an unfitted wrapper.
+Match the predictor's target dtype to the table dtype when the column
+transformer has a supervised branch such as TargetEncoder. For a predictor
+with a different target type, Pipeline supplies no target to the column
+transformer, so all active branches must support fitting without one.
+
+The [mixed Ridge comparison](../../tests/compose/pipeline/mixed_ridge_parity.py)
+checks reordered inference, unseen categories, predictions, R², cloning,
+parameter updates and refitting against pinned scikit-learn. Encoded columns,
+feature names and output spans match exactly. Native schema validation uses
+Mojo errors with descriptive ValueError messages.

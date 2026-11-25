@@ -106,6 +106,9 @@ TypeError), `get_feature_names_out(input_features)`, `fit`, `fit_transform`,
 - `make_pipeline(SimpleImputer(), StandardScaler())` returns a
   `TransformerPipeline` that can be used as one entry. Its stages must agree
   on the target type and on the intermediate array type.
+- Use `as_table_transformer()` to move a ColumnTransformer into a
+  `TableColumnTransformer` when a generic pipeline expects a native table
+  input. See [predictive pipelines on mixed tables](../named-columns.md#predictive-pipelines-on-mixed-tables).
 - Errors are Mojo `Error`s whose text starts with the sklearn exception type
   and message (`InvalidParameterError: The 'remainder' parameter ...`).
 

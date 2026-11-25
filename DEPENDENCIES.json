@@ -708,6 +708,7 @@
             "ColumnList": "moxie.compose._column_transformer",
             "ColumnTransformer": "moxie.compose._column_transformer",
             "ColumnTransformerParams": "moxie.compose._column_transformer",
+            "TableColumnTransformer": "moxie.compose._column_transformer",
             "Columns": "moxie.compose._column_transformer",
             "EndColumns": "moxie.compose._column_transformer",
             "FeatureNameFormatter": "moxie.compose._column_transformer",

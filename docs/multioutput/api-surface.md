@@ -132,6 +132,12 @@ use the component's native representation. Wrapper targets, predictions and
 `classes_` remain NDArrays. The wrappers convert Float64 NDArray weights to the
 `List[Float64]` that GaussianNB consumes.
 
+`DummyClassifier()` uses tagged `Label` values internally. Either wrapper
+accepts it with Int64, Float32 or Float64 targets. With a constant strategy,
+use an integer `Label` for Int64 targets or a floating-point `Label` for
+floating-point targets. `SVC[Int]()` works with the default Int64 wrapper
+labels and Float64 features.
+
 The independent wrappers share their field layout with the chains: they also
 carry `order`, `random_state`, `random_order`, `verbose`, `chain_method`,
 `chain_method_` and `order_`, and `MultiOutputRegressor` carries an empty

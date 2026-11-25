@@ -4,8 +4,10 @@ from numojo import NDArray, Shape
 from std.testing import assert_equal, assert_raises
 from moxie.base import clone
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis
+from moxie.dummy import DummyClassifier, Label
 from moxie.naive_bayes import GaussianNB, NumericDomain
 from moxie.neighbors import KNeighborsClassifier
+from moxie.svm import SVC
 from moxie.tree import DecisionTreeClassifier
 from moxie.multioutput import ClassifierChain, MultiOutputClassifier
 
@@ -136,3 +138,47 @@ def main() raises:
     _ = lda.fit(X, multiclass)
     parity["ComponentsLDAListLabels"](lda.predict(X))
     parity["ComponentsLDAListProba"](lda.predict_proba(X)[1])
+
+    var dummy = MultiOutputClassifier(DummyClassifier())
+    _ = dummy.fit(X, integer_targets, sample_weight=weights)
+    assert_equal(dummy.estimators_[1].classes_[2] == Label(19), True)
+    parity["ComponentsDummyWeightedLabels"](dummy.predict(X))
+    parity["ComponentsDummyWeightedProba"](dummy.predict_proba(X)[1])
+    var unfitted_dummy = clone(dummy)
+    with assert_raises(contains="NotFittedError"):
+        _ = unfitted_dummy.predict(X)
+
+    # Adjacent integers beyond Float64's exact range must stay distinct.
+    var wide_labels = nm.full[DType.int64](Shape(12, 1), Int64(9007199254740992))
+    wide_labels.unsafe_set(0, Int64(9007199254740993))
+    var constant_dummy = MultiOutputClassifier(
+        DummyClassifier(strategy="constant", constant=Label(9007199254740993)),
+    )
+    _ = constant_dummy.fit(X, wide_labels)
+    assert_equal(constant_dummy.classes_[0].size, 2)
+    assert_equal(constant_dummy.predict(X).item(0, 0), Int64(9007199254740993))
+
+    var dummy_chain = ClassifierChain[DummyClassifier[], DType.float64, DType.float64](
+        DummyClassifier(), order=List[Int]([1, 0]), chain_method="predict_proba", cv=3,
+    )
+    _ = dummy_chain.fit(X, binary)
+    assert_equal(dummy_chain.estimators_[0].classes_[1] == Label(11.0), True)
+    parity["ComponentsDummyChainCVLabels"](dummy_chain.predict(X))
+    parity["ComponentsDummyChainCVProba"](dummy_chain.predict_proba(X))
+
+    comptime Dummy32 = DummyClassifier[False, DType.float32]
+    var dummy32 = MultiOutputClassifier[Dummy32, DType.float32, DType.float32](Dummy32())
+    var targets32 = multiclass.astype[DType.float32]()
+    _ = dummy32.fit(X32, targets32, sample_weight=weights)
+    parity["ComponentsDummy32WeightedLabels"](dummy32.predict(X32))
+    parity["ComponentsDummy32WeightedProba"](dummy32.predict_proba(X32)[1])
+
+    var svc = MultiOutputClassifier(SVC[Int](kernel="linear"))
+    _ = svc.fit(X, integer_targets)
+    parity["ComponentsSVCLabels"](svc.predict(X))
+    var svc_chain = ClassifierChain(
+        SVC[Int](kernel="linear"), chain_method="decision_function", cv=3,
+    )
+    _ = svc_chain.fit(X, integer_binary)
+    parity["ComponentsSVCChainCVLabels"](svc_chain.predict(X))
+    parity["ComponentsSVCChainCVDecision"](svc_chain.decision_function(X))

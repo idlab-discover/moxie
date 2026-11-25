@@ -9,6 +9,7 @@ version = "0.1.0"
 build = "python tools/check.py build"
 test = "python tools/check.py test"
 parity = "python tools/check.py parity"
+pow-accuracy = "python tools/check.py pow-accuracy"
 
 [dependencies]
 mojo = "==1.0.0"

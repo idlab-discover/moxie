@@ -23,8 +23,8 @@ tests pass for both dtypes. The historical Float64 Minkowski p=0.5 precision fai
 fixed with std.math sqrt/cbrt and multiplication compositions for common powers.
 All 108 dtype/metric parity configurations (96 explicit-parameter, 12 inferred
 Mahalanobis/standardized-Euclidean) pass at the unchanged
-2e-12 Float64 / 3e-6 Float32 tolerances. Arbitrary powers use the compiler
-llvm.pow.f64 intrinsic; additional powers 0.1, 0.7, 1.1, 2.3, 7.1 and 31.4 pass
+2e-12 Float64 / 3e-6 Float32 tolerances. Arbitrary powers use the shared
+numerics `pow_float64` primitive. Additional powers 0.1, 0.7, 1.1, 2.3, 7.1 and 31.4 pass
 the same tolerances. Required dense scope is not complete.
 
 Mahalanobis without VI follows sklearn `_precompute_metric_params`: self

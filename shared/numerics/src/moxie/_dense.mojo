@@ -1,5 +1,11 @@
-"""Small native operations on NuMojo storage, with explicit 2-D contracts."""
+"""Native numerical primitives for dense CPU algorithms."""
 import numojo as nm
+from std.sys import llvm_intrinsic
+
+
+def pow_float64(base: Float64, exponent: Float64) -> Float64:
+    """Raise a binary64 scalar to a real power with CPU libm semantics."""
+    return llvm_intrinsic["llvm.pow.f64", Float64](base, exponent)
 
 
 def sum_axis2d[

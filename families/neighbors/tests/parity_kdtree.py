@@ -53,9 +53,11 @@ def native(X, Y, metric='euclidean', p=2, leaf=2, k=3, dual=False, breadth=False
 def independent_cases():
     cases = 0
     rng = np.random.RandomState(123)
-    for dtype, metric, p, leaf, dual, breadth in itertools.product(
-            [np.float32, np.float64], ['euclidean', 'manhattan', 'chebyshev', 'minkowski'],
-            [1.5, 3], [1, 4, 40], [False, True], [False, True]):
+    metrics = ['euclidean', 'manhattan', 'chebyshev', 'minkowski']
+    metric_powers = [*itertools.product(metrics, [1.5, 3]), ('minkowski', 2.3)]
+    for dtype, (metric, p), leaf, dual, breadth in itertools.product(
+            [np.float32, np.float64], metric_powers, [1, 4, 40],
+            [False, True], [False, True]):
         X = rng.normal(size=(31, 3)).astype(dtype)
         X[2] = X[1]
         Y = rng.normal(size=(7, 3)).astype(dtype)

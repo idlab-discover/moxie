@@ -106,7 +106,7 @@ def independent_cases():
         if metric=='mahalanobis':params={'VI':(np.eye(dim)+np.ones((dim,dim))/dim).astype(dtype)}
         check_queries(X,Y,metric,3,leaf,dual,breadth,params)
         count+=1
-    for dtype,p,dual,breadth in itertools.product([np.float32,np.float64],[1,1.5,2,3],[False,True],[False,True]):
+    for dtype,p,dual,breadth in itertools.product([np.float32,np.float64],[1,1.5,2,3,2.3],[False,True],[False,True]):
         X=rng.normal(size=(31,5)).astype(dtype);Y=rng.normal(size=(7,5)).astype(dtype)
         check_queries(X,Y,'minkowski',p,1,dual,breadth,{'w':np.array([0,1,2,3,4],dtype=dtype)})
         count+=1

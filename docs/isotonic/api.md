@@ -101,9 +101,9 @@ A single retained X threshold predicts a constant everywhere for all three
 modes, matching the reference. The training domain excludes discarded weights
 and uses the representative X values after duplicate consolidation.
 
-The reference binds interpolation's `bounds_error` at fit time. This port
-preserves that detail: switching `out_of_bounds` to `"clip"` takes effect
-immediately, while switching the interpolator's raise behavior requires refit.
+The interpolator binds its raise behavior during fit and when loading saved
+state. Switching `out_of_bounds` to `"clip"` takes effect immediately for
+`predict` and `transform`.
 
 The solver uses O(n) time and storage; sorting and automatic ranking use
 O(n log n), and prediction uses binary search in the retained thresholds.
@@ -166,10 +166,36 @@ Grid values use `IsotonicSearchValue`. Bounds take Float64 or `NoneType()`
 to clear a bound. Direction takes Bool or `String("auto")`. Out-of-bounds
 mode takes a String.
 
+## Persistence
+
+Use the experimental [native model format](../serialization.md) for fitted or
+unfitted estimators. Select the schema with the same dtype as the model.
+
+```mojo
+from moxie.isotonic_serialization import IsotonicRegressionSchema
+from moxie.serialization import load_model, save_model
+
+comptime Schema = IsotonicRegressionSchema[]  # Float64
+save_model[Schema](model, "isotonic.moxie")
+var restored = load_model[Schema]("isotonic.moxie")
+```
+
+Use `IsotonicRegressionSchema[DType.float32]` for Float32. The schema stores
+the current configuration separately from fitted state, including configuration
+changed since the last fit. It restores independent threshold Lists without
+refitting. Constructor values retain their normal fit-time validation.
+Fitted thresholds must be finite, with strictly ascending X, monotone y in
+the fitted direction, and a domain matching the two endpoints.
+
+Loading binds the interpolator's raise behavior to the saved configuration,
+as scikit-learn does when unpickling. For example, if you fit with `"raise"`
+and then set `out_of_bounds="nan"`, the loaded model returns NaN outside the
+training domain.
+
 ## Scope and validation
 
 Python bindings, automatic heterogeneous dtype coercion, scalar sample
-weights, pandas output, metadata routing and serialization are not implemented.
+weights, pandas output and metadata routing are not implemented.
 Pass weights in the same dtype and container type as y.
 `get_feature_names_out(input_features)` accepts and ignores the optional names,
 as the reference does. Sparse inputs
@@ -179,11 +205,12 @@ for in-place fitting and typed configuration differences.
 
 `pixi run python tools/isotonic_checks.py test` covers trait conformance,
 validation, clone/copy ownership, repeat fits, 1-D and one-column equivalence,
-strided arrays, direction, bounds, and weighted R².
-`pixi run python tools/isotonic_checks.py parity` compares 624 Float64 and
-457 Float32 deterministic cases, including scaler pipeline predictions, against
-the pinned Python module and Cython tie engine. The scikit-learn support wheel
-and SciPy come from the locked Pixi environment. Float64 uses
+strided arrays, direction, bounds, weighted R², and native persistence.
+`pixi run python tools/isotonic_checks.py parity` compares 627 Float64 and
+460 Float32 deterministic cases, including scaler pipeline predictions and
+interpolator reconstruction, against the pinned Python module and Cython tie
+engine. The scikit-learn support wheel and SciPy come from the locked Pixi
+environment. Float64 uses
 `atol=rtol=2e-12` and Float32 uses `atol=rtol=2e-6` to allow for differences
 in rounding and reduction order.
 Threshold counts, X thresholds, domain, direction, and NaN locations must match. Fixture generation

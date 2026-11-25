@@ -6,7 +6,8 @@
 # scikit-learn developers. SPDX-License-Identifier: BSD-3-Clause
 """Apply transformers to selected columns and assemble a dense result."""
 from numojo import NDArray, Shape, zeros
-from moxie.compose._table import ColumnSchema, ColumnTable, StringColumn
+from moxie._categorical import CategoricalColumn, CategoryDomain, NumericCategories, StringCategories
+from moxie.compose._table import ColumnSchema, ColumnTable, NumericColumn, StringColumn
 from std.reflection.type_info import _unqualified_type_name
 from std.time import perf_counter_ns
 from std.sys import num_logical_cores
@@ -422,12 +423,27 @@ struct _ColumnSource[dtype: DType, origin: ImmOrigin](Copyable, Movable):
             return _select(table._data, indices, scalar)
         return _select(table._data, table._numeric_indices(indices), scalar)
 
-    def categorical(self, indices: List[Int], scalar: Bool) raises -> List[StringColumn]:
+    def categorical[Domain: CategoryDomain](
+        self, indices: List[Int], scalar: Bool,
+    ) raises -> List[CategoricalColumn[Domain]]:
         if not self._table:
             raise Error("TypeError: categorical components require a ColumnTable")
         if scalar:
             raise Error(_1D_MESSAGE)
-        return self._table.value()[].categorical_columns(indices)
+        return self._table.value()[].categorical_columns[Domain](indices)
+
+
+def _numeric_category_dtype[Input: Movable]() -> DType:
+    comptime if Input == List[NumericColumn[DType.bool]]:
+        return DType.bool
+    elif Input == List[NumericColumn[DType.int64]]:
+        return DType.int64
+    elif Input == List[NumericColumn[DType.float32]]:
+        return DType.float32
+    elif Input == List[NumericColumn[DType.float64]]:
+        return DType.float64
+    else:
+        comptime assert False, "column component input must match column storage"
 
 
 def _select[dtype: DType](X: NDArray[dtype], indices: List[Int], scalar: Bool) raises -> NDArray[dtype]:
@@ -684,10 +700,17 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
             else:
                 var estimator = clone(self.transformer.estimator.value())
                 try:
-                    comptime if Self.E.Input == List[StringColumn]:
-                        block = _fit_transform_one[Self.dtype](estimator, X.categorical(self.indices_, scalar), y)
-                    else:
+                    comptime if Self.E.Input == NDArray[Self.dtype]:
                         block = _fit_transform_one[Self.dtype](estimator, X.numeric(self.indices_, scalar), y)
+                    elif Self.E.Input == List[StringColumn]:
+                        block = _fit_transform_one[Self.dtype](
+                            estimator, X.categorical[StringCategories](self.indices_, scalar), y,
+                        )
+                    else:
+                        comptime Domain = NumericCategories[_numeric_category_dtype[Self.E.Input]()]
+                        block = _fit_transform_one[Self.dtype](
+                            estimator, X.categorical[Domain](self.indices_, scalar), y,
+                        )
                 except error:
                     raise _remap_1d(error)
                 self.fitted_ = estimator^
@@ -721,10 +744,17 @@ struct ColumnEntry[E: ColumnComponent = NoTransformer[DType.float64], dtype: DTy
                 raise Error("TypeError: NoTransformer entries hold no estimator")
             else:
                 try:
-                    comptime if Self.E.Input == List[StringColumn]:
-                        block = _transform_one[Self.dtype](self.fitted_.value(), X.categorical(indices, scalar))
-                    else:
+                    comptime if Self.E.Input == NDArray[Self.dtype]:
                         block = _transform_one[Self.dtype](self.fitted_.value(), X.numeric(indices, scalar))
+                    elif Self.E.Input == List[StringColumn]:
+                        block = _transform_one[Self.dtype](
+                            self.fitted_.value(), X.categorical[StringCategories](indices, scalar),
+                        )
+                    else:
+                        comptime Domain = NumericCategories[_numeric_category_dtype[Self.E.Input]()]
+                        block = _transform_one[Self.dtype](
+                            self.fitted_.value(), X.categorical[Domain](indices, scalar),
+                        )
                 except error:
                     raise _remap_1d(error)
         if weights and self.name in weights.value():

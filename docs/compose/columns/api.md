@@ -44,7 +44,8 @@ unnamed arrays as sklearn does. Regex patterns are not yet supported. See
 [the native table guide](../named-columns.md). A component is
 a copyable `TransformerMixin` with `NDArray[dtype]` target and result.
 Its input is `NDArray[dtype]` for numeric selections or
-`List[CategoricalColumn[StringCategories]]` for categorical selections.
+`List[CategoricalColumn[Domain]]` for categorical selections of one supported
+domain.
 ColumnTransformer passes `y` to `FitTransformer.fit_transform` when
 available. Otherwise it calls `UnsupervisedEstimator.fit` then `transform`.
 

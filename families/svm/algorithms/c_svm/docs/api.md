@@ -80,8 +80,10 @@ not supported. Positive class weights and partial row masking remain supported.
 ## Sample-weight requests
 
 All kernel estimators expose the shared [sample-weight request API](../../../../../docs/interfaces.md#sample-weight-requests).
-SVC, NuSVC, SVR, and NuSVR expose separate fit and score requests. OneClassSVM
-exposes a fit request through the same setter and returns a single
+SVC, NuSVC, SVR, and NuSVR implement `FitScoreMetadataRequestProvider` and
+`WeightedSupervisedEstimator`. Generic parents can read separate fit and
+score requests and pass a Float64 weight vector to weighted fit. OneClassSVM
+exposes its fit request through the same setter and returns a single
 `SampleWeightRequest` from `get_metadata_routing()`.
 
 ```mojo

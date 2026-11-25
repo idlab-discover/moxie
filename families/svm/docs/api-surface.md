@@ -95,6 +95,37 @@ The [RBF parameters notebook](../../../notebooks/svm/plot_rbf_parameters.ipynb)
 compares both compositions with pinned scikit-learn, including candidate order,
 per-fold scores, ranks, best parameters, and predictions from the refitted model.
 
+## Routed fit weights in multioutput models
+
+`MultiOutputClassifier` and `MultiOutputRegressor` use the generic SVM fit
+request to resolve weights before fitting each cloned child. Pass a typed
+`metadata=` map keyed by the configured request name.
+
+```mojo
+from numojo import NDArray
+from moxie.multioutput import MultiOutputClassifier
+from moxie.svm import SVC
+
+var child = SVC[Int]()
+_ = child.set_fit_request(sample_weight="training_weight")
+var model = MultiOutputClassifier(child^)
+var metadata = Dict[String, NDArray[DType.float64]]()
+metadata["training_weight"] = weights.copy()
+_ = model.fit(X, y, metadata=metadata)
+```
+
+Here `X` is a Float64 matrix, `y` is an Int64 matrix with one column per
+output, and `weights` is a Float64 vector with one value per row. The same
+metadata keyword works for `MultiOutputRegressor` with Float64 targets.
+Score requests are available to parents that route score metadata.
+
+From the repository root, after building `test_metadata_composition.mojo` with
+the locked toolchain, run `python families/svm/tests/metadata_composition_parity.py`
+with the pinned scikit-learn build on the Python import path. The six supervised
+estimators are checked on two outputs each. Class predictions compare exactly.
+Regression uses `rtol=2e-6` and `atol=2e-7` for solver termination and
+Float64 reduction differences.
+
 ## Compile and validate
 
 Run `pixi run build`, `pixi run test` and `pixi run parity` from the family root.

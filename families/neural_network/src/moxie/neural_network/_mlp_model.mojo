@@ -351,6 +351,38 @@ def _regression_validation_score[dtype: DType](
     return _regression_score(y, _as_float64(prediction), weights, weight_ptr)
 
 
+def _indicator_value[dtype: DType](y: NDArray[dtype], row: Int, column: Int) raises -> Scalar[dtype]:
+    var value = y.unsafe_get(row * Int(y.strides[0]) + column * Int(y.strides[1]))
+    if value != 0 and value != 1:
+        raise Error("ValueError: multilabel indicators must be zero or one")
+    return value
+
+
+def _multilabel_score[target_dtype: DType, prediction_dtype: DType, weight_dtype: DType](
+    y: NDArray[target_dtype], prediction: NDArray[prediction_dtype],
+    weights: Optional[NDArray[weight_dtype]],
+) raises -> Float64:
+    if y.ndim != 2 or y.shape != prediction.shape:
+        raise Error("ValueError: expected a multilabel indicator matrix matching the prediction shape")
+    var weight_ptr: Optional[ImmPointer[NDArray[weight_dtype], origin_of(weights._value)]] = None
+    if weights:
+        weight_ptr = Pointer(to=weights.value())
+    var rows = y.shape[0]
+    var width = y.shape[1]
+    var mass = _weight_sum(weight_ptr, rows)
+    var correct: Float64 = 0
+    for row in range(rows):
+        var matches = True
+        for column in range(width):
+            var expected = _indicator_value(y, row, column) == 1
+            var predicted = prediction.unsafe_get(row * width + column) > 0.5
+            if expected != predicted:
+                matches = False
+        if matches:
+            correct += _sample_weight(weights, row)
+    return correct / mass
+
+
 def _as_float64[dtype: DType](data: NDArray[dtype]) raises -> NDArray[DType.float64]:
     # NuMojo astype walks contiguous storage. Compact strided arrays first.
     if data.is_c_contiguous():

@@ -11,8 +11,9 @@ from moxie.warnings import FitWarning
 from ._base import MLPClassifierAPI, MLPRegressorAPI
 from ._mlp_engine import _log, _weight_sum
 from ._mlp_model import (
-    MLPParams, _MLPState, _class_code, _classification_validation_score, _regression_output,
-    _regression_score, _regression_validation_score, _sample_weight, _target_matrix,
+    MLPParams, _MLPState, _class_code, _classification_validation_score, _indicator_value,
+    _multilabel_score, _regression_output, _regression_score, _regression_validation_score,
+    _sample_weight, _target_matrix,
 )
 from ._plumbing import validate_incremental
 
@@ -48,7 +49,7 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
     MLPClassifierAPI, WeightedSupervisedEstimator,
     InputFeatureCount, Copyable, Movable,
 ):
-    """Multilayer perceptron for dense single-label classification."""
+    """Multilayer perceptron for dense single-label and multilabel classification."""
 
     comptime Params = MLPParams
     comptime Input = NDArray[Self.dtype]
@@ -327,6 +328,13 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
             raise Error("ValueError: expected a dense rank-2 matrix")
         if self._params.loss != "log_loss":
             raise Error("ValueError: MLPClassifier requires log_loss")
+        var multilabel = y.ndim == 2 and y.shape[1] > 1
+        if self._state and (incremental or self._params.warm_start):
+            if multilabel != self._is_multilabel(self._state.value()):
+                raise Error("ValueError: target kind differs from the fitted classifier")
+        if multilabel:
+            self._fit_multilabel(X, y, rng, weights, incremental, classes)
+            return
         _validate_labels(y, X.shape[0])
         var values = _label_values(y)
         var encoding: NumericEncoding[DType.int64]
@@ -365,6 +373,50 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
         self._state = state^
         self._classes = labels^
 
+    def _is_multilabel(self, state: _MLPState[Self.dtype]) -> Bool:
+        return state.n_outputs > 1 and state.out_activation == "logistic"
+
+    def _fit_multilabel[weight_origin: ImmOrigin](
+        mut self, X: Self.Input, y: Self.Target, mut rng: RandomState,
+        weights: Optional[ImmPointer[Self.SampleWeight, weight_origin]],
+        incremental: Bool, classes: Optional[Self.Classes],
+    ) raises:
+        var rows = X.shape[0]
+        var width = y.shape[1]
+        if rows == 0 or y.shape[0] != rows:
+            raise Error("ValueError: expected one indicator row per sample")
+        if Int(Scalar[Self.label_dtype](width - 1)) != width - 1:
+            raise Error("ValueError: multilabel column indices must fit in the label dtype")
+        if incremental and not self._classes and not classes:
+            raise Error("ValueError: classes must be provided on the first partial_fit")
+        if incremental and classes:
+            ref supplied = classes.value()
+            if supplied.ndim != 1 or supplied.size == 0:
+                raise Error("ValueError: classes must be a nonempty vector")
+            var encoding = encode_column(_label_values(supplied), classification=False)
+            if encoding.classes.size != width:
+                raise Error("ValueError: multilabel classes must match the indicator columns")
+            for column in range(width):
+                if encoding.classes.unsafe_get(column) != Int64(column):
+                    raise Error("ValueError: multilabel classes must match the indicator columns")
+
+        var encoded = zeros[Self.dtype](Shape(rows, width))
+        for row in range(rows):
+            for column in range(width):
+                var value = _indicator_value(y, row, column)
+                encoded.unsafe_set(row * width + column, value.cast[Self.dtype]())
+        var labels = zeros[Self.label_dtype](Shape(width))
+        for column in range(width):
+            labels.unsafe_set(column, Scalar[Self.label_dtype](column))
+        var state = _MLPState(
+            X, encoded, self._params, "logistic", "binary_log_loss", rng, weights,
+            previous=self._state, incremental=incremental,
+            validation_score=_multilabel_score[Self.dtype, Self.dtype, Self.dtype],
+        )
+        self.fit_warnings = state.warnings.copy()
+        self._state = state^
+        self._classes = labels^
+
     def _incremental_encoding(
         self, values: NDArray[DType.int64], classes: Optional[Self.Classes],
     ) raises -> NumericEncoding[DType.int64]:
@@ -394,7 +446,14 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
         return self._classes.value().copy()
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
-        var activation = self._fitted().predict_matrix(X, self._params.activation)
+        ref state = self._fitted()
+        var activation = state.predict_matrix(X, self._params.activation)
+        if self._is_multilabel(state):
+            var indicators = zeros[Self.label_dtype](activation.shape)
+            for index in range(activation.size):
+                var positive = activation.unsafe_get(index) > 0.5
+                indicators.unsafe_set(index, Scalar[Self.label_dtype](Int(positive)))
+            return indicators^
         ref classes = self._classes.value()
         var result = zeros[Self.label_dtype](Shape(activation.shape[0]))
         for row in range(result.size):
@@ -435,6 +494,9 @@ struct MLPClassifier[dtype: DType = DType.float64, label_dtype: DType = DType.in
         self, X: Self.Input, y: Self.Target,
         sample_weight: Optional[Self.SampleWeight] = None,
     ) raises -> Float64:
+        ref state = self._fitted()
+        if self._is_multilabel(state):
+            return _multilabel_score(y, state.predict_matrix(X, self._params.activation), sample_weight)
         var prediction = self.predict(X)
         _validate_labels(y, prediction.size)
         var weights: Optional[ImmPointer[Self.SampleWeight, origin_of(sample_weight._value)]] = None

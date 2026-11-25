@@ -7,15 +7,15 @@ import warnings
 
 import numpy as np
 
-from mlp_parity import FAMILY, compare, load_reference
+from mlp_parity import FAMILY, compare, indicators, load_reference
 
 
 def snapshots(reference):
     for dtype in (np.float32, np.float64):
         for solver in ("sgd", "adam"):
             for explicit in (False, True):
-                for kind in (2, 3, "squared_error", "poisson"):
-                    classifier = isinstance(kind, int)
+                for kind in ("multilabel", 2, 3, "squared_error", "poisson"):
+                    classifier = kind == "multilabel" or isinstance(kind, int)
                     start_with_fit = explicit if classifier else not explicit
                     rng = np.random.RandomState(42)
                     params = dict(
@@ -35,7 +35,12 @@ def snapshots(reference):
                         ).astype(dtype)
                         weights = ((rows % 3 + 1) / 2).astype(dtype)
                         kwargs = {}
-                        if classifier:
+                        if kind == "multilabel":
+                            y = indicators(rows, step)
+                            weighted = explicit
+                            if step == 0 and not explicit:
+                                kwargs["classes"] = np.arange(2, -1, -1)
+                        elif classifier:
                             present = kind - 1 if step == 0 and not explicit else kind
                             y = 3 * ((rows + step) % present) - 4
                             weighted = explicit

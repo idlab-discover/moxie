@@ -43,6 +43,14 @@ def emit_validation(scores: Optional[List[Float64]], best: Optional[Float64]) ra
         print(value)
 
 
+def indicators(rows: Int, step: Int = 0) raises -> NDArray[DType.int64]:
+    var y = zeros[DType.int64](Shape(rows, 3))
+    for row in range(rows):
+        for column in range(3):
+            y.unsafe_set(row * 3 + column, Int64(((row + step) >> column) & 1))
+    return y^
+
+
 def run_cases[dtype: DType](warm_start: Bool, early_stopping: Bool = False) raises:
     var X = zeros[dtype](Shape(8, 2))
     var weights = zeros[dtype](Shape(8))
@@ -59,10 +67,15 @@ def run_cases[dtype: DType](warm_start: Bool, early_stopping: Bool = False) rais
             continue
         for weighted_case in range(2):
             var weighted = weighted_case == 1
-            for classes in range(1, 4):
-                var y = zeros[DType.int64](Shape(8, 1))
-                for row in range(8):
-                    y.unsafe_set(row, Int64(3 * (row % classes) - 4))
+            # A count of zero selects the three-column multilabel fixture.
+            for classes in range(4):
+                var y: NDArray[DType.int64]
+                if classes == 0:
+                    y = indicators(8)
+                else:
+                    y = zeros[DType.int64](Shape(8, 1))
+                    for row in range(8):
+                        y.unsafe_set(row, Int64(3 * (row % classes) - 4))
                 var clf = MLPClassifier[dtype](
                     [4, 3], "tanh", solver=solver, alpha=0.03,
                     batch_size=3, max_iter=12 if early_stopping else 6, random_state=42,

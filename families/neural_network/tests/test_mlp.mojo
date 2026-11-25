@@ -112,8 +112,8 @@ def classifier() raises:
     assert_true(fresh.get_params().warm_start)
     assert_false(fresh.__sklearn_is_fitted__())
 
-    with assert_raises(contains="label"):
-        _ = model.fit(X, zeros[DType.int32](Shape(6, 2)))
+    with assert_raises(contains="vector or one column"):
+        _ = model.fit(X, zeros[DType.int32](Shape(6, 1, 2)))
     with assert_raises(contains="one label per sample"):
         _ = model.fit(X, zeros[DType.int32](Shape(5)))
     with assert_raises(contains="input width"):
@@ -265,9 +265,66 @@ def early_stopping() raises:
     assert_false(lbfgs.best_loss_())
 
 
+def multilabel() raises:
+    var X = arange[DType.float64](12).reshape(Shape(6, 2))
+    var backing = zeros[DType.int32](Shape(6, 4))
+    for row in range(6):
+        backing.unsafe_set(row * 4 + 3, Int32(row % 2))
+        backing.unsafe_set(row * 4 + 1, Int32(row % 3 == 0))
+    var y = backing.view_with_layout(Shape(6, 2), NDArrayStrides(4, -2), 3)
+    var model = MLPClassifier[DType.float64, DType.int32](
+        [3], random_state=17, max_iter=3, solver="sgd",
+    )
+    var domain = arange[DType.int32](2)
+    with assert_raises(contains="classes must be provided"):
+        _ = model.partial_fit(X, y)
+    with assert_raises(contains="classes must match the indicator columns"):
+        _ = model.partial_fit(X, y, classes=arange[DType.int32](3))
+    var wrong_domain = domain.copy()
+    wrong_domain.unsafe_set(1, 2)
+    with assert_raises(contains="classes must match the indicator columns"):
+        _ = model.partial_fit(X, y, classes=wrong_domain.copy())
+    assert_false(model.__sklearn_is_fitted__())
+    _ = model.partial_fit(X, y, classes=domain.copy())
+    equal(model.classes_(), domain)
+    assert_equal(model.n_outputs_(), 2)
+    assert_equal(model.out_activation_(), "logistic")
+    var prediction = model.predict(X)
+    assert_equal(prediction.shape, Shape(6, 2))
+    assert_equal(model.predict_proba(X).shape, prediction.shape)
+    # A single wrong column makes its whole row incorrect.
+    var expected = prediction.copy()
+    expected.unsafe_set(0, 1 - expected.unsafe_get(0))
+    assert_equal(model.score(X, expected), 5.0 / 6)
+    assert_equal(model.score(X, prediction), 1.0)
+    expected.unsafe_set(1, -1)
+    with assert_raises(contains="indicators must be zero or one"):
+        _ = model.score(X, expected)
+    with assert_raises(contains="indicator matrix matching the prediction shape"):
+        _ = model.score(X, zeros[DType.int32](Shape(6, 1)))
+    with assert_raises(contains="indicators must be zero or one"):
+        _ = model.fit(X, expected)
+    with assert_raises(contains="output shape"):
+        _ = model.partial_fit(X, zeros[DType.int32](Shape(6, 3)))
+    _ = model.set_params(warm_start=True)
+    var single_labels = zeros[DType.int32](Shape(6))
+    with assert_raises(contains="target kind differs"):
+        _ = model.fit(X, single_labels)
+    equal(model.predict(X), prediction)
+    assert_false(clone(model).__sklearn_is_fitted__())
+    _ = model.set_params(warm_start=False).fit(X, single_labels)
+    assert_equal(model.predict(X).shape, Shape(6))
+    _ = model.fit(X, y)
+    var contiguous = clone(model)
+    _ = contiguous.fit(X, y.contiguous())
+    equal(model.predict_proba(X), contiguous.predict_proba(X))
+    assert_equal(model.score(X, y), model.score(X, y.contiguous()))
+
+
 def main() raises:
     classifier()
     early_stopping()
+    multilabel()
     regressor[DType.float32]()
     regressor[DType.float64]()
     print("PASS dense public MLP validation, cloning, atomic refit, RNG and strided input")

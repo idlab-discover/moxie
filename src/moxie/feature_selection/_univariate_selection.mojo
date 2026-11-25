@@ -39,28 +39,40 @@ struct BuiltinScorer[dt: DType = DType.float64, target_dt: DType = dt, target_ty
         return Self(self.name, center=self.center, force_finite=self.force_finite)
 
     def score(self, x: nm.NDArray[Self.dtype], y: Optional[Self.Target]) raises -> ScoreResult[Self.score_dtype]:
-        comptime assert Self.Target == StringTarget or Self.Target == nm.NDArray[Self.target_dt]
+        comptime assert (
+            Self.Target == StringTarget
+            or Self.Target == nm.NDArray[Self.target_dt]
+            or Self.Target == List[Scalar[Self.target_dt]]
+        ), "Built-in scorer targets must be StringTarget, an NDArray, or a list of matching numeric scalars"
         if not y:
             raise Error("ValueError: selected scorer requires y")
+        ref target = y.value()
         comptime if Self.Target == StringTarget:
-            ref target = rebind[StringTarget](y.value())
+            ref labels = rebind[StringTarget](target)
             if self.name == "f_classif":
-                return f_classif(x, target)
+                return f_classif(x, labels)
             if self.name == "chi2":
-                return chi2(x, target)
+                return chi2(x, labels)
             raise Error("ValueError: string targets require a classification scorer")
+        elif Self.Target == List[Scalar[Self.target_dt]]:
+            ref labels = rebind[List[Scalar[Self.target_dt]]](target)
+            return self._score_numeric(x, nm.array[Self.target_dt](labels, [len(labels)]))
         else:
-            ref target = rebind[nm.NDArray[Self.target_dt]](y.value())
-            if self.name == "f_classif":
-                return f_classif(x, target)
-            if self.name == "chi2":
-                return chi2(x, target)
-            if self.name == "r_regression":
-                var values = r_regression(x, target, center=self.center, force_finite=self.force_finite)
-                return ScoreResult[Self.score_dtype](values^)
-            if self.name == "f_regression":
-                return f_regression(x, target, center=self.center, force_finite=self.force_finite)
-            raise Error("ValueError: unknown built-in scorer")
+            return self._score_numeric(x, rebind[nm.NDArray[Self.target_dt]](target))
+
+    def _score_numeric(
+        self, x: nm.NDArray[Self.dtype], y: nm.NDArray[Self.target_dt],
+    ) raises -> ScoreResult[Self.score_dtype]:
+        if self.name == "f_classif":
+            return f_classif(x, y)
+        if self.name == "chi2":
+            return chi2(x, y)
+        if self.name == "r_regression":
+            var values = r_regression(x, y, center=self.center, force_finite=self.force_finite)
+            return ScoreResult[Self.score_dtype](values^)
+        if self.name == "f_regression":
+            return f_regression(x, y, center=self.center, force_finite=self.force_finite)
+        raise Error("ValueError: unknown built-in scorer")
 
 comptime SelectionParameter = Variant[Int, Float64, String]
 

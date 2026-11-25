@@ -2124,6 +2124,7 @@
             "SimpleImputer": "moxie.impute._simple",
             "StringImputationResult": "moxie.impute._string",
             "StringMatrix": "moxie.impute._string",
+            "CategoricalStringImputer": "moxie.impute._string",
             "StringSimpleImputer": "moxie.impute._string",
             "StringMissingIndicator": "moxie.impute._string",
             "IterativeBound": "moxie.impute._iterative",

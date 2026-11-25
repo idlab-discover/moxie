@@ -36,6 +36,24 @@ exec(compile(ast.fix_missing_locations(mod),str(SOURCE),'exec'),namespace)
 RBM = namespace['BernoulliRBM']
 assert RBM._fit.__code__.co_filename == str(SOURCE)
 
+def compare_activation_tails(lines):
+    X = np.array([-500.0, -60.0, -30.0, -3.0, -0.3, 0.0, 0.3, 3.0, 30.0, 60.0, 500.0])[:, None]
+    model = RBM(n_components=1)
+    model.components_ = np.ones((1, 1))
+    model.intercept_hidden_ = np.zeros(1)
+    model.intercept_visible_ = np.zeros(1)
+    errors = {}
+    for name, expected in (('tail_probabilities', model._mean_hiddens(X)),
+                           ('tail_energy', model._free_energy(X))):
+        label, *values = next(lines).split()
+        assert label == name
+        actual = np.array(values, dtype=np.float64)
+        wanted = expected.ravel()
+        assert_allclose(actual, wanted, rtol=2e-14, atol=0, err_msg=name)
+        errors[name] = float(np.max(np.abs((actual - wanted) / wanted)))
+    return errors
+
+
 def compare():
     lines = iter(subprocess.check_output([ROOT/'builds/kernel_dump'],text=True).splitlines())
     cases = [(1,1,1,1,0),(7,3,2,4,5),(2,10,5,8,3)]
@@ -75,9 +93,11 @@ def compare():
             for word in state[1]:
                 parts=next(lines).split()
                 assert parts[0]=='word' and int(parts[1])==int(word)
+    tail_errors = compare_activation_tails(lines)
     assert next(lines,None) is None
     report={'oracle':REVISION,'source_sha256':hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
-            'cases':6,'maximum_absolute_error':worst,'scope':'private kernels only; no estimator lifecycle parity'}
+            'cases':6,'maximum_absolute_error':worst,'float64_activation_tail_max_relative_error':tail_errors,
+            'scope':'private kernels only; no estimator lifecycle parity'}
     (ROOT/'docs/private/rbm').mkdir(parents=True, exist_ok=True)
     (ROOT/'docs/private/rbm/kernel-parity.json').write_text(json.dumps(report,indent=2)+'\n')
     print('PASS private kernel parity',report)

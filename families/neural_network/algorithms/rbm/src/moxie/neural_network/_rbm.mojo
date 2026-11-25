@@ -1,7 +1,8 @@
 """Dense Bernoulli RBM kernels. Adapted from sklearn _rbm.py (BSD-3-Clause)."""
 from std.sys import llvm_intrinsic
+from numax.core.libm import exp
 from numojo import NDArray, Shape, zeros
-from std.math import exp, log1p, abs, isfinite
+from std.math import abs, isfinite
 from std.memory import bitcast
 from std.time import perf_counter_ns
 from moxie.neural_network._base import RBMTransformer

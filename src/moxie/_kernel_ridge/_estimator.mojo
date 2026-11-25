@@ -14,7 +14,7 @@ from ._api import (
     unchanged,
 )
 from ._validation import validate, dense_cast
-from ._kernels import pairwise, pairwise_callable, RowKernel, validate_kernel
+from ._kernels import MatrixKernel, RowKernel, pairwise, validate_kernel
 from ._promotion import (
     FloatingArray,
     FittedArray,
@@ -40,7 +40,7 @@ struct NoKernel(Copyable, RowKernel):
 
 
 @fieldwise_init
-struct KernelRidgeParams[Metric: RowKernel & Copyable & Deinitable = NoKernel](
+struct KernelRidgeParams[Metric: MatrixKernel & Copyable & Deinitable = NoKernel](
     Copyable, Movable
 ):
     var alpha: ScalarOrVector
@@ -82,7 +82,7 @@ def _weights(
 
 struct KernelRidge[
     dtype: DType = DType.float64,
-    Metric: RowKernel & Copyable & Deinitable = NoKernel,
+    Metric: MatrixKernel & Copyable & Deinitable = NoKernel,
 ](Copyable, KernelRidgeRegressor, WeightedSupervisedEstimator):
     """Dense mixed-dtype kernel ridge regression with shape-preserving outputs.
 
@@ -742,15 +742,18 @@ struct KernelRidge[
         var features = dense_cast[kernel_dtype](X)
         var other = dense_cast[kernel_dtype](Y)
         if self.native_kernel:
-            return FloatingArray(
-                pairwise_callable(
-                    features,
-                    other,
-                    self.native_kernel.value(),
-                    same_data,
-                    self.kernel_params,
-                )
+            var result = self.native_kernel.value().evaluate_matrix(
+                features, other^, same_data, self.kernel_params
             )
+            if result.isa[nm.NDArray[DType.float32]]():
+                _validate_kernel_matrix(
+                    result[nm.NDArray[DType.float32]], X.shape[0], Y.shape[0]
+                )
+            else:
+                _validate_kernel_matrix(
+                    result[nm.NDArray[DType.float64]], X.shape[0], Y.shape[0]
+                )
+            return result^
         return FloatingArray(
             pairwise(
                 features,
@@ -860,3 +863,11 @@ struct KernelRidge[
             elif denominator != 0:
                 total_score += 1.0 - numerator / denominator
         return total_score / Float64((y.shape[1] if y.ndim == 2 else 1))
+
+
+def _validate_kernel_matrix[dtype: DType](
+    K: nm.NDArray[dtype], rows: Int, cols: Int
+) raises:
+    validate(K, "kernel result", True)
+    if K.shape[0] != rows or K.shape[1] != cols:
+        raise Error("ValueError: matrix kernel returned an incompatible shape")

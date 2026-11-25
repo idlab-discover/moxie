@@ -4,6 +4,7 @@ import numojo as nm
 from std.math import sqrt, isfinite, tanh
 from std.sys import llvm_intrinsic
 from ._validation import validate, epsilon
+from ._promotion import FloatingArray
 
 
 def validate_kernel(kernel: String) raises:
@@ -187,7 +188,24 @@ def pairwise[
     return result^
 
 
-trait RowKernel(Movable):
+trait MatrixKernel(Movable):
+    """Evaluate the kernel on two matrices in the estimator's pairwise dtype.
+
+    Return a finite matrix of shape (X rows, Y rows). During fit, same_data
+    identifies the training matrix on both sides.
+    """
+
+    def evaluate_matrix[dtype: DType](
+        self,
+        X: nm.NDArray[dtype],
+        var Y: nm.NDArray[dtype],
+        same_data: Bool,
+        params: Optional[KernelParameters],
+    ) raises -> FloatingArray:
+        ...
+
+
+trait RowKernel(MatrixKernel):
     def evaluate[
         dtype: DType
     ](
@@ -210,6 +228,15 @@ trait RowKernel(Movable):
                 "TypeError: this callable does not accept kernel_params"
             )
         return self.evaluate(X, i, Y, j)
+
+    def evaluate_matrix[dtype: DType](
+        self,
+        X: nm.NDArray[dtype],
+        var Y: nm.NDArray[dtype],
+        same_data: Bool,
+        params: Optional[KernelParameters],
+    ) raises -> FloatingArray:
+        return FloatingArray(pairwise_callable(X, Y, self, same_data, params))
 
 
 def pairwise_callable[

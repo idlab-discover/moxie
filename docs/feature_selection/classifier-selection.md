@@ -1,5 +1,51 @@
 # Feature selection with a native classifier
 
+`LinearSVCImportance` wraps the native dense `LinearSVC` for
+`SelectFromModel`, `RFE` and `RFECV`.
+
+```mojo
+from moxie.feature_selection import DenseSupervisedCV, LinearSVCImportance, RFECV, SequentialCV
+from moxie.svm import LinearSVC
+
+comptime Estimator = LinearSVCImportance[String]
+comptime CV = DenseSupervisedCV[Estimator]
+var estimator = Estimator(LinearSVC[String](dual=False, random_state=42))
+var selector = RFECV[CV](estimator^, cv=SequentialCV(3))
+# X is a Float64 matrix with one row per label.
+var y: List[String] = ["cat", "dog", "cat", "dog", "cat", "dog"]
+_ = selector.fit(X, y)
+var decision = selector.decision_function(X)
+var classes = selector.classes_()
+```
+
+The adapter keeps the model's `List[Label]` targets, predictions and sorted
+classes. It accepts Float64 features by default. Select Float32 input with
+`LinearSVCImportance[Label, DType.float32]` and use the same feature dtype for
+`DenseSupervisedCV`. Float32 features and weights are promoted to Float64 for
+LIBLINEAR. Decision values retain Float64 and match the model's binary-vector
+or multiclass-matrix shape. Coefficient importances are owned arrays in the
+selector dtype. Both `"auto"` and `"coef_"` select those coefficients. L1 models
+use the default `1e-5` threshold and other models use the mean. RFE and RFECV
+forward prediction, accuracy and decision values. LinearSVC offers no
+probability capability. Set model options through the wrapped model or the
+adapter's typed parameter record.
+
+For default stratification, `DenseSupervisedCV` accepts lists of String, Int,
+Int64, Float32 and Float64 alongside its existing targets. It slices the
+original labels for each fold and passes the same label values to shared
+stratification. Int64 identities remain exact above 2**53.
+
+The focused contract is `tests/feature_selection/test_linear_svc_importance.mojo`.
+After live assembly, `python tests/feature_selection/parity_linear_svc.py`
+runs the three model-based selectors against the pinned scikit-learn
+LinearSVC and selector sources. The binary Int64/Float64 and multiclass
+String/Float32 fixtures check masks, coefficients, decision shapes and
+values, class order, weighted fits, and RFECV folds and results. Numerical
+tolerances of 3e-6 for Float32 and 2e-7 for Float64 allow coefficient
+rounding and solver termination differences. Discrete comparisons are exact.
+
+## Decision trees
+
 `DecisionTreeClassifierImportance` adapts the sibling family's production
 `DecisionTreeClassifier` for SelectFromModel, RFE, RFECV and
 SequentialFeatureSelector. Training and prediction remain in the adopted tree
@@ -45,7 +91,7 @@ is available through `estimator_()`. Sparse inputs, Python metadata routing,
 reflection and warning transport are outside this native interface.
 
 `DenseSupervisedCV` now takes targets from `Estimator.Target`, independently of
-its Float32/Float64 feature dtype. Supported targets are StringTarget and
+its Float32/Float64 feature dtype. For trees it accepts StringTarget and
 Int64/Float32/Float64 arrays. Original labels go directly to shared SplitLabels;
 shared check_cv and the shared CV engine still own stratification and scoring.
 Metadata remains optional sample weights in the feature dtype.

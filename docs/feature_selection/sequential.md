@@ -89,7 +89,8 @@ and metadata types are otherwise adapter-owned. An unsupervised adapter can
 supply missing_target so `fit(X)` and `fit_transform(X)` work. This extension is
 tested with explicit control-flow fixtures; the shipped adapters cover supervised regressors and DecisionTreeClassifier.
 The dense adapter takes its target type from the estimator independently of
-feature dtype, preserving StringTarget and Int64 labels in rows and stratification.
+feature dtype. It preserves StringTarget, Int64/Float32/Float64 arrays, and
+String/Int/Int64/Float32/Float64 lists in rows and stratification.
 See [classifier selection](classifier-selection.md). Custom scorers must be Copyable;
 estimators must implement BaseEstimator and Copyable. Pairwise-kernel column
 semantics need a dedicated adapter and are not supplied here.

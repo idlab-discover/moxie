@@ -8,6 +8,35 @@ from ._sequential import SequentialAdapter
 from ._univariate_scores import _validate_y
 from moxie._labels import StringTarget
 
+
+def _split_list_labels[Label: Copyable & Deinitable](y: List[Label]) raises -> SplitLabels:
+    comptime if Label == String:
+        return SplitLabels(rebind[List[String]](y))
+    elif Label == Int:
+        ref values = rebind[List[Int]](y)
+        var labels = nm.zeros[DType.int64](nm.Shape(len(values)))
+        for i in range(len(values)):
+            labels[nm.Item(i)] = Int64(values[i])
+        return SplitLabels(labels)
+    elif Label == Int64:
+        return SplitLabels(nm.array[DType.int64](rebind[List[Int64]](y), [len(y)]))
+    elif Label == Float32:
+        return SplitLabels(nm.array[DType.float32](rebind[List[Float32]](y), [len(y)]))
+    else:
+        comptime assert Label == Float64
+        return SplitLabels(nm.array[DType.float64](rebind[List[Float64]](y), [len(y)]))
+
+
+def _list_rows[Label: Copyable & Deinitable](y: List[Label], rows: IndexArray) raises -> List[Label]:
+    var result = List[Label](capacity=rows.size)
+    for i in range(rows.size):
+        var row = Int(rows[nm.Item(i)])
+        if row < 0 or row >= len(y):
+            raise Error("ValueError: target row index is out of bounds")
+        result.append(y[row].copy())
+    return result^
+
+
 struct EstimatorCVScore[E: SupervisedScorer & Copyable & Deinitable, dt: DType = DType.float64](TypedScorer, Copyable) where conforms_to(E.Target, Copyable & Deinitable):
     comptime Estimator = Self.E
     comptime Input = nm.NDArray[Self.dt]
@@ -24,10 +53,23 @@ struct EstimatorCVScore[E: SupervisedScorer & Copyable & Deinitable, dt: DType =
 struct DenseSupervisedCV[E: SupervisedScorer & Copyable & Deinitable, dt: DType = DType.float64](SequentialAdapter) where conforms_to(E.Target, Copyable & Deinitable):
     comptime dtype = Self.dt
     comptime Scorer = EstimatorCVScore[Self.E, Self.dt]
+    comptime _ListLabel = (
+        String if Self.E.Target == List[String] else
+        Int if Self.E.Target == List[Int] else
+        Int64 if Self.E.Target == List[Int64] else
+        Float32 if Self.E.Target == List[Float32] else
+        Float64 if Self.E.Target == List[Float64] else NoneType
+    )
 
     def __init__(out self):
         comptime assert Self.E.Input == Self.Scorer.Input
-        comptime assert Self.E.Target == StringTarget or Self.E.Target == nm.NDArray[DType.int64] or Self.E.Target == nm.NDArray[DType.float32] or Self.E.Target == nm.NDArray[DType.float64], "CV targets require StringTarget or Int64/Float32/Float64 arrays"
+        comptime assert (
+            Self._ListLabel != NoneType
+            or Self.E.Target == StringTarget
+            or Self.E.Target == nm.NDArray[DType.int64]
+            or Self.E.Target == nm.NDArray[DType.float32]
+            or Self.E.Target == nm.NDArray[DType.float64]
+        ), "CV targets require StringTarget, Int64/Float32/Float64 arrays, or String/Int/Int64/Float32/Float64 lists"
         comptime assert Self.E.SampleWeight == Self.Scorer.Input
 
     def default_scorer(self) -> Self.Scorer:
@@ -41,7 +83,9 @@ struct DenseSupervisedCV[E: SupervisedScorer & Copyable & Deinitable, dt: DType 
 
     def cv_labels(self, y: Self.Scorer.Target) raises -> Optional[SplitLabels]:
         if self.is_classifier():
-            comptime if Self.Scorer.Target == StringTarget:
+            comptime if Self._ListLabel != NoneType:
+                return _split_list_labels(rebind[List[Self._ListLabel]](y))
+            elif Self.Scorer.Target == StringTarget:
                 return SplitLabels(rebind[StringTarget](y))
             elif Self.Scorer.Target == nm.NDArray[DType.int64]:
                 return SplitLabels(rebind[nm.NDArray[DType.int64]](y))
@@ -52,7 +96,10 @@ struct DenseSupervisedCV[E: SupervisedScorer & Copyable & Deinitable, dt: DType 
         return None
 
     def n_samples(self, X: Self.Scorer.Input, y: Self.Scorer.Target) raises -> Int:
-        comptime if Self.Scorer.Target == StringTarget:
+        comptime if Self._ListLabel != NoneType:
+            if len(rebind[List[Self._ListLabel]](y)) != X.shape[0]:
+                raise Error("ValueError: inconsistent sample counts")
+        elif Self.Scorer.Target == StringTarget:
             ref labels = rebind[StringTarget](y)
             if labels.rows() != X.shape[0] or labels.columns() == 0:
                 raise Error("ValueError: inconsistent sample counts or empty target")
@@ -69,7 +116,10 @@ struct DenseSupervisedCV[E: SupervisedScorer & Copyable & Deinitable, dt: DType 
         return _rows(X, rows)
 
     def target_rows(self, y: Self.Scorer.Target, rows: IndexArray) raises -> Self.Scorer.Target:
-        comptime if Self.Scorer.Target == StringTarget:
+        comptime if Self._ListLabel != NoneType:
+            var result = _list_rows(rebind[List[Self._ListLabel]](y), rows)
+            return rebind[Self.Scorer.Target](result).copy()
+        elif Self.Scorer.Target == StringTarget:
             ref labels = rebind[StringTarget](y)
             var values = List[String]()
             for i in range(rows.size):

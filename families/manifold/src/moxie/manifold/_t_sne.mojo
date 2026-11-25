@@ -1,6 +1,6 @@
 # Adapted from scikit-learn; authors: scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
-"""Dense exact t-SNE and neighborhood preservation diagnostics."""
+"""Dense t-SNE and neighborhood preservation diagnostics."""
 from numojo import NDArray, zeros, Shape
 from std.builtin.sort import sort
 from std.math import abs, sqrt, isfinite, inf, nan
@@ -10,7 +10,9 @@ from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._random import check_random_state
 from moxie.decomposition._pca import PCA
 from moxie.manifold._base import EmbeddingEstimator
+from moxie.manifold._barnes_hut_tsne import _Pair, _merge_neighbor_probabilities, _barnes_hut_objective
 from moxie.neighbors._distance import Metric, at, metric_power
+from moxie.neighbors._query_engine import BruteForce
 from moxie.manifold._plumbing import validate_matrix, validate_pairwise
 
 
@@ -131,7 +133,7 @@ struct TSNEParams[dtype: DType, embedding_dtype: DType](Copyable, Movable):
 struct TSNE[dtype: DType = DType.float64, embedding_dtype: DType = DType.float32](
     EmbeddingEstimator, FeatureNamesOut, InputFeatureCount,
 ):
-    """Exact dense t-SNE with Float32 coordinates by default."""
+    """Dense t-SNE with Float32 coordinates by default."""
 
     comptime Input = NDArray[Self.dtype]
     comptime Target = NDArray[Self.dtype]
@@ -309,13 +311,13 @@ struct TSNE[dtype: DType = DType.float64, embedding_dtype: DType = DType.float32
         return self.embedding_.value().copy()
 
     def _validate_params(self, X: Self.Input) raises -> Float64:
-        if self.method == "barnes_hut":
-            raise Error('NotImplementedError: TSNE method="barnes_hut" is unavailable. Select method="exact".')
-        if self.method != "exact":
+        if self.method != "exact" and self.method != "barnes_hut":
             raise Error("ValueError: method must be exact or barnes_hut")
         validate_matrix(X)
         if self.n_components < 1:
             raise Error("ValueError: n_components must be positive")
+        if self.method == "barnes_hut" and self.n_components > 3:
+            raise Error("ValueError: n_components must be at most 3 for Barnes–Hut t-SNE")
         if not (self.perplexity > 0 and self.perplexity < Float64(X.shape[0])):
             raise Error("ValueError: perplexity must be positive and less than n_samples")
         if not isfinite(self.early_exaggeration) or self.early_exaggeration < 1:
@@ -355,8 +357,14 @@ struct TSNE[dtype: DType = DType.float64, embedding_dtype: DType = DType.float32
 
     def _fit(mut self, X: Self.Input) raises:
         var rate = self._validate_params(X)
-        var distances = _squared_distances(X, self.metric, self.metric_params)
-        var probabilities = _joint_probabilities(distances^, self.perplexity, self.verbose)
+        var pairs: Optional[List[_Pair]] = None
+        var probabilities: NDArray[DType.float64]
+        if self.method == "barnes_hut":
+            pairs = _neighbor_probabilities(X, self.metric, self.metric_params, self.perplexity, self.verbose)
+            probabilities = zeros[DType.float64](Shape(0))
+        else:
+            var distances = _squared_distances(X, self.metric, self.metric_params)
+            probabilities = _joint_probabilities(distances^, self.perplexity, self.verbose)
         var coordinates = self._initial_coordinates(X)
         var weights = zeros[DType.float64](Shape(probabilities.size))
         var gradient = zeros[DType.float64](coordinates.shape)
@@ -366,6 +374,7 @@ struct TSNE[dtype: DType = DType.float64, embedding_dtype: DType = DType.float32
         var loss, iteration = _gradient_descent(
             coordinates, probabilities, weights, gradient, dof, 0,
             _EXPLORATION, _EXPLORATION, 0.5, rate, self.min_grad_norm, self.verbose,
+            pairs, Float32(self.angle), self.early_exaggeration,
         )
         if self.verbose:
             print("[t-SNE] KL divergence after", iteration + 1, "iterations with early exaggeration:", loss)
@@ -374,6 +383,7 @@ struct TSNE[dtype: DType = DType.float64, embedding_dtype: DType = DType.float32
         loss, iteration = _gradient_descent(
             coordinates, probabilities, weights, gradient, dof, iteration + 1,
             self.max_iter, self.n_iter_without_progress, 0.8, rate, self.min_grad_norm, self.verbose,
+            pairs, Float32(self.angle),
         )
         if self.verbose:
             print("[t-SNE] KL divergence after", iteration + 1, "iterations:", loss)
@@ -421,6 +431,31 @@ struct TSNE[dtype: DType = DType.float64, embedding_dtype: DType = DType.float32
         return coordinates^
 
 
+def _metric[dtype: DType](
+    name: String, options: Optional[TSNEMetricParams[dtype]], *, squared_euclidean: Bool = False,
+) raises -> Metric[dtype]:
+    # Use the neighbors owner's kernels where their distance conventions match
+    # sklearn's dense pairwise distances.
+    if name not in [
+        "euclidean", "l2", "sqeuclidean", "manhattan", "l1", "cityblock",
+        "cosine", "chebyshev", "minkowski", "canberra", "correlation", "hamming",
+        "jaccard", "dice", "rogerstanimoto", "russellrao", "sokalsneath", "yule",
+        "seuclidean", "mahalanobis", "nan_euclidean", "haversine",
+    ]:
+        raise Error("ValueError: unsupported dense TSNE metric: " + name)
+    var params = options.copy().or_else(TSNEMetricParams[dtype]())
+    if ((params.p or params.w) and name != "minkowski"
+        or params.V and name != "seuclidean"
+        or params.VI and name != "mahalanobis"
+        or params.missing_values and name != "nan_euclidean"):
+        raise Error("ValueError: metric_params do not match the selected metric")
+    return Metric[dtype](
+        "sqeuclidean" if squared_euclidean and name == "euclidean" else name,
+        params.p.or_else(2.0), params.w, params.V, params.VI,
+        params.missing_values.or_else(nan[DType.float64]()),
+    )
+
+
 def _squared_distances[dtype: DType](
     X: NDArray[dtype], name: String, options: Optional[TSNEMetricParams[dtype]],
 ) raises -> NDArray[DType.float32]:
@@ -438,28 +473,7 @@ def _squared_distances[dtype: DType](
                     squared.unsafe_set(i * n + j, converted)
         return squared^
 
-    # Use the neighbors owner's kernels where their distance conventions match
-    # sklearn's dense pairwise distances.
-    if name not in [
-        "euclidean", "l2", "sqeuclidean", "manhattan", "l1", "cityblock",
-        "cosine", "chebyshev", "minkowski", "canberra", "correlation", "hamming",
-        "jaccard", "dice", "rogerstanimoto", "russellrao", "sokalsneath", "yule",
-        "seuclidean", "mahalanobis", "nan_euclidean", "haversine",
-    ]:
-        raise Error("ValueError: unsupported dense TSNE metric: " + name)
-    var params = options.copy().or_else(TSNEMetricParams[dtype]())
-    if ((params.p or params.w) and name != "minkowski"
-        or params.V and name != "seuclidean"
-        or params.VI and name != "mahalanobis"
-        or params.missing_values and name != "nan_euclidean"):
-        raise Error("ValueError: metric_params do not match the selected metric")
-    # Pairwise euclidean computes squared distances directly. For all other
-    # metrics sklearn calls the distance function and squares its output.
-    var kernel = Metric[dtype](
-        "sqeuclidean" if name == "euclidean" else name,
-        params.p.or_else(2.0), params.w, params.V, params.VI,
-        params.missing_values.or_else(nan[DType.float64]()),
-    )
+    var kernel = _metric(name, options, squared_euclidean=True)
     kernel.validate_features(X.shape[1])
     kernel = kernel.self_query_metric(X)
     for i in range(n):
@@ -479,30 +493,30 @@ def _squared_distances[dtype: DType](
     return squared^
 
 
-def _joint_probabilities(
-    var squared: NDArray[DType.float32], perplexity: Float64, verbose: Int = 0,
+def _conditional_probabilities(
+    squared: NDArray[DType.float32], perplexity: Float64, verbose: Int,
 ) raises -> NDArray[DType.float64]:
-    """Symmetrize the row-wise Gaussian probabilities into condensed storage."""
     var n = squared.shape[0]
-    var conditional = zeros[DType.float64](Shape(n, n))
+    var width = squared.shape[1]
+    var conditional = zeros[DType.float64](squared.shape)
     var desired_entropy = log(Float64(Float32(perplexity)))
     var beta_sum: Float64 = 0
     for i in range(n):
         var beta: Float64 = 1
         var lower: Float64 = 0
         var upper = inf[DType.float64]()
-        var row = i * n
+        var row = i * width
         for _ in range(100):
             var total: Float64 = 0
-            for j in range(n):
-                if i != j:
+            for j in range(width):
+                if width < n or i != j:
                     var probability = exp(-beta * Float64(squared.unsafe_get(row + j)))
                     conditional.unsafe_set(row + j, probability)
                     total += probability
             if total == 0:
                 total = Float64(Float32(1e-8))
             var weighted_distance: Float64 = 0
-            for j in range(n):
+            for j in range(width):
                 var probability = conditional.unsafe_get(row + j) / total
                 conditional.unsafe_set(row + j, probability)
                 weighted_distance += Float64(squared.unsafe_get(row + j)) * probability
@@ -520,6 +534,57 @@ def _joint_probabilities(
             print("[t-SNE] Computed conditional probabilities for sample", i + 1, "/", n)
     if verbose:
         print("[t-SNE] Mean sigma:", sqrt(Float64(n) / beta_sum))
+    return conditional^
+
+
+def _neighbor_probabilities[dtype: DType](
+    X: NDArray[dtype], name: String, options: Optional[TSNEMetricParams[dtype]],
+    perplexity: Float64, verbose: Int = 0,
+) raises -> List[_Pair]:
+    var n = X.shape[0]
+    var k = min(n - 1, Int(3 * perplexity + 1))
+    var precomputed = name == "precomputed"
+    if precomputed:
+        validate_pairwise(X, nonnegative=True, symmetric=False)
+    var kernel = _metric("euclidean" if precomputed else name, options)
+    var search = BruteForce(kernel, precomputed=precomputed)
+    search.fit(X)
+    if verbose:
+        print("[t-SNE] Computing", k, "nearest neighbors per sample")
+    var neighborhood = search.kneighbors(None, k)
+    ref distances = neighborhood.distances.value()
+    var squared = zeros[DType.float32](Shape(n, k))
+    var indices = List[Int](capacity=n * k)
+    # The reference's entropy search consumes each row in sample-index order.
+    var row = List[Tuple[Int, Float32]](capacity=k)
+    for i in range(n):
+        row.clear()
+        for j in range(k):
+            var offset = i * k + j
+            var distance = distances.unsafe_get(offset)
+            var value = Float32(distance * distance)
+            if not isfinite(value):
+                raise Error("ValueError: TSNE requires finite squared neighbor distances")
+            row.append((neighborhood.indices[offset], value))
+        sort(Span(row))
+        for j in range(k):
+            indices.append(row[j][0])
+            squared.unsafe_set(i * k + j, row[j][1])
+    var conditional = _conditional_probabilities(squared, perplexity, verbose)
+    var directed = List[_Pair](capacity=n * k)
+    for i in range(n):
+        for offset in range(i * k, (i + 1) * k):
+            var j = indices[offset]
+            directed.append((min(i, j), max(i, j), conditional.unsafe_get(offset)))
+    return _merge_neighbor_probabilities(directed^)
+
+
+def _joint_probabilities(
+    var squared: NDArray[DType.float32], perplexity: Float64, verbose: Int = 0,
+) raises -> NDArray[DType.float64]:
+    """Symmetrize the row-wise Gaussian probabilities into condensed storage."""
+    var n = squared.shape[0]
+    var conditional = _conditional_probabilities(squared, perplexity, verbose)
     var joint = zeros[DType.float64](Shape(n * (n - 1) // 2))
     var k = 0
     var total: Float64 = 0
@@ -592,6 +657,7 @@ def _gradient_descent[dtype: DType](
     mut weights: NDArray[DType.float64], mut gradient: NDArray[DType.float64],
     degrees_of_freedom: Float64, start: Int, stop: Int, patience: Int,
     momentum: Float64, learning_rate: Float64, min_grad_norm: Float64, verbose: Int,
+    pairs: Optional[List[_Pair]] = None, angle: Float32 = 0.5, probability_scale: Float64 = 1,
 ) raises -> Tuple[Float64, Int]:
     # The reference starts each phase with fresh velocity and gains.
     var update = zeros[dtype](coordinates.shape)
@@ -606,10 +672,15 @@ def _gradient_descent[dtype: DType](
     for iteration in range(start, stop):
         last_iteration = iteration
         var check = (iteration + 1) % _CHECK_INTERVAL == 0
-        loss = _kl_divergence(
-            coordinates, probabilities, weights, gradient, degrees_of_freedom,
-            check or iteration == stop - 1,
-        )
+        var compute_error = check or iteration == stop - 1
+        if pairs:
+            loss = _barnes_hut_objective(
+                coordinates, pairs.value(), probability_scale, gradient, angle, compute_error,
+            )
+        else:
+            loss = _kl_divergence(
+                coordinates, probabilities, weights, gradient, degrees_of_freedom, compute_error,
+            )
         var squared_norm: Float64 = 0
         for k in range(coordinates.size):
             var velocity = update.unsafe_get(k)

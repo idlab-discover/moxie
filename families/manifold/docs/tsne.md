@@ -1,9 +1,9 @@
-# Exact t-SNE
+# Dense t-SNE
 
 ```mojo
 from moxie.manifold import TSNE
 
-var model = TSNE[DType.float64](method="exact", perplexity=20, random_state=7)
+var model = TSNE[DType.float64](perplexity=20, random_state=7)
 var embedding = model.fit_transform(X)
 print(model.kl_divergence_, model.n_iter_)
 ```
@@ -17,9 +17,13 @@ Float64 `init` array to keep its precision. Supply a named array with
 Construction, cloning and parameter updates snapshot array configuration.
 `fit_transform` returns coordinates independently owned from `embedding_`.
 
-The default `method="barnes_hut"` raises during fitting. Use `method="exact"`.
-`perplexity` must be positive and smaller than the sample count. `init="pca"`
-uses the decomposition family's PCA with automatic solver selection, then
+The default `method="barnes_hut"` supports one to three output dimensions.
+Its `angle` parameter sets the tree opening threshold. At zero, the tree
+walk visits every leaf and the input probabilities still use the fixed-k
+neighborhood. `method="exact"` uses all input pairs and supports more than
+three output dimensions. `perplexity` must be positive and smaller than
+the sample count. `init="pca"` uses the decomposition family's PCA
+with automatic solver selection, then
 rescales the Float32 scores to a first-component population standard
 deviation of `1e-4`. Zero first-component variance raises. `init="random"`
 uses the shared MT19937 normal stream and converts each draw to Float32
@@ -35,11 +39,11 @@ The neighbors engine supplies `euclidean`, `l2`, `sqeuclidean`,
 `rogerstanimoto`, `russellrao`, `sokalsneath`, `yule`, `seuclidean`,
 `mahalanobis`, `nan_euclidean` and `haversine`. Use `TSNEMetricParams[dtype]`
 for Minkowski `p` and `w`, standardized Euclidean `V`, Mahalanobis `VI`,
-or `nan_euclidean`'s finite missing-value sentinel. Exact TSNE validates
-finite input before metric evaluation. When `metric="precomputed"`, pass
+or `nan_euclidean`'s finite missing-value sentinel. TSNE validates finite
+input before metric evaluation. When `metric="precomputed"`, pass
 a square nonnegative distance matrix. The algorithm squares it internally,
-excludes the diagonal, and uses both input triangles in the conditional
-probability search. The input is borrowed and remains intact. Precomputed
+excludes the diagonal, and uses both input triangles when building the
+conditional distributions. The input is borrowed and remains intact. Precomputed
 distances require random or explicit array initialization. Other metrics
 raise `ValueError`, and metric callables are outside the typed interface.
 
@@ -56,15 +60,28 @@ carries no input column names. `get_feature_names_out` produces
 `tsne0`, `tsne1` and so on after fitting. Output uses native arrays.
 `n_jobs` retains the input configuration and the dense loops run serially.
 
-The optimizer uses a Gaussian perplexity search, symmetrized pair
-probabilities and a Student t KL objective. Distances enter the perplexity
-search as Float32 values, with Float64 probability arithmetic. Its memory
-scales quadratically with the sample count. The objective reuses condensed
-Student t weights and accumulates both endpoint gradients in one pass over
-pairs. Numax `core.libm.exp` and `log` supply the Float64 elementary functions.
+Both methods use a Gaussian perplexity search, symmetrized pair probabilities
+and a Student t KL objective. Distances enter the perplexity search as Float32
+values, with Float64 probability arithmetic. Numax `core.libm.exp` and `log`
+supply the Float64 elementary functions.
 
-The fused objective uses strided NuMojo storage directly. A separate Numax
-tensor composition would need a quadratic coordinate-difference intermediate.
+Exact t-SNE uses quadratic memory, reuses condensed Student t weights and
+accumulates both endpoint gradients in one pass over pairs. Barnes–Hut uses
+the neighbors owner's dense `BruteForce.kneighbors`, with
+`k = min(n_samples - 1, floor(3 * perplexity + 1))`. Its owned `TopKResult`
+carries the same fixed-k arrays as `DenseNeighborhood` and avoids a second
+snapshot of the result. The query snapshots the input for the duration of the
+probability calculation and resolves distance ties by sample index.
+Symmetrization merges unordered pair weights in a private list of at most
+`n_samples * k` entries. The tree traverses one to three dimensions for
+repulsive forces and uses Float32 coordinates and forces, even when the
+optimizer's output dtype is Float64. As in sklearn, the tree groups positions
+within `1e-6` per coordinate and excludes matching leaves from repulsion.
+
+Numax pairwise tensor operations would materialize all coordinate differences.
+The neighbors query, private pair list, and tree avoid that allocation.
+The input neighbor scan still examines all candidate pairs.
+
 The locked MAX layout lacks `DefaultEngine`, which
 `numax.stats.statistics.stddev` requires. PCA normalization uses
 two passes over the first coordinate column with Float32 accumulation and
@@ -73,7 +90,9 @@ constant scratch space. The shared numerical policy excludes NuMojo variance.
 
 Run the scoped contracts and parity from the Moxie root with the locked environment.
 The parity command requires Cython, setuptools and a C compiler to build
-the pinned sklearn perplexity extension under the ignored family `builds/`.
+the pinned perplexity, quad-tree and Barnes–Hut extensions under the ignored
+family `builds/`. The harness specializes the pinned sklearn allocator for
+tree cells to isolate it from allocator ABI differences in the installed wheel.
 
 ```sh
 python families/manifold/tools/check.py tsne
@@ -86,6 +105,11 @@ tolerances of `3e-9` to account for the amplification of reduction-order
 roundoff across iterations. Float32 tolerances account for the state and
 gradient rounding in every update. The random initializer is checked
 bit for bit, and seeded fits compare KL and neighborhood preservation
-across seeds. SciPy, NumPy and scikit-learn are used in validation only.
+across seeds. Barnes–Hut comparisons cover fixed-k probabilities, KL, and
+forces for one, two and three dimensions, angles from zero to 0.85, and
+coincident points. Its Float32 summation order differs from sklearn's CSR
+row reductions. Explicit-initialization fit tolerances account for that
+rounding across iterations. SciPy, NumPy and scikit-learn are used in
+validation only.
 The estimator and perplexity oracle sources come from sklearn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.

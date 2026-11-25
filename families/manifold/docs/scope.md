@@ -1,7 +1,7 @@
 # Dense-only scope
 
 This project implements dense contracts, validation, owned snapshots,
-exact TSNE, ClassicalMDS and trustworthiness. See [exact t-SNE](tsne.md) and
+dense TSNE, ClassicalMDS and trustworthiness. See [dense t-SNE](tsne.md) and
 [algorithm support](algorithms.md) for settings, native API differences and parity coverage. The supported
 and tested settings are float32/float64, finite nonempty rank-two inputs,
 contiguous and offset/negative-stride views, square pairwise matrices, dense
@@ -10,14 +10,13 @@ shape checks. Public estimator traits and the baseline remain unchanged.
 
 Dense work remains open for MDS and smacof, SpectralEmbedding and
 spectral_embedding, all four LLE reconstruction methods, and Isomap.
-The dense Barnes-Hut path needs assessment. See [plumbing.md](plumbing.md)
-for ownership and dependencies.
+See [plumbing.md](plumbing.md) for ownership and dependencies.
 
 Sparse containers, conversions, arithmetic, graph-returning APIs and solvers
 are deferred by the accepted dense-only policy.
 Spectral nearest-neighbor and precomputed-nearest-neighbor affinities,
 sparse spectral solver branches and
-t-SNE Barnes-Hut probability graphs are deferred. No sparse input is densified.
+sparse t-SNE inputs and sparse probability graph interfaces are deferred. No sparse input is densified.
 No `_sparse` module is required or provided. The shared numerics owner does not
 provide dense factorizations. ClassicalMDS consumes the live decomposition engine.
 
@@ -29,8 +28,8 @@ guide. LLE's dense native implementation may form its dense reconstruction
 operator directly where sklearn constructs a sparse intermediate; a child must
 validate the mathematical equivalence, not call that intermediate a sparse API.
 
-TSNE defaults to `method="barnes_hut"`. Select `method="exact"` for dense exact
-fitting. Spectral defaults to
+Dense TSNE supports the default `method="barnes_hut"` and `method="exact"`.
+Spectral defaults to
 `affinity="nearest_neighbors"`, so select dense `"rbf"`, `"precomputed"` or a
 native dense callable. LLE selects `eigen_solver="dense"` for dense operator
 assembly. Spectral's default `eigen_solver=None` resolves to ARPACK: the child

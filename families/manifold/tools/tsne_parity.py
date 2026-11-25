@@ -1,4 +1,4 @@
-"""Validate exact t-SNE against pinned Python and Cython sklearn sources."""
+"""Validate dense t-SNE against pinned Python and Cython sklearn sources."""
 import importlib.util
 import os
 import subprocess
@@ -39,15 +39,35 @@ def reference_module():
     source("sklearn/utils/_typedefs.pxd")
     native = FOLDER / "reference"
     native.mkdir(exist_ok=True)
+    (native / "sklearn/neighbors").mkdir(parents=True, exist_ok=True)
     pyx = native / "_pinned_tsne_perplexity.pyx"
     if not pyx.exists() or pyx.read_bytes() != utils.read_bytes():
         pyx.write_bytes(utils.read_bytes())
+    source("sklearn/neighbors/_quad_tree.pxd")
+    quad_source = source("sklearn/neighbors/_quad_tree.pyx").read_text()
+    # The installed sklearn exposes a different set of fused allocator
+    # specializations. Inline the pinned allocator's Cell* specialization.
+    allocator_source = source("sklearn/tree/_utils.pyx").read_text()
+    allocator = allocator_source.split("cdef int safe_realloc(", 1)[1].split("\n\n\ndef _realloc_test", 1)[0]
+    allocator = "cdef int safe_realloc(" + allocator.replace("realloc_ptr", "Cell*")
+    quad_source = quad_source.replace("from sklearn.tree._utils cimport safe_realloc",
+                                      "from libc.stdlib cimport realloc\n\n" + allocator)
+    for name, content in (
+        ("_quad_tree.pyx", quad_source.encode()),
+        ("_barnes_hut_tsne.pyx", source("sklearn/manifold/_barnes_hut_tsne.pyx").read_bytes()),
+    ):
+        target = native / name
+        if not target.exists() or target.read_bytes() != content:
+            target.write_bytes(content)
     setup = native / "build_reference.py"
     setup.write_text(
         "from Cython.Build import cythonize\n"
+        "import numpy as np\n"
         "from setuptools import Extension, setup\n"
         "setup(name='pinned-tsne-perplexity', ext_modules=cythonize("
-        "[Extension('_pinned_tsne_perplexity', ['_pinned_tsne_perplexity.pyx'])],"
+        "[Extension('_pinned_tsne_perplexity', ['_pinned_tsne_perplexity.pyx']),"
+        " Extension('sklearn.neighbors._quad_tree', ['_quad_tree.pyx'], include_dirs=[np.get_include()]),"
+        " Extension('_barnes_hut_tsne', ['_barnes_hut_tsne.pyx'], include_dirs=[np.get_include()])],"
         f" include_path=[{str(REFERENCE)!r}], compiler_directives={{'language_level': 3,"
         " 'boundscheck': False, 'wraparound': False, 'initializedcheck': False, 'cdivision': True}))\n"
     )
@@ -58,6 +78,11 @@ def reference_module():
     extension, = native.glob("_pinned_tsne_perplexity*.so")
     module = imported("sklearn.manifold._moxie_t_sne", source("sklearn/manifold/_t_sne.py"))
     module._utils = imported("_pinned_tsne_perplexity", extension)
+    quad_tree, = (native / "sklearn/neighbors").glob("_quad_tree*.so")
+    barnes_hut, = native.glob("_barnes_hut_tsne*.so")
+    quad_name = "sklearn.neighbors._quad_tree"
+    with patch.dict(sys.modules, {quad_name: imported(quad_name, quad_tree)}):
+        module._barnes_hut_tsne = imported("_barnes_hut_tsne", barnes_hut)
     array_api = imported("sklearn.utils._moxie_tsne_array_api", source("sklearn/utils/_array_api.py"))
     with patch.multiple(_array_api, create=True, _cov=array_api._cov, array_device=array_api.array_device):
         module.PCA = imported("sklearn.decomposition._moxie_tsne_pca", source("sklearn/decomposition/_pca.py")).PCA
@@ -77,12 +102,13 @@ def native(*args):
 
 
 def native_fit(X, init, *, operation="fit", components=2, metric="euclidean", max_iter=300,
-               exaggeration=1, lr=2, min_grad=0, patience=300, seed=0, perplexity=4):
+               exaggeration=1, lr=2, min_grad=0, patience=300, seed=0, perplexity=4,
+               method="exact", angle=0.5):
     path = matrix("X", X)
     dtype = init.dtype if isinstance(init, np.ndarray) else np.dtype("float32")
     init = matrix("init", init) if isinstance(init, np.ndarray) else init
     lines = native(operation, X.dtype, dtype, path, init, components, metric, max_iter,
-                   exaggeration, lr, min_grad, patience, seed, perplexity).splitlines()
+                   exaggeration, lr, min_grad, patience, seed, perplexity, method, angle).splitlines()
     if operation == "init":
         return np.asarray(lines, dtype=dtype).reshape(len(X), components)
     iteration, kl, rate, features = lines[0].split()
@@ -242,6 +268,76 @@ def initialization_checks(reference):
     return drawn, len(seeds)
 
 
+def barnes_hut_checks(reference):
+    rng = np.random.RandomState(37)
+    comparisons = 0
+    for dtype in (np.float32, np.float64):
+        for components in (1, 2, 3):
+            X = rng.normal(size=(41, 5)).astype(dtype)
+            Y = rng.normal(size=(len(X), components)).astype(np.float32)
+            # Include coincident embedding points in a nondegenerate tree.
+            Y[1] = Y[0]
+            for metric in ("euclidean", "precomputed"):
+                data = pairwise_distances(X) if metric == "precomputed" else X.copy()
+                perplexity = 4.0 if metric == "euclidean" else 20.0
+                k = min(len(X) - 1, int(3 * perplexity + 1))
+                nearest = reference.NearestNeighbors(n_neighbors=k, metric=metric).fit(data)
+                distances = nearest.kneighbors_graph(mode="distance")
+                distances.data **= 2
+                P = reference._joint_probabilities_nn(distances, perplexity, 0)
+                dof = max(components - 1, 1)
+                native_gradients = []
+                for angle in (0.0, 0.5, 0.85):
+                    loss, gradient = reference._kl_divergence_bh(
+                        Y.ravel(), P, dof, len(X), components, angle=angle,
+                    )
+                    lines = native("barnes_hut_objective", dtype.__name__, matrix("X", data),
+                                   matrix("Y", Y), metric, perplexity, angle).splitlines()
+                    got = np.zeros(P.shape)
+                    for line in lines[1 + Y.size:]:
+                        left, right, value = line.split()
+                        got[int(left), int(right)] = got[int(right), int(left)] = float(value)
+                    np.testing.assert_allclose(got, P.toarray(), atol=2e-8, rtol=2e-5)
+                    np.testing.assert_allclose(float(lines[0]), loss, atol=4e-6, rtol=2e-6)
+                    native_gradient = np.asarray(lines[1:1 + Y.size], dtype=float)
+                    np.testing.assert_allclose(native_gradient, gradient, atol=2e-8, rtol=3e-5)
+                    native_gradients.append(native_gradient)
+                    comparisons += 1
+                assert np.max(np.abs(native_gradients[0] - native_gradients[-1])) > 1e-5
+    return comparisons
+
+
+def barnes_hut_fit_checks(reference):
+    rng = np.random.RandomState(93)
+    comparisons = 0
+    for components in (1, 2, 3):
+        X = rng.normal(size=(30, 5))
+        metric = "precomputed" if components == 3 else "euclidean"
+        if metric == "precomputed":
+            X = pairwise_distances(X)
+        if components == 2:
+            X = X.astype(np.float32)
+        init = rng.normal(scale=0.1, size=(len(X), components)).astype(np.float32)
+        for angle in (0.0, 0.5):
+            options = dict(n_components=components, method="barnes_hut", init=init.copy(),
+                           random_state=0, max_iter=275, perplexity=5, metric=metric, angle=angle,
+                           early_exaggeration=1.0, learning_rate=0.5, min_grad_norm=0)
+            fitted = reference.TSNE(**options)
+            expected = fitted.fit_transform(X.copy())
+            iteration, kl, rate, features, got = native_fit(
+                X, init, method="barnes_hut", components=components, angle=angle,
+                metric=metric, max_iter=275, perplexity=5, lr=0.5,
+            )
+            assert (iteration, rate, features) == (fitted.n_iter_, fitted.learning_rate_, fitted.n_features_in_)
+            np.testing.assert_allclose(kl, fitted.kl_divergence_, atol=5e-6, rtol=0)
+            # In the octree fixture, rounding can switch the opening decision
+            # mid-fit. The zero-angle run also bounds drift without summaries.
+            coordinate_atol = 2e-3 if components == 3 and angle > 0 else 5e-6
+            np.testing.assert_allclose(got, expected, atol=coordinate_atol, rtol=0)
+            comparisons += 1
+    return comparisons
+
+
 def main():
     for variable in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
         assert os.environ.get(variable) == "1", f"set {variable}=1 for reproducible reductions"
@@ -256,6 +352,8 @@ def main():
     print("PASS: no-progress stopping against pinned sklearn gradient descent")
     draws, seeds = initialization_checks(reference)
     print(f"PASS: {draws} identical Float32 RNG initialization draws, 4 PCA initializations and {seeds} seeded distribution comparisons")
+    print(f"PASS: {barnes_hut_checks(reference)} Barnes–Hut P, KL and gradient comparisons")
+    print(f"PASS: {barnes_hut_fit_checks(reference)} Barnes–Hut explicit-initialization fits")
     print(f"sklearn oracle revision {REVISION}")
 
 

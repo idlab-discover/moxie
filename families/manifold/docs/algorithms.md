@@ -1,6 +1,6 @@
 # Implemented dense algorithms
 
-`ClassicalMDS` and `trustworthiness` run entirely in Mojo. See [exact TSNE](tsne.md)
+`ClassicalMDS` and `trustworthiness` run entirely in Mojo. See [dense TSNE](tsne.md)
 for t-SNE fitting and [scope](scope.md) for the other manifold estimators.
 
 ## Classical MDS

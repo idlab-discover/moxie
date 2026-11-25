@@ -55,6 +55,9 @@
       "modules": {
         "moxie.neighbors._distance": {
           "file": "src/moxie/neighbors/_distance.mojo"
+        },
+        "moxie.neighbors._query_engine": {
+          "file": "src/moxie/neighbors/_query_engine.mojo"
         }
       },
       "assets": {},

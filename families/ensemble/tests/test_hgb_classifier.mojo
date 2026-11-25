@@ -132,6 +132,18 @@ def test_string_labels_and_explicit_validation() raises:
         _ = model.fit(X, y, X_val=X.view(), y_val=unknown^)
     assert_equal(model.n_iter_, 4)
     assert_equal(model.predict(X).get(0), "owl")
+    var params = model.get_params()
+    params.warm_start = True
+    params.max_iter = 6
+    _ = model.set_params(params)
+    var different = StringTarget(["owl", "owl", "owl", "ape", "ape", "ape"])
+    with assert_raises(contains="fitted classes"):
+        _ = model.fit(X, different)
+    assert_equal(model.n_iter_, 4)
+    assert_equal(model.classes_[0], "ant")
+    _ = model.fit(X, y, X_val=X.view(), y_val=y.copy())
+    assert_equal(model.n_iter_, 6)
+    assert_equal(model.validation_score_.size, 7)
 
 
 def test_invalid_targets_parameters_and_holdout() raises:

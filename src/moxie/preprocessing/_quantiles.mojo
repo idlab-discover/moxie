@@ -31,6 +31,7 @@ from moxie.preprocessing._special_math import (
 )
 from moxie.preprocessing._optimize import ScalarObjective, brent, fminbound
 from moxie.preprocessing._scalers import StandardScaler
+from moxie.warnings import FitWarning
 
 comptime BOUNDS_THRESHOLD = 1e-7
 comptime _SEED_MAX = 4294967295
@@ -208,6 +209,7 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor,
     as in sklearn. `random_state` is `Optional[Int]`: an integer reseeds a fresh
     NumPy-compatible RandomState on every fit; `None` draws from the process
     default stream. `fit(X, rng)` borrows and advances a caller's RandomState.
+    `fit_warnings` records scikit-learn's explicit dense-fit warnings.
     """
     comptime Params = QuantileTransformerParams
     comptime Input = NDArray[Self.dtype]
@@ -224,6 +226,7 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor,
     var references_: NDArray[DType.float64]
     var n_features_in_: Int
     var feature_names_in_: Optional[List[String]]
+    var fit_warnings: List[FitWarning]
     var _fitted: Bool
 
     def __init__(out self, *, n_quantiles: Int = 1000, output_distribution: String = "uniform", ignore_implicit_zeros: Bool = False, subsample: Optional[Int] = 10000, random_state: Optional[Int] = None, copy: Bool = True) raises:
@@ -239,6 +242,7 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor,
         self.references_ = vector[DType.float64](0)
         self.n_features_in_ = 0
         self.feature_names_in_ = None
+        self.fit_warnings = []
         self._fitted = False
 
     def get_params(self, deep: Bool = True) raises -> Self.Params:
@@ -312,11 +316,23 @@ struct QuantileTransformer[dtype: DType = DType.float64](InvertiblePreprocessor,
         var refs = _references(nq)
         var used = self.subsample.value() if self._needs_subsample(n) else n
         var quantiles = _fit_quantiles(X, refs, rows, used)
+        var warnings = List[FitWarning]()
+        if self.n_quantiles > n:
+            warnings.append(FitWarning("UserWarning", String(
+                "n_quantiles (", self.n_quantiles, ") is greater than the total number ",
+                "of samples (", n, "). n_quantiles is set to n_samples.",
+            )))
+        if self.ignore_implicit_zeros:
+            warnings.append(FitWarning("UserWarning", String(
+                "'ignore_implicit_zeros' takes effect only with",
+                " sparse matrix. This parameter has no effect.",
+            )))
         self.n_quantiles_ = nq
         self.references_ = refs^
         self.quantiles_ = quantiles^
         self.n_features_in_ = X.shape[1]
         self.feature_names_in_ = None
+        self.fit_warnings = warnings^
         self._fitted = True
 
     def fit[

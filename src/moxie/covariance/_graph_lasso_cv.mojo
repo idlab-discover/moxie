@@ -1,11 +1,11 @@
 # Adapted from scikit-learn sklearn/covariance/_graph_lasso.py.
 # Authors: scikit-learn developers. SPDX-License-Identifier: BSD-3-Clause
-"""Cross-validated graphical lasso, with serial fold execution."""
+"""Cross-validated graphical lasso."""
 from moxie.covariance._param_update import NullableUpdate
-from std.sys import stderr
+from std.sys import llvm_intrinsic, num_logical_cores, stderr
 from numojo import NDArray, Shape, Item, zeros
 from std.math import isfinite, sqrt
-from std.sys import llvm_intrinsic
+from max.algorithm import parallelize
 from moxie.covariance._base import CovarianceEstimator
 from moxie.covariance._empirical_covariance import (
     EmpiricalCovariance, CovarianceModel, column_means, empirical_covariance_float64,
@@ -102,6 +102,12 @@ def _logspace(high: Float64, low: Float64, count: Int, interior: Bool = False) r
 struct _PathPoint(Copyable, Movable):
     var alpha: Float64
     var scores: NDArray[DType.float64]
+
+
+@fieldwise_init
+struct _FoldResult(Copyable, Movable):
+    var scores: Optional[NDArray[DType.float64]]
+    var error: Optional[String]
 
 
 def _mean(scores: NDArray[DType.float64]) -> Float64:
@@ -259,6 +265,58 @@ struct GraphicalLassoCV[dtype: DType = DType.float64](CovarianceEstimator, Copya
     def __sklearn_is_fitted__(self) -> Bool:
         return self._model.is_fitted()
 
+    def _fold_path(
+        self, X: Self.Input, split: IndexSplit, grid: List[Float64],
+    ) raises -> NDArray[DType.float64]:
+        var train = _rows(X, split.train)
+        var test = _rows(X, split.test)
+        # The reference path always centers both folds independently.
+        var train_cov = empirical_covariance_float64(train, False)
+        var test_cov = empirical_covariance_float64(test, False)
+        var warm = train_cov.copy()
+        var scores = NDArray[DType.float64](Shape(len(grid)))
+        for a in range(len(grid)):
+            var score = -Float64.MAX * 2.0
+            try:
+                var fitted = graphical_lasso_solve(
+                    train_cov, grid[a], self.mode, self.tol, self.enet_tol,
+                    Int(0.1 * Float64(self.max_iter)), self.eps, warm.copy(),
+                    emit_warnings=False,
+                )
+                warm = fitted.covariance.copy()
+                score = log_likelihood(test_cov, fitted.precision)
+            except err:
+                if not String(err).startswith("FloatingPointError:"):
+                    raise err
+            scores.unsafe_set(a, score if isfinite(score) else -Float64.MAX * 2.0)
+        return scores^
+
+    def _grid_scores(
+        self, X: Self.Input, splits: List[IndexSplit], grid: List[Float64], workers: Int,
+    ) raises -> List[NDArray[DType.float64]]:
+        var scores = List[NDArray[DType.float64]](capacity=len(splits))
+        if workers == 1:
+            for fold in range(len(splits)):
+                scores.append(self._fold_path(X, splits[fold], grid))
+            return scores^
+
+        var results = List[_FoldResult](length=len(splits), fill=_FoldResult(None, None))
+        var slots = results.unsafe_ptr()
+
+        # Each task owns its fold workspace and writes exactly one distinct slot.
+        def work(fold: Int) {self, X, splits, grid, slots}:
+            try:
+                slots[unsafe_offset=fold].scores = self._fold_path(X, splits[fold], grid)
+            except err:
+                slots[unsafe_offset=fold].error = String(err)
+
+        parallelize(work, len(splits), workers)
+        for fold in range(len(splits)):
+            if results[fold].error:
+                raise Error(results[fold].error.value())
+            scores.append(results[fold].scores.take())
+        return scores^
+
     def fit[origin: MutOrigin, x_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, y: Optional[Self.Target] = None) raises -> ref[self] Self:
         var cursor = KFold(self.cv.value() if self.cv else 5).split(X.shape[0] if X.ndim == 2 else 0)
         var splits = List[IndexSplit]()
@@ -276,10 +334,14 @@ struct GraphicalLassoCV[dtype: DType = DType.float64](CovarianceEstimator, Copya
         validate_samples(X, Self.NAME + ".fit", min_samples=2, min_features=2)
         if self.n_refinements < 1 or self.alphas.count < 1:
             raise Error("ValueError: alphas and n_refinements must be positive and alpha lists nonempty")
-        if self.n_jobs and self.n_jobs.value() != 1:
-            raise Error("NotImplementedError: GraphicalLassoCV supports serial n_jobs=None or 1")
+        var jobs = self.n_jobs.or_else(1)
+        if jobs == 0:
+            raise Error("ValueError: n_jobs == 0 in Parallel has no meaning")
+        if jobs < 0:
+            jobs = max(1, num_logical_cores() + 1 + jobs)
         if len(splits) == 0:
             raise Error("ValueError: cross-validation requires at least one split")
+        var workers = min(jobs, len(splits))
         for fold in range(len(splits)):
             splits[fold].validate(X.shape[0])
             if splits[fold].train.size == 0 or splits[fold].test.size == 0:
@@ -303,29 +365,11 @@ struct GraphicalLassoCV[dtype: DType = DType.float64](CovarianceEstimator, Copya
         var path = List[_PathPoint]()
         var best_index = 0
         for refinement in range(refinements):
-            var scores = zeros[DType.float64](Shape(len(grid), len(splits)))
-            for fold in range(len(splits)):
-                var train = _rows(X, splits[fold].train)
-                var test = _rows(X, splits[fold].test)
-                # The reference path always centers both folds independently.
-                var train_cov = empirical_covariance_float64(train, False)
-                var test_cov = empirical_covariance_float64(test, False)
-                var warm = train_cov.copy()
-                for a in range(len(grid)):
-                    var score = -Float64.MAX * 2.0
-                    try:
-                        var fitted = graphical_lasso_solve(train_cov, grid[a], self.mode, self.tol,
-                            self.enet_tol, Int(0.1 * Float64(self.max_iter)), self.eps, warm.copy(), emit_warnings=False)
-                        warm = fitted.covariance.copy()
-                        score = log_likelihood(test_cov, fitted.precision)
-                    except err:
-                        if not String(err).startswith("FloatingPointError:"):
-                            raise err
-                    scores[Item(a, fold)] = score if isfinite(score) else -Float64.MAX * 2.0
+            var scores = self._grid_scores(X, splits, grid, workers)
             for a in range(len(grid)):
                 var column = zeros[DType.float64](Shape(len(splits)))
                 for fold in range(len(splits)):
-                    column.unsafe_set(fold, scores[Item(a, fold)])
+                    column.unsafe_set(fold, scores[fold].unsafe_get(a))
                 var point = _PathPoint(grid[a], column^)
                 # Stable descending insertion retains duplicate alpha order.
                 path.append(point^)

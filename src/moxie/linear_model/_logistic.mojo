@@ -15,7 +15,8 @@ from moxie.linear_model._linear_base import (
 )
 from moxie.linear_model._linear_loss import LogisticLoss, logistic_probability
 from moxie.linear_model._logistic_solver import (
-    LogisticSolution, logistic_lbfgs, logistic_newton, logistic_newton_cd, logistic_newton_cg, logistic_sag,
+    LogisticSolution, logistic_lbfgs, logistic_newton, logistic_newton_cd,
+    logistic_newton_cd_gram, logistic_newton_cg, logistic_sag,
 )
 from moxie.linear_model._ridge_labels import (
     ClassWeight, LabelEncoding, _label, accuracy, fit_labels,
@@ -310,7 +311,7 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             if seed < 0 or seed > 4294967295:
                 raise Error("ValueError: random_state must be in [0, 2**32 - 1]")
         var liblinear = self.solver == "liblinear"
-        var proximal = self.solver == "saga" or self.solver == "newton-cd"
+        var proximal = self.solver in ("saga", "newton-cd", "newton-cd-gram")
         if not (
             liblinear or proximal or self.solver == "sag" or self.solver == "lbfgs"
             or self.solver == "newton-cholesky" or self.solver == "newton-cg"
@@ -450,10 +451,12 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
                 for k in range(outputs):
                     initial.unsafe_set(intercept_start + k, Float64(_vector_entry(self.intercept_, k)))
 
+        var gram = self.solver == "newton-cd-gram"
         var newton = self.solver == "newton-cholesky"
         var saga = self.solver == "saga"
         var stochastic = saga or self.solver == "sag"
         var l2 = Float64(0)
+        var l1 = Float64(0)
         var solution: LogisticSolution
         if stochastic:
             var seed: UInt32
@@ -475,18 +478,25 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
             if not isfinite(regularization):
                 raise Error("ValueError: LogisticRegression regularization strength overflows")
             l2 = (1 - ratio) * regularization
+            l1 = ratio * regularization
             var objective = LogisticLoss(
-                compact_matrix(X), targets^, weights^, outputs, l2, self.fit_intercept, newton and self.max_iter > 0,
+                compact_matrix(X), targets^, weights^, outputs, l2, self.fit_intercept,
+                (newton or gram) and self.max_iter > 0, l1=l1,
             )
             if newton:
                 solution = logistic_newton(
                     objective, initial^, outputs, features, self.fit_intercept, l2, self.max_iter, self.tol,
                 )
+            elif gram:
+                solution = logistic_newton_cd_gram(
+                    objective, initial^, outputs, features, self.fit_intercept, l1, l2,
+                    self.max_iter, self.tol,
+                )
             elif self.solver == "newton-cg":
                 solution = logistic_newton_cg(objective, initial^, outputs, self.max_iter, self.tol)
             elif self.solver == "newton-cd":
                 solution = logistic_newton_cd(
-                    objective, initial^, ratio * regularization, l2, self.max_iter, self.tol,
+                    objective, initial^, l1, l2, self.max_iter, self.tol,
                 )
             else:
                 solution = logistic_lbfgs(objective, initial, self.max_iter, self.tol)
@@ -496,7 +506,7 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
         var intercept = zeros[Self.dtype](Shape(outputs))
         for j in range(features):
             var mean = Float64(0)
-            if newton and l2 == 0 and outputs > 1:
+            if (newton or gram) and l1 == 0 and l2 == 0 and outputs > 1:
                 for k in range(outputs):
                     mean += fitted.unsafe_get(j * outputs + k) / Float64(outputs)
             for k in range(outputs):

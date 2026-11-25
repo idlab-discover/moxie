@@ -25,9 +25,9 @@ random selection and Gram precomputation raise explicit errors. Ridge supports
 auto, svd, cholesky, lsqr, sparse_cg on dense inputs, and positive lbfgs;
 sag/saga remain unimplemented. BayesianRidge supports posterior covariance
 and predictive uncertainty. LogisticRegression supports binary and multinomial
-L-BFGS, Newton-CG, Newton-Cholesky, SAG and SAGA fits with L2 or no penalty.
-SAGA also supports L1 and elastic net, and binary LIBLINEAR supports L1
-and L2. See the
+L-BFGS, Newton-CG, Newton-Cholesky, Newton-CD-Gram, SAG and SAGA fits with
+L2 or no penalty. Newton-CD-Gram, SAGA and binary Newton-CD also support L1
+and elastic net. Binary LIBLINEAR supports L1 and L2. See the
 [coverage table](docs/coverage.md), [scope](docs/scope.md), and
 [public API](docs/api-surface.md) for the supported contract.
 

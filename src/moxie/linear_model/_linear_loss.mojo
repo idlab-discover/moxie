@@ -40,6 +40,7 @@ struct LogisticLoss[source_dtype: DType](Objective):
         l2: Float64,
         fit_intercept: Bool,
         newton: Bool,
+        *, l1: Float64 = 0,
     ) raises:
         var active = List[Int]()
         if newton:
@@ -48,7 +49,7 @@ struct LogisticLoss[source_dtype: DType](Objective):
             for j in range(columns):
                 # Fix the final class at zero for unpenalized columns.
                 var count = outputs
-                if outputs > 1 and (l2 == 0 or j == features):
+                if outputs > 1 and ((l2 == 0 and l1 == 0) or j == features):
                     count -= 1
                 for k in range(count):
                     active.append(j * outputs + k)
@@ -78,12 +79,12 @@ struct LogisticLoss[source_dtype: DType](Objective):
     def active_parameters(self) -> List[Int]:
         return self._active.copy()
 
-    def gradient_hessian(
+    def gradient_hessian[include_l2: Bool = True](
         mut self,
         weights: NDArray[DType.float64],
         mut gradient: NDArray[DType.float64],
     ) raises -> Float64:
-        return self._evaluate[True](weights, gradient)
+        return self._evaluate[True, include_l2](weights, gradient)
 
     def binary_working_response(
         mut self, coefficients: NDArray[DType.float64],
@@ -193,7 +194,7 @@ struct LogisticLoss[source_dtype: DType](Objective):
             self._accumulate_row(row, features, projected, result)
 
     def _evaluate[
-        with_hessian: Bool
+        with_hessian: Bool, include_l2: Bool = True,
     ](
         mut self,
         weights: NDArray[DType.float64],
@@ -209,15 +210,17 @@ struct LogisticLoss[source_dtype: DType](Objective):
             for i in range(order):
                 for j in range(i + 1):
                     self.hessian.unsafe_set(i * order + j, 0)
-                if self._active[i] < intercept_start:
-                    self.hessian.unsafe_set(i * order + i, self._l2)
-        for j in range(intercept_start):
-            var coefficient = weights.unsafe_get(j)
-            var regularizer = self._l2 * coefficient
+                comptime if include_l2:
+                    if self._active[i] < intercept_start:
+                        self.hessian.unsafe_set(i * order + i, self._l2)
+        for j in range(weights.size):
+            var regularizer = Float64(0)
+            comptime if include_l2:
+                if j < intercept_start:
+                    var coefficient = weights.unsafe_get(j)
+                    regularizer = self._l2 * coefficient
+                    loss += 0.5 * regularizer * coefficient
             gradient.unsafe_set(j, regularizer)
-            loss += 0.5 * regularizer * coefficient
-        for k in range(intercept_start, weights.size):
-            gradient.unsafe_set(k, 0)
 
         for i in range(self._X.shape[0]):
             var weight = self._weights.unsafe_get(i)

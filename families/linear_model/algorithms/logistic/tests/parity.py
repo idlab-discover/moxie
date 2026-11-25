@@ -152,6 +152,9 @@ def oracle(*, coordinate=False):
         coordinate_module, coordinate_hashes = load_pinned_coordinate(FAMILY / "algorithms/logistic")
         print(f"scikit-learn coordinate source SHA256 {coordinate_hashes}")
         newton.enet_coordinate_descent = coordinate_module.cd_fast.enet_coordinate_descent
+        newton.enet_coordinate_descent_gram = coordinate_module.cd_fast.enet_coordinate_descent_gram
+        pinned_code(newton.NewtonCDGramSolver.inner_solve, NEWTON)
+        assert estimator.NewtonCDGramSolver is newton.NewtonCDGramSolver
         newton._pre_fit = coordinate_module._pre_fit
         pinned_code(newton.NewtonCDSolver.inner_solve, NEWTON)
         assert estimator.NewtonCDSolver is newton.NewtonCDSolver
@@ -350,6 +353,49 @@ def newton_cd_fixtures():
         )
 
 
+def newton_cd_gram_fixtures():
+    for ident, bits, params, arrays in newton_cd_fixtures():
+        if "invalid" not in params and not params.get("line_search_failure"):
+            yield ident.replace("newton-cd", "newton-cd-gram"), bits, params | {"solver": "newton-cd-gram"}, arrays
+    rng = np.random.default_rng(541)
+    for bits, dtype in [(32, np.float32), (64, np.float64)]:
+        X = rng.normal(size=(100, 5)).astype(dtype)
+        X[:, -1] = 0
+        logits = X[:, :3] + rng.normal(size=(len(X), 3)) + [-0.3, 0.2, 0.6]
+        y = np.array([-3, 8, 23])[logits.argmax(axis=1)]
+        Z = rng.normal(size=(21, X.shape[1])).astype(dtype)
+        arrays = {"X": X, "y": y, "Z": Z}
+        sw = rng.uniform(0.25, 2, size=len(X)).astype(dtype)
+        sw[0] = 0
+        base = {
+            "solver": "newton-cd-gram", "C": 0.32, "tol": 4e-6 if bits == 32 else 1e-8,
+            "max_iter": 100, "intercept": 1, "weight": "none", "unpenalized": 0,
+        }
+        for mode, options in [
+            ("l2", {}), ("elasticnet", {"ratio": 0.65}),
+            ("l1", {"ratio": 1.0}), ("unpenalized", {"unpenalized": 1}),
+        ]:
+            for scenario, params, data in [
+                ("fit", {}, arrays),
+                ("no-intercept", {"intercept": 0}, arrays),
+                ("weighted", {"weight": "balanced"}, arrays | {"sw": sw}),
+                ("warm", {"refit_C": 0.25}, arrays),
+                ("zero-iter", {"max_iter": 0}, arrays),
+                ("one-iter", {"max_iter": 1}, arrays),
+            ]:
+                yield f"{bits}-3-newton-cd-gram-{mode}-{scenario}", bits, base | options | params, data
+        yield f"{bits}-3-newton-cd-gram-intercept-only", bits, base, arrays | {"X": np.zeros_like(X)}
+        signed_weights = sw.copy()
+        signed_weights[1] = -0.05
+        yield f"{bits}-3-newton-cd-gram-signed", bits, base | {"weight": "explicit"}, arrays | {
+            "sw": signed_weights,
+        }
+        yield f"{bits}-3-newton-cd-gram-explicit-elasticnet", bits, base | {
+            "penalty": "elasticnet", "ratio": 0.65,
+        }, arrays
+        yield f"{bits}-3-newton-cd-gram-dual", bits, base | {"dual": 1, "invalid": 1}, arrays
+
+
 def sag_fixtures():
     rng = np.random.default_rng(731)
     for bits, dtype in [(32, np.float32), (64, np.float64)]:
@@ -463,7 +509,7 @@ def main():
 
 
 def compare(model_type):
-    cases = [*fixtures(), *liblinear_fixtures(), *sag_fixtures(), *newton_cd_fixtures()]
+    cases = [*fixtures(), *liblinear_fixtures(), *sag_fixtures(), *newton_cd_fixtures(), *newton_cd_gram_fixtures()]
     output = OUTPUT
     fixture = output / "fixtures.txt"
     fixture.write_text("\n".join(case_line(*case) for case in cases) + "\n")
@@ -509,8 +555,8 @@ def compare(model_type):
             # The pinned Newton solver pads the unpenalized multinomial
             # step with Float64 zeros, promoting Float32 raw predictions.
             if not (
-                bits == 32 and solver == "newton-cholesky" and params["unpenalized"]
-                and np.unique(arrays["y"]).size > 2
+                bits == 32 and solver in {"newton-cholesky", "newton-cd-gram"}
+                and params["unpenalized"] and np.unique(arrays["y"]).size > 2
                 and "Buffer dtype mismatch" in str(error)
             ):
                 raise
@@ -572,11 +618,14 @@ def compare(model_type):
                     actual = actual - actual.mean(axis=axis, keepdims=True)
                     wanted = wanted.astype(np.float64)
                     wanted -= wanted.mean(axis=axis, keepdims=True)
-                if key == "coef" and solver == "newton-cd" and params.get("ratio") and ident.endswith("-fit"):
+                if (
+                    key == "coef" and solver in {"newton-cd", "newton-cd-gram"}
+                    and params.get("ratio") and ident.endswith("-fit")
+                ):
                     np.testing.assert_array_equal(actual == 0, wanted == 0, err_msg=ident)
                     assert (actual == 0).any() and (actual != 0).any(), ident
                 error = close(actual, wanted, 0, atol, f"{ident}/{kind}/{key}")
-                group = f"{bits}/{solver}/{kind}/{key}" if solver in {"liblinear", "newton-cd", "sag", "saga"} else f"{bits}/{kind}/{key}"
+                group = f"{bits}/{solver}/{kind}/{key}" if solver in {"liblinear", "newton-cd", "newton-cd-gram", "sag", "saga"} else f"{bits}/{kind}/{key}"
                 maxima[group] = max(maxima.get(group, 0), error)
     print(f"PASS: {sum(fit_counts.values())} pinned dense logistic fits {fit_counts}, {invalid} input rejections"
           f" and {line_search_failures} line-search failure."

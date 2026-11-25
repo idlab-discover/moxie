@@ -11,9 +11,9 @@ from mojo_optimize._vectors import dot
 from numojo import NDArray, Shape, full, zeros
 from numojo.routines.math.extrema import max as array_max
 from moxie._dense import row_squared_norms
-from moxie._linear_linalg import IndefiniteFactor, symmetric_indefinite
+from moxie._linear_linalg import IndefiniteFactor, symmetric_indefinite, symmetric_pinv
 from moxie._random import our_rand_r
-from moxie.linear_model._cd_fast import coordinate_descent
+from moxie.linear_model._cd_fast import coordinate_descent, coordinate_descent_gram
 from moxie.linear_model._linear_base import preprocess_data
 from moxie.linear_model._linear_loss import LogisticLoss, logistic_probability
 
@@ -320,6 +320,186 @@ def logistic_newton_cd[dtype: DType](
     return LogisticSolution(current^, max_iter)
 
 
+def _reference_class_start(
+    mut current: NDArray[DType.float64], outputs: Int, features: Int,
+    fit_intercept: Bool, shift_features: Bool,
+):
+    if outputs == 1:
+        return
+    var first = 0 if shift_features else features
+    for j in range(first, features + Int(fit_intercept)):
+        var last = current.unsafe_get(j * outputs + outputs - 1)
+        for k in range(outputs):
+            var index = j * outputs + k
+            current.unsafe_set(index, current.unsafe_get(index) - last)
+
+
+def _hessian_entry(hessian: NDArray[DType.float64], order: Int, row: Int, col: Int) -> Float64:
+    return hessian.unsafe_get(max(row, col) * order + min(row, col))
+
+
+def _gram_newton_direction(
+    hessian: NDArray[DType.float64], gradient: NDArray[DType.float64],
+    current: NDArray[DType.float64], active: List[Int], penalized: Int,
+    l1: Float64, l2: Float64, target_norm2: Float64, inner_tol: Float64,
+    mut direction: NDArray[DType.float64],
+) raises -> Int:
+    var order = len(active)
+    var intercepts = order - penalized
+    var gram = zeros[DType.float64](Shape(penalized, penalized))
+    var cross = zeros[DType.float64](Shape(penalized))
+    var start = zeros[DType.float64](Shape(penalized))
+    var intercept_rhs = zeros[DType.float64](Shape(intercepts, penalized + 1))
+    var intercept_block = zeros[DType.float64](Shape(intercepts, intercepts))
+    for i in range(order):
+        var value = -gradient.unsafe_get(active[i])
+        for j in range(order):
+            var entry = _hessian_entry(hessian, order, i, j)
+            value += entry * current.unsafe_get(active[j])
+            if i < penalized and j < penalized:
+                gram.unsafe_set(i * penalized + j, entry)
+            elif i >= penalized:
+                var row = i - penalized
+                if j < penalized:
+                    intercept_rhs.unsafe_set(row * (penalized + 1) + j, entry)
+                else:
+                    intercept_block.unsafe_set(row * intercepts + j - penalized, entry)
+        if i < penalized:
+            cross.unsafe_set(i, value)
+            start.unsafe_set(i, current.unsafe_get(active[i]))
+        else:
+            intercept_rhs.unsafe_set((i - penalized) * (penalized + 1) + penalized, value)
+
+    # Eliminate the unpenalized intercepts with a Schur complement. The
+    # intercept solution is affine in the solution of the reduced system.
+    var intercept_map = zeros[DType.float64](Shape(0, 0))
+    if intercepts > 0:
+        var inverse = symmetric_pinv(intercept_block, rtol=1e-15, atol=0)
+        intercept_map = inverse.matrix @ intercept_rhs
+        for i in range(penalized):
+            var cross_value = cross.unsafe_get(i)
+            for k in range(intercepts):
+                cross_value -= _hessian_entry(hessian, order, penalized + k, i) * intercept_map.unsafe_get(
+                    k * (penalized + 1) + penalized
+                )
+            cross.unsafe_set(i, cross_value)
+            for j in range(i + 1):
+                var value = gram.unsafe_get(i * penalized + j)
+                for k in range(intercepts):
+                    value -= _hessian_entry(hessian, order, penalized + k, i) * intercept_map.unsafe_get(k * (penalized + 1) + j)
+                gram.unsafe_set(i * penalized + j, value)
+                gram.unsafe_set(j * penalized + i, value)
+
+    var result = coordinate_descent_gram(gram, cross, start^, target_norm2, l1, l2, 1000, inner_tol)
+    for j in range(penalized):
+        direction.unsafe_set(active[j], result.coef.unsafe_get(j) - current.unsafe_get(active[j]))
+    for k in range(intercepts):
+        var row = k * (penalized + 1)
+        var value = intercept_map.unsafe_get(row + penalized)
+        for j in range(penalized):
+            value -= intercept_map.unsafe_get(row + j) * result.coef.unsafe_get(j)
+        var index = active[penalized + k]
+        direction.unsafe_set(index, value - current.unsafe_get(index))
+    return result.iterations
+
+
+def _binary_gram_target_norm[dtype: DType](
+    mut objective: LogisticLoss[dtype], current: NDArray[DType.float64],
+    mut response: NDArray[DType.float64], mut curvature: NDArray[DType.float64],
+) raises -> Float64:
+    objective.binary_working_response(current, response, curvature)
+    var mean = Float64(0)
+    if objective._fit_intercept:
+        var mass = Float64(0)
+        for i in range(response.size):
+            var weight = curvature.unsafe_get(i)
+            mass += weight
+            mean += weight * response.unsafe_get(i)
+        if mass > 0:
+            mean /= mass
+    var norm2 = Float64(0)
+    for i in range(response.size):
+        var value = sqrt(curvature.unsafe_get(i)) * (response.unsafe_get(i) - mean)
+        norm2 += value * value
+    return norm2
+
+
+def logistic_newton_cd_gram[dtype: DType](
+    mut objective: LogisticLoss[dtype], var current: NDArray[DType.float64],
+    outputs: Int, features: Int, fit_intercept: Bool, l1: Float64, l2: Float64,
+    max_iter: Int, tol: Float64,
+) raises -> LogisticSolution:
+    _reference_class_start(current, outputs, features, fit_intercept, l2 == 0)
+    if max_iter == 0:
+        return LogisticSolution(current^, 0)
+    var active = objective.active_parameters()
+    var intercepts = (1 if outputs == 1 else outputs - 1) if fit_intercept else 0
+    var penalized = len(active) - intercepts
+    var all_indices = List[Int](capacity=current.size)
+    for j in range(current.size):
+        all_indices.append(j)
+
+    var trial = current.copy()
+    var gradient = zeros[DType.float64](current.shape)
+    var trial_gradient = zeros[DType.float64](current.shape)
+    var direction = zeros[DType.float64](current.shape)
+    var rows = objective._X.shape[0]
+    var response = zeros[DType.float64](Shape(rows if outputs == 1 else 0))
+    var curvature = zeros[DType.float64](response.shape)
+    var inner_tol = tol
+    var accepted = 0
+    while accepted < max_iter:
+        var loss = objective.gradient_hessian[False](current, gradient)
+        if objective.hessian_warning or not isfinite(loss):
+            break
+        # The pinned multinomial solver uses an all-ones dual-gap target.
+        var target_norm2 = Float64(rows)
+        if outputs == 1:
+            target_norm2 = _binary_gram_target_norm(objective, current, response, curvature)
+        if not isfinite(target_norm2):
+            break
+        var iterations: Int
+        try:
+            iterations = _gram_newton_direction(
+                objective.hessian, gradient, current, active, penalized,
+                l1, l2, target_norm2, inner_tol, direction,
+            )
+        except:
+            break
+        if iterations <= 4:
+            inner_tol *= 0.25
+        for j in range(features * outputs):
+            var value = current.unsafe_get(j)
+            var regularizer = l2 * value
+            gradient.unsafe_set(j, gradient.unsafe_get(j) + regularizer)
+            loss += 0.5 * regularizer * value
+        var slope = dot(gradient, direction)
+        if not _newton_line_search(
+            objective, current, gradient, direction, all_indices, slope, loss, tol, trial, trial_gradient,
+            l1=l1, penalized_features=features * outputs,
+        ):
+            break
+        swap(current, trial)
+        accepted += 1
+        if _subgradient_norm(trial_gradient, current, features * outputs, l1, True) <= tol:
+            var decrement_squared = Float64(0)
+            for i in range(len(active)):
+                var di = direction.unsafe_get(active[i])
+                var diagonal = _hessian_entry(objective.hessian, len(active), i, i)
+                decrement_squared += di * di * (diagonal + (l2 if i < penalized else 0))
+                for j in range(i):
+                    decrement_squared += 2 * di * direction.unsafe_get(active[j]) * _hessian_entry(objective.hessian, len(active), i, j)
+            if 0.5 * decrement_squared <= tol:
+                return LogisticSolution(current^, accepted)
+    if accepted < max_iter:
+        if l1 > 0:
+            raise Error("RuntimeError: LogisticRegression newton-cd-gram cannot fall back with a nonzero L1 penalty")
+        var solution = logistic_lbfgs(objective, current, max_iter - accepted - 1, tol)
+        solution.iterations += accepted
+        return solution^
+    return LogisticSolution(current^, accepted)
+
+
 def _has_tiny_pivot(factor: IndefiniteFactor[DType.float64]) -> Bool:
     if factor.is_singular():
         return True
@@ -346,15 +526,7 @@ def logistic_newton[dtype: DType](
     outputs: Int, features: Int, fit_intercept: Bool, l2: Float64,
     max_iter: Int, tol: Float64,
 ) raises -> LogisticSolution:
-    if outputs > 1:
-        # Move warm starts to the Newton system's reference-class coordinates.
-        var first = 0 if l2 == 0 else features
-        for j in range(first, features + Int(fit_intercept)):
-            var last = current.unsafe_get(j * outputs + outputs - 1)
-            for k in range(outputs):
-                var index = j * outputs + k
-                current.unsafe_set(index, current.unsafe_get(index) - last)
-
+    _reference_class_start(current, outputs, features, fit_intercept, l2 == 0)
     if max_iter == 0:
         return LogisticSolution(current^, 0)
     var active = objective.active_parameters()

@@ -9,9 +9,9 @@ L2. Dense `sag` and `saga` also support both class modes. Use
 net. Set `C` to infinity or pass `None` as the penalty to remove
 regularization for any of these five solvers. For binary classification, `solver="liblinear"`
 supports primal L2, dual L2 and primal L1 with finite `C` and positive
-`tol`. Select L1 with `l1_ratio=1.0`. Binary `newton-cd` supports
-L2, L1, elastic net and no penalty. `newton-cd-gram` and
-LogisticRegressionCV remain open.
+`tol`. Select L1 with `l1_ratio=1.0`. Use `newton-cd` for binary or
+`newton-cd-gram` for binary and multinomial fits with L2, L1, elastic net
+or no penalty. LogisticRegressionCV remains open.
 
 ```mojo
 from moxie.linear_model import ClassWeight, LogisticRegression
@@ -123,6 +123,27 @@ it raises Mojo `Error`, corresponding to the pinned solver's raised
 `ConvergenceWarning`. The solver accepts strided features through the
 same compact snapshot as the other solvers.
 
+Select `solver="newton-cd-gram"` to solve the quadratic Newton subproblem
+with cyclic coordinate descent on the dense Hessian. It eliminates unpenalized
+intercepts with a Schur complement and recovers them after the feature step.
+Like the pinned reference, it applies Gap Safe screening for L1 and uses the
+row count as the squared norm of the multinomial dual-gap target. For pure L1
+and unpenalized multinomial fits, it shifts the warm start to the reference
+class. Unpenalized fits return class-centered coefficient columns. L1 fits
+preserve the zeros from coordinate descent. Backtracking uses the same
+composite line search as `newton-cd`. When the quadratic step or line search
+fails, smooth objectives can use the remaining L-BFGS budget. With L1, the
+fit raises Mojo `Error`.
+
+The Gram solver needs quadratic space in the number of free coefficients.
+It reuses the streamed Hessian, the linear-model linalg owner's
+`symmetric_pinv` on the intercept block, and NuMojo's rank-two matrix
+multiplication for the intercept map. The coordinate sweeps maintain the
+Gram-vector product with in-place row updates. Numax's fixed-size Array
+`axpy` requires compile-time lengths and its Tensor overload requires MAX
+tensor storage. NuMojo array expressions for the row updates would allocate
+a product-sized temporary at each coordinate.
+
 SAG and SAGA sample rows with replacement and update the average of the
 gradients for rows seen so far. SAGA adds a correction for the current
 gradient and soft-thresholds the feature coefficients for L1 and elastic net.
@@ -188,7 +209,7 @@ The first command assembles the family namespace and builds both the native
 contracts and the differential driver. The second executes the estimator and
 linear-loss Python sources, the Newton-CG optimizer, the LIBLINEAR wrapper,
 the LIBLINEAR C++ sources, the SAG/SAGA Cython engine and its dataset
-sampler, and the Newton-CD solver and coordinate-descent Cython engine at
+sampler, and the two Newton-CD solvers and coordinate-descent Cython engine at
 scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 It uses the locked support wheel, SciPy and the SVM owner's C++ oracle
 adapter. The last command compiles the StandardScaler pipeline through the
@@ -230,7 +251,11 @@ iteration, signed and zero sample weights with balanced classes, warm
 refit, a zero column, and multiclass rejection. The suite checks L1 zero
 patterns exactly and exercises the raised error after L1 backtracking
 fails. The Float32 cases use `tol=1e-6` because the pinned native Float32
-line search can stall below that precision.
+line search can stall below that precision. Newton-CD-Gram also covers
+multinomial penalties, balanced and signed weights, an intercept-only
+Hessian, and attempts to enable dual mode. Both binary and multinomial
+comparisons check L1 or elastic-net zero patterns where the published
+coefficient convention preserves them.
 
 For L-BFGS and the Newton solvers, the Float64 and widened Float32 oracles use
 absolute bounds of 2e-6 for coefficients, intercepts and probabilities and
@@ -239,11 +264,10 @@ values in the feature dtype and can stop earlier due to its rounded loss.
 Its bounds are 9e-4 and 3e-3 respectively. For unpenalized multinomial
 Newton-CG, the Float32 reference comparison uses class-centered coefficients
 and decision values. The widened comparison checks both arrays directly.
-Pinned unpenalized multinomial Newton-Cholesky pads a Float32 step with
-Float64 zeros and raises a buffer dtype error. The native Float32 fit
-succeeds, and those two cases compare against the pinned solver on widened
-inputs. The widened binary log-probability comparison rounds the sigmoid
-to Float32 before computing its complement, since rounding near one is
+The pinned unpenalized multinomial Newton-Cholesky and Newton-CD-Gram
+solvers pad Float32 steps with Float64 zeros. Cases where this raises a
+buffer dtype error compare against the pinned solver on widened inputs.
+The widened binary log-probability comparison rounds the sigmoid to Float32 before computing its complement, since rounding near one is
 amplified by the log. Classification outputs are exact. Iteration counts
 are exact for zero- and one-iteration budgets, the stationary start, the
 backtracking case, and the singular (two-iteration budget) and nearly

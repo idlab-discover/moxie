@@ -78,6 +78,23 @@ build do not supply these weighted distances, and the neighbors kernel
 accepts feature weights only for Minkowski. Barnes–Hut rejects weights for
 these two metrics, as sklearn's native neighbor distance kernels do.
 
+Exact t-SNE also accepts `TSNEMetricParams[dtype](w=weights)` for
+`metric="chebyshev"` and `metric="sqeuclidean"`. Pass one finite,
+nonnegative weight per feature. Chebyshev takes the largest absolute
+difference among features with positive weights. It uses the neighbors
+engine's weighted Minkowski kernel at `p=inf`. Squared Euclidean sums
+`w[i] * (x[i] - y[i])**2` in Float64, and t-SNE squares this sum again
+before casting to Float32 for its perplexity search. Numax's
+`linalg.blas.dot` takes statically sized tensors, and
+`core.rowwise.sum_axis` takes row-major tensors with the MAX engine
+unavailable in the locked layout. A separate elementwise calculation
+would materialize the weighted differences for each pair. The native
+reduction packs the weights once and uses constant scratch space per
+pair. Both metrics yield zero distances with all-zero weights.
+Native Barnes–Hut rejects both weight options. Sklearn's neighbor path
+rejects Chebyshev weights, and its optimized squared Euclidean search
+warns and ignores weights.
+
 Both methods accept a native metric through
 `metric="callable", metric_params=TSNEMetricParams[dtype](distance=my_distance)`.
 The callback type is
@@ -162,6 +179,8 @@ matrices exactly for both input dtypes, with the same fit tolerances for
 accumulated optimizer rounding.
 Weighted Canberra and Bray–Curtis use the same checks on signed inputs
 with zero and fractional weights, and verify the Barnes–Hut rejections.
+Weighted Chebyshev and squared Euclidean use the same distance and fit
+checks and verify the reference's Barnes–Hut handling.
 SciPy, NumPy and scikit-learn are used in validation only.
 The estimator and perplexity oracle sources come from sklearn revision
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.

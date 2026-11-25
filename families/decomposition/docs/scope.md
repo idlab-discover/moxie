@@ -9,15 +9,15 @@ non_negative_factorization (cd and mu, all beta losses), LatentDirichletAllocati
 (named/precomputed kernels, dense/dense-exact arpack/randomized eigenspaces,
 learned inverse maps; see [kernel_pca.md](kernel_pca.md)), SparseCoder/sparse_encode
 (all five dense coding modes; see [sparse_coding.md](sparse_coding.md)), and randomized_svd (both
-drivers) from `shared/svd_engine`. The batch [dict_learning](dictionary.md)
-function supports LARS and coordinate descent. See the guides linked from the
+drivers) from `shared/svd_engine`. Batch [DictionaryLearning and dict_learning](dictionary.md)
+support LARS and coordinate descent. See the guides linked from the
 README for adaptations and tolerances.
 
 "arpack" is served by an exact truncated factorization: on dense input the
 leading singular triplets are what ARPACK converges to, so every `tol` is
 satisfied; no Lanczos iteration is performed.
 
-Raising declarations: DictionaryLearning, MiniBatchDictionaryLearning,
+The remaining raising declarations are MiniBatchDictionaryLearning,
 dict_learning_online, SparsePCA and MiniBatchSparsePCA.
 
 `SparseCoder` defaults to OMP and `sparse_encode` defaults to Lasso LARS.

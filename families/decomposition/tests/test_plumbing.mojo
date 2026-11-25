@@ -1,6 +1,6 @@
 from numojo import NDArray, Shape, Item, NDArrayStrides, arange, zeros
 from moxie.decomposition import (
-    DictionaryLearning, MiniBatchDictionaryLearning, SparsePCA, MiniBatchSparsePCA,
+    MiniBatchDictionaryLearning, SparsePCA, MiniBatchSparsePCA,
     dict_learning_online,
 )
 from moxie.decomposition._contracts import (
@@ -82,8 +82,6 @@ def contracts[dtype: DType]() raises:
     assert_equal(eigen.eigenvectors.shape[1], 2)
 
 def unsupported_apis() raises:
-    with assert_raises(contains="NotImplementedError: DictionaryLearning.__init__"):
-        _ = DictionaryLearning()
     with assert_raises(contains="NotImplementedError: MiniBatchDictionaryLearning.__init__"):
         _ = MiniBatchDictionaryLearning()
     with assert_raises(contains="NotImplementedError: SparsePCA.__init__"):

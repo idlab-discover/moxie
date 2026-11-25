@@ -1,5 +1,39 @@
 # Batch dictionary learning
 
+`DictionaryLearning` learns dictionary atoms from a dense Float32 or Float64
+matrix. `fit` returns a mutable borrow and records `components_` (components
+by features), `error_` (Float64 objective history), `n_iter_`, and
+`n_features_in_`. A successful refit replaces those learned values.
+
+```mojo
+from moxie.decomposition import DictionaryLearning
+
+var learner = DictionaryLearning(4, alpha=0.2, fit_algorithm="cd", random_state=0)
+var training_code = learner.fit_transform(training)
+var held_code = learner.transform(held_out)
+var reconstruction = learner.inverse_transform(held_code)
+```
+
+`fit_transform` returns the codes from alternating minimization. `transform`
+recodes with the fitted atoms using `transform_algorithm` (OMP by default)
+and uses the training `alpha` when `transform_alpha` is omitted. With
+`split_sign=True`, `transform` returns the nonnegative parts followed by the
+absolute values of the negative parts. The split retains the estimator's
+dtype. Scikit-learn allocates Float64 output for sign splitting in both dtypes.
+`inverse_transform` merges the split before reconstruction. As in
+scikit-learn, the training codes and feature names each have one column or
+name per atom, even with sign splitting enabled.
+
+The estimator owns its initializer configuration. Use the typed
+`DictionaryLearningParams` record or named `set_params` overload to update
+it. An optional parameter can be cleared in the record or by supplying an
+explicit inner `Optional` with no value to the named setter. Cloning copies
+configuration and starts unfitted. The estimator uses the same callback,
+integer seed, serial coding, and Float32 padding conventions as the function.
+Both `fit` and `fit_transform` accept an ignored optional dense target.
+
+## Batch function
+
 `dict_learning(X, n_components, alpha=...)` borrows a rank-2 Float32 or Float64
 NuMojo array and returns an owned `DictionaryLearningResult`. Its fields are
 `code` (samples by components), `dictionary` (components by features),
@@ -58,3 +92,10 @@ Float64 reference using the same Float32-rounded inputs. For padded CD,
 the parity cases use eight solver sweeps per update. On nearly dependent
 atoms, longer Float32 trajectories can distribute coefficients differently
 from the Float64 run.
+
+The estimator driver checks both fit entry points, all five transform
+algorithms, held-out transforms, inverse transforms, names, iteration counts
+and objectives. It checks shapes and the native dtype in Mojo, with Float32
+tolerance 6e-5 and Float64 tolerance 3e-7 for the compounded fit, coding and
+reconstruction operations. The contracts also exercise initializer ownership,
+clone, parameter updates, refits and failure before state replacement.

@@ -140,6 +140,46 @@ def sparse_encode[dtype: DType](
     return code^
 
 
+def validate_coding_options(
+    transform_algorithm: String, transform_alpha: Optional[Float64],
+    transform_n_nonzero_coefs: Optional[Int], transform_max_iter: Int, n_jobs: Optional[Int],
+) raises:
+    if transform_algorithm not in [String("lasso_lars"), "lasso_cd", "lars", "omp", "threshold"]:
+        raise Error("ValueError: invalid transform_algorithm")
+    if transform_alpha and not (transform_alpha.value() >= 0 and isfinite(transform_alpha.value())):
+        raise Error("ValueError: invalid transform_alpha")
+    if transform_max_iter < 0 or (transform_n_nonzero_coefs and transform_n_nonzero_coefs.value() < 1):
+        raise Error("ValueError: invalid iteration/count parameter")
+    if n_jobs and n_jobs.value() == 0: raise Error("ValueError: n_jobs must not be zero")
+
+
+def split_signed_code[dtype: DType](code: NDArray[dtype]) raises -> NDArray[dtype]:
+    var atoms = code.shape[1]
+    var result = zeros[dtype](Shape(code.shape[0], 2 * atoms))
+    for i in range(code.shape[0]):
+        for j in range(atoms):
+            var value = get2(code, i, j)
+            set2(result, i, j, max(value, Float64(0)))
+            set2(result, i, j + atoms, max(-value, Float64(0)))
+    return result^
+
+
+def reconstruct_code[dtype: DType](
+    X: NDArray[dtype], dictionary: NDArray[dtype], split_sign: Bool,
+) raises -> NDArray[dtype]:
+    validate_matrix(X)
+    var atoms = dictionary.shape[0]
+    if X.shape[1] != atoms * (2 if split_sign else 1):
+        raise Error("ValueError: wrong code component count")
+    if not split_sign:
+        return X @ dictionary
+    var code = zeros[dtype](Shape(X.shape[0], atoms))
+    for i in range(X.shape[0]):
+        for j in range(atoms):
+            set2(code, i, j, get2(X, i, j) - get2(X, i, j + atoms))
+    return code @ dictionary
+
+
 @fieldwise_init
 struct SparseCoderParams[dtype: DType](Copyable, Movable):
     var dictionary: NDArray[Self.dtype]
@@ -232,13 +272,10 @@ struct SparseCoder[dtype: DType = DType.float64](InvertibleDecomposition, Unsupe
 
     def _validate(self) raises:
         validate_matrix(self.dictionary)
-        if self.transform_algorithm not in [String("lasso_lars"), "lasso_cd", "lars", "omp", "threshold"]:
-            raise Error("ValueError: invalid transform_algorithm")
-        if self.transform_alpha and not (self.transform_alpha.value() >= 0 and isfinite(self.transform_alpha.value())):
-            raise Error("ValueError: invalid transform_alpha")
-        if self.transform_max_iter < 0 or (self.transform_n_nonzero_coefs and self.transform_n_nonzero_coefs.value() < 1):
-            raise Error("ValueError: invalid iteration/count parameter")
-        if self.n_jobs and self.n_jobs.value() == 0: raise Error("ValueError: n_jobs must not be zero")
+        validate_coding_options(
+            self.transform_algorithm, self.transform_alpha, self.transform_n_nonzero_coefs,
+            self.transform_max_iter, self.n_jobs,
+        )
         comptime if Self.dtype == DType.float32:
             if self.split_sign:
                 raise Error("NotImplementedError: Float32 split_sign requires a Float64 output; use SparseCoder[float64] for split_sign")
@@ -257,13 +294,7 @@ struct SparseCoder[dtype: DType = DType.float64](InvertibleDecomposition, Unsupe
         var code = sparse_encode(X, self.dictionary, algorithm=self.transform_algorithm,
             alpha=self.transform_alpha, n_nonzero_coefs=self.transform_n_nonzero_coefs,
             max_iter=self.transform_max_iter, n_jobs=self.n_jobs, positive=self.positive_code)
-        if not self.split_sign: return code^
-        var result = zeros[Self.dtype](Shape(X.shape[0], 2 * self.dictionary.shape[0]))
-        for i in range(code.shape[0]):
-            for j in range(code.shape[1]):
-                set2(result, i, j, max(get2(code, i, j), Float64(0)))
-                set2(result, i, j + code.shape[1], max(-get2(code, i, j), Float64(0)))
-        return result^
+        return split_signed_code(code) if self.split_sign else code^
 
     def transform(self, X: Self.Input, y: Optional[Self.Target]) raises -> Self.Transformed:
         return self.transform(X)
@@ -274,14 +305,7 @@ struct SparseCoder[dtype: DType = DType.float64](InvertibleDecomposition, Unsupe
 
     def inverse_transform(self, X: Self.Transformed) raises -> Self.Input:
         self._validate()
-        validate_matrix(X)
-        var k = self.dictionary.shape[0]
-        if X.shape[1] != k * (2 if self.split_sign else 1): raise Error("ValueError: wrong code component count")
-        if not self.split_sign: return X @ self.dictionary
-        var code = zeros[Self.dtype](Shape(X.shape[0], k))
-        for i in range(X.shape[0]):
-            for j in range(k): set2(code, i, j, get2(X, i, j) - get2(X, i, j + k))
-        return code @ self.dictionary
+        return reconstruct_code(X, self.dictionary, self.split_sign)
 
     def get_n_features_in(self) raises -> Int:
         """sklearn's `n_features_in_` attribute, which exists only after fit."""

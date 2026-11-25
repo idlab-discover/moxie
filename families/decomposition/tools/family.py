@@ -25,7 +25,8 @@ FLAGS = ["-O3", "--fp-mode=contract=off", *INCLUDES]
 
 # name -> (native sources to compile, binaries run by `test`, parity script)
 ESTIMATORS = {
-    "dictionary": (["tests/dictionary/contracts.mojo", "tests/dictionary/driver.mojo"],
+    "dictionary": (["tests/dictionary/contracts.mojo", "tests/dictionary/driver.mojo",
+                    "tests/dictionary/estimator.mojo"],
                    ["contracts"], "tests/dictionary/parity.py"),
     "sparse_coding": (["tests/sparse_coding/contracts.mojo", "tests/sparse_coding/driver.mojo", "examples/sparse_coding.mojo"],
                       ["contracts", "example"], "tests/sparse_coding/parity.py"),

@@ -3,7 +3,8 @@
 This family supplies contracts and validation/ownership helpers. Concrete
 splitters are owned by `algorithms/splitters` and exported through the verified
 assembly. The validation child supplies serial CV engines; the search child supplies
-candidate enumeration and serial grid/random search. Threshold estimators remain queued. Existing `CrossValidator`, `SearchEstimator` and
+candidate enumeration and serial grid/random search. The family implements
+`FixedThresholdClassifier` in `_classification_threshold`. Existing `CrossValidator`, `SearchEstimator` and
 `PredictiveSearch` remain unchanged. Python module boundaries guide future
 `_split`, `_validation`, `_search`, `_classification_threshold`, and
 `_search_successive_halving` contributions. Private contract modules are a
@@ -133,7 +134,7 @@ only on capabilities, which avoids cycles.
 
 Each row names the architectural owner; the splitter child now contains concrete
 implementations. Validation, validation-curve, learning-curve, candidate and
-grid/random-search and permutation-test engines are implemented; thresholds,
+grid/random-search, permutation-test and fixed thresholds are implemented; threshold tuning and
 halving remain queued.
 
 | Child | Public exports | Dependencies |
@@ -141,7 +142,8 @@ halving remain queued.
 | `algorithms/splitters/` | BaseCrossValidator, BaseShuffleSplit, KFold, StratifiedKFold, GroupKFold, StratifiedGroupKFold, TimeSeriesSplit, LeaveOneOut, LeavePOut, LeaveOneGroupOut, LeavePGroupsOut, ShuffleSplit, GroupShuffleSplit, StratifiedShuffleSplit, RepeatedKFold, RepeatedStratifiedKFold, PredefinedSplit, check_cv, train_test_split | model_selection.scaffold |
 | `algorithms/validation/` | cross_validate, cross_val_score, cross_val_predict, learning_curve, validation_curve, permutation_test_score, LearningCurveDisplay, ValidationCurveDisplay | scaffold, splitters, dummy.estimators |
 | `algorithms/search/` | ParameterGrid, ParameterSampler, GridSearchCV, RandomizedSearchCV | scaffold, validation |
-| `algorithms/thresholds/` | FixedThresholdClassifier, TunedThresholdClassifierCV | scaffold, validation, naive_bayes.gaussian |
+| Family | FixedThresholdClassifier | ordered class labels, classifier capabilities, classification metrics |
+| Threshold tuning | TunedThresholdClassifierCV | scaffold, validation, naive_bayes.gaussian |
 | `algorithms/halving/` | HalvingGridSearchCV, HalvingRandomSearchCV | scaffold, search |
 
 BaseSearchCV, GroupsConsumerMixin and BaseSuccessiveHalving are private reference

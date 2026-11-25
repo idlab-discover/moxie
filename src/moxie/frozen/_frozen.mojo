@@ -8,6 +8,7 @@ from moxie.base import (
     Predictor,
     SupervisedScorer,
     ClassifierMixin,
+    NumericClassifierClasses,
     RegressorMixin,
     TransformerMixin,
     InverseTransformer,
@@ -59,6 +60,7 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     InputFeatureCount where conforms_to(E, InputFeatureCount),
     InverseTransformer where conforms_to(E, InverseTransformer),
     LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
+    NumericClassifierClasses where conforms_to(E, NumericClassifierClasses),
     OutlierMixin where conforms_to(E, OutlierMixin),
     Predictor where conforms_to(E, Predictor),
     ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
@@ -84,6 +86,9 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
         Self.E, IncrementalClassifier
     ) else NoneType
     comptime Params = FrozenParams[Self.E]
+    comptime ClassLabelDType where conforms_to(
+        Self.E, NumericClassifierClasses
+    ) = Self.E.ClassLabelDType
     comptime Input where conforms_to(Self.E, InputEstimator) = Self.E.Input
     comptime Target = Self.E.Target if conforms_to(
         Self.E, SupervisedEstimator
@@ -163,6 +168,11 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._estimator[].__sklearn_is_fitted__()
+
+    def get_classes(self) raises -> Self.Target where conforms_to(
+        Self.E, NumericClassifierClasses
+    ):
+        return rebind_var[Self.Target](self._estimator[].get_classes())
 
     def fit[
         origin: MutOrigin,

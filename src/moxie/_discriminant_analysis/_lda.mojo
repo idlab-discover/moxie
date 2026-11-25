@@ -3,7 +3,8 @@
 """LinearDiscriminantAnalysis: 'svd', 'lsqr' and 'eigen' solvers (sklearn.discriminant_analysis)."""
 from std.math import sqrt, abs
 from numojo import NDArray, Shape, zeros
-from moxie.utils.validation import FittedState
+from moxie.base import NumericClassifierClasses
+from moxie.utils.validation import FittedState, check_is_fitted
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._discriminant_analysis_contracts import LinearDiscriminantTransformer
 from ._labels import ClassLabel, sorted_unique, encode_labels, class_counts
@@ -333,7 +334,10 @@ struct LinearDiscriminantAnalysis[
     dtype: DType = DType.float64,
     L: ClassLabel = Int,
     C: CovarianceEstimator = NoCovarianceEstimator,
-](LinearDiscriminantTransformer, FeatureNamesOut, InputFeatureCount, Copyable):
+](
+    LinearDiscriminantTransformer, FeatureNamesOut, InputFeatureCount, Copyable,
+    NumericClassifierClasses where L == Int,
+):
     """Linear Discriminant Analysis (sklearn.discriminant_analysis.LinearDiscriminantAnalysis).
 
     A classifier with a linear decision boundary from class-conditional Gaussian
@@ -358,6 +362,7 @@ struct LinearDiscriminantAnalysis[
     comptime Params = LinearDiscriminantAnalysisParams[Self.C]
     comptime Input = NDArray[Self.dtype]
     comptime Target = List[Self.L]
+    comptime ClassLabelDType = DType.int64
     comptime Prediction = List[Self.L]
     comptime SampleWeight = NDArray[Self.dtype]
     comptime Probabilities = NDArray[Self.dtype]
@@ -487,6 +492,10 @@ struct LinearDiscriminantAnalysis[
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.is_fitted()
+
+    def get_classes(self) raises -> Self.Target where Self.L == Int:
+        check_is_fitted(self)
+        return self.classes_.copy()
 
     def get_n_features_in(self) raises -> Int:
         """sklearn's `n_features_in_` through the shared InputFeatureCount contract; raises before fit."""

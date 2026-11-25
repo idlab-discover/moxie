@@ -5,7 +5,8 @@
 from std.math import exp, inf, isfinite, log
 from numojo import NDArray, Shape, full, zeros
 from moxie._random import check_random_state
-from moxie.base import WeightedSupervisedEstimator
+from moxie._feature_metadata import InputFeatureCount
+from moxie.base import NumericClassifierClasses, WeightedSupervisedEstimator
 from moxie.linear_model._base import ProbabilisticLinearClassifier
 from moxie.linear_model._contracts import validate_weights
 from moxie.linear_model._linear_base import (
@@ -116,11 +117,13 @@ struct LogisticRegressionParams(Copyable, Movable):
 
 
 struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DType.int64](
-    Copyable, ProbabilisticLinearClassifier, WeightedSupervisedEstimator,
+    Copyable, InputFeatureCount, NumericClassifierClasses,
+    ProbabilisticLinearClassifier, WeightedSupervisedEstimator,
 ):
     """Dense logistic regression with sorted integer-valued numeric labels."""
 
     comptime Input = NDArray[Self.dtype]
+    comptime ClassLabelDType = Self.label_dtype
     comptime Target = NDArray[Self.label_dtype]
     comptime Prediction = Self.Target
     comptime Decision = Self.Input
@@ -263,6 +266,14 @@ struct LogisticRegression[dtype: DType = DType.float64, label_dtype: DType = DTy
 
     def __sklearn_is_fitted__(self) -> Bool:
         return Bool(self._encoding)
+
+    def get_classes(self) raises -> Self.Target:
+        check_is_fitted(self)
+        return self.classes_.copy()
+
+    def get_n_features_in(self) raises -> Int:
+        check_is_fitted(self)
+        return self.n_features_in_
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](
         ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target,

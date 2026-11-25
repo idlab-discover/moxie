@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Calibration-specific fitting on native Float64 NuMojo arrays."""
 import numojo as nm
+from numax.core.libm import exp, log
+from std.math import isfinite, log1p
 from .isotonic import IsotonicRegression
-from std.math import exp, log, log1p, isfinite
 
 comptime Array = nm.NDArray[DType.float64]
 

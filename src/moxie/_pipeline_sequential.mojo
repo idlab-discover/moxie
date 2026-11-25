@@ -76,6 +76,11 @@ def _pipeline_feature_names[P: TransformerMixin, E: BaseEstimator](
         raise Error("AttributeError: Estimator " + first_name + " does not provide get_feature_names_out")
 
 
+trait _NamedWeightedPipeline(WeightedSupervisedEstimator):
+    def _fit_weight_key(self) -> String:
+        ...
+
+
 struct Pipeline[
     P: TransformerMixin & Deinitable,
     E: SupervisedEstimator & Predictor & Deinitable,
@@ -86,7 +91,7 @@ struct Pipeline[
   SupervisedScorer where conforms_to(E, SupervisedScorer),
   ClassifierMixin where conforms_to(E, ClassifierMixin),
   NumericClassifierClasses where conforms_to(E, NumericClassifierClasses),
-  WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
+  _NamedWeightedPipeline where conforms_to(E, WeightedSupervisedEstimator),
   ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
   LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
   DecisionFunction where conforms_to(E, DecisionFunction),
@@ -250,6 +255,36 @@ struct Pipeline[
         else:
             comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
         return self
+
+    def _fit_weight_key(self) -> String where conforms_to(
+        Self.E, WeightedSupervisedEstimator
+    ):
+        comptime if conforms_to(Self.E, _NamedWeightedPipeline):
+            return self.estimator_name + "__" + self.estimator._fit_weight_key()
+        else:
+            return self.estimator_name + "__sample_weight"
+
+    def fit[
+        origin: MutOrigin,
+        x_origin: ImmOrigin,
+        y_origin: ImmOrigin,
+        params_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: Self.Input,
+        ref[y_origin] y: Self.Target,
+        *,
+        ref[params_origin] fit_params: Dict[String, Self.SampleWeight],
+    ) raises -> ref[self] Self where conforms_to(
+        Self.E, WeightedSupervisedEstimator
+    ) and conforms_to(Self.SampleWeight, Copyable & Deinitable):
+        """Accept the terminal estimator's step-qualified sample_weight key."""
+        if len(fit_params) == 0:
+            return self.fit(X, y)
+        var key = self._fit_weight_key()
+        if len(fit_params) != 1 or key not in fit_params:
+            raise Error(t"ValueError: Pipeline.fit fit_params expects only '{key}'")
+        return self.fit(X, y, sample_weight=fit_params[key])
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         check_is_fitted(self)

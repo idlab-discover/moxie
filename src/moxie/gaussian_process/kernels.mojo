@@ -17,6 +17,8 @@ Kernel evaluation always computes in Float64 (see docs/api.md).
 from numojo import NDArray, Shape, zeros
 from std.collections import Dict
 from std.math import abs, cos, isfinite, isinf, pi, sin, sqrt, tanh
+from std.memory import ArcPointer, Layout, alloc
+from std.reflection.type_info import _unqualified_type_name
 
 from moxie.gaussian_process._plumbing import (
     Dense64,
@@ -71,6 +73,7 @@ struct _Kind:
     comptime PRODUCT = 9
     comptime EXPONENTIATION = 10
     comptime COMPOUND = 11
+    comptime CUSTOM = 12
 
 
 @always_inline
@@ -101,6 +104,8 @@ def _kind_name(kind: Int) -> String:
         return "Product"
     if kind == _Kind.EXPONENTIATION:
         return "Exponentiation"
+    if kind == _Kind.CUSTOM:
+        return "custom kernel"
     return "CompoundKernel"
 
 
@@ -449,6 +454,124 @@ struct KernelParams(Copyable, Movable, Sized, Writable):
 # ===----------------------------------------------------------------------=== #
 
 
+comptime _CustomContext = Pointer[UInt8, MutUntrackedOrigin]
+
+
+@fieldwise_init
+struct _CustomValue[K: KernelContract](Movable):
+    var kernel: Self.K
+    # Ensure real allocated storage even for an empty kernel struct.
+    var _nonzero: UInt8
+
+
+@fieldwise_init
+struct _CustomKernel(Movable):
+    """An immutable, reference-counted leaf with typed dispatch."""
+
+    var _context: _CustomContext
+    var _destroy: def(_CustomContext) thin -> None
+    var _clone: def(_CustomContext, Dense64) thin raises -> ArcPointer[Self]
+    var _evaluate: def(_CustomContext, Dense64, Optional[Dense64], Bool) thin raises -> KernelEvaluation
+    var _diag: def(_CustomContext, Dense64) thin raises -> Dense64
+    var name: String
+    var theta: List[Float64]
+    var bounds: Dense64
+    var specs: List[HyperparameterSpec]
+    var stationary: Bool
+    var vector: Bool
+
+    @staticmethod
+    def box[K: KernelContract](var kernel: K) raises -> ArcPointer[Self] where K.Input == Dense64:
+        var coordinates = kernel.theta()
+        var bounds = kernel.bounds()
+        var specs = kernel.hyperparameters()
+        var width = 0
+        for spec in specs:
+            width += spec.n_dims()
+        if coordinates.shape != Shape(width) or bounds.shape != Shape(width, 2):
+            raise Error("ValueError: custom kernel theta or bounds do not match its hyperparameters")
+        var ordered_bounds = bounds.contiguous() if width else zeros[DType.float64](Shape(0, 2))
+        var theta = List[Float64](capacity=width)
+        for i in range(width):
+            theta.append(coordinates.item(i))
+        var stationary = kernel.is_stationary()
+        var vector = kernel.requires_vector_input()
+
+        def destroy(context: _CustomContext):
+            var ptr = context.unsafe_bitcast[_CustomValue[K]]()
+            _ = ptr.unsafe_take_pointee()
+            ptr.unsafe_free()
+
+        def clone(context: _CustomContext, theta: Dense64) raises -> ArcPointer[Self]:
+            ref original = context.unsafe_bitcast[_CustomValue[K]]()[].kernel
+            return Self.box(original.clone_with_theta(theta))
+
+        def evaluate(
+            context: _CustomContext, X: Dense64, Y: Optional[Dense64], gradient: Bool
+        ) raises -> KernelEvaluation:
+            ref original = context.unsafe_bitcast[_CustomValue[K]]()[].kernel
+            return original.evaluate(rebind[K.Input](X), rebind[Optional[K.Input]](Y), gradient)
+
+        def diag(context: _CustomContext, X: Dense64) raises -> Dense64:
+            ref original = context.unsafe_bitcast[_CustomValue[K]]()[].kernel
+            return original.diag(rebind[K.Input](X))
+
+        # The destructor restores the concrete type before destroying and freeing it.
+        var ptr = alloc(Layout[_CustomValue[K]](count=1)).unsafe_leak()
+        ptr.unsafe_write(_CustomValue[K](kernel^, 0))
+        return ArcPointer(Self(
+            ptr.unsafe_bitcast[UInt8](), destroy, clone, evaluate, diag,
+            String(_unqualified_type_name[K]()), theta^, ordered_bounds^,
+            specs^, stationary, vector,
+        ))
+
+    def __deinit__(deinit self):
+        self._destroy(self._context)
+
+    def with_theta(self, theta: Dense64) raises -> ArcPointer[Self]:
+        var replacement = self._clone(self._context, theta)
+        if len(replacement[].theta) != len(self.theta):
+            raise Error("ValueError: custom kernel changed its theta length")
+        return replacement^
+
+    def evaluate(
+        self, X: Dense64, Y: Dense64, same: Bool, want_grad: Bool
+    ) raises -> _Eval:
+        var explicit_y = Optional[Dense64]()
+        if not same:
+            explicit_y = Y.copy()
+        var result = self._evaluate(self._context, X, explicit_y, want_grad)
+        var rows = X.shape[0]
+        var cols = Y.shape[0]
+        if result.covariance.shape != Shape(rows, cols):
+            raise Error("ValueError: custom kernel returned an invalid covariance shape")
+        # Operators mutate their intermediates, including outputs backed by a view.
+        var covariance = (
+            result.covariance.contiguous()
+            if result.covariance.size else zeros[DType.float64](Shape(rows, cols))
+        )
+        var gradient = empty_gradient(rows)
+        if want_grad:
+            if not result.gradient or result.gradient.value().shape != Shape(rows, cols, len(self.theta)):
+                raise Error("ValueError: custom kernel returned an invalid gradient shape")
+            if result.gradient.value().size != 0:
+                gradient = result.gradient.value().contiguous()
+            else:
+                gradient = zeros[DType.float64](Shape(rows, cols, len(self.theta)))
+        return _Eval(covariance^, gradient^)
+
+    def diag(self, X: Dense64) raises -> Dense64:
+        var result = self._diag(self._context, X)
+        if result.shape != Shape(X.shape[0]):
+            raise Error("ValueError: custom kernel returned an invalid diagonal shape")
+        if result.size == 0:
+            return zeros[DType.float64](Shape(0))
+        return result.contiguous()
+
+    def same_snapshot(self, other: Self) -> Bool:
+        return self._context == other._context
+
+
 struct _Node(Copyable, Movable):
     var kind: Int
     var values: List[Float64]
@@ -461,6 +584,7 @@ struct _Node(Copyable, Movable):
     var kwargs: Dict[String, Float64]
     var has_kwargs: Bool
     var children: List[Int]
+    var custom: Optional[ArcPointer[_CustomKernel]]
 
     def __init__(out self, kind: Int):
         self.kind = kind
@@ -474,6 +598,7 @@ struct _Node(Copyable, Movable):
         self.kwargs = Dict[String, Float64]()
         self.has_kwargs = False
         self.children = List[Int]()
+        self.custom = None
 
 
 @fieldwise_init
@@ -491,7 +616,7 @@ struct _Eval(Movable):
 
 
 def _is_leaf(kind: Int) -> Bool:
-    return kind <= _Kind.PAIRWISE
+    return kind <= _Kind.PAIRWISE or kind == _Kind.CUSTOM
 
 
 def _check_pairwise_metric(metric: String) raises:
@@ -686,6 +811,13 @@ struct Kernel(KernelContract, Equatable, Writable):
         nodes.append(node^)
         return Kernel(nodes=nodes^, root=0)
 
+    @staticmethod
+    def from_custom[K: KernelContract](kernel: K) raises -> Kernel where K.Input == Dense64:
+        """Wrap a native vector kernel for use in the built-in kernel tree."""
+        var node = _Node(_Kind.CUSTOM)
+        node.custom = _CustomKernel.box(kernel.copy())
+        return Kernel._leaf(node^)
+
     # --- tree plumbing ------------------------------------------------------
 
     def _append_subtree(self, mut out: List[_Node], idx: Int) -> Int:
@@ -734,7 +866,10 @@ struct Kernel(KernelContract, Equatable, Writable):
 
     def name(self) -> String:
         """sklearn class name of the outermost kernel (e.g. "Product")."""
-        return _kind_name(self._nodes[self._root].kind)
+        ref node = self._nodes[self._root]
+        if node.custom:
+            return node.custom.value()[].name.copy()
+        return _kind_name(node.kind)
 
     def _child(self, position: Int, accessor: String) raises -> Kernel:
         var node = self._nodes[self._root].copy()
@@ -979,6 +1114,14 @@ struct Kernel(KernelContract, Equatable, Writable):
             return
         if k == _Kind.COMPOUND:
             return  # sklearn exposes no hyperparameter_* attributes here.
+        if node.custom:
+            for spec in node.custom.value()[].specs:
+                var name = prefix + spec.name
+                if not only or name == only.value():
+                    var named = spec.copy()
+                    named.name = name^
+                    out.append(named^)
+            return
         if k == _Kind.RATIONAL_QUADRATIC:
             _append_spec(prefix + "alpha", 1, node.bounds2, only, out)
         var n_elements = 1
@@ -1010,6 +1153,10 @@ struct Kernel(KernelContract, Equatable, Writable):
         if not _is_leaf(k):
             for c in node.children:
                 self._theta_at(c, out)
+            return
+        if node.custom:
+            for coordinate in node.custom.value()[].theta:
+                out.append(coordinate)
             return
         if k == _Kind.RATIONAL_QUADRATIC:
             if not node.bounds2.is_fixed:
@@ -1051,6 +1198,11 @@ struct Kernel(KernelContract, Equatable, Writable):
             for c in node.children:
                 self._bounds_at(c, rows)
             return
+        if node.custom:
+            ref bounds = node.custom.value()[].bounds
+            for i in range(bounds.size):
+                rows.append(bounds.unsafe_get(i))
+            return
         var specs = List[HyperparameterSpec]()
         self._hyperparameters_at(idx, "", specs)
         for spec in specs:
@@ -1070,7 +1222,7 @@ struct Kernel(KernelContract, Equatable, Writable):
             out.unsafe_set(i, rows[i])
         return out^
 
-    def _set_theta_at(mut self, idx: Int, theta: List[Float64], mut pos: Int):
+    def _set_theta_at(mut self, idx: Int, theta: List[Float64], mut pos: Int) raises:
         var k = self._nodes[idx].kind
         if not _is_leaf(k):
             var children = self._nodes[idx].children.copy()
@@ -1078,6 +1230,15 @@ struct Kernel(KernelContract, Equatable, Writable):
                 self._set_theta_at(c, theta, pos)
             return
         ref node = self._nodes[idx]
+        if node.custom:
+            var width = len(node.custom.value()[].theta)
+            if width:
+                var coordinates = zeros[DType.float64](Shape(width))
+                for i in range(width):
+                    coordinates.unsafe_set(i, theta[pos + i])
+                node.custom = node.custom.value()[].with_theta(coordinates)
+                pos += width
+            return
         if k == _Kind.RATIONAL_QUADRATIC:
             if not node.bounds2.is_fixed:
                 node.value2 = fexp(theta[pos])
@@ -1115,6 +1276,12 @@ struct Kernel(KernelContract, Equatable, Writable):
         for i in range(theta.size):
             values.append(theta.unsafe_get(i * stride))
         var pos = 0
+        for node in self._nodes:
+            if node.custom:
+                var updated = self.copy()
+                updated._set_theta_at(updated._root, values, pos)
+                self = updated^
+                return
         self._set_theta_at(self._root, values, pos)
 
     def clone_with_theta(self, theta: Dense64) raises -> Kernel:
@@ -1352,7 +1519,10 @@ struct Kernel(KernelContract, Equatable, Writable):
     def _eval(
         self, idx: Int, X: Dense64, Y: Dense64, same: Bool, want_grad: Bool
     ) raises -> _Eval:
-        var k = self._nodes[idx].kind
+        ref node = self._nodes[idx]
+        var k = node.kind
+        if node.custom:
+            return node.custom.value()[].evaluate(X, Y, same, want_grad)
         if _is_leaf(k):
             return self._eval_leaf(idx, X, Y, same, want_grad)
         if k == _Kind.COMPOUND:
@@ -1503,6 +1673,8 @@ struct Kernel(KernelContract, Equatable, Writable):
         ref node = self._nodes[idx]
         var k = node.kind
         var n = X.shape[0]
+        if node.custom:
+            return node.custom.value()[].diag(X)
         if k == _Kind.CONSTANT or k == _Kind.WHITE:
             return vector_fill(n, node.values[0])
         if (
@@ -1570,6 +1742,8 @@ struct Kernel(KernelContract, Equatable, Writable):
 
     def _stationary_at(self, idx: Int) -> Bool:
         ref node = self._nodes[idx]
+        if node.custom:
+            return node.custom.value()[].stationary
         if node.kind == _Kind.DOT_PRODUCT:
             return False
         if node.kind == _Kind.PAIRWISE:
@@ -1587,6 +1761,8 @@ struct Kernel(KernelContract, Equatable, Writable):
 
     def _vector_at(self, idx: Int) -> Bool:
         ref node = self._nodes[idx]
+        if node.custom:
+            return node.custom.value()[].vector
         if node.kind == _Kind.CONSTANT or node.kind == _Kind.WHITE:
             return False
         if _is_leaf(node.kind):
@@ -1607,6 +1783,8 @@ struct Kernel(KernelContract, Equatable, Writable):
         ref b = other._nodes[other_idx]
         if a.kind != b.kind:
             return False
+        if a.custom:
+            return a.custom.value()[].same_snapshot(b.custom.value()[])
         if _is_leaf(a.kind):
             if len(a.values) != len(b.values):
                 return False
@@ -1655,7 +1833,9 @@ struct Kernel(KernelContract, Equatable, Writable):
     def _write_at(self, idx: Int, mut writer: Some[Writer]):
         ref node = self._nodes[idx]
         var k = node.kind
-        if k == _Kind.CONSTANT:
+        if node.custom:
+            writer.write(node.custom.value()[].name, "()")
+        elif k == _Kind.CONSTANT:
             writer.write(format_g3(sqrt(node.values[0])), "**2")
         elif k == _Kind.WHITE:
             writer.write("WhiteKernel(noise_level=", format_g3(node.values[0]), ")")

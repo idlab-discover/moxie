@@ -10,8 +10,10 @@ Cholesky algebra adapter; L-BFGS-B optimizer adapter and restart policy.
 
 The built-in kernel engine accepts dense vector inputs.
 [Structured regression](../regression/api.md#structured-inputs) accepts a typed
-native kernel through `KernelContract`. Callable PairwiseKernel metrics, custom
-leaves in the built-in kernel tree, and custom Python kernels remain open. Sparse input (CSR/CSC/COO) is deferred by the session's dense-only
+native kernel through `KernelContract`. Native vector kernels can also be
+[wrapped as leaves](api.md#custom-vector-leaves) in the built-in kernel tree.
+Callable PairwiseKernel metrics and custom Python kernels remain open.
+Sparse input (CSR/CSC/COO) is deferred by the session's dense-only
 policy (`../session-plan/SPARSITY-SCOPE.md`); nothing is densified implicitly.
 
 Validation: `pixi run test` (native contracts incl. central-difference gradient

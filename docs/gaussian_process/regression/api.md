@@ -76,8 +76,11 @@ and gallery kernel through
 
 ## Custom vector kernels
 
-Use `DenseGaussianProcessRegressor[MyKernel]` when the native
-`KernelContract` has `Input = NDArray[DType.float64]`. The optional second
+Use [`Kernel.from_custom`](../kernels/api.md#custom-vector-leaves) to combine
+a native vector kernel with built-in operators and pass the tree to
+`GaussianProcessRegressor` or the KernelRidge `GaussianProcessKernel` adapter.
+Use `DenseGaussianProcessRegressor[MyKernel]` to keep the concrete kernel type
+when its `KernelContract` has `Input = NDArray[DType.float64]`. The optional second
 type parameter selects the input and target dtype. The estimator validates
 rank, sample and feature counts, and finiteness before passing contiguous
 Float64 matrices to the kernel. It records `n_features_in_` and snapshots

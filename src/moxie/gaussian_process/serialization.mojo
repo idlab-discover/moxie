@@ -157,6 +157,8 @@ def _check_tree(nodes: List[_Node]) raises:
     var depths = List[Int](capacity=count)
     for i in range(count):
         ref node = nodes[i]
+        if node.kind == _Kind.CUSTOM:
+            raise Error("ModelSchemaError: custom kernel leaves are not supported by the native schema")
         _check_arity(node.kind, len(node.children))
         var depth = 1
         for child in node.children:

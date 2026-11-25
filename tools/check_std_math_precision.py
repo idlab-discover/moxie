@@ -17,7 +17,6 @@ IMPORT = re.compile(
 # operation and validates the affected numerical behavior.
 EXISTING_IMPORTS = {
     "families/cluster/algorithms/kmeans/src/moxie/cluster/_kmeans.mojo": {"log"},
-    "families/manifold/src/moxie/manifold/_classical_mds.mojo": {"pow"},
     "families/neural_network/algorithms/rbm/src/moxie/neural_network/_rbm.mojo": {"exp"},
     "families/svm/algorithms/c_svm/src/moxie/svm/_c_svm.mojo": {"log"},
     "families/svm/algorithms/nu_svm/src/moxie/svm/_nu_svm.mojo": {"log"},

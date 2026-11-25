@@ -76,15 +76,9 @@ def run_classical(binary, folder, data, dtype, n_components, metric, p=None, che
     return np.asarray(coordinates), np.asarray(eigenvalues), np.asarray(distances)
 
 
-def classical_tolerance(dtype, metric, p):
-    # Float32 dissimilarities round before the float64 eigensolve. The locked
-    # Mojo pow root differs from SciPy by about 1e-10 relative for fractional
-    # Minkowski powers; p in {1, 2, inf} uses exact sums, abs maxima and sqrt.
-    if dtype == np.float32:
-        return 5e-6
-    if metric == 'minkowski' and p not in (None, 1.0, 2.0, np.inf):
-        return 2e-8
-    return 2e-11
+def classical_tolerance(dtype):
+    # Float32 dissimilarities round before the Float64 eigensolve.
+    return 5e-6 if dtype == np.float32 else 2e-11
 
 
 def classical_parity():
@@ -95,7 +89,8 @@ def classical_parity():
     results = []
     cases = [('euclidean', None), ('l2', None), ('sqeuclidean', None), ('manhattan', None),
              ('l1', None), ('cityblock', None), ('chebyshev', None), ('cosine', None),
-             ('precomputed', None), ('minkowski', None), ('minkowski', 1.0), ('minkowski', 1.5),
+             ('precomputed', None), ('minkowski', None), ('minkowski', 0.5),
+             ('minkowski', 1.0), ('minkowski', 1.5),
              ('minkowski', 2.0), ('minkowski', 3.0), ('minkowski', np.inf)]
     for dtype in (np.float32, np.float64):
         for seed in range(4):
@@ -108,7 +103,7 @@ def classical_parity():
                 wanted = model.fit_transform(data)
                 coordinates, eigenvalues, distances = run_classical(binary, folder, data, dtype, 2, metric, p)
                 got = coordinates.reshape(wanted.shape)
-                tol = classical_tolerance(dtype, metric, p)
+                tol = classical_tolerance(dtype)
                 distance_error = float(np.max(np.abs(distances.reshape(model.dissimilarity_matrix_.shape) - model.dissimilarity_matrix_)))
                 np.testing.assert_allclose(distances.reshape(model.dissimilarity_matrix_.shape),
                     model.dissimilarity_matrix_, rtol=tol, atol=tol)
@@ -124,7 +119,7 @@ def classical_parity():
 def classical_edges(binary, folder):
     results = []
     for dtype in (np.float32, np.float64):
-        tol = classical_tolerance(dtype, 'euclidean', None)
+        tol = classical_tolerance(dtype)
         x = np.random.RandomState(7).normal(size=(13, 4)).astype(dtype)
         zero_row = x.copy()
         zero_row[3] = 0

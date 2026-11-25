@@ -1,8 +1,9 @@
 # Dense-only polynomial count sketch scope
 
 Supported public export: `PolynomialCountSketch` on dense Float32/Float64 NuMojo
-matrices (including strided views) with Float64 output, seeded and
-explicit-context fit, typed parameters, clone and native feature names. See
+matrices (including strided views) with Float64 output by default and opt-in
+Float32 output, seeded and explicit-context fit, typed parameters, clone and
+native feature names. See
 [API and language adaptations](api.md).
 
 Deferred branch: the CSC sparse fit/transform path (`sp.hstack` augmentation

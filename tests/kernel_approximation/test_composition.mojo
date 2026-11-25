@@ -153,6 +153,42 @@ def union[dtype: DType]() raises:
     assert_equal(u.n_features_in_(), 3)
 
 
+def float32_polynomial_composition() raises:
+    comptime Sketch = PolynomialCountSketch[DType.float32, output_dtype=DType.float32]
+    var x = data[DType.float32]()
+    var y = labels()
+    var pipe = make_pipeline(Sketch(n_components=7, random_state=0), RidgeClassifier[DType.float32]())
+    _ = pipe.fit(x, y)
+    var wide = PolynomialCountSketch[DType.float32](n_components=7, random_state=0)
+    var expected = wide.fit_transform(x).astype[DType.float32]()
+    same(pipe.transformer.transform(x), expected)
+    var model = RidgeClassifier[DType.float32]()
+    _ = model.fit(expected, y)
+    same(pipe.predict(x), model.predict(expected))
+
+    var fresh = clone(pipe)
+    assert_false(fresh.transformer.__sklearn_is_fitted__())
+    var rng = RandomState(0)
+    same(fresh.transformer.fit_transform_with_rng(x, rng), expected)
+
+    var joined = make_union[dtype=DType.float32](
+        Sketch(n_components=7, random_state=0),
+        AdditiveChi2Sampler[DType.float32](sample_steps=1),
+    )
+    var features: NDArray[DType.float32] = joined.fit_transform(x)
+    assert_equal(features.shape[0], 12)
+    assert_equal(features.shape[1], 10)
+    var additive = AdditiveChi2Sampler[DType.float32](sample_steps=1)
+    var other = additive.fit_transform(x)
+    for i in range(12):
+        for j in range(7):
+            assert_equal(features.unsafe_get(i * 10 + j), expected.unsafe_get(i * 7 + j))
+        for j in range(3):
+            assert_equal(features.unsafe_get(i * 10 + 7 + j), other.unsafe_get(i * 3 + j))
+    assert_equal(joined.get_feature_names_out()[6], "polynomialcountsketch__polynomialcountsketch6")
+    assert_equal(joined.n_features_in_(), 3)
+
+
 def counts[dtype: DType]() raises:
     # get_n_features_in mirrors sklearn's n_features_in_ attribute: absent before fit.
     var x = data[dtype]()
@@ -190,6 +226,7 @@ def main() raises:
     default_stream_in_composition()
     union[DType.float32]()
     union[DType.float64]()
+    float32_polynomial_composition()
     counts[DType.float32]()
     counts[DType.float64]()
     print("PASS kernel feature maps in Pipeline/FeatureUnion: predictions, clone, set_params, names, input counts")

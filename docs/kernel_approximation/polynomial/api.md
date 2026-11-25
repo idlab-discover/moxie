@@ -5,7 +5,7 @@ family's `KernelFeatureMap` contract. See [the example](../../../tests/kernel_ap
 
 | Estimator | Constructor keywords and defaults |
 | --- | --- |
-| `PolynomialCountSketch[dtype=DType.float64]` | `gamma: Float64=1.0`, `degree: Int=2`, `coef0: Float64=0.0`, `n_components: Int=100`, `random_state: Optional[Int]=None` |
+| `PolynomialCountSketch[dtype=DType.float64, output_dtype=DType.float64]` | `gamma: Float64=1.0`, `degree: Int=2`, `coef0: Float64=0.0`, `n_components: Int=100`, `random_state: Optional[Int]=None` |
 
 Tensor Sketch approximates the feature map of `(gamma <x, y> + coef0)^degree`.
 `fit` draws `indexHash_` (all `randint(0, n_components)` values in C order)
@@ -15,8 +15,23 @@ shared sklearn-compatible `RandomState`; the data is only validated. `transform`
 builds, per sample and degree, the signed count sketch of
 `[sqrt(gamma) x, sqrt(coef0)]`, multiplies the `degree` spectra
 (mojo-linalg `FFTPlan`, radix-2 or Bluestein for any `n_components`), inverse
-transforms and keeps the real part. Output is **Float64 for both input dtypes**
-(sklearn's `count_sketches` buffer is float64), shape `(n_samples, n_components)`.
+transforms and keeps the real part. The output has shape `(n_samples, n_components)`
+and defaults to **Float64 for both input dtypes**, matching sklearn.
+
+For a Float32 successor or FeatureUnion, select the Mojo-only compile-time
+parameter `output_dtype=DType.float32` explicitly.
+
+```mojo
+var pipe = make_pipeline(
+    PolynomialCountSketch[DType.float32, output_dtype=DType.float32](random_state=0),
+    RidgeClassifier[DType.float32](),
+)
+```
+
+The count sketch and FFT still use Float64. Each final value is rounded to
+Float32 as it is stored in the output. The
+[composition contract](../../../tests/kernel_approximation/test_composition.mojo)
+covers both Float32 pipelines and Float32 unions.
 
 `fit` and `fit_transform` use the process-wide stream for `random_state=None`.
 Integer seeds restart per fit. For a caller-owned stream, use `fit_with_rng`
@@ -47,5 +62,7 @@ degrees 1-5, widths 1-128 (powers of two and not), coef0 0/2.5, gamma 0, seeds
 up to 2^32-1, and negative coef0. Hashes and the next RNG draw must be
 identical; outputs must satisfy
 `|native - sklearn| <= 16 * degree * eps64 * log2(M) * max(1, ||x'||_1)^degree`
-per row (observed worst 0.022 of the bound). It also runs the full
+per row (observed worst 0.022 of the bound). The Float32 output mode must equal
+an explicit cast of the validated native Float64 output, with identical hashes
+and RNG consumption. The suite also runs the full
 `test_polynomial_count_sketch` grid (18 settings) with sklearn's thresholds.

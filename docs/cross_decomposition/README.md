@@ -40,8 +40,9 @@ and canonical deflation, with NIPALS or SVD. CCA uses mode B and canonical
 deflation. PLSSVD takes one SVD of centered/scaled cross covariance. All four
 share centering/scaling and the PLS engine. PLSRegression, PLSCanonical and
 CCA expose structured `fit_warnings` and a typed request for score weights.
-Pandas output, fitted input feature names, and automatic metadata forwarding
-require shared support. The native estimators accept dense inputs and use
+All four retain feature names from [named dense inputs](#named-dense-inputs).
+Pandas output and automatic metadata forwarding require shared support.
+The native estimators accept dense inputs and use
 the native model container for persistence.
 
 Examples cover [PLS/CCA](../../examples/cross_decomposition.mojo),

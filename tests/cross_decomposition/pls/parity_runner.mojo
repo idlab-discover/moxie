@@ -11,7 +11,14 @@ from std.sys import argv
 from moxie.cross_decomposition import CCA, PLSCanonical, PLSParams, PLSRegression
 from moxie.cross_decomposition._pls import _PLS
 from moxie.cross_decomposition._serialization import _PLSSchema
+from moxie.metadata_routing import FitScoreMetadataRequestProvider
 from moxie.serialization import dumps, loads
+
+
+def route_score_weights[E: FitScoreMetadataRequestProvider](
+    estimator: E, metadata: Dict[String, nm.NDArray[DType.float64]],
+) raises -> Optional[nm.NDArray[DType.float64]]:
+    return estimator.get_metadata_routing().score.route(metadata)
 
 
 def numbers(text: String) raises -> List[Float64]:
@@ -116,8 +123,7 @@ def run_case[flavor: Int, dtype: DType](f: List[String]) raises:
             score = estimator.score(Xt, yt)
         else:
             var metadata = {"weights": array[DType.float64](f[13])}
-            var request = estimator.get_metadata_routing()
-            var weights = request.score.route(metadata)
+            var weights = route_score_weights(estimator, metadata)
             if not weights:
                 raise Error("Missing requested score weights")
             score = estimator.score(Xt, yt, weights^)

@@ -6,9 +6,10 @@ fit_transform/score`: modes A/B, both deflation modes, scale=True/False,
 copy semantics, 1-D and 2-D targets, max_iter/tol diagnostics, constant
 residual early stop, Float32/Float64 inputs. Sparse input is excluded by
 the dense-only porting scope (the reference has no sparse branch either);
-it is never densified. PLS and CCA expose native score-weight requests.
-Automatic parent forwarding, pandas output, fitted input feature names,
-and Python pickling require shared support.
+it is never densified. PLS and CCA expose native score-weight requests and
+retain fitted names for [named dense inputs](../README.md#named-dense-inputs).
+Automatic parent forwarding, pandas output and Python pickling require
+shared support.
 
 The migrated suite contains 15 estimator contracts, six engine tests and
 125 parity cases against the recorded

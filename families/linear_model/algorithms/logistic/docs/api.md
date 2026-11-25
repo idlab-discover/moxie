@@ -9,8 +9,9 @@ L2. Dense `sag` and `saga` also support both class modes. Use
 net. Set `C` to infinity or pass `None` as the penalty to remove
 regularization for any of these five solvers. For binary classification, `solver="liblinear"`
 supports primal L2, dual L2 and primal L1 with finite `C` and positive
-`tol`. Select L1 with `l1_ratio=1.0`. The Newton coordinate-descent
-solvers and LogisticRegressionCV remain open.
+`tol`. Select L1 with `l1_ratio=1.0`. Binary `newton-cd` supports
+L2, L1, elastic net and no penalty. `newton-cd-gram` and
+LogisticRegressionCV remain open.
 
 ```mojo
 from moxie.linear_model import ClassWeight, LogisticRegression
@@ -107,6 +108,21 @@ can drift along this direction. Moxie's Float64 arithmetic keeps a centered
 cold start close to centered, so raw coefficients and decision values may
 differ by that common offset.
 
+Select `solver="newton-cd"` for binary proximal Newton iterations.
+The solver clips negative pointwise curvature to zero in the quadratic
+subproblem and keeps signed weights in the logistic objective. It uses
+the family's weighted centering and rescaling and the same cyclic residual
+engine as ElasticNet, with at least one inner sweep. The working design
+and its column-major copy take linear space in the number of input
+elements. Numax's fixed-size dot and NuMojo's dense matrix product do not
+supply the in-place residual updates and Gap Safe screening used by this
+engine. The outer iteration uses composite Armijo backtracking and checks
+the minimum-norm subgradient and Newton decrement. Failed backtracking
+uses L-BFGS for smooth objectives within the remaining budget. With L1,
+it raises Mojo `Error`, corresponding to the pinned solver's raised
+`ConvergenceWarning`. The solver accepts strided features through the
+same compact snapshot as the other solvers.
+
 SAG and SAGA sample rows with replacement and update the average of the
 gradients for rows seen so far. SAGA adds a correction for the current
 gradient and soft-thresholds the feature coefficients for L1 and elastic net.
@@ -172,7 +188,8 @@ The first command assembles the family namespace and builds both the native
 contracts and the differential driver. The second executes the estimator and
 linear-loss Python sources, the Newton-CG optimizer, the LIBLINEAR wrapper,
 the LIBLINEAR C++ sources, the SAG/SAGA Cython engine and its dataset
-sampler at scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
+sampler, and the Newton-CD solver and coordinate-descent Cython engine at
+scikit-learn revision `4358542a1bd39af2e7e1cbace8b9fed067473c5b`.
 It uses the locked support wheel, SciPy and the SVM owner's C++ oracle
 adapter. The last command compiles the StandardScaler pipeline through the
 integrated namespace and checks class
@@ -207,6 +224,13 @@ convergence. Widened Float32 uses `3e-6` across those outputs to account
 for rounding public arrays back to Float32. Native contracts also cover
 seed changes, strided input, zero weights, clone and fit failure after a
 successful fit.
+
+Newton-CD cases cover L2, L1 and elastic net, no penalty, zero and one
+iteration, signed and zero sample weights with balanced classes, warm
+refit, a zero column, and multiclass rejection. The suite checks L1 zero
+patterns exactly and exercises the raised error after L1 backtracking
+fails. The Float32 cases use `tol=1e-6` because the pinned native Float32
+line search can stall below that precision.
 
 For L-BFGS and the Newton solvers, the Float64 and widened Float32 oracles use
 absolute bounds of 2e-6 for coefficients, intercepts and probabilities and

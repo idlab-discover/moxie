@@ -13,6 +13,8 @@ from numojo.routines.math.extrema import max as array_max
 from moxie._dense import row_squared_norms
 from moxie._linear_linalg import IndefiniteFactor, symmetric_indefinite
 from moxie._random import our_rand_r
+from moxie.linear_model._cd_fast import coordinate_descent
+from moxie.linear_model._linear_base import preprocess_data
 from moxie.linear_model._linear_loss import LogisticLoss, logistic_probability
 
 
@@ -157,31 +159,71 @@ def _gradient_norm(gradient: NDArray[DType.float64], infinity: Bool) -> Float64:
     return norm
 
 
+def _l1_penalty(coef: NDArray[DType.float64], features: Int, strength: Float64) -> Float64:
+    var norm = Float64(0)
+    for j in range(features):
+        norm += abs(coef.unsafe_get(j))
+    return strength * norm
+
+
+def _subgradient_norm(
+    gradient: NDArray[DType.float64], coef: NDArray[DType.float64],
+    features: Int, l1: Float64, infinity: Bool,
+) -> Float64:
+    if l1 == 0:
+        return _gradient_norm(gradient, infinity)
+    var norm = Float64(0)
+    for j in range(gradient.size):
+        var value = gradient.unsafe_get(j)
+        if not isfinite(value):
+            return inf[DType.float64]()
+        if j < features:
+            var coefficient = coef.unsafe_get(j)
+            if coefficient == 0:
+                value = max(0.0, abs(value) - l1)
+            else:
+                value += copysign(l1, coefficient)
+        norm = max(norm, abs(value)) if infinity else norm + abs(value)
+    return norm
+
+
 def _newton_line_search[dtype: DType](
     mut objective: LogisticLoss[dtype], current: NDArray[DType.float64],
     gradient: NDArray[DType.float64], direction: NDArray[DType.float64],
     active: List[Int], slope: Float64, loss: Float64, tol: Float64,
     mut trial: NDArray[DType.float64], mut trial_gradient: NDArray[DType.float64],
+    *, l1: Float64 = 0, penalized_features: Int = 0,
 ) raises -> Bool:
     comptime armijo = 0.00048828125
     comptime epsilon = 3.552713678800501e-15  # 16 * Float64 epsilon.
     comptime min_step = 1e-12
     var step = Float64(1)
     var previous_step = Float64(1)
-    var previous_loss = loss
-    var old_gradient_norm = _gradient_norm(gradient, False)
+    var previous_change = Float64(0)
+    var penalty = Float64(0)
+    var armijo_slope = slope
+    if l1 > 0:
+        penalty = _l1_penalty(current, penalized_features, l1)
+        var new_norm = Float64(0)
+        # L1 callers use the full, ordered coefficient vector.
+        for j in range(penalized_features):
+            new_norm += abs(current.unsafe_get(j) + direction.unsafe_get(j))
+        armijo_slope += l1 * new_norm - penalty
+    var old_gradient_norm = _subgradient_norm(gradient, current, penalized_features, l1, False)
     for i in range(21):
         for j in range(len(active)):
             var index = active[j]
             trial.unsafe_set(index, current.unsafe_get(index) + step * direction.unsafe_get(j))
         var trial_loss = objective.evaluate(trial, trial_gradient)
         var change = trial_loss - loss
+        if l1 > 0:
+            change += _l1_penalty(trial, penalized_features, l1) - penalty
         if isfinite(trial_loss):
-            if change <= step * armijo * slope:
+            if change <= step * armijo * armijo_slope:
                 return True
-            if i == 0 and abs(armijo * slope) <= tol and _gradient_norm(trial_gradient, True) <= tol:
+            if i == 0 and abs(armijo * armijo_slope) <= tol and _subgradient_norm(trial_gradient, trial, penalized_features, l1, True) <= tol:
                 return True
-            if abs(change) <= abs(loss * epsilon) and _gradient_norm(trial_gradient, False) < old_gradient_norm:
+            if abs(change) <= abs((loss + penalty) * epsilon) and _subgradient_norm(trial_gradient, trial, penalized_features, l1, False) < old_gradient_norm:
                 return True
 
         # Interpolate the loss at the trial step and, from the second
@@ -189,7 +231,7 @@ def _newton_line_search[dtype: DType](
         var residual = change - slope * step
         var next_step = -slope * step * step / (2 * residual)
         if i > 0:
-            var old_residual = previous_loss - loss - slope * previous_step
+            var old_residual = previous_change - slope * previous_step
             var product = previous_step * step
             var denominator = product * product * (step - previous_step)
             var a = (previous_step * previous_step * residual - step * step * old_residual) / denominator
@@ -198,11 +240,84 @@ def _newton_line_search[dtype: DType](
             if a != 0 and discriminant >= 0:
                 next_step = (-b + sqrt(discriminant)) / (3 * a)
         previous_step = step
-        previous_loss = trial_loss
+        previous_change = change
         if not isfinite(next_step) or next_step >= step or next_step <= min_step:
             next_step = 0.5 * step
         step = max(next_step, max(0.01 * step, min_step))
     return False
+
+
+def logistic_newton_cd[dtype: DType](
+    mut objective: LogisticLoss[dtype], var current: NDArray[DType.float64],
+    l1: Float64, l2: Float64, max_iter: Int, tol: Float64,
+) raises -> LogisticSolution:
+    if max_iter == 0:
+        return LogisticSolution(current^, 0)
+    var X = objective._X.astype[DType.float64]()
+    var rows = X.shape[0]
+    var features = X.shape[1]
+    var fit_intercept = objective._fit_intercept
+    var response = zeros[DType.float64](Shape(rows))
+    var curvature = zeros[DType.float64](Shape(rows))
+    var trial = current.copy()
+    var gradient = zeros[DType.float64](current.shape)
+    var trial_gradient = zeros[DType.float64](current.shape)
+    var direction = zeros[DType.float64](current.shape)
+    var start = zeros[DType.float64](Shape(features))
+    var active = List[Int](capacity=current.size)
+    for j in range(current.size):
+        active.append(j)
+    var projected = List[Float64](length=1, fill=0)
+    var inner_tol = tol
+    for iteration in range(max_iter):
+        var loss = objective.evaluate(current, gradient)
+        if not isfinite(loss):
+            raise Error("ValueError: LogisticRegression newton-cd encountered a nonfinite objective")
+        objective.binary_working_response(current, response, curvature)
+        # Fit the quadratic model with the existing weighted least-squares
+        # preprocessing and residual coordinate solver.
+        var data = preprocess_data(
+            X, response, Optional(curvature.view()), fit_intercept, owner="LogisticRegression newton-cd",
+        )
+        for j in range(features):
+            start.unsafe_set(j, current.unsafe_get(j))
+        var result = coordinate_descent(
+            data.X, data.y.reshape(Shape(rows)), start, l1, l2, 1000, inner_tol,
+            early_stopping=False,
+        )
+        var intercept = data.y_offset.unsafe_get(0)
+        for j in range(features):
+            var coefficient = result.coef.unsafe_get(j)
+            direction.unsafe_set(j, coefficient - current.unsafe_get(j))
+            intercept -= data.X_offset.unsafe_get(j) * coefficient
+        if fit_intercept:
+            direction.unsafe_set(features, intercept - current.unsafe_get(features))
+        if result.iterations <= 4:
+            inner_tol *= 0.25
+        var slope = dot(gradient, direction)
+        if not _newton_line_search(
+            objective, current, gradient, direction, active, slope, loss, tol, trial, trial_gradient,
+            l1=l1, penalized_features=features,
+        ):
+            if l1 > 0:
+                raise Error("RuntimeError: LogisticRegression newton-cd line search failed with a nonzero L1 penalty")
+            var solution = logistic_lbfgs(objective, current, max_iter - iteration - 1, tol)
+            solution.iterations += iteration
+            return solution^
+        swap(current, trial)
+        if _subgradient_norm(trial_gradient, current, features, l1, True) <= tol:
+            var decrement_squared = Float64(0)
+            for j in range(features):
+                var delta = direction.unsafe_get(j)
+                decrement_squared += l2 * delta * delta
+            for i in range(rows):
+                LogisticLoss[dtype]._project_row(
+                    objective._X, i * features, features, fit_intercept, direction, projected,
+                )
+                decrement_squared += curvature.unsafe_get(i) * projected[0] * projected[0]
+            if 0.5 * decrement_squared <= tol:
+                return LogisticSolution(current^, iteration + 1)
+    return LogisticSolution(current^, max_iter)
 
 
 def _has_tiny_pivot(factor: IndefiniteFactor[DType.float64]) -> Bool:

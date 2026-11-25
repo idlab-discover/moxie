@@ -56,7 +56,7 @@ def _gap[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], w: NDArray[dtype], 
     return (gap, dualnorm)
 
 
-def coordinate_descent[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], initial: NDArray[dtype], alpha: Float64, beta: Float64, max_iter: Int, tol: Float64, positive: Bool = False) raises -> CoordinateResult[dtype]:
+def coordinate_descent[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], initial: NDArray[dtype], alpha: Float64, beta: Float64, max_iter: Int, tol: Float64, positive: Bool = False, *, early_stopping: Bool = True) raises -> CoordinateResult[dtype]:
     """Solve 0.5||y-Xw||² + alpha||w||₁ + 0.5 beta||w||².
 
     X/y are already centered/rescaled. Penalties are unnormalized. The returned
@@ -98,7 +98,7 @@ def coordinate_descent[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], initi
     var pair = _gap(columns, target, w, residual, a, b, positive, False, correlations)
     var gap = pair[0]
     var dualnorm = pair[1]
-    if gap <= threshold:
+    if early_stopping and gap <= threshold:
         return CoordinateResult[dtype](w^, Float64(gap), 0, True)
     var iterations = 0
     var converged = False

@@ -23,6 +23,7 @@ from sklearn.utils import _array_api, fixes
 FAMILY = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(FAMILY / "tools"))
 from parity_io import REFERENCE, case_line, close, load_pinned, parse_results, pinned_code, verify_reference
+from pinned_coordinate import load as load_pinned_coordinate
 
 LOSS = "sklearn/linear_model/_linear_loss.py"
 LOGISTIC = "sklearn/linear_model/_logistic.py"
@@ -125,7 +126,7 @@ def unsupported_oracle_branch(*args, **kwargs):
     raise AssertionError("the pinned oracle reached an import used only by LogisticRegressionCV")
 
 
-def oracle():
+def oracle(*, coordinate=False):
     hashes = verify_reference([
         LOSS, LOGISTIC, NEWTON, OPTIMIZE, SVM_BASE, "sklearn/svm/_liblinear.pyx",
         f"{LIBLINEAR}/linear.cpp", f"{LIBLINEAR}/linear.h", f"{LIBLINEAR}/tron.cpp",
@@ -147,6 +148,13 @@ def oracle():
     newton = load_pinned(NEWTON, register=True)
     optimize = load_pinned(OPTIMIZE, register=True)
     estimator = load_pinned(LOGISTIC)
+    if coordinate:
+        coordinate_module, coordinate_hashes = load_pinned_coordinate(FAMILY / "algorithms/logistic")
+        print(f"scikit-learn coordinate source SHA256 {coordinate_hashes}")
+        newton.enet_coordinate_descent = coordinate_module.cd_fast.enet_coordinate_descent
+        newton._pre_fit = coordinate_module._pre_fit
+        pinned_code(newton.NewtonCDSolver.inner_solve, NEWTON)
+        assert estimator.NewtonCDSolver is newton.NewtonCDSolver
     estimator.sag_solver = pinned_sag()
     estimator._fit_liblinear = load_pinned(SVM_BASE)._fit_liblinear
     pinned_code(estimator._fit_liblinear, SVM_BASE)
@@ -307,6 +315,41 @@ def liblinear_fixtures():
             yield f"{bits}-liblinear-invalid-{scenario}", bits, base | params | {"invalid": 1}, data
 
 
+def newton_cd_fixtures():
+    rng = np.random.default_rng(1042)
+    for bits, dtype in [(32, np.float32), (64, np.float64)]:
+        X = rng.normal(size=(83, 7)).astype(dtype)
+        X[:, -1] = 0
+        y = np.where(X[:, 0] - 0.5 * X[:, 1] + rng.normal(size=len(X)) > 0.45, 8, -3)
+        Z = rng.normal(size=(13, X.shape[1])).astype(dtype)
+        sw = rng.uniform(0.25, 2, size=len(X)).astype(dtype)
+        sw[:2] = [0, -0.05]
+        arrays = {"X": X, "y": y, "Z": Z}
+        base = {
+            "solver": "newton-cd", "C": 0.42, "tol": 1e-6 if bits == 32 else 1e-8, "max_iter": 100,
+            "intercept": 1, "weight": "none", "unpenalized": 0,
+        }
+        for ratio in (0, 0.65, 1):
+            for scenario, params, data in [
+                ("fit", {}, arrays),
+                ("no-intercept", {"intercept": 0}, arrays),
+                ("weighted", {"weight": "balanced"}, arrays | {"sw": np.maximum(sw, 0)}),
+                ("warm", {"refit_C": 0.2}, arrays),
+                ("zero-iter", {"max_iter": 0}, arrays),
+                ("one-iter", {"max_iter": 1}, arrays),
+            ]:
+                yield f"{bits}-newton-cd-{ratio}-{scenario}", bits, base | {"ratio": ratio} | params, data
+        yield f"{bits}-newton-cd-unpenalized", bits, base | {"unpenalized": 1}, arrays
+        yield f"{bits}-newton-cd-signed", bits, base | {"weight": "balanced"}, arrays | {"sw": sw}
+        if bits == 64:
+            yield "64-newton-cd-l1-line-search-failure", bits, base | {
+                "ratio": 1, "weight": "balanced", "line_search_failure": 1,
+            }, arrays | {"sw": sw}
+        yield f"{bits}-newton-cd-multiclass", bits, base | {"invalid": 1}, (
+            arrays | {"y": np.where(np.arange(len(y)) == 0, 23, y)}
+        )
+
+
 def sag_fixtures():
     rng = np.random.default_rng(731)
     for bits, dtype in [(32, np.float32), (64, np.float64)]:
@@ -414,13 +457,13 @@ def reference(model_type, params, arrays):
 
 
 def main():
-    model_type = oracle()
+    model_type = oracle(coordinate=True)
     with patch.object(_liblinear, "train_wrap", pinned_liblinear()):
         compare(model_type)
 
 
 def compare(model_type):
-    cases = [*fixtures(), *liblinear_fixtures(), *sag_fixtures()]
+    cases = [*fixtures(), *liblinear_fixtures(), *sag_fixtures(), *newton_cd_fixtures()]
     output = OUTPUT
     fixture = output / "fixtures.txt"
     fixture.write_text("\n".join(case_line(*case) for case in cases) + "\n")
@@ -433,7 +476,18 @@ def compare(model_type):
     fit_counts = {}
     widened_only = 0
     invalid = 0
+    line_search_failures = 0
     for ident, bits, params, arrays in cases:
+        if params.get("line_search_failure"):
+            try:
+                reference(model_type, params, arrays)
+            except ConvergenceWarning as error:
+                assert "fallback for non-zero L1" in str(error)
+            else:
+                raise AssertionError(f"pinned sklearn accepted {ident}")
+            assert "newton-cd line search failed with a nonzero L1 penalty" in observed[ident]["error"]
+            line_search_failures += 1
+            continue
         if "invalid" in params:
             try:
                 reference(model_type, params, arrays)
@@ -518,10 +572,14 @@ def compare(model_type):
                     actual = actual - actual.mean(axis=axis, keepdims=True)
                     wanted = wanted.astype(np.float64)
                     wanted -= wanted.mean(axis=axis, keepdims=True)
+                if key == "coef" and solver == "newton-cd" and params.get("ratio") and ident.endswith("-fit"):
+                    np.testing.assert_array_equal(actual == 0, wanted == 0, err_msg=ident)
+                    assert (actual == 0).any() and (actual != 0).any(), ident
                 error = close(actual, wanted, 0, atol, f"{ident}/{kind}/{key}")
-                group = f"{bits}/{solver}/{kind}/{key}" if solver in {"liblinear", "sag", "saga"} else f"{bits}/{kind}/{key}"
+                group = f"{bits}/{solver}/{kind}/{key}" if solver in {"liblinear", "newton-cd", "sag", "saga"} else f"{bits}/{kind}/{key}"
                 maxima[group] = max(maxima.get(group, 0), error)
-    print(f"PASS: {len(cases) - invalid} pinned dense logistic fits {fit_counts} and {invalid} input rejections."
+    print(f"PASS: {sum(fit_counts.values())} pinned dense logistic fits {fit_counts}, {invalid} input rejections"
+          f" and {line_search_failures} line-search failure."
           f" {widened_only} fits used only the widened oracle."
           f" Max unconstrained iteration-count difference {iteration_difference}.")
     for key, error in sorted(maxima.items()):

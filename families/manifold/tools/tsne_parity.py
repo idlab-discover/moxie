@@ -169,7 +169,7 @@ def distance_checks():
         for metric in (
             "euclidean", "l2", "manhattan", "l1", "cityblock", "cosine", "sqeuclidean",
             "minkowski", "chebyshev", "correlation", "mahalanobis", "seuclidean",
-            "braycurtis", "canberra", "precomputed", "hamming", "haversine", "nan_euclidean", "callable",
+            "braycurtis", "canberra", "precomputed", "hamming", "matching", "haversine", "nan_euclidean", "callable",
             *boolean_metrics,
         ):
             data = X
@@ -189,6 +189,11 @@ def distance_checks():
                 distances = pairwise_distances(data, metric=metric)
             elif metric == "callable":
                 distances = pairwise_distances(X, metric=weighted_distance)
+            elif metric == "matching":
+                # Shared nonzero categories distinguish numeric Hamming from
+                # Hamming on a Boolean conversion of the same rows.
+                data = np.round(X * 2)
+                distances = pairwise_distances(data, metric=metric)
             elif metric in boolean_metrics:
                 mask = X > 0
                 mask[:, 0] = True  # Keep every row out of the all-zero case.
@@ -260,6 +265,28 @@ def metric_fit_checks(reference, metric, reference_metric, feature_count):
             np.testing.assert_allclose(got, expected, atol=2e-5, rtol=0)
             count += 1
     return count
+
+
+def matching_fit_checks(reference):
+    rng = np.random.RandomState(74)
+    X = rng.randint(-2, 3, size=(24, 5))
+    init = rng.normal(scale=0.1, size=(len(X), 2)).astype(np.float32)
+    for dtype in (np.float32, np.float64):
+        data = X.astype(dtype)
+        model = reference.TSNE(
+            method="exact", metric="matching", init=init.copy(),
+            perplexity=4, max_iter=275, early_exaggeration=1, learning_rate=0.5,
+            min_grad_norm=0, random_state=0,
+        )
+        expected = model.fit_transform(data)
+        iteration, kl, rate, features, got = native_fit(
+            data, init, metric="matching", max_iter=275, lr=0.5,
+        )
+        assert (iteration, rate, features) == (model.n_iter_, model.learning_rate_, model.n_features_in_)
+        np.testing.assert_allclose(kl, model.kl_divergence_, atol=5e-6, rtol=0)
+        np.testing.assert_allclose(got, expected, atol=2e-5, rtol=0)
+        with np.testing.assert_raises_regex(ValueError, "metric.*NearestNeighbors"):
+            model.set_params(method="barnes_hut").fit(data)
 
 
 def initialization_checks(reference):
@@ -390,6 +417,8 @@ def main():
         for width in (5, 16)
     )
     print(f"PASS: {bray_curtis_count} exact and Barnes–Hut Bray–Curtis fits on signed inputs")
+    matching_fit_checks(reference)
+    print("PASS: 2 exact matching fits and 2 Barnes–Hut matching rejections")
     patience_check(reference)
     print("PASS: no-progress stopping against pinned sklearn gradient descent")
     draws, seeds = initialization_checks(reference)

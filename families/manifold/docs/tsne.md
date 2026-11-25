@@ -47,6 +47,11 @@ conditional distributions. The input is borrowed and remains intact. Precomputed
 distances require random or explicit array initialization. Unsupported metric
 names raise `ValueError`.
 
+Exact t-SNE also accepts `metric="matching"`, SciPy's alias for numeric
+Hamming distance. This metric compares feature values for equality, including
+distinct nonzero values. Barnes–Hut rejects the alias, as sklearn's
+`NearestNeighbors` does. Use `metric="hamming"` with either method.
+
 Both methods accept `metric="braycurtis"`. Exact t-SNE follows SciPy and
 divides the sum of absolute differences by `sum(abs(x + y))`. An undefined
 distance between distinct rows raises `ValueError`. Barnes–Hut uses

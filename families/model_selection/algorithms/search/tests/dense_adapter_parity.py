@@ -1,4 +1,4 @@
-"""Compare the dense adapter and default CV curves with pinned sklearn."""
+"""Compare dense adapter defaults with pinned sklearn."""
 import ast
 import importlib.util
 from pathlib import Path
@@ -78,6 +78,12 @@ with sklearn.config_context(enable_metadata_routing=True), warnings.catch_warnin
     sizes, learning_train, learning_test = cv['learning_curve'](
         model, X, y, scoring=scorer, params={'sample_weight': weights},
     )
+    score, null_scores, pvalue = cv['permutation_test_score'](
+        model, X, y, scoring=scorer, params={'sample_weight': weights},
+        random_state=42, n_permutations=7,
+    )
+expected['permutation'] = [[score, pvalue]]
+expected['permutation_null'] = list(enumerate(null_scores))
 expected['learning_size'] = sizes.reshape(-1, 1)
 for name, train, test in (
     ('validation_curve', validation_train, validation_test),
@@ -99,7 +105,13 @@ for key, values in expected.items():
     if key in ('validation_curve', 'learning_curve'):
         np.testing.assert_array_equal(observed[:, :2], values[:, :2], err_msg=key)
         observed, values = observed[:, 2:], values[:, 2:]
+    if key == 'permutation':
+        np.testing.assert_array_equal(observed[:, 1], values[:, 1], err_msg='p-value')
+        observed, values = observed[:, 0], values[:, 0]
+    if key == 'permutation_null':
+        np.testing.assert_array_equal(observed[:, 0], values[:, 0], err_msg='permutation order')
+        observed, values = observed[:, 1], values[:, 1]
     # Float32 weighted means can round differently, especially in small prefixes.
     rtol = 2e-7 if key == 'learning_curve' else 0
     np.testing.assert_allclose(observed, values, rtol=rtol, atol=2e-6, err_msg=key)
-print(f'PASS pinned dense adapter and CV curves with {REVISION}')
+print(f'PASS pinned dense adapter, CV curves and permutation scores with {REVISION}')

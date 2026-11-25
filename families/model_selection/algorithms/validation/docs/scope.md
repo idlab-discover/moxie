@@ -280,6 +280,18 @@ list and separate fit/score metadata as the other CV functions. Defaults are
 `RandomState` after score metadata. A process-global `None` seed is not exposed
 by the adopted RNG snapshot.
 
+With a `DefaultCVAdapter`, use `permutation_test_score[A](estimator, X, y,
+adapter, n_permutations=100, random_state=0)`. The dense supervised adapter
+supplies five unshuffled folds, with stratification for binary and multiclass
+classification targets. Omitted folds are regenerated for the original target
+and for each shuffled target. In this form, `groups` restricts the shuffle
+within each group. Use a custom provider when the split itself needs groups.
+Pass `cv=` for fixed folds or `scoring=` for a typed scorer override.
+The short form uses default-constructed metadata. Pass both
+`fit_metadata=` and `score_metadata=` to supply metadata explicitly.
+The short form takes an integer seed. The positional provider and fold-list
+forms also accept a borrowed mutable RNG.
+
 The returned `PermutationTestResult` contains `score` (the unweighted mean fold
 score), an owned Float64 `permutation_scores` vector, and `pvalue`. The latter
 is `(count(permutation_score >= score) + 1) / (n_permutations + 1)`. Ties count;

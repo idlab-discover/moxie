@@ -587,6 +587,18 @@ struct FixedPermutationCV[A: CVAdapter](PermutationCV):
 
 
 @fieldwise_init
+struct _DefaultPermutationCV[A: DefaultCVAdapter, origin: ImmOrigin](PermutationCV):
+    comptime Adapter = Self.A
+    var adapter: Pointer[Self.A, Self.origin]
+
+    def split(
+        mut self, X: Self.A.Scorer.Input, y: Self.A.Scorer.Target,
+        groups: Optional[SplitLabels],
+    ) raises -> List[IndexSplit]:
+        return self.adapter[].default_cv(X, y)
+
+
+@fieldwise_init
 struct PermutationTestResult(Movable):
     var score: Float64
     var permutation_scores: NDArray[DType.float64]
@@ -700,6 +712,41 @@ def permutation_test_score[A: CVAdapter](
 ) raises -> PermutationTestResult:
     var rng = RandomState(random_state)
     return permutation_test_score[A](estimator, X, y, adapter, scoring, cv, fit_metadata, score_metadata, rng, groups=groups, n_permutations=n_permutations)
+
+
+def permutation_test_score[A: DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, fit_metadata: A.Scorer.Metadata, score_metadata: A.Scorer.Metadata,
+    var scoring: Optional[A.Scorer] = None, cv: Optional[List[IndexSplit]] = None,
+    groups: Optional[SplitLabels] = None, n_permutations: Int = 100, random_state: Int = 0,
+) raises -> PermutationTestResult:
+    """Use the adapter's scorer and regenerate omitted folds for each target."""
+    if not scoring:
+        scoring = adapter.default_scorer()
+    if cv:
+        return permutation_test_score[A](
+            estimator, X, y, adapter, scoring.value(), cv.value(), fit_metadata, score_metadata,
+            groups=groups, n_permutations=n_permutations, random_state=random_state,
+        )
+    comptime Provider = _DefaultPermutationCV[A, origin_of(adapter)]
+    var provider = Provider(Pointer(to=adapter))
+    return permutation_test_score[Provider](
+        estimator, X, y, adapter, scoring.value(), provider, fit_metadata, score_metadata,
+        groups=groups, n_permutations=n_permutations, random_state=random_state,
+    )
+
+
+def permutation_test_score[A: DefaultCVAdapter](
+    estimator: A.Scorer.Estimator, X: A.Scorer.Input, y: A.Scorer.Target,
+    adapter: A, *, var scoring: Optional[A.Scorer] = None, cv: Optional[List[IndexSplit]] = None,
+    groups: Optional[SplitLabels] = None, n_permutations: Int = 100, random_state: Int = 0,
+) raises -> PermutationTestResult where conforms_to(A.Scorer.Metadata, Defaultable):
+    """Use default metadata for both fitting and scoring."""
+    return permutation_test_score[A](
+        estimator, X, y, adapter, fit_metadata=A.Scorer.Metadata(),
+        score_metadata=A.Scorer.Metadata(), scoring=scoring^, cv=cv,
+        groups=groups, n_permutations=n_permutations, random_state=random_state,
+    )
 
 
 trait StringPredictionAdapter(CVAdapter):

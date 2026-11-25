@@ -2,7 +2,7 @@ from moxie.base import clone
 from moxie.dummy import DummyRegressor
 from moxie.model_selection import (
     DenseSupervisedAdapter, GridSearchCV, IndexArray, IndexSplit, cross_val_score, cross_validate,
-    learning_curve, validation_curve,
+    learning_curve, permutation_test_score, validation_curve,
 )
 from numojo import NDArray, Shape, Item, zeros
 from std.testing import assert_equal, assert_false, assert_raises
@@ -91,6 +91,13 @@ def main() raises:
     var model = Regression()
     check_curves(model, X, y, sample_weight)
     var adapter = Adapter()
+    var permutation = permutation_test_score[Adapter](
+        model, X, y, adapter, fit_metadata=sample_weight, score_metadata=sample_weight,
+        random_state=42, n_permutations=7,
+    )
+    print("permutation", permutation.score, permutation.pvalue)
+    for i in range(permutation.permutation_scores.size):
+        print("permutation_null", i, permutation.permutation_scores[Item(i)])
     var folds = adapter.default_cv(X, y)
     var scores = cross_val_score[Adapter](
         model, X, y, adapter, fit_metadata=sample_weight, score_metadata=sample_weight,

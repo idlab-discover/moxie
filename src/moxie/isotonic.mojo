@@ -610,18 +610,26 @@ struct IsotonicRegression[dtype: DType = DType.float64](
         var right = n - 1
         while left + 1 < right:
             var middle = left + (right - left) // 2
-            if self.X_thresholds_[middle] <= x:
+            if self.X_thresholds_[middle] < x:
                 left = middle
             else:
                 right = middle
-        if x == self.X_thresholds_[left]:
-            return self.y_thresholds_[left]
-        if x == self.X_thresholds_[right]:
-            return self.y_thresholds_[right]
-        var slope = (self.y_thresholds_[right] - self.y_thresholds_[left]) / (
-            self.X_thresholds_[right] - self.X_thresholds_[left]
-        )
-        return self.y_thresholds_[left] + slope * (x - self.X_thresholds_[left])
+        var x_left = self.X_thresholds_[left]
+        var x_right = self.X_thresholds_[right]
+        var y_left = self.y_thresholds_[left]
+        var y_right = self.y_thresholds_[right]
+        comptime if Self.dtype == DType.float32:
+            # SciPy uses the interval ending at an exact knot and blends its
+            # targets by normalized distances. Forming the slope can overflow.
+            var width = x_right - x_left
+            return ((x - x_left) / width) * y_right + ((x_right - x) / width) * y_left
+        else:
+            if x == x_left:
+                return y_left
+            if x == x_right:
+                return y_right
+            var slope = (y_right - y_left) / (x_right - x_left)
+            return y_left + slope * (x - x_left)
 
     def f_(self, T: Self.Vector) raises -> Self.Vector:
         """Evaluate the fitted interpolator directly, without input clipping."""

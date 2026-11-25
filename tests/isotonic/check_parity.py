@@ -459,6 +459,13 @@ def main():
             w[1::7] = 0
             estimator(x, y, w, low, high, [True, False, "auto"][i % 3], ["nan", "clip", "raise"][i % 3], score=i % 3 == 1)
             direction_check(x, y)
+        with np.errstate(over="ignore", invalid="ignore"):
+            # The slope overflows here, but the reference's prediction is finite.
+            estimator([0, 1e-5], [0, 1e35], query=[-1, 0, 5e-6, 1e-5, 1])
+            # Subtracting the first two X thresholds overflows. At the middle
+            # knot the Float32 reference uses the interval to its left.
+            estimator([-3e38, 1e38, 3e38], [1, 3, 5],
+                      query=[-3e38, -2e38, 0, 1e38, 2e38, 3e38])
         for direction in (True, False, "auto"):
             estimator([0, 1e-7, 1e-6, 2e-6, 1], [0, 2, 3, 1, 4], direction=direction)
         for mode in ("nan", "clip", "raise"):

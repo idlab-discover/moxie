@@ -108,6 +108,41 @@ def run_cases[dtype: DType]() raises:
                     _ = check_increasing(x, y)
             else:
                 assert_equal(check_increasing(x, y), fields[3] == "true")
+        elif kind == "score_warnings":
+            var model = IsotonicRegression[dtype]()
+            var train_x: List[Scalar[dtype]] = [0, 1]
+            var train_y: List[Scalar[dtype]] = [1, 2]
+            _ = model.fit(train_x, train_y)
+            var x = vector[dtype](String(fields[1]))
+            var y = vector[dtype](String(fields[2]))
+            var kind_of_input = fields[4]
+            var actual: Float64
+            if kind_of_input == "list":
+                actual = model.score(x, y)
+            elif kind_of_input == "column":
+                var column = List[List[Scalar[dtype]]]()
+                for value in x:
+                    column.append([value])
+                actual = model.score(column, y)
+            else:
+                var X = array(x, [len(x), 1])
+                var target = array(y, [len(y)])
+                if kind_of_input == "array_weighted":
+                    var weights = vector[dtype](String(fields[3]))
+                    var weight_array = array(weights, [len(weights)])
+                    if fields[5] == "error":
+                        with assert_raises(contains="score weights must not sum to zero"):
+                            _ = model.score(X, target, weight_array)
+                        count += 1
+                        continue
+                    actual = model.score(X, target, weight_array)
+                else:
+                    actual = model.score(X, target)
+            var expected = Float64(String(fields[5]))
+            if isnan(expected):
+                assert_equal(isnan(actual), True, context)
+            else:
+                assert_equal(actual, expected, context)
         elif kind == "fit_warnings":
             var x = vector[dtype](String(fields[1]))
             var y = vector[dtype](String(fields[2]))

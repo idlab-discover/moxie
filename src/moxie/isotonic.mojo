@@ -4,6 +4,7 @@ Float32/Float64 NDArray trait interface with retained List overloads; see docs/i
 Behavior follows sklearn.isotonic (BSD-3-Clause; see docs/isotonic/THIRD_PARTY_NOTICES).
 """
 from std.math import isfinite, isnan, sqrt
+from std.sys import stderr
 from std.utils import Variant
 from moxie.base import (
     FitTransformer,
@@ -150,16 +151,31 @@ def check_increasing[dtype: DType = DType.float64](
 
     Infinities participate in ranking. NaNs, fewer than two samples,
     and constant inputs produce an undefined correlation and return False.
+    Reference warnings are written to stderr as category and message.
     """
-    return _spearman_correlation(x, y) >= 0
+    var rho = _spearman_correlation(x, y)
+    var constant_input = len(x) >= 2 and isnan(rho) and (
+        _is_constant(x) or _is_constant(y)
+    )
+    for warning in _direction_warnings(rho, len(x), constant_input):
+        print(warning.category + ": " + warning.message, file=stderr)
+    return rho >= 0
 
 
-def _direction_warnings(rho: Float64, samples: Int) -> List[FitWarning]:
+def _is_constant[dtype: DType](values: List[Scalar[dtype]]) -> Bool:
+    for value in values:
+        if value != values[0]:
+            return False
+    return True
+
+
+def _direction_warnings(
+    rho: Float64, samples: Int, constant_input: Bool,
+) -> List[FitWarning]:
     var warnings = List[FitWarning]()
     if samples < 2:
         return warnings^
-    if isnan(rho):
-        # Fit validates finiteness, so an undefined rho here means constant input.
+    if constant_input:
         warnings.append(FitWarning(
             "ConstantInputWarning",
             "An input array is constant; the correlation coefficient is not defined.",
@@ -426,7 +442,9 @@ struct IsotonicRegression[dtype: DType = DType.float64](
             # sklearn infers direction before filtering nonpositive weights.
             var rho = _spearman_correlation(X, y)
             direction = rho >= 0
-            warnings = _direction_warnings(rho, len(X))
+            # Fit has validated finiteness. After excluding singletons, an
+            # undefined correlation can only be due to a constant input.
+            warnings = _direction_warnings(rho, len(X), isnan(rho))
         var weights = _weights[Self.dtype](len(X), sample_weight)
         var order = _order(X, y)
         var unique_x = List[Scalar[Self.dtype]]()
@@ -581,8 +599,6 @@ struct IsotonicRegression[dtype: DType = DType.float64](
         if len(y) != len(predicted):
             raise Error("ValueError: inconsistent numbers of samples")
         var weights = _weights[Self.dtype](len(y), sample_weight)
-        if len(y) < 2:
-            return Float64("nan")
         var total_weight: Float64 = 0
         var total: Float64 = 0
         for i in range(len(y)):
@@ -590,6 +606,12 @@ struct IsotonicRegression[dtype: DType = DType.float64](
             total += Float64(weights[i]) * Float64(y[i])
         if total_weight == 0:
             raise Error("ValueError: score weights must not sum to zero")
+        if len(y) < 2:
+            print(
+                "UndefinedMetricWarning: R^2 score is not well-defined with less than two samples.",
+                file=stderr,
+            )
+            return Float64("nan")
         var mean = total / total_weight
         var numerator: Float64 = 0
         var denominator: Float64 = 0

@@ -228,6 +228,53 @@ category metadata, pandas categorical arrays, arbitrary Python objects, or spars
 storage. Exact differential checks compare values, missing statistics, Boolean
 indicators and feature names with sklearn's object-string implementation.
 
+## Numeric categorical imputation
+
+Use `CategoricalNumericImputer[dtype]` from `moxie.impute` on a list of
+`CategoricalColumn[NumericCategories[dtype]]` values. The default dtype is Int64.
+Boolean, Float32 and Float64 are also supported. Select columns with
+`ColumnTable.categorical_columns[NumericCategories[dtype]](indices)` and use
+the same selection order at transform. A [ColumnTransformer](../../../../../docs/compose/named-columns.md)
+can select the columns by name and pass them to an imputer and encoder pipeline.
+
+```mojo
+from moxie.impute import CategoricalNumericImputer
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import OrdinalEncoder
+from moxie.preprocessing._vocabulary import NumericKind
+
+var stage = make_pipeline(
+    CategoricalNumericImputer[DType.int64](strategy="most_frequent"),
+    OrdinalEncoder[NumericKind[DType.int64]](),
+)
+```
+
+The stage defaults to `most_frequent`, with ties resolved by the smallest
+observed value. `constant` uses a same-dtype `fill_value`, defaulting to zero
+(`False` for Boolean columns). Floating fill values must be finite. Both
+strategies drop features that were entirely missing during fit unless
+`keep_empty_features=True`. A retained empty feature uses zero for
+`most_frequent` and the fill value for `constant`. The only missing marker is
+the column's missing tag. Use a separate `MissingIndicator` on the original
+columns for a Boolean output.
+
+`statistics_` is a list of nullable scalars in the input dtype and order.
+`None` marks a dropped column. In particular, Int64 values are preserved
+exactly through fitting and replay. Each output column is owned and retains
+its input dictionary, including unused categories. A fill category is added
+in sorted order when a missing cell needs it. A query dictionary may differ
+from the training dictionary. `get_feature_names_out(input_features)` selects
+the retained names in order; without supplied names it uses `x0`, `x1`, etc.
+Named `set_params` updates supplied values; set `fill_value=None` on the typed
+parameter record to restore the default. Changing parameters resets fitted
+state.
+
+The [integration parity runner](../tests/integration/categorical_numeric_parity.py)
+compares values, statistics, output shape, names and an ordinal encoder
+composition exactly against the pinned scikit-learn implementations. It uses
+object cells in the reference to preserve large Int64 categories alongside
+a missing sentinel.
+
 ## Standalone string missing indicators
 
 `StringMissingIndicator` is the native string specialization of sklearn's

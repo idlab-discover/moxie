@@ -62,6 +62,19 @@ recursively clone nested estimators instead of copying their learned state.
 Explicit reference exceptions such as `FrozenEstimator` preserve fitted state
 through their own `__sklearn_clone__` implementation.
 
+## Fit warnings
+
+Estimators that opt in expose `fit_warnings: List[FitWarning]`. Import
+`FitWarning` from `moxie.warnings`. Its `category` is the reference warning
+class name and its `message` is the warning text. The list starts empty, and
+each successful fit replaces it with that fit's warnings in occurrence order.
+A failed fit preserves the previous record. A fitted copy owns its own list,
+and an unfitted clone starts with an empty list.
+
+Callers read the records on the estimator, including the fitted child in a
+composition. The contract uses per-estimator records in place of Python's
+process-wide warning filters and emission.
+
 ## Explicit Mojo differences
 
 - `fit`, `set_params`, and `partial_fit` mutate in place and return a mutable

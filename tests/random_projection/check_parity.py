@@ -74,12 +74,14 @@ def main():
                             kwargs = dict(n_components=components, eps=.5, compute_inverse_components=cached, random_state=42)
                             if family == 'sparse':
                                 kwargs.update(density=density, dense_output=dense_output)
-                            with warnings.catch_warnings():
-                                warnings.simplefilter('ignore')
+                            with warnings.catch_warnings(record=True) as recorded:
+                                warnings.simplefilter('always')
                                 model = cls(**kwargs).fit(input_data)
+                            assert len(recorded) <= 1
+                            warning = (recorded[0].category.__name__, str(recorded[0].message)) if recorded else ('-', '-')
                             transformed = model.transform(input_data)
                             inverse = model.inverse_transform(transformed)
-                            emit('model', bits, family, rows, cols, components, .5, density, flag(dense_output), flag(cached), 42, flag(sparse_input), flat(X), model.n_components_, flat(model.components_), flat(transformed), flat(inverse), flag(sparse.issparse(transformed)), flat(model.inverse_components_) if cached else '-')
+                            emit('model', bits, family, rows, cols, components, .5, density, flag(dense_output), flag(cached), 42, flag(sparse_input), flat(X), model.n_components_, flat(model.components_), flat(transformed), flat(inverse), flag(sparse.issparse(transformed)), flat(model.inverse_components_) if cached else '-', *warning)
         matrices = [np.zeros((3, 5)), np.ones((5, 3)), np.array([[1, 2, 3], [2, 4, 6]]), np.eye(4), rng.normal(size=(6, 3)), rng.normal(size=(3, 6)), np.diag([1, 1e-4, 1e-8]), np.diag([1, 1e-15, 1e-17])]
         if dtype == np.float64:
             matrices += [np.eye(3) * 1e-200, np.eye(3) * 1e200]

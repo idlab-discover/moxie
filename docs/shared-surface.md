@@ -69,3 +69,5 @@ name, for example `NotFittedError:` or `ValueError:` (see
 [interfaces](interfaces.md)). There are no exception or warning classes.
 Warnings such as `ConvergenceWarning` are emitted by each family, as stderr
 messages or recorded warning lists; their family docs describe them.
+Estimators adopting the shared [fit warning contract](interfaces.md#fit-warnings)
+record reference categories and messages as `moxie.warnings.FitWarning` values.

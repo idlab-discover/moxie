@@ -21,6 +21,7 @@ from moxie.random_projection_serialization import (
     SparseRandomProjectionSchema,
 )
 from moxie.serialization import ModelSchema, dumps, loads
+from moxie.warnings import FitWarning
 
 
 def vector[dtype: DType](text: String) raises -> List[Scalar[dtype]]:
@@ -110,6 +111,15 @@ def round_trip[Schema: ModelSchema](model: Schema.Model) raises -> Schema.Model:
     return Schema.decode(loads(bytes))
 
 
+def check_warnings(warnings: List[FitWarning], fields: List[String]) raises:
+    if fields[19] == "-":
+        assert_equal(len(warnings), 0)
+        return
+    assert_equal(len(warnings), 1)
+    assert_equal(warnings[0].category, fields[19])
+    assert_equal(warnings[0].message, fields[20])
+
+
 def model_case[dtype: DType](fields: List[String]) raises:
     var rows = Int(fields[3])
     var cols = Int(fields[4])
@@ -136,7 +146,9 @@ def model_case[dtype: DType](fields: List[String]) raises:
             random_state=seed,
         )
         _ = model.fit(X)
+        check_warnings(model.fit_warnings, fields)
         model = round_trip[GaussianRandomProjectionSchema[dtype]](model)
+        assert_equal(len(model.fit_warnings), 0)
         var transformed = model.transform(X)
         compare(model.components_, fields[14], expected_count, cols, tolerance)
         compare(transformed, fields[15], rows, expected_count, tolerance)
@@ -155,6 +167,7 @@ def model_case[dtype: DType](fields: List[String]) raises:
         if not X.is_sparse:
             var dense = clone(model)
             var dense_transformed = dense.fit_transform(as_array(X))
+            check_warnings(dense.fit_warnings, fields)
             same_dense(dense_transformed, transformed)
             same_dense(dense.inverse_transform(dense_transformed), reconstructed)
         if cached:
@@ -175,8 +188,10 @@ def model_case[dtype: DType](fields: List[String]) raises:
             random_state=seed,
         )
         _ = model.fit(X)
+        check_warnings(model.fit_warnings, fields)
         if not model.components_.is_sparse:
             model = round_trip[SparseRandomProjectionSchema[dtype]](model)
+            assert_equal(len(model.fit_warnings), 0)
         var transformed = model.transform(X)
         compare(model.components_, fields[14], expected_count, cols, tolerance)
         compare(transformed, fields[15], rows, expected_count, tolerance)
@@ -195,6 +210,7 @@ def model_case[dtype: DType](fields: List[String]) raises:
         if not X.is_sparse:
             var dense = clone(model)
             var dense_transformed = dense.fit_transform(as_array(X))
+            check_warnings(dense.fit_warnings, fields)
             same_dense(dense_transformed, transformed)
             same_dense(dense.inverse_transform(dense_transformed), reconstructed)
         if cached:

@@ -11,6 +11,9 @@
         "moxie.base": {
           "file": "src/moxie/base.mojo"
         },
+        "moxie.warnings": {
+          "file": "src/moxie/warnings.mojo"
+        },
         "moxie.dummy": {
           "file": "src/moxie/dummy.mojo"
         },

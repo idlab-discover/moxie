@@ -17,7 +17,7 @@ struct KNeighborsClassifierParams[dtype: DType, M: DenseMetric & Deinitable = Me
     var outlier_label: Optional[Self.Y]
     var outlier_most_frequent: Bool
 
-struct KNeighborsClassifier[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype], Y: Copyable & Deinitable = nm.NDArray[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](KNeighborsClassifierAPI):
+struct KNeighborsClassifier[dtype: DType = DType.float64, M: DenseMetric & Deinitable = Metric[dtype], Y: Copyable & Deinitable = nm.NDArray[dtype], W: NeighborWeights & Deinitable = BuiltinWeights](KNeighborsClassifierAPI, Copyable):
     comptime Input = nm.NDArray[Self.dtype]
     comptime Target = Self.Y
     comptime Prediction = Self.Target

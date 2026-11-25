@@ -8,7 +8,8 @@
       "LabelSpreading": "moxie.semi_supervised._label_propagation",
       "SelfTrainingClassifier": "moxie.semi_supervised._self_training",
       "GraphClassifierAdapter": "moxie.semi_supervised._self_training",
-      "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter"
+      "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter",
+      "LogisticRegressionAdapter": "moxie.semi_supervised._logistic_adapter"
     }
   }
 }

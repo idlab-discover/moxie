@@ -10,7 +10,8 @@ tagged string labels, hard and soft clamping, unseen-data probabilities,
 weighted accuracy, configuration cloning, repeated fits, and strided inputs.
 Self-training supports strict threshold and k-best selection, finite/zero/None
 iteration limits, final supervised refitting, owned transduction state, and
-capability-specific delegation. GaussianNB is consumed from its owner in Moxie.
+capability-specific delegation. GaussianNB and LogisticRegression are consumed
+from their owners in Moxie.
 
 Deferred branches are sparse feature/target arrays, sparse callable affinities,
 sparse graph outputs, and `kernel="knn"`, even when the input features are dense.

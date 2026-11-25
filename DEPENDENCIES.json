@@ -2717,6 +2717,9 @@
         "moxie.semi_supervised._label_propagation": {
           "file": "src/moxie/semi_supervised/_label_propagation.mojo"
         },
+        "moxie.semi_supervised._logistic_adapter": {
+          "file": "src/moxie/semi_supervised/_logistic_adapter.mojo"
+        },
         "moxie.semi_supervised._probability": {
           "file": "src/moxie/semi_supervised/_probability.mojo"
         },
@@ -2737,7 +2740,8 @@
             "LabelSpreading": "moxie.semi_supervised._label_propagation",
             "SelfTrainingClassifier": "moxie.semi_supervised._self_training",
             "GraphClassifierAdapter": "moxie.semi_supervised._self_training",
-            "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter"
+            "GaussianNBAdapter": "moxie.semi_supervised._gaussian_adapter",
+            "LogisticRegressionAdapter": "moxie.semi_supervised._logistic_adapter"
           }
         }
       }

@@ -1,8 +1,9 @@
 # Dense semi-supervised extension contracts
 
 The family owns `moxie.semi_supervised._contracts`, `_affinity`, `_probability`,
-`_label_propagation`, `_self_training`, and `_gaussian_adapter`. Both graph
-estimators consume the same affinity and normalization engines. The foundation
+`_label_propagation`, `_self_training`, `_gaussian_adapter`, and
+`_logistic_adapter`. Both graph estimators consume the same affinity and
+normalization engines. The foundation
 capability traits remain unchanged. [Family development](development.md) defines
 the repository ownership boundary; [the API guide](api-surface.md) describes the
 concrete estimator interfaces.
@@ -67,6 +68,11 @@ shared label owner from their current Moxie sources. It widens Float32 probabili
 outputs to Float64 without changing column order. Numax is explicitly authorized
 for this integration. `GraphClassifierAdapter` supports integer and string labels
 and serves as another real classifier composition target.
+
+`LogisticRegressionAdapter` uses the linear-model owner's native classifier
+and its existing optimizer dependency. It converts owned target and prediction
+vectors at the adapter boundary and copies fitted class labels in their original
+order. The adapter delegates fit, prediction and scoring to the classifier.
 
 ## Assembly and verification
 

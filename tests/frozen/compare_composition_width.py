@@ -6,10 +6,11 @@ import subprocess
 import numpy as np
 import sklearn
 from sklearn.base import clone
+from sklearn.compose import ColumnTransformer
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.frozen import FrozenEstimator
 from sklearn.pipeline import FeatureUnion, make_pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT.parent / "scikit-learn"
@@ -19,7 +20,10 @@ REVISION = "4358542a1bd39af2e7e1cbace8b9fed067473c5b"
 def main():
     revision = subprocess.check_output(["git", "-C", SOURCE, "rev-parse", "HEAD"], text=True)
     assert revision.strip() == REVISION, revision
-    for module in ("pipeline.py", "frozen/_frozen.py", "discriminant_analysis.py", "preprocessing/_data.py"):
+    for module in (
+        "pipeline.py", "frozen/_frozen.py", "discriminant_analysis.py",
+        "preprocessing/_data.py", "compose/_column_transformer.py",
+    ):
         pinned = subprocess.check_output(["git", "-C", SOURCE, "show", f"{REVISION}:sklearn/{module}"])
         assert (Path(sklearn.__file__).parent / module).read_bytes() == pinned, module
 
@@ -70,6 +74,26 @@ def main():
     np.testing.assert_array_equal(predictions, expected_predictions)
     print(f"Frozen pipeline steps matched sklearn with max transform error "
           f"{abs(scaled - expected_scaled).max():.3g} and {predictions.size} exact predictions")
+
+    columns = ColumnTransformer(
+        [("scale", StandardScaler(), [0]), ("empty", StandardScaler(), [])],
+        remainder=MinMaxScaler(),
+    )
+    with np.testing.assert_raises(TypeError):
+        FrozenEstimator(columns)["scale"]
+    frozen_columns = FrozenEstimator(columns.fit(X))
+    nested_columns = FrozenEstimator(clone(frozen_columns))
+    with np.testing.assert_raises(KeyError):
+        frozen_columns["missing"]
+    assert not hasattr(frozen_columns["empty"], "n_features_in_")
+    expected_columns = np.column_stack((
+        nested_columns["scale"].transform(X[:, :1]),
+        frozen_columns["remainder"].transform(X[:, 1:]),
+    ))
+    indexed_columns = values("column_lookup", np.float64)
+    np.testing.assert_allclose(indexed_columns, expected_columns, rtol=0, atol=1e-14)
+    print(f"Frozen column lookups matched {indexed_columns.size} sklearn values with max error "
+          f"{abs(indexed_columns - expected_columns).max():.3g}")
 
 
 if __name__ == "__main__":

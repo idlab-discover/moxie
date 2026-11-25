@@ -26,6 +26,7 @@ from moxie.base import (
 )
 from moxie._feature_metadata import FeatureNamesOut, InputFeatureCount
 from moxie._pipeline_contracts import PipelineSteps
+from moxie.compose._base import NamedColumnTransformers
 from moxie.utils.validation import check_is_fitted
 from ._base import FrozenEstimatorAPI
 
@@ -61,6 +62,7 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
     InputFeatureCount where conforms_to(E, InputFeatureCount),
     InverseTransformer where conforms_to(E, InverseTransformer),
     LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
+    NamedColumnTransformers where conforms_to(E, NamedColumnTransformers),
     NumericClassifierClasses where conforms_to(E, NumericClassifierClasses),
     OutlierMixin where conforms_to(E, OutlierMixin),
     PipelineSteps where conforms_to(E, PipelineSteps),
@@ -171,6 +173,12 @@ struct FrozenEstimator[E: BaseEstimator & Deinitable](
                     Pointer(to=self._final_step())
                 )[]
         raise Error(t"TypeError: pipeline step '{name}' has a different type")
+
+    def named_transformers_[T: TransformerMixin & Copyable & Deinitable](
+        self, name: String,
+    ) raises -> T where conforms_to(Self.E, NamedColumnTransformers):
+        """Return a fitted column transformer child using Compose's copy semantics."""
+        return self._estimator[].named_transformers_[T](name)
 
     def __init__(out self, var estimator: Self.E):
         self._estimator = ArcPointer(estimator^)

@@ -5,13 +5,75 @@ from std.sys import size_of
 from numojo import NDArray, Item, Shape, array, zeros
 from moxie._dense import sum_axis2d
 from moxie._labels import StringTarget
+from moxie._naive_bayes_common import _NaiveBayesMetadata
 from moxie._naive_bayes_dense import ClassDomain, DenseMatrix
 from moxie.naive_bayes import (
     BernoulliNB, CategoricalNB, ComplementNB, GaussianNB, IntListDomain, MultinomialNB,
     NumericDomain, StringDomain,
 )
+from moxie.metadata_routing import SampleWeightRequest
 from moxie.serialization import ArrayPayload, BinaryReader, BinaryWriter, ModelArchive, ModelSchema, dtype_code
 from moxie.warnings import FitWarning
+
+
+comptime _WEIGHT_REQUEST_VERSION = 2
+
+
+def _write_request(mut writer: BinaryWriter, request: SampleWeightRequest):
+    var value = request.value()
+    if value.isa[Bool]():
+        writer.uint(UInt64(2 if value[Bool] else 1))
+    elif value.isa[String]():
+        writer.uint(3)
+        writer.string(value[String])
+    else:
+        writer.uint(0)
+
+
+def _read_request(mut reader: BinaryReader[_]) raises -> SampleWeightRequest:
+    var request = SampleWeightRequest()
+    var tag = reader.uint()
+    if tag == 3:
+        var alias_name = reader.string(reader.remaining())
+        request.set(alias_name)
+        if not request.value().isa[String]():
+            raise Error("ModelSchemaError: invalid sample-weight alias")
+    elif tag == 1 or tag == 2:
+        request.set(tag == 2)
+    elif tag != 0:
+        raise Error("ModelSchemaError: invalid sample-weight request tag")
+    return request^
+
+
+def _has_metadata(metadata: _NaiveBayesMetadata) -> Bool:
+    return (
+        not metadata.fit_score.fit.value().isa[NoneType]()
+        or not metadata.fit_score.score.value().isa[NoneType]()
+        or not metadata.partial_fit.value().isa[NoneType]()
+    )
+
+
+def _write_metadata(
+    mut writer: BinaryWriter, mut archive: ModelArchive, metadata: _NaiveBayesMetadata,
+):
+    if _has_metadata(metadata):
+        archive.schema_version = _WEIGHT_REQUEST_VERSION
+        _write_request(writer, metadata.fit_score.fit)
+        _write_request(writer, metadata.fit_score.score)
+        _write_request(writer, metadata.partial_fit)
+
+
+def _read_metadata(
+    mut reader: BinaryReader[_], archive: ModelArchive,
+) raises -> _NaiveBayesMetadata:
+    var metadata = _NaiveBayesMetadata()
+    if archive.schema_version == _WEIGHT_REQUEST_VERSION:
+        metadata.fit_score.fit = _read_request(reader)
+        metadata.fit_score.score = _read_request(reader)
+        metadata.partial_fit = _read_request(reader)
+        if not _has_metadata(metadata):
+            raise Error("ModelSchemaError: missing configured sample-weight request")
+    return metadata^
 
 
 def _numeric_label_dtype[D: ClassDomain]() -> DType:
@@ -125,7 +187,7 @@ def _check_counts_and_priors[dtype: DType](
 struct GaussianNBSchema[
     D: ClassDomain = IntListDomain, dtype: DType = DType.float64
 ](ModelSchema):
-    """Version 1 state for GaussianNB with a built-in label domain."""
+    """Native state for GaussianNB with a built-in label domain."""
 
     comptime Model = GaussianNB[Self.D, Self.dtype]
     comptime TypeId = "moxie.naive_bayes.GaussianNB"
@@ -169,12 +231,14 @@ struct GaussianNBSchema[
             or model.theta_.shape.tolist() != [0, 0] or model.var_.shape.tolist() != [0, 0]
         ):
             raise Error("ModelSchemaError: unfitted GaussianNB has learned state")
+        _write_metadata(writer, archive, model._metadata)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != UInt64(dtype_code[Self.dtype]()):
@@ -210,6 +274,7 @@ struct GaussianNBSchema[
             model.n_features_in_ = features
             model.classes_ = classes^
             model._domain = domain^
+        model._metadata = _read_metadata(reader, archive)
         reader.finish()
         return model^
 
@@ -355,7 +420,7 @@ def _read_count_warning(mut reader: BinaryReader[_], estimator: String) raises -
 struct MultinomialNBSchema[
     D: ClassDomain = IntListDomain, dtype: DType = DType.float64
 ](ModelSchema):
-    """Version 1 state for MultinomialNB with a built-in label domain."""
+    """Native state for MultinomialNB with a built-in label domain."""
 
     comptime Model = MultinomialNB[Self.D, Self.dtype]
     comptime Estimator = "MultinomialNB"
@@ -396,12 +461,14 @@ struct MultinomialNBSchema[
             or model.feature_log_prob_.shape.tolist() != [0, 0]
         ):
             raise Error("ModelSchemaError: unfitted " + Self.Estimator + " has learned state")
+        _write_metadata(writer, archive, model._metadata)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != _count_input_dtype_tag[Self.dtype]():
@@ -437,6 +504,7 @@ struct MultinomialNBSchema[
             model.n_features_in_ = features
             model.classes_ = classes^
             model._domain = domain^
+        model._metadata = _read_metadata(reader, archive)
         reader.finish()
         return model^
 
@@ -444,7 +512,7 @@ struct MultinomialNBSchema[
 struct ComplementNBSchema[
     D: ClassDomain = IntListDomain, dtype: DType = DType.float64
 ](ModelSchema):
-    """Version 1 state for ComplementNB with a built-in label domain."""
+    """Native state for ComplementNB with a built-in label domain."""
 
     comptime Model = ComplementNB[Self.D, Self.dtype]
     comptime Estimator = "ComplementNB"
@@ -489,12 +557,14 @@ struct ComplementNBSchema[
             or model.feature_all_.shape.tolist() != [0]
         ):
             raise Error("ModelSchemaError: unfitted " + Self.Estimator + " has learned state")
+        _write_metadata(writer, archive, model._metadata)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != _count_input_dtype_tag[Self.dtype]():
@@ -533,6 +603,7 @@ struct ComplementNBSchema[
             model.n_features_in_ = features
             model.classes_ = classes^
             model._domain = domain^
+        model._metadata = _read_metadata(reader, archive)
         reader.finish()
         return model^
 
@@ -540,7 +611,7 @@ struct ComplementNBSchema[
 struct BernoulliNBSchema[
     D: ClassDomain = IntListDomain, dtype: DType = DType.float64
 ](ModelSchema):
-    """Version 1 state for BernoulliNB with a built-in label domain."""
+    """Native state for BernoulliNB with a built-in label domain."""
 
     comptime Model = BernoulliNB[Self.D, Self.dtype]
     comptime Estimator = "BernoulliNB"
@@ -584,12 +655,14 @@ struct BernoulliNBSchema[
             or model.feature_log_prob_.shape.tolist() != [0, 0]
         ):
             raise Error("ModelSchemaError: unfitted " + Self.Estimator + " has learned state")
+        _write_metadata(writer, archive, model._metadata)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != _count_input_dtype_tag[Self.dtype]():
@@ -627,6 +700,7 @@ struct BernoulliNBSchema[
             model.n_features_in_ = features
             model.classes_ = classes^
             model._domain = domain^
+        model._metadata = _read_metadata(reader, archive)
         reader.finish()
         return model^
 
@@ -647,7 +721,7 @@ def _check_categorical_statistics(
 struct CategoricalNBSchema[
     D: ClassDomain = IntListDomain, dtype: DType = DType.float64
 ](ModelSchema):
-    """Version 1 state for CategoricalNB with a built-in label domain."""
+    """Native state for CategoricalNB with a built-in label domain."""
 
     comptime Model = CategoricalNB[Self.D, Self.dtype]
     comptime Estimator = "CategoricalNB"
@@ -718,12 +792,14 @@ struct CategoricalNBSchema[
             or len(model.category_count_) != 0 or len(model.feature_log_prob_) != 0
         ):
             raise Error("ModelSchemaError: unfitted CategoricalNB has learned state")
+        _write_metadata(writer, archive, model._metadata)
         archive.manifest = writer^.finish()
         return archive^
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self.TypeId, Self.StateVersion)
+        var version = _WEIGHT_REQUEST_VERSION if archive.schema_version == _WEIGHT_REQUEST_VERSION else Self.StateVersion
+        archive.expect(Self.TypeId, version)
         archive.validate()
         var reader = BinaryReader(Span(archive.manifest))
         if reader.uint() != _count_input_dtype_tag[Self.dtype]():
@@ -792,5 +868,6 @@ struct CategoricalNBSchema[
             model._domain = domain^
         elif len(archive.payloads) != 0:
             raise Error("ModelSchemaError: unexpected CategoricalNB arrays")
+        model._metadata = _read_metadata(reader, archive)
         reader.finish()
         return model^

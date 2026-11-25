@@ -38,14 +38,16 @@ statistics. See
 [Gaussian API](gaussian/api.md) for shapes and examples.
 
 Native model files are available for [GaussianNB](gaussian/api.md#persistence),
-[MultinomialNB and ComplementNB](counts/scope.md#native-model-files), and
-[BernoulliNB](bernoulli/scope.md#native-model-files).
+[MultinomialNB and ComplementNB](counts/scope.md#native-model-files),
+[BernoulliNB](bernoulli/scope.md#native-model-files), and
+[CategoricalNB](family.md#categoricalnb-native-model-files).
 
 Other explicit differences remain in [family.md](family.md): typed parameter
 records, fluent mutable-reference returns, descriptive Mojo errors, stricter
 negative-weight/prior validation and default Gaussian arithmetic dtype. See
-[behavior classifications](family.md#behavioral-compatibility-decisions). Named-data
-feature_names_in_, metadata routing, Python reflection/bindings and device array
+[behavior classifications](family.md#behavioral-compatibility-decisions). All five estimators
+expose [typed sample-weight requests](family.md#sample-weight-requests).
+Named-data `feature_names_in_`, Python reflection/bindings and device array
 namespace dispatch are outside the native contract. Gaussian is CPU dense only.
 Multioutput targets are unsupported by the reference classifiers as well.
 

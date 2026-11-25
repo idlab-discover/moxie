@@ -66,8 +66,7 @@ def scaled_pls[dtype: DType](q: Int) raises:
     var y = targets(x, q)
     var pipe = make_pipeline(StandardScaler[dtype](), PLSRegression[dtype](n_components=2))
     assert_equal(pipe.transformer_name, "standardscaler")
-    # sklearn names the step "plsregression"; make_pipeline reflects the
-    # `_PLS` struct behind the alias and yields "_pls" (documented gap).
+    assert_equal(pipe.estimator_name, "plsregression")
     _ = pipe.fit(x, y)
     var scaler = StandardScaler[dtype]()
     var z = scaler.fit_transform(x)
@@ -107,8 +106,21 @@ def canonical_regressors() raises:
     _ = cca.fit(z, y)
     same(can_pipe.predict(x), can.predict(z))
     same(cca_pipe.predict(x), cca.predict(z))
+    assert_equal(can_pipe.estimator_name, "plscanonical")
+    assert_equal(cca_pipe.estimator_name, "cca")
     assert_equal(can_pipe.get_feature_names_out()[1], "plscanonical1")
     assert_equal(cca_pipe.get_feature_names_out()[0], "cca0")
+
+
+def aliased_pipeline_names() raises:
+    var distinct = make_pipeline(PLSRegression(1), CCA(1))
+    assert_equal(distinct.transformer_name, "plsregression")
+    assert_equal(distinct.estimator_name, "cca")
+    var repeated = make_pipeline(PLSRegression(1), PLSRegression(1))
+    assert_equal(repeated.transformer_name, "plsregression-1")
+    assert_equal(repeated.estimator_name, "plsregression-2")
+    var svd = make_pipeline(PLSSVD(1), PLSRegression(1))
+    assert_equal(svd.transformer_name, "plssvd")
 
 
 def unfitted_and_plssvd() raises:
@@ -223,6 +235,7 @@ def main() raises:
     scaled_pls[DType.float32](0)
     scaled_pls[DType.float32](2)
     canonical_regressors()
+    aliased_pipeline_names()
     unfitted_and_plssvd()
     cloned_pipeline()
     cross_validation()

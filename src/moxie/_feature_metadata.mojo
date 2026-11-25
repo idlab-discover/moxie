@@ -1,4 +1,4 @@
-"""Optional feature metadata contracts shared by native composition engines."""
+"""Optional metadata contracts shared by native composition engines."""
 
 
 trait FeatureNamesOut:
@@ -10,3 +10,9 @@ trait FeatureNamesOut:
 trait InputFeatureCount:
     """Read learned input width without prescribing attribute storage."""
     def get_n_features_in(self) raises -> Int: ...
+
+
+trait EstimatorClassName:
+    """Public estimator class name when the reflected struct name differs."""
+    @staticmethod
+    def name() -> String: ...

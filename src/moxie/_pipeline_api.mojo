@@ -1,7 +1,9 @@
 # Adapted from scikit-learn; authors: scikit-learn developers.
 # SPDX-License-Identifier: BSD-3-Clause
 """make_pipeline/make_union: typed constructors with sklearn's automatic step names."""
+from std.iter import downcast
 from std.reflection import reflect
+from moxie._feature_metadata import EstimatorClassName
 from moxie.base import TransformerMixin, SupervisedEstimator, UnsupervisedEstimator, Predictor
 from moxie._pipeline_sequential import Pipeline, TransformerPipeline
 from moxie._pipeline_union import FeatureUnion, UnionStep, UnionPair, union_step
@@ -32,8 +34,11 @@ def _name_estimators(var names: List[String]) -> List[String]:
 
 
 def _type_name[T: AnyType]() -> String:
-    comptime info = reflect[T]
-    return String(info.base_name())
+    comptime if conforms_to(T, EstimatorClassName):
+        return downcast[T, EstimatorClassName].name()
+    else:
+        comptime info = reflect[T]
+        return String(info.base_name())
 
 
 def make_pipeline[P: TransformerMixin & Deinitable, E: SupervisedEstimator & Predictor & Deinitable](

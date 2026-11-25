@@ -33,10 +33,12 @@ for dt in (np.float64, np.float32):
         for norm in ('l1', 'l2', 'max'):
             for axis in (0, 1):
                 body.append(f'emit("n_{norm}_{axis}", normalize(X, "{norm}", axis={axis}))')
-                body.append(f'var r_{norm}_{axis} = normalize_with_norms(X, "{norm}", axis={axis})')
+                body.append(f'var r_{norm}_{axis} = normalize[return_norm=True](X, "{norm}", axis={axis})')
+                body.append(f'emit("nt_{norm}_{axis}", r_{norm}_{axis}[0])')
                 body.append(f'emit("nn_{norm}_{axis}", r_{norm}_{axis}[1])')
                 Xn, norms = P.normalize(X, norm=norm, axis=axis, return_norm=True)
                 expected[(tag, f'n_{norm}_{axis}')] = Xn
+                expected[(tag, f'nt_{norm}_{axis}')] = Xn
                 expected[(tag, f'nn_{norm}_{axis}')] = norms
             body.append(f'var est_{norm} = Normalizer[{MOJO[dt]}]("{norm}")')
             body.append(f'emit("N_{norm}", est_{norm}.fit_transform(X))')
@@ -113,8 +115,7 @@ try:
 except e:
     emit_error("unfitted", e)''')
 
-out = d.run(imports='from moxie.preprocessing import Normalizer, Binarizer, KernelCenterer, normalize, binarize, add_dummy_feature\n'
-                    'from moxie.preprocessing._simple import normalize_with_norms')
+out = d.run(imports='from moxie.preprocessing import Normalizer, Binarizer, KernelCenterer, normalize, binarize, add_dummy_feature')
 for (tag, name), value in expected.items():
     got = out.get(tag, {})
     if 'error' in got:

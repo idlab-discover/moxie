@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Stateless dense transforms: Normalizer, Binarizer, KernelCenterer and helpers.
 
-See docs/api.md for the native adaptations (typed dtypes, in-place methods,
-normalize_with_norms) shared by the family.
+See docs/api.md for the native adaptations, including typed dtypes,
+in-place methods and compile-time selection of returned norms.
 """
 from moxie._feature_metadata import FeatureNamesOut as NativeFeatureNamesOut
 from numojo import NDArray, Shape
@@ -38,16 +38,40 @@ def _check_axis(axis: Int, owner: String) raises:
 def normalize[dtype: DType](X: NDArray[dtype], norm: String = "l2", *, axis: Int = 1, copy: Bool = True, return_norm: Bool = False) raises -> NDArray[dtype]:
     """Scale rows (axis=1) or features (axis=0) to unit l1, l2 or max norm.
 
-    Returns a new array; `copy=False` cannot mutate a borrowed input (use
-    `normalize_inplace`). `return_norm=True` changes the result type in
-    sklearn: call `normalize_with_norms` instead.
+    Returns a new array. Use `normalize_inplace` to mutate the input or
+    `normalize[return_norm=True]` to return the array and its guarded norms.
     """
     var code = _norm_code(norm, "normalize")
     _check_axis(axis, "normalize")
     if return_norm:
-        raise Error("ValueError: return_norm=True returns a tuple; call normalize_with_norms(X, norm, axis=axis)")
+        raise Error(
+            "ValueError: select the tuple result with "
+            "normalize[return_norm=True](X, norm, axis=axis)"
+        )
     check_matrix(X, allow_nan=False)
     return engine.normalize(X, axis=axis, norm=code)
+
+
+def normalize[dtype: DType, return_norm: Bool](
+    X: NDArray[dtype],
+    norm: String = "l2",
+    *,
+    axis: Int = 1,
+    copy: Bool = True,
+) raises -> Tuple[NDArray[dtype], NDArray[dtype]] where return_norm:
+    """Return the normalized matrix and the guarded norm for each slice."""
+    return normalize_with_norms(X, norm, axis=axis)
+
+
+def normalize[dtype: DType, return_norm: Bool](
+    X: NDArray[dtype],
+    norm: String = "l2",
+    *,
+    axis: Int = 1,
+    copy: Bool = True,
+) raises -> NDArray[dtype] where not return_norm:
+    """Return the normalized matrix."""
+    return normalize(X, norm, axis=axis, copy=copy)
 
 
 def normalize_with_norms[dtype: DType](X: NDArray[dtype], norm: String = "l2", *, axis: Int = 1) raises -> Tuple[NDArray[dtype], NDArray[dtype]]:

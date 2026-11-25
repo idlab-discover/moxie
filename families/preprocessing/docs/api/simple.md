@@ -7,16 +7,17 @@ Conventions: [api.md](../api.md). Source: `src/moxie/preprocessing/_simple.mojo`
 | `Normalizer[dtype]` | `Normalizer(norm="l2", *, copy=True)`; norm in l1, l2, max |
 | `Binarizer[dtype]` | `Binarizer(*, threshold=0.0, copy=True)` |
 | `KernelCenterer[dtype]` | `KernelCenterer()`; learned `K_fit_rows_` (vector), `K_fit_all_` (scalar) |
-| `normalize` | `normalize(X, norm="l2", *, axis=1, copy=True, return_norm=False) -> NDArray` |
+| `normalize` | `normalize(X, norm="l2", *, axis=1, copy=True) -> NDArray` or `normalize[return_norm=True](X, norm="l2", *, axis=1, copy=True) -> Tuple[NDArray, NDArray]` |
 | `binarize` | `binarize(X, *, threshold=0.0, copy=True) -> NDArray` |
 | `add_dummy_feature` | `add_dummy_feature(X, value=1.0) -> NDArray[float64]` |
 
 ```mojo
 from moxie.preprocessing import Normalizer, normalize
-from moxie.preprocessing._simple import normalize_with_norms
 
 var unit_rows = normalize(X, "l1")
-var result = normalize_with_norms(X, "l2", axis=0)   # (X_normalized, norms)
+var result = normalize[return_norm=True](X, "l2", axis=0)
+var unit_columns = result[0]
+var column_norms = result[1]
 var model = Normalizer("max")
 model.transform_inplace(X)                            # no allocation
 ```
@@ -30,8 +31,12 @@ the feature count. KernelCenterer requires a square training kernel and centers
 `kernelcenterer0, ...`. `add_dummy_feature` returns Float64 for Float32 input,
 like sklearn's dense `hstack`.
 
-Native adaptations: `normalize(..., return_norm=True)` raises because the
-result type would change; `normalize_with_norms` returns the tuple.
+Mojo selects the result type at compile time. Use `normalize[return_norm=True]`
+for the tuple and `normalize[return_norm=False]` or `normalize(X)` for the array.
+The older runtime keyword still accepts `return_norm=False` and raises with
+guidance for `True`. The `normalize_with_norms` helper in
+`moxie.preprocessing._simple` also returns the tuple.
+Both forms of `normalize` return a new array even with `copy=False`.
 `normalize_inplace`, `binarize_inplace` and each estimator's
 `transform_inplace(mut X)` implement copy=False without allocating.
 

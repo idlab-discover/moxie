@@ -5,7 +5,9 @@ from moxie.base import clone
 from moxie.preprocessing import (
     Preprocessor, Normalizer, Binarizer, KernelCenterer, binarize, normalize,
 )
-from moxie.preprocessing._simple import normalize_inplace, binarize_inplace
+from moxie.preprocessing._simple import (
+    normalize_inplace, normalize_with_norms, binarize_inplace,
+)
 
 
 def generic_transform[P: Preprocessor](model: P, X: P.Input) raises -> P.Transformed:
@@ -119,13 +121,28 @@ def test_functions() raises:
     var vector = zeros[DType.float64](Shape(3))
     with assert_raises(contains="2D"):
         _ = normalize(vector)
-    with assert_raises(contains="return_norm"):
-        _ = normalize(X, return_norm=True)
+    var runtime_flag = X.shape[0] == 2
+    with assert_raises(contains="normalize[return_norm=True]"):
+        _ = normalize(X, return_norm=runtime_flag)
+    with assert_raises(contains="2D"):
+        _ = normalize[return_norm=True](vector)
+    with assert_raises(contains="'axis' parameter"):
+        _ = normalize[return_norm=True](X, axis=2)
     var copy = X.copy()
     normalize_inplace(copy, "max", axis=0)
     var expected = normalize(X, "max", axis=0)
+    var explicit_array = normalize[DType.float64, return_norm=False](X, "max", axis=0)
+    var legacy_array = normalize[DType.float64](X, "max", axis=0, return_norm=False)
+    var result = normalize[return_norm=True](X, "max", axis=0, copy=False)
+    var helper = normalize_with_norms(X, "max", axis=0)
     for k in range(6):
         assert_equal(copy.unsafe_get(k), expected.unsafe_get(k))
+        assert_equal(explicit_array.unsafe_get(k), expected.unsafe_get(k))
+        assert_equal(legacy_array.unsafe_get(k), expected.unsafe_get(k))
+        assert_equal(result[0].unsafe_get(k), expected.unsafe_get(k))
+        assert_equal(X.unsafe_get(k), Float64(k) - 2.5)
+    for col in range(3):
+        assert_equal(result[1].unsafe_get(col), helper[1].unsafe_get(col))
     var empty = zeros[DType.float64](Shape(0, 2))
     assert_equal(binarize(empty).shape[0], 0)
 

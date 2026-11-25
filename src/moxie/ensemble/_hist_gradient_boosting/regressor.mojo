@@ -2,7 +2,7 @@
 # See families/ensemble/LICENSES/scikit-learn.txt.
 """Public dense histogram gradient boosting regression."""
 
-from std.math import ceil
+from std.math import ceil, isfinite, sqrt
 
 from numojo import NDArray, Shape, full
 
@@ -11,6 +11,7 @@ from moxie.base import WeightedSupervisedEstimator
 from moxie.tree._classes import DecisionTreeRegressor
 
 from .._base import EnsembleRegressor, StagedPredictor
+from .._sampling import _at
 from .binning import _BinMapper
 from .common import (
     HistGradientBoostingCategoricalFeatures, _CategoryEncoder, _categorical_mask,
@@ -60,6 +61,74 @@ def _validate_target(
     if y.ndim != 1 or y.size != rows:
         raise Error("ValueError: y must be a vector with one entry per sample")
     loss.validate_targets(y, weights)
+
+
+def _linked(loss: _RegressionLoss, raw: _Values) raises -> _Values:
+    var result = _Values(Shape(raw.size))
+    for i in range(raw.size):
+        result.unsafe_set(i, loss.inverse_link(raw.unsafe_get(i)))
+    return result^
+
+
+def _regression_score(
+    scoring: String, loss: _RegressionLoss, y: _Values, raw: _Values,
+    weights: Optional[_Values],
+) raises -> Float64:
+    if scoring == "loss":
+        return -loss.mean_loss(y, raw, weights)
+    if scoring == "r2":
+        var prediction = _linked(loss, raw)
+        for i in range(prediction.size):
+            if not isfinite(prediction.unsafe_get(i)):
+                raise Error("ValueError: nonfinite score prediction")
+        var scorer = DecisionTreeRegressor()
+        scorer.n_outputs_ = 1
+        return scorer._score(prediction, y, weights)
+
+    var total_weight = Float64(0)
+    var total_error = Float64(0)
+    var absolute = scoring == "neg_mean_absolute_error"
+    for i in range(y.size):
+        var prediction = loss.inverse_link(raw.unsafe_get(i))
+        if not isfinite(prediction):
+            raise Error("ValueError: nonfinite score prediction")
+        var difference = prediction - _at(y, i)
+        var error = abs(difference) if absolute else difference * difference
+        var weight = _at(weights.value(), i) if weights else 1.0
+        total_error += weight * error
+        total_weight += weight
+    if total_weight == 0.0:
+        raise Error("ValueError: sample weights sum to zero")
+    var mean_error = total_error / total_weight
+    return -sqrt(mean_error) if scoring == "neg_root_mean_squared_error" else -mean_error
+
+
+@fieldwise_init
+struct _ScoringSubset(Movable):
+    var indices: NDArray[DType.int64]
+    var y: _Values
+    var weights: Optional[_Values]
+
+    @staticmethod
+    def sample(y: _Values, weights: Optional[_Values], seed: Int) raises -> Self:
+        var rng = RandomState(seed)
+        var indices = rng.permutation(y.size)
+        var subset_weights: Optional[_Values] = None
+        if weights:
+            subset_weights = _take_rows(weights.value(), indices, 0, 10_000)
+        var subset_targets = _take_rows(y, indices, 0, 10_000)
+        return Self(indices^, subset_targets^, subset_weights^)
+
+
+def _training_score(
+    scoring: String, loss: _RegressionLoss, y: _Values, raw: _Values,
+    weights: Optional[_Values], subset: Optional[_ScoringSubset],
+) raises -> Float64:
+    if subset:
+        ref sample = subset.value()
+        var subset_raw = _take_rows(raw, sample.indices, 0, sample.y.size)
+        return _regression_score(scoring, loss, sample.y, subset_raw, sample.weights)
+    return _regression_score(scoring, loss, y, raw, weights)
 
 
 @fieldwise_init
@@ -192,8 +261,12 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         var loss = _RegressionLoss(self._params.loss, self._params.quantile)
         _validate_target(loss, y, X.shape[0], sample_weight)
         var early = _uses_early_stopping(params.early_stopping, X.shape[0])
-        if early and self._params.scoring.or_else("") != "loss":
-            raise Error("NotImplementedError: histogram regression early stopping supports scoring=loss")
+        var scoring = params.scoring.or_else("r2")
+        if early and scoring not in (
+            "loss", "r2", "neg_mean_absolute_error", "neg_mean_squared_error",
+            "neg_root_mean_squared_error",
+        ):
+            raise Error("NotImplementedError: unsupported histogram regression early-stopping scorer")
         if Bool(X_val) != Bool(y_val) or (sample_weight_val and not X_val):
             raise Error("ValueError: explicit validation requires both X_val and y_val")
         var validation: Optional[_Validation[Self.feature_dtype]] = None
@@ -276,8 +349,12 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         var raw_val = _Values(Shape(0))
         var binned_val: Optional[NDArray[DType.uint8]] = None
         var score_validation = early and Bool(validation)
+        var scoring = params.scoring.or_else("r2")
+        var scoring_subset: Optional[_ScoringSubset] = None
+        if early and scoring != "loss" and y.size > 10_000:
+            scoring_subset = _ScoringSubset.sample(y, weights, random.split_seed)
         if early and not resume:
-            train_scores.append(-loss.mean_loss(y, raw, weights))
+            train_scores.append(_training_score(scoring, loss, y, raw, weights, scoring_subset))
         if validation:
             ref val_data = validation.value()
             var X_val = encoder.transform(val_data.X)
@@ -285,7 +362,7 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
                 binned_val = mapper.transform(X_val)
                 raw_val = Self._raw_predictions(X_val, baseline, trees)
                 if not resume:
-                    validation_scores.append(-loss.mean_loss(val_data.y, raw_val, val_data.weights))
+                    validation_scores.append(_regression_score(scoring, loss, val_data.y, raw_val, val_data.weights))
 
         var gradients = List[Float32]()
         var hessians = List[Float32]()
@@ -316,10 +393,10 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
             if params.verbose > 1:
                 print("Boosting iteration", stage + 1, "of", params.max_iter)
             if early:
-                train_scores.append(-loss.mean_loss(y, raw, weights))
+                train_scores.append(_training_score(scoring, loss, y, raw, weights, scoring_subset))
                 if score_validation:
                     ref val_data = validation.value()
-                    validation_scores.append(-loss.mean_loss(val_data.y, raw_val, val_data.weights))
+                    validation_scores.append(_regression_score(scoring, loss, val_data.y, raw_val, val_data.weights))
                 ref scores = validation_scores if score_validation else train_scores
                 if _should_stop(scores, params.n_iter_no_change, params.tol):
                     break
@@ -343,13 +420,6 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
             raise Error("ValueError: prediction feature count must match training")
 
     @staticmethod
-    def _linked(loss: _RegressionLoss, raw: _Values) raises -> _Values:
-        var result = _Values(Shape(raw.size))
-        for i in range(raw.size):
-            result.unsafe_set(i, loss.inverse_link(raw.unsafe_get(i)))
-        return result^
-
-    @staticmethod
     def _raw_predictions(X: Self.Input, baseline: Float64, trees: List[_RawTree]) raises -> _Values:
         var raw = full[DType.float64](Shape(X.shape[0]), baseline)
         for tree in trees:
@@ -359,7 +429,7 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check_predict(X)
         ref model = self._model.value()
-        return Self._linked(model.loss, Self._raw_predictions(model.encoder.transform(X), model.baseline, model.trees))
+        return _linked(model.loss, Self._raw_predictions(model.encoder.transform(X), model.baseline, model.trees))
 
     def staged_predict(self, X: Self.Input) raises -> Self.Stages:
         self._check_predict(X)
@@ -369,7 +439,7 @@ struct HistGradientBoostingRegressor[feature_dtype: DType = DType.float64](
         var encoded = model.encoder.transform(X)
         for tree in model.trees:
             _add_prediction(raw, tree.predict(encoded))
-            stages.append(Self._linked(model.loss, raw))
+            stages.append(_linked(model.loss, raw))
         return stages^
 
     def score(self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:

@@ -25,7 +25,8 @@ def _run_case[origin: ImmOrigin](fields: List[StringSpan[origin]]) raises:
     var seed = atol(String(fields[10]))
     var initial = atol(String(fields[11]))
     var categories = atol(String(fields[12]))
-    var offset = 13
+    var scoring = String(fields[13])
+    var offset = 14
 
     var X = _Values(Shape(rows, cols))
     var query = _Values(Shape(queries, cols))
@@ -46,6 +47,7 @@ def _run_case[origin: ImmOrigin](fields: List[StringSpan[origin]]) raises:
         tol=0.125,
     )
     var params = model.get_params()
+    params.scoring = None if scoring == "none" else Optional[String](scoring^)
     if categories:
         var indices = List[Int]()
         for col in range(cols):

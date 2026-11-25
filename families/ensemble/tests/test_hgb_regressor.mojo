@@ -142,9 +142,20 @@ def test_pipeline_and_unsupported_configuration() raises:
     params.max_iter = 1
     _ = standalone.set_params(params).fit(X, y)
     assert_equal(standalone.n_iter_, 1)
-    var scorer = HistGradientBoostingRegressor(early_stopping=True, scoring=String("r2"))
-    with assert_raises(contains="scoring=loss"):
+    var scorer = HistGradientBoostingRegressor(
+        early_stopping=True, scoring=String("r2"), max_iter=2, random_state=10,
+    )
+    _ = scorer.fit(X, y)
+    var fitted = scorer.predict(X)
+    var scoring_params = scorer.get_params()
+    scoring_params.scoring = String("accuracy")
+    _ = scorer.set_params(scoring_params)
+    with assert_raises(contains="unsupported histogram regression early-stopping scorer"):
         _ = scorer.fit(X, y)
+    assert_equal(scorer.n_iter_, 2)
+    var after_failure = scorer.predict(X)
+    for i in range(fitted.size):
+        assert_equal(after_failure.unsafe_get(i), fitted.unsafe_get(i))
 
 
 def test_categorical_feature_validation_and_refit() raises:

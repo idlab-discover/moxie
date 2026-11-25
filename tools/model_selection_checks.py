@@ -81,6 +81,11 @@ def main():
             run(sys.executable, project / 'tests/parity.py', cwd=project)
             if child == 'search':
                 run(sys.executable, project / 'tests/search_parity.py', cwd=project)
+                # The SVC composition uses the root-assembled namespace.
+                binary = build / 'iris_search'
+                run('mojo', 'build', '-O3', '--fp-mode=contract=off', '-I', DEPS,
+                    project / 'tests/svc/iris_search.mojo', '-o', binary)
+                run(sys.executable, project / 'tests/search_parity.py', '--svc-only', binary, cwd=project)
     print('PASS model_selection', action, 'using Moxie-owned sources')
 
 

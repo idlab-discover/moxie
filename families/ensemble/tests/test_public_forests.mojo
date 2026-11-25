@@ -121,7 +121,39 @@ def absolute_error_missing[extra: Bool]() raises:
         assert_equal(leaves.unsafe_get(3 * 4 + member), leaves.unsafe_get(4 * 4 + member))
 
 
+def float64_features() raises:
+    var backing = nm.zeros[DType.float64](nm.Shape(12, 4))
+    var y = nm.zeros[DType.float64](nm.Shape(12))
+    for i in range(12):
+        backing.unsafe_set(4 * i + 1, Float64(i) + 1e-12)
+        backing.unsafe_set(4 * i + 3, Float64(i % 3) / 7)
+        y.unsafe_set(i, Float64((i * i) % 17))
+    var X = backing.view_with_layout(nm.Shape(12, 2), nm.Strides(-4, 2), 45)
+    var narrow = X.contiguous().astype[DType.float32]()
+    var wide = RandomForestRegressor[DType.float64](5, random_state=12)
+    var standard = RandomForestRegressor(5, random_state=12)
+    regressor_contract(wide)
+    with assert_raises(contains="NotFittedError"):
+        _ = wide.predict(X)
+    var weights = nm.full[DType.float64](nm.Shape(12), 2)
+    _ = wide.fit(X, y, sample_weight=weights)
+    _ = standard.fit(narrow, y, sample_weight=weights)
+    var expected = standard.predict(narrow)
+    var predicted = wide.predict(X)
+    var dense_predicted = wide.predict(X.contiguous())
+    for i in range(expected.size):
+        assert_equal(predicted.unsafe_get(i), expected.unsafe_get(i))
+        assert_equal(dense_predicted.unsafe_get(i), expected.unsafe_get(i))
+    var expected_leaves = standard.apply(narrow)
+    var leaves = wide.apply(X)
+    for i in range(leaves.size):
+        assert_equal(leaves.unsafe_get(i), expected_leaves.unsafe_get(i))
+    assert_equal(wide.score(X, y), standard.score(narrow, y))
+    assert_true(not clone(wide).__sklearn_is_fitted__())
+
+
 def main() raises:
+    float64_features()
     absolute_error_missing[False]()
     absolute_error_missing[True]()
     parameter_updates[True, False]()
@@ -152,6 +184,7 @@ def main() raises:
     assert_equal(len(classifier), 12)
     assert_equal(classifier.estimators_()[0].classes_[0].unsafe_get(0), Float64(0))
     assert_true(classifier[-1].__sklearn_is_fitted__())
+    var snapshot = classifier.copy()
     var cloned = clone(classifier)
     assert_true(not cloned.__sklearn_is_fitted__())
     assert_equal(cloned.n_estimators, 12)
@@ -171,6 +204,10 @@ def main() raises:
     params.warm_start = False
     _ = classifier.set_params(params).fit(X, y)
     assert_equal(len(classifier), 3)
+    assert_equal(len(snapshot), 12)
+    var saved = snapshot.predict_proba(X)
+    for i in range(saved.size):
+        assert_equal(saved.unsafe_get(i), probabilities.unsafe_get(i))
     var extra = ExtraTreesClassifier(10, random_state=42)
     assert_true(not extra.bootstrap)
     _ = extra.fit(X, y)
@@ -184,6 +221,9 @@ def main() raises:
     var extra_regressor = ExtraTreesRegressor(10, random_state=42)
     _ = extra_regressor.fit(X, y)
     assert_equal(extra_regressor.score(X, y), Float64(1))
+    var extra_snapshot = extra_regressor.copy()
+    _ = extra_regressor.fit(X, nm.full[DType.float64](nm.Shape(12), 0))
+    assert_equal(extra_snapshot.score(X, y), Float64(1))
     var multiple = nm.zeros[DType.float64](nm.Shape(12, 2))
     for i in range(12):
         multiple.unsafe_set(i * 2, y.unsafe_get(i))

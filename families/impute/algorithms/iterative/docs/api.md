@@ -75,6 +75,26 @@ var imputer = IterativeImputer[DType.float64, Regressor](
 )
 ```
 
+The random forest gallery regressor uses the Float64 feature specialization.
+It accepts the imputer's Float64 arrays and casts the predictors to Float32
+inside the forest, matching scikit-learn's tree inputs. Targets and predictions
+remain Float64. Each step retains its own fitted ensemble.
+
+```mojo
+from moxie.ensemble import RandomForestRegressor
+from moxie.ensemble._sampling import MaxSamples
+from moxie.impute import IterativeImputer
+
+comptime Regressor = RandomForestRegressor[DType.float64]
+var imputer = IterativeImputer[DType.float64, Regressor](
+    Regressor(
+        n_estimators=5, max_depth=10, bootstrap=True,
+        max_samples=MaxSamples(0.5), n_jobs=2, random_state=0,
+    ),
+    random_state=0, max_iter=40, tol=1e-1,
+)
+```
+
 The polynomial Nystroem + Ridge gallery regressor uses the regular typed
 pipeline. Pass its type to the imputer and move in the configured pipeline.
 Both children support fitted copies, so copying the imputer also copies
@@ -187,4 +207,22 @@ mkdir -p builds/pr6-nystroem
 python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
 mojo build -O3 --fp-mode=contract=off -I builds/deps families/impute/algorithms/iterative/tests/integration/nystroem_ridge.mojo -o builds/pr6-nystroem/nystroem_ridge
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python families/impute/algorithms/iterative/tests/nystroem_ridge_parity.py builds/pr6-nystroem/nystroem_ridge
+```
+
+The random forest integration uses the gallery parameters and compares Float64
+training fills and held-out replay, including missing cells in a feature that
+was complete at fit time. It checks round counts, feature and predictor order,
+member seeds and preservation of observed values. Fill comparisons allow
+absolute and relative tolerances of `2e-14` for differences in summation order.
+The native probe checks unfitted transforms, configuration clones and replay
+from an independent fitted copy after the original has been refit.
+
+Run the parity script with an importable scikit-learn build from the revision
+recorded in the [estimator contract](../../../../../docs/interfaces.md).
+
+```sh
+mkdir -p builds/pr6-forest
+python shared/assembly/tools/assemble_family.py --consumer . --lock DEPENDENCIES.json --output builds/deps
+mojo build -O3 --fp-mode=contract=off -I builds/deps families/impute/algorithms/iterative/tests/integration/random_forest.mojo -o builds/pr6-forest/random_forest
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python families/impute/algorithms/iterative/tests/random_forest_parity.py builds/pr6-forest/random_forest
 ```

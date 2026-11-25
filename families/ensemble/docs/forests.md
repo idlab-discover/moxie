@@ -18,7 +18,7 @@ var unfitted = clone(model)
 _ = model.set_params(warm_start=True, n_estimators=150).fit(X, y)
 ```
 
-Inputs are NuMojo Float32 feature matrices. Regression targets are Float64,
+The default input is a NuMojo Float32 feature matrix. Regression targets are Float64,
 with single or multiple outputs. Classification labels are Float64 by default;
 select Int64 or Float32 labels with `label_dtype`, or strings with
 `string_labels=True` (a `moxie._labels.StringTarget`), as for the trees:
@@ -26,8 +26,15 @@ select Int64 or Float32 labels with `label_dtype`, or strings with
 `ExtraTreesClassifier[string_labels=True](...)`. Numeric labels must be
 integral, `classes_` is sorted in the label type, and `predict` returns that
 type. Members always train on Float64 class codes, as scikit-learn's forest
-members do. Float64 feature matrices are not accepted (scikit-learn casts them
-to float32); see the tree family's composition notes. No sparse conversion occurs.
+members do.
+
+Use `RandomForestRegressor[DType.float64](...)` to accept Float64 feature
+matrices, including inputs from a Float64 pipeline transformer. The associated
+`Input` type is selected at compile time and defaults to Float32. With Float64
+features, `fit`, `predict`, `apply` and `score` narrow the features to
+Float32 at the forest boundary, following scikit-learn. NuMojo's `astype`
+traverses physical storage, so a strided Float64 input is first materialized in
+logical row order. Regression targets and predictions remain Float64.
 
 Single-output predictions have shape `(samples,)`; probabilities and log
 probabilities have shape `(samples, classes)`. Multiple regression outputs have
@@ -64,7 +71,9 @@ Integer `random_state` resets the stream on each fit. None consumes Moxie's
 process-wide random stream. A mutable RandomState constructor argument is not
 implemented here; the underlying engine accepts one explicitly. Warm starts
 retain members and replay integer-seeded draws before growing new members.
-Ordinary fits replace members; cloning copies constructor configuration only.
+Ordinary fits replace members. `clone(model)` copies constructor configuration
+and starts unfitted. `model.copy()` also preserves the fitted members and
+learned state in an independent snapshot.
 
 Learned attributes include `n_features_in_`, `n_outputs_`,
 `feature_importances_`, and OOB results. `estimators_()` and `estimator_()` return

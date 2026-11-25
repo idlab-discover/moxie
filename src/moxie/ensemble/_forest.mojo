@@ -60,8 +60,12 @@ struct ForestParams[label_dtype: DType = DType.float64, string_labels: Bool = Fa
     var max_samples: MaxSamples
     var monotonic_cst: Optional[List[Int]]
 
-struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False](BaseEstimator, Predictor, SupervisedEstimator, SupervisedScorer, WeightedSupervisedEstimator, DenseForestInspection, ProbabilisticEnsemble where classifier, LogProbabilityPredictor where classifier, EnsembleRegressor where not classifier, Sized):
-    """Float32 features; Float64 regression targets or typed class labels.
+struct Forest[
+    classifier: Bool, extra: Bool = False, multi_output: Bool = False,
+    label_dtype: DType = DType.float64, string_labels: Bool = False,
+    feature_dtype: DType = DType.float32,
+](Copyable, BaseEstimator, Predictor, SupervisedEstimator, SupervisedScorer, WeightedSupervisedEstimator, DenseForestInspection, ProbabilisticEnsemble where classifier, LogProbabilityPredictor where classifier, EnsembleRegressor where not classifier, Sized):
+    """Float32 or Float64 features; Float64 regression targets or typed class labels.
 
     multi_output selects classifier result types. Classifier labels are Float64
     (default), Float32, Int64 or strings (`string_labels=True`), as for trees;
@@ -72,7 +76,7 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False,
     comptime ClassLabels = Self.Labels.ClassLabels
     comptime Weights = TypedClassWeight[Self.Label]
     comptime Params = ForestParams[Self.label_dtype, Self.string_labels]
-    comptime Input = Features
+    comptime Input = nm.NDArray[Self.feature_dtype]
     comptime Target = Self.Labels.Target
     comptime Prediction = Self.Labels.Prediction
     comptime Leaves = Indices
@@ -129,6 +133,7 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False,
             ccp_alpha: Float64 = 0,
             max_samples: MaxSamples = NoneType(),
             monotonic_cst: Optional[List[Int]] = None) raises:
+        comptime assert Self.feature_dtype in (DType.float32, DType.float64), "forest features require Float32 or Float64"
         comptime assert Self.classifier or (Self.label_dtype == DType.float64 and not Self.string_labels), "regression targets use Float64"
         comptime assert Self.string_labels or Self.label_dtype in (DType.int64, DType.float32, DType.float64), "labels require Int64, Float32, Float64 or strings"
         self.n_estimators = n_estimators.copy()
@@ -297,13 +302,24 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False,
     def estimators_samples_(self) raises -> List[Indices]:
         return self._engine.estimators_samples_()
 
-    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Features, ref[y_origin] y: Self.Target) raises -> ref[self] Self:
+    @staticmethod
+    def _tree_features(X: Self.Input) raises -> Features:
+        comptime if Self.feature_dtype == DType.float32:
+            ref features = rebind[Features](X)
+            return features.view_with_layout(features.shape, features.strides, features.offset)
+        else:
+            # NuMojo's cast traverses physical storage.
+            if X.is_c_contiguous():
+                return X.astype[DType.float32]()
+            return X.contiguous().astype[DType.float32]()
+
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target) raises -> ref[self] Self:
         return self.fit(X, y, None)
 
-    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Features, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Values) raises -> ref[self] Self:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin, sample_weight_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, *, ref[sample_weight_origin] sample_weight: Values) raises -> ref[self] Self:
         return self.fit(X, y, Optional[Values](sample_weight.copy()))
 
-    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Features, ref[y_origin] y: Self.Target, sample_weight: Optional[Values]) raises -> ref[self] Self:
+    def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, sample_weight: Optional[Values]) raises -> ref[self] Self:
         if self.verbose != 0:
             raise Error("NotImplementedError: verbose progress is not implemented")
         # n_jobs only distributes member building in sklearn; members are built
@@ -364,7 +380,7 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False,
         self._engine.max_samples = self.max_samples.copy()
         self._engine.class_weight = weights^
         var rng = check_random_state(self.random_state)
-        self._engine.fit(X, target, sample_weight, rng[])
+        self._engine.fit(Self._tree_features(X), target, sample_weight, rng[])
         self.n_features_in_ = self._engine.n_features_in_
         self.n_outputs_ = self._engine.n_outputs_
         self.feature_importances_ = self._engine.feature_importances_()
@@ -386,17 +402,17 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False,
                 self.oob_prediction_ = self._engine.oob_prediction_.reshape(nm.Shape(rows)) if outputs == 1 else self._engine.oob_prediction_.copy()
         return self
 
-    def apply(self, X: Features) raises -> Indices:
-        return self._engine.apply(X)
+    def apply(self, X: Self.Input) raises -> Indices:
+        return self._engine.apply(Self._tree_features(X))
 
-    def predict_proba(self, X: Features) raises -> Self.Probabilities where Self.classifier:
-        var result = self._engine.predict_proba(X)
+    def predict_proba(self, X: Self.Input) raises -> Self.Probabilities where Self.classifier:
+        var result = self._engine.predict_proba(Self._tree_features(X))
         comptime if Self.multi_output:
             return rebind[Self.Probabilities](result).copy()
         else:
             return rebind[Self.Probabilities](result[0]).copy()
 
-    def predict_log_proba(self, X: Features) raises -> Self.Probabilities where Self.classifier:
+    def predict_log_proba(self, X: Self.Input) raises -> Self.Probabilities where Self.classifier:
         var result = self.predict_proba(X)
         comptime if Self.multi_output:
             ref matrices = rebind[List[Values]](result)
@@ -409,12 +425,12 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False,
                 matrix.unsafe_set(i, log(matrix.unsafe_get(i)))
         return result^
 
-    def predict(self, X: Features) raises -> Self.Prediction:
+    def predict(self, X: Self.Input) raises -> Self.Prediction:
         comptime if not Self.classifier:
-            var result = self._engine.predict(X)
+            var result = self._engine.predict(Self._tree_features(X))
             return rebind[Self.Prediction](result.reshape(nm.Shape(X.shape[0])) if self.n_outputs_ == 1 else result^).copy()
         else:
-            var probabilities = self._engine.predict_proba(X)
+            var probabilities = self._engine.predict_proba(Self._tree_features(X))
             var n = probabilities[0].shape[0]
             var outputs = self.n_outputs_
             var result: Self.Prediction
@@ -441,7 +457,7 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False,
                         rebind[nm.NDArray[Self.label_dtype]](result).unsafe_set(i * outputs + k, rebind[nm.NDArray[Self.label_dtype]](domain).unsafe_get(chosen))
             return result^
 
-    def score(self, X: Features, y: Self.Target, sample_weight: Optional[Values] = None) raises -> Float64:
+    def score(self, X: Self.Input, y: Self.Target, sample_weight: Optional[Values] = None) raises -> Float64:
         var prediction = self.predict(X)
         # The tree's scorer implements the same sklearn accuracy/R2 contract.
         var scorer = Self.Labels()
@@ -449,6 +465,6 @@ struct Forest[classifier: Bool, extra: Bool = False, multi_output: Bool = False,
         return scorer._score(prediction, y, sample_weight)
 
 comptime RandomForestClassifier[multi_output: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False] = Forest[True, False, multi_output, label_dtype, string_labels]
-comptime RandomForestRegressor = Forest[False]
+comptime RandomForestRegressor[feature_dtype: DType = DType.float32] = Forest[False, feature_dtype=feature_dtype]
 comptime ExtraTreesClassifier[multi_output: Bool = False, label_dtype: DType = DType.float64, string_labels: Bool = False] = Forest[True, True, multi_output, label_dtype, string_labels]
 comptime ExtraTreesRegressor = Forest[False, True]

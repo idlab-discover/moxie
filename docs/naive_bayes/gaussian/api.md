@@ -25,6 +25,12 @@ target representation. String classes use StringTarget. Classes are sorted;
 probability columns follow their order. Annotate the default concrete type as
 `GaussianNB[]`; a bare generic annotation does not fix its label domain.
 
+In generic code, `Input` and `Probabilities` are both `NDArray[dtype]`.
+The default dtype is Float64. This lets `GaussianNB` follow an NDArray
+transformer with a matching output dtype in `make_pipeline`. Concrete calls
+with `List[List[Float64]]` still accept List features and return List
+probabilities.
+
 Constructor defaults remain `priors=None`, `var_smoothing=1e-9`. Priors are
 optional Float64 Lists. Fit and partial_fit sample weights are Float64 scalars
 or Float64 Lists; score weights remain Lists. `get_params(deep=True)` returns

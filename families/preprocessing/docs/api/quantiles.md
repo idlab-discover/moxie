@@ -77,9 +77,15 @@ Box-Cox feature raises `Data must not be constant.`; a bracket failure raises
   the outer `None` leaves the value, an inner `None` sets the parameter to None.
 * `copy=False` cannot mutate a borrowed argument; `transform_inplace` and
   `inverse_transform_inplace` implement it for writable arrays.
-* There is no warning channel: `ignore_implicit_zeros=True` on dense input,
-  `n_quantiles > n_samples` and SciPy's lambda-constraint warning are silent
-  (behavior is otherwise identical). Sparse input is unavailable by type.
+* On `QuantileTransformer`, read `fit_warnings: List[FitWarning]` after fit.
+  It records sklearn's `UserWarning` for `n_quantiles > n_samples`, followed by
+  the warning for `ignore_implicit_zeros=True` on dense input when applicable.
+  Each successful fit replaces the list, a failed fit preserves it, a fitted
+  copy owns its list, and an unfitted clone starts with an empty list.
+  The array-returning `quantile_transform` helper has no diagnostics result.
+  NumPy's all-NaN slice warning and PowerTransformer's numerical warnings
+  remain silent. Sparse input is unavailable by type.
+  See the [shared warning contract](../../../../docs/interfaces.md#fit-warnings).
 * Quirk preserved: for Float32 input whose first feature is all-NaN, NumPy's
   `apply_along_axis` rounds every quantile to float32; the values are rounded
   likewise but `quantiles_` stays a Float64 array.
@@ -96,7 +102,7 @@ two (Yeo-Johnson) or three (Box-Cox) Float64 workspaces of `n_samples`; with
 
 ## Parity
 
-`tests/parity/test_quantiles.py` (1725 checks) compares against the pinned
+`tests/parity/test_quantiles.py` (1733 checks) compares against the pinned
 sklearn with NumPy 2.5.3 / SciPy 1.18.1: Float32/Float64 Gaussian, NaN, all-NaN
 column, tied/discrete, toy, bounds, single-row, near-zero and 2500-row data;
 `n_quantiles` 1/5/17/300/1000 with and without seeded subsampling; uniform and
@@ -104,7 +110,9 @@ normal outputs; `quantiles_`, `references_`, `n_quantiles_`, fit_transform,
 out-of-range/NaN transforms, inverse transforms (including out-of-range
 inputs) and in-place transforms; column-major and negative-stride inputs;
 `quantile_transform` on both axes; integer seeds (including 2**32-1) and an
-advancing RandomState; feature names. PowerTransformer: log-normal, mixed-sign,
+advancing RandomState, and feature names. The tests compare category, message,
+and order exactly for the two explicit dense fit warnings.
+PowerTransformer cases include log-normal, mixed-sign,
 negative, NaN, constant-column, strongly non-Gaussian, extreme-skew, year-like
 (Box-Cox overflow guard in Float64) and small-spread Float32/Float64 data
 (Box-Cox overflow guard), both methods, `standardize` on/off, fit vs
@@ -132,5 +140,5 @@ Tolerances and why:
   the lambda tolerance propagated through `d transform / d lambda` and the
   standardization.
 
-Not covered: sparse input, pandas output, warnings, and SciPy's non-default
-optimizer options (sklearn never passes them).
+Not covered: sparse input, pandas output, NumPy/SciPy numerical warnings,
+and SciPy's non-default optimizer options (sklearn never passes them).

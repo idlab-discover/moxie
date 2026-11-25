@@ -81,6 +81,37 @@ def test_quantile_lifecycle() raises:
         model.set_output(transform=String("pandas"))
 
 
+def test_quantile_fit_warnings() raises:
+    var X = data(4, 2)
+    var model = QuantileTransformer(n_quantiles=5, ignore_implicit_zeros=True)
+    assert_equal(len(model.fit_warnings), 0)
+    _ = model.fit_transform(X)
+    assert_equal(len(model.fit_warnings), 2)
+    assert_equal(model.n_quantiles_, 4)
+
+    var copied = model.copy()
+    var fresh = clone(model)
+    assert_equal(len(fresh.fit_warnings), 0)
+    assert_equal(len(copied.fit_warnings), 2)
+
+    _ = model.set_params(n_quantiles=0, ignore_implicit_zeros=False)
+    with assert_raises(contains="'n_quantiles' parameter"):
+        _ = model.fit(X)
+    assert_equal(len(model.fit_warnings), 2)
+    assert_equal(model.fit_warnings[0].message, copied.fit_warnings[0].message)
+    assert_equal(model.fit_warnings[1].message, copied.fit_warnings[1].message)
+
+    var rng = RandomState(7)
+    _ = model.set_params(n_quantiles=5)
+    _ = model.fit(X, rng)
+    assert_equal(len(model.fit_warnings), 1)
+    assert_equal(model.fit_warnings[0].message, copied.fit_warnings[0].message)
+    _ = model.set_params(n_quantiles=4)
+    _ = model.fit_named(X, ["a", "b"])
+    assert_equal(len(model.fit_warnings), 0)
+    assert_equal(len(copied.fit_warnings), 2)
+
+
 def test_quantile_params_and_errors() raises:
     var X = data(12, 2)
     var bad = QuantileTransformer(n_quantiles=0)
@@ -225,6 +256,7 @@ def test_power_edges() raises:
 
 def main() raises:
     test_quantile_lifecycle()
+    test_quantile_fit_warnings()
     test_quantile_params_and_errors()
     test_quantile_random_state()
     test_quantile_dtypes_and_edges()

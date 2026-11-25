@@ -97,6 +97,8 @@ def run_case[flavor: Int, dtype: DType](f: List[String]) raises:
     emit_list(case_id, "n_iter_", estimator.n_iter_)
     for message in estimator.diagnostics_:
         print(case_id + "|diagnostic|" + message)
+    for warning in estimator.fit_warnings:
+        print(case_id + "|warning|" + warning.category + "|" + warning.message)
     var Xt = array[dtype](f[11])
     var yt = array[dtype](f[12])
     try:

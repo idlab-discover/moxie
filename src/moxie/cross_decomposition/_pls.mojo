@@ -19,6 +19,7 @@ from moxie._feature_metadata import (
     FeatureNamesOut,
     InputFeatureCount,
 )
+from moxie.warnings import FitWarning
 from moxie.cross_decomposition._base import (
     CrossDecompositionTransformer,
     PLSPredictor,
@@ -37,6 +38,8 @@ from moxie.cross_decomposition._contracts import (
 comptime EPS64: Float64 = 2.220446049250313e-16
 """NumPy `finfo(float64).eps`; every fit workspace is Float64."""
 
+comptime _CONVERGENCE_WARNING = "ConvergenceWarning"
+comptime _USER_WARNING = "UserWarning"
 
 # ---------------------------------------------------------------------------
 # Stride-aware element access. All engine inputs are valid NuMojo arrays; the
@@ -863,7 +866,7 @@ struct PLSFit(Copyable, Movable):
     var coef: Matrix
     var scaling: Scaling
     var n_iter: List[Int]
-    var diagnostics: List[String]
+    var warnings: List[FitWarning]
 
 
 def fit_two_block(
@@ -876,7 +879,7 @@ def fit_two_block(
     """The `_PLS.fit` numerical core on validated Float64 (n,p)/(n,q) workspaces.
 
     Mutates xk/yk into the final deflated residuals (scikit-learn's copy=False
-    end state). Warnings become `diagnostics` entries.
+    end state). Returns the warnings in component order.
     """
     validate_options(options)
     var engine = PLSEngine()
@@ -892,7 +895,7 @@ def fit_two_block(
     var x_loadings = _matrix(p, n_components)
     var y_loadings = _matrix(q, n_components)
     var n_iter = List[Int]()
-    var diagnostics = List[String]()
+    var warnings = List[FitWarning]()
     for k in range(n_components):
         var step: WeightStep
         if options.algorithm == "nipals":
@@ -908,15 +911,20 @@ def fit_two_block(
                         _put(yk, i, j, 0.0)
             step = engine.leading_weights(xk, yk, options)
             if step.constant_target:
-                diagnostics.append(
-                    "UserWarning: y residual is constant at iteration "
-                    + String(k)
+                warnings.append(
+                    FitWarning(
+                        _USER_WARNING,
+                        "y residual is constant at iteration " + String(k),
+                    )
                 )
                 break
             n_iter.append(step.n_iter)
             if not step.converged:
-                diagnostics.append(
-                    "ConvergenceWarning: Maximum number of iterations reached"
+                warnings.append(
+                    FitWarning(
+                        _CONVERGENCE_WARNING,
+                        "Maximum number of iterations reached",
+                    )
                 )
         else:
             step = engine.leading_weights(xk, yk, options)
@@ -967,7 +975,7 @@ def fit_two_block(
         coef^,
         scaling^,
         n_iter^,
-        diagnostics^,
+        warnings^,
     )
 
 
@@ -985,7 +993,7 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
     Use the public aliases `PLSRegression`, `PLSCanonical` and `CCA`.
     Inputs are NuMojo arrays of `dtype` (Float32 or Float64); fitting and all
     outputs are Float64, as in scikit-learn. See docs/api.md for the Mojo
-    adaptations (copy=False overloads, diagnostics_, feature names).
+    adaptations (copy=False overloads, fit warning records, feature names).
     """
 
     comptime Params = PLSParams
@@ -1020,8 +1028,11 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
     var n_iter_: List[Int]
     """Power-method iterations per extracted component; empty for 'svd'."""
     var n_features_in_: Int
+    var fit_warnings: List[FitWarning]
+    """Warning categories and messages from the last successful fit."""
+
     var diagnostics_: List[String]
-    """Native replacement for Python warnings emitted by the last fit."""
+    """Legacy strings formatted as 'category: message'."""
     var _x_mean: Matrix
     var _y_mean: Matrix
     var _x_std: Matrix
@@ -1082,6 +1093,7 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         self.n_iter_ = List[Int]()
         self.n_features_in_ = 0
         self.diagnostics_ = List[String]()
+        self.fit_warnings = List[FitWarning]()
         self._x_mean = _vector(0)
         self._y_mean = _vector(0)
         self._x_std = _vector(0)
@@ -1278,7 +1290,10 @@ struct _PLS[flavor: Int, dtype: DType = DType.float64](
         self._x_std = result.scaling.x_std.copy()
         self._y_std = result.scaling.y_std.copy()
         self.n_iter_ = result.n_iter.copy()
-        self.diagnostics_ = result.diagnostics.copy()
+        self.fit_warnings = result.warnings.copy()
+        self.diagnostics_ = List[String](capacity=len(self.fit_warnings))
+        for warning in self.fit_warnings:
+            self.diagnostics_.append(warning.category + ": " + warning.message)
         self.n_features_in_ = xk.shape[1]
         self._predict_1d = was_1d
         self._fitted = True

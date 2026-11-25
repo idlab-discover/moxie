@@ -6,12 +6,15 @@ from moxie.serialization import (
     ModelSchema,
     dtype_code,
 )
+from moxie.warnings import FitWarning
 from ._contracts import Matrix
 from ._pls import (
     _CANONICAL,
     _CCA,
+    _CONVERGENCE_WARNING,
     _PLS,
     _REGRESSION,
+    _USER_WARNING,
     PLSParams,
     _at,
     _matrix,
@@ -200,7 +203,16 @@ struct _PLSSchema[flavor: Int, dtype: DType = DType.float64](ModelSchema):
             model.n_iter_.append(iterations)
         var diagnostics_count = reader.count(min(k, reader.remaining() // 8))
         for _ in range(diagnostics_count):
-            model.diagnostics_.append(reader.string(reader.remaining()))
+            var diagnostic = reader.string(reader.remaining())
+            # Version 1 archives store warning categories and messages together.
+            for category in [_CONVERGENCE_WARNING, _USER_WARNING]:
+                var prefix = String(category) + ": "
+                if diagnostic.startswith(prefix):
+                    model.fit_warnings.append(
+                        FitWarning(String(category), String(diagnostic.removeprefix(prefix)))
+                    )
+                    break
+            model.diagnostics_.append(diagnostic^)
         reader.finish()
 
         model.x_weights_ = _read_array(archive, "x_weights_", p, k)

@@ -38,9 +38,9 @@ concurrent input mutation are unsupported.
 PLSRegression uses mode A and regression deflation. PLSCanonical uses mode A
 and canonical deflation, with NIPALS or SVD. CCA uses mode B and canonical
 deflation. PLSSVD takes one SVD of centered/scaled cross covariance. All four
-share centering/scaling and the PLS engine. Python warnings are available as
-native diagnostics. Sparse inputs, pandas output, Python metadata routing,
-feature-name input metadata, and pickling are excluded.
+share centering/scaling and the PLS engine. PLSRegression, PLSCanonical and
+CCA expose structured `fit_warnings`. Sparse inputs, pandas output, Python
+metadata routing, feature-name input metadata, and pickling are excluded.
 
 Examples cover [PLS/CCA](../../examples/cross_decomposition.mojo),
 [PLSSVD](../../examples/cross_decomposition_svd.mojo), and
@@ -69,7 +69,8 @@ The schemas round-trip both fitted and unfitted estimators. Loading reconstructs
 independent learned arrays without fitting or requiring the original inputs.
 Parameters changed after fit are saved separately from the learned dimensions,
 projection state, and prediction rank. Learned arrays are saved in logical row
-order, so strided arrays load as contiguous arrays.
+order, so strided arrays load as contiguous arrays. PLS and CCA model files
+store the formatted diagnostics and reconstruct the warning records on load.
 
 ## Cross-validation and search
 

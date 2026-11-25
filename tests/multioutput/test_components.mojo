@@ -1,11 +1,11 @@
-"""Wrapper behavior with production Ridge, RidgeClassifier and RandomForest components."""
+"""Wrapper behavior with production linear models and RandomForestClassifier."""
 import numojo as nm
 from numojo import NDArray, Shape
 from std.math import nan
 from std.testing import assert_equal, assert_true, assert_false, assert_raises
 from moxie.base import clone
 from moxie.ensemble import RandomForestClassifier
-from moxie.linear_model import Ridge, RidgeClassifier
+from moxie.linear_model import LogisticRegression, Ridge, RidgeClassifier
 from moxie.model_selection import KFold, StratifiedKFold
 from moxie.multioutput import MultiOutputRegressor, MultiOutputClassifier, RegressorChain, ClassifierChain
 
@@ -67,6 +67,35 @@ def assert_same[dtype: DType](a: NDArray[dtype], b: NDArray[dtype]) raises:
     assert_equal(a.shape[1], b.shape[1])
     for i in range(a.shape[0] * a.shape[1]):
         assert_equal(a.unsafe_get(i), b.unsafe_get(i))
+
+
+def logistic_components() raises:
+    var X = features[DType.float64]()
+    var binary = labels[DType.int64](False)
+    var multiclass = labels[DType.int64](True)
+    var base = LogisticRegression(tol=1e-10, max_iter=1000)
+    var independent = MultiOutputClassifier(clone(base))
+    _ = independent.fit(X, multiclass)
+    var predictions = independent.predict(X)
+    var probabilities = independent.predict_proba(X)
+    comptime assert type_of(predictions) == NDArray[DType.int64]
+    comptime assert type_of(probabilities) == List[NDArray[DType.float64]]
+    assert_equal(len(probabilities), 3)
+    assert_equal(probabilities[2].shape, Shape(ROWS, 3))
+    for i in range(3):
+        assert_equal(independent.classes_[2].item(i), Int64(i))
+    parity("ComponentsLogisticIndependentLabels", predictions)
+    parity("ComponentsLogisticIndependentProba", probabilities[2])
+
+    var chain = ClassifierChain(
+        clone(base), order=List[Int]([2, 0, 1]), chain_method="predict_proba",
+    )
+    _ = chain.fit(X, binary)
+    parity("ComponentsLogisticChainLabels", chain.predict(X))
+    parity("ComponentsLogisticChainProba", chain.predict_proba(X))
+    _ = chain.fit(X, binary, cv=3)
+    parity("ComponentsLogisticChainCVLabels", chain.predict(X))
+    parity("ComponentsLogisticChainCVProba", chain.predict_proba(X))
 
 
 def chain_cv() raises:
@@ -255,4 +284,5 @@ def main() raises:
     for i in range(ROWS * 3):
         assert_true(chained.unsafe_get(i) >= 0 and chained.unsafe_get(i) <= 1)
     chain_cv()
-    print("PASS: production Ridge, RidgeClassifier and RandomForest components")
+    logistic_components()
+    print("PASS: production linear models and RandomForestClassifier components")

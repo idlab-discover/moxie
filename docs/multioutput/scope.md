@@ -70,9 +70,9 @@ namespace conflicts, live-source provenance and missing required capabilities.
 including chains with two-fold out-of-fold responses. It also compares
 independent and chain probabilities, chain log probabilities and probability
 feature responses, seeded chain order, subset accuracy, weighted accuracy,
-uniform-average R2 and weighted fitting. Predictions, probabilities and orders
-must match exactly; score reductions use absolute and relative tolerances of
-1e-12 for Float64 rounding. The test components are an exact one-nearest-neighbor
-implementation and a weighted mean, kept exclusively in tests.
+uniform-average R2 and weighted fitting. Discrete predictions and orders
+must match exactly. Floating-point comparisons use the component-specific
+tolerances recorded in the [multioutput test guide](README.md). Test-only
+components include a one-nearest-neighbor implementation and a weighted mean.
 These comparisons establish wrapper behavior for the tested cases, not parity
 with every possible base estimator. No performance claim is made.

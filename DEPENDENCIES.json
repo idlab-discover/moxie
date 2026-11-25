@@ -452,6 +452,9 @@
         "moxie.cross_decomposition._plssvd": {
           "file": "src/moxie/cross_decomposition/_plssvd.mojo"
         },
+        "moxie.cross_decomposition._serialization": {
+          "file": "src/moxie/cross_decomposition/_serialization.mojo"
+        },
         "moxie.mixture._base": {
           "file": "src/moxie/mixture/_base.mojo"
         },
@@ -793,7 +796,11 @@
             "PLSEngine": "moxie.cross_decomposition._pls",
             "PLSParams": "moxie.cross_decomposition._pls",
             "PLSSVD": "moxie.cross_decomposition._plssvd",
-            "PLSSVDParams": "moxie.cross_decomposition._plssvd"
+            "PLSSVDParams": "moxie.cross_decomposition._plssvd",
+            "PLSRegressionSchema": "moxie.cross_decomposition._serialization",
+            "PLSCanonicalSchema": "moxie.cross_decomposition._serialization",
+            "CCASchema": "moxie.cross_decomposition._serialization",
+            "PLSSVDSchema": "moxie.cross_decomposition._serialization"
           },
           "moxie.mixture": {
             "GaussianMixture": "moxie.mixture._gaussian_mixture",

@@ -5,7 +5,8 @@ Output: `id|attribute|array`, `id|names|...` or `id|error|message`.
 """
 import numojo as nm
 from std.sys import argv
-from moxie.cross_decomposition import PLSSVD, PLSSVDParams
+from moxie.cross_decomposition import PLSSVD, PLSSVDParams, PLSSVDSchema
+from moxie.serialization import dumps, loads
 
 
 def numbers(text: String) raises -> List[Float64]:
@@ -50,6 +51,12 @@ def run_case[dtype: DType](f: List[String]) raises:
     var y = array[dtype](f[6])
     try:
         est.fit(X, y)
+    except e:
+        print(case_id + "|error|" + String(e))
+        return
+    comptime Schema = PLSSVDSchema[dtype]
+    est = Schema.decode(loads(dumps(Schema.encode(est))))
+    try:
         emit(case_id, "x_weights_", est.x_weights_)
         emit(case_id, "y_weights_", est.y_weights_)
         var Xt = array[dtype](f[7])

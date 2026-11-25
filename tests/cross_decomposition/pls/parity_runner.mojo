@@ -10,6 +10,8 @@ import numojo as nm
 from std.sys import argv
 from moxie.cross_decomposition import CCA, PLSCanonical, PLSParams, PLSRegression
 from moxie.cross_decomposition._pls import _PLS
+from moxie.cross_decomposition._serialization import _PLSSchema
+from moxie.serialization import dumps, loads
 
 
 def numbers(text: String) raises -> List[Float64]:
@@ -80,6 +82,8 @@ def run_case[flavor: Int, dtype: DType](f: List[String]) raises:
     except e:
         print(case_id + "|error|" + String(e))
         return
+    comptime Schema = _PLSSchema[flavor, dtype]
+    estimator = Schema.decode(loads(dumps(Schema.encode(estimator))))
     emit(case_id, "x_weights_", estimator.x_weights_)
     emit(case_id, "y_weights_", estimator.y_weights_)
     emit(case_id, "x_loadings_", estimator.x_loadings_)

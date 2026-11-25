@@ -2,3 +2,9 @@
 from ._base import CrossDecompositionTransformer, PLSPredictor
 from ._pls import PLSRegression, PLSCanonical, CCA, PLSEngine, PLSParams
 from ._plssvd import PLSSVD, PLSSVDParams
+from ._serialization import (
+    CCASchema,
+    PLSCanonicalSchema,
+    PLSRegressionSchema,
+    PLSSVDSchema,
+)

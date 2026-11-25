@@ -65,15 +65,17 @@ def covariance_estimator(kind):
     if kind == 'none':
         return None
     if kind.startswith('shrunk:'):
-        return ORACLE['shrunk'].ShrunkCovariance(shrinkage=float(kind.split(':')[1]))
+        return ORACLE['shrunk'].ShrunkCovariance(shrinkage=float(kind.split(':')[1]), store_precision=False)
     if kind == 'lw':
-        return ORACLE['shrunk'].LedoitWolf()
+        return ORACLE['shrunk'].LedoitWolf(store_precision=False)
+    if kind == 'oas':
+        return ORACLE['shrunk'].OAS(store_precision=False)
     if kind == 'stdlw':
         return StandardizedLedoitWolf()
     if kind == 'diag':
         return DiagonalCovariance()
     if kind == 'empirical':
-        return ORACLE['empirical'].EmpiricalCovariance()
+        return ORACLE['empirical'].EmpiricalCovariance(store_precision=False)
     raise ValueError(kind)
 
 
@@ -260,11 +262,12 @@ def main():
             add_case('qda', f'blobs-{seed}-svd-reg', Xg, yg, Tg, dtype, solver='svd', reg_param=0.3)
             for shrinkage in ['auto', 0.2]:
                 add_case('qda', f'blobs-{seed}-eigen-{shrinkage}', Xg, yg, Tg, dtype, solver='eigen', shrinkage=shrinkage)
-            for kind in ['shrunk:0.5', 'stdlw', 'lw', 'diag', 'empirical']:
+            for kind in ['shrunk:0.3', 'stdlw', 'lw', 'diag', 'empirical', 'oas']:
                 for solver in ['lsqr', 'eigen']:
                     add_case('lda', f'blobs-{seed}-{solver}-{kind}', Xg, yg, Tg, dtype, solver=solver,
                              covariance_estimator=kind)
-                add_case('qda', f'blobs-{seed}-eigen-{kind}', Xg, yg, Tg, dtype, solver='eigen', covariance_estimator=kind)
+                add_case('qda', f'blobs-{seed}-eigen-{kind}', Xg, yg, Tg, dtype,
+                         solver='eigen', covariance_estimator=kind, store_covariance=True)
             # Four classes, strongly different feature scales (test_lda_scaling-like).
             Xs = np.vstack([rng.uniform(-1, 1, (15, 3)) + [c * 5, 0, 0] for c in range(4)]) * [1, 100, 10000]
             ys = np.repeat([3, 5, 7, 9], 15)

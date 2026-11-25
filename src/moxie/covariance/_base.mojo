@@ -6,6 +6,10 @@ trait CovarianceEstimator(UnsupervisedEstimator):
     comptime Precision: Movable
     comptime Distances: Movable
 
+    def covariance_(self) raises -> Self.Input:
+        """Return an independent snapshot of the fitted covariance matrix."""
+        ...
+
     def get_precision(self) raises -> Self.Precision:
         ...
 

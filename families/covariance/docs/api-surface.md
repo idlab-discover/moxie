@@ -42,6 +42,11 @@ and bindings are outside the native API. Estimator dtypes are static parameters.
 
 ## Composition
 
+`CovarianceEstimator.covariance_()` returns an independent fitted covariance
+matrix of the estimator's input array type. Generic consumers can use it after
+fitting. To use a dense covariance estimator inside LDA or QDA, wrap it in the
+[discriminant analysis adapter](../../../docs/discriminant_analysis/api.md#mojo-adaptations-each-covered-by-tests).
+
 `clone` and keyword `set_params` work on every estimator. `moxie.model_selection`
 searches and cross-validation take a hand-written typed `SearchAdapter` whose
 scorer calls the estimator's own `score`, as sklearn does with `scoring=None`;

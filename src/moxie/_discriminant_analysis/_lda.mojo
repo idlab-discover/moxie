@@ -26,6 +26,7 @@ from ._covariance import (
     Shrinkage,
     CovarianceEstimator,
     NoCovarianceEstimator,
+    clone_covariance_configuration,
     estimate_covariance,
     class_means,
     class_covariance,
@@ -481,7 +482,7 @@ struct LinearDiscriminantAnalysis[
             self.n_components,
             self.store_covariance,
             self.tol,
-            self.covariance_estimator.copy(),
+            clone_covariance_configuration(self.covariance_estimator),
         )
 
     def __sklearn_is_fitted__(self) -> Bool:

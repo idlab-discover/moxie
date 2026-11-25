@@ -24,6 +24,7 @@ from ._covariance import (
     Shrinkage,
     CovarianceEstimator,
     NoCovarianceEstimator,
+    clone_covariance_configuration,
     estimate_covariance,
     column_means,
     centered,
@@ -251,7 +252,7 @@ struct QuadraticDiscriminantAnalysis[
             reg_param=self.reg_param,
             store_covariance=self.store_covariance,
             tol=self.tol,
-            covariance_estimator=self.covariance_estimator.copy(),
+            covariance_estimator=clone_covariance_configuration(self.covariance_estimator),
         )
 
     def __sklearn_is_fitted__(self) -> Bool:

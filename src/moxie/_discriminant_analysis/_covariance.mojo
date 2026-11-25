@@ -6,13 +6,18 @@ Reuses Moxie covariance kernels on StandardScaler-standardized data,
 as in `discriminant_analysis._cov`.
 All arithmetic uses Float64 work arrays.
 """
-from moxie.covariance import empirical_covariance, shrunk_covariance
+from moxie.covariance import (
+    CovarianceEstimator as NativeCovarianceEstimator,
+    empirical_covariance,
+    shrunk_covariance,
+)
 from moxie.covariance._shrunk_covariance_adaptive import (
     ledoit_wolf as covariance_ledoit_wolf, ledoit_wolf_shrinkage,
 )
 from moxie.covariance._empirical_covariance import (
     column_means,
 )
+from std.iter import downcast
 from std.math import sqrt
 from numojo import NDArray
 from ._work import Work, get, put, matrix, vector
@@ -124,6 +129,55 @@ trait CovarianceEstimator(Copyable, Movable, Deinitable):
         """Return the fitted (n_features, n_features) covariance matrix."""
         ...
 
+    def clone_configuration(self) raises -> Self:
+        """Return an independent configuration for a new fit."""
+        return self.copy()
+
+
+struct CovarianceEstimatorAdapter[E: NativeCovarianceEstimator & Copyable & Deinitable](
+    CovarianceEstimator
+):
+    """Bridge a dense moxie.covariance estimator to LDA or QDA."""
+
+    var _estimator: Self.E
+
+    def __init__(out self, var estimator: Self.E):
+        comptime assert (
+            Self.E.Input == NDArray[DType.float64] or Self.E.Input == NDArray[DType.float32]
+        ), "CovarianceEstimatorAdapter requires Float64 or Float32 NDArray input"
+        self._estimator = estimator^
+
+    def fit(mut self, X: NDArray[DType.float64]) raises:
+        var target = Optional[downcast[Self.E.Target, Movable & Deinitable]](None)
+        comptime if Self.E.Input == NDArray[DType.float64]:
+            _ = self._estimator.fit(rebind[Self.E.Input](X), rebind[Optional[Self.E.Target]](target))
+        else:
+            var input = (
+                X.astype[DType.float32]()
+                if X.is_c_contiguous()
+                else X.contiguous().astype[DType.float32]()
+            )
+            _ = self._estimator.fit(rebind[Self.E.Input](input), rebind[Optional[Self.E.Target]](target))
+
+    def covariance(self) raises -> NDArray[DType.float64]:
+        var fitted = self._estimator.covariance_()
+        comptime if Self.E.Input == NDArray[DType.float64]:
+            return rebind_var[NDArray[DType.float64]](fitted^)
+        else:
+            var single = rebind_var[NDArray[DType.float32]](fitted^)
+            if not single.is_c_contiguous():
+                single = single.contiguous()
+            return single.astype[DType.float64]()
+
+    def clone_configuration(self) raises -> Self:
+        return Self(self._estimator.__sklearn_clone__())
+
+
+def clone_covariance_configuration[C: CovarianceEstimator](estimator: Optional[C]) raises -> Optional[C]:
+    if estimator:
+        return estimator.value().clone_configuration()
+    return None
+
 
 @fieldwise_init
 struct NoCovarianceEstimator(CovarianceEstimator, ImplicitlyCopyable):
@@ -199,7 +253,7 @@ def estimate_covariance[
                 "ValueError: covariance_estimator and shrinkage parameters are not None."
                 " Only one of the two can be set."
             )
-        var fitted = estimator.value().copy()
+        var fitted = estimator.value().clone_configuration()
         fitted.fit(X.copy())
         var c = fitted.covariance()
         var p = X.shape[1]

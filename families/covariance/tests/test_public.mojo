@@ -1,5 +1,6 @@
 """All sixteen sklearn names share one concrete covariance namespace."""
 from moxie.covariance import (
+    CovarianceEstimator,
     EmpiricalCovariance, ShrunkCovariance, LedoitWolf, OAS,
     MinCovDet, EllipticEnvelope, GraphicalLasso, GraphicalLassoCV,
     empirical_covariance, shrunk_covariance, log_likelihood,
@@ -7,6 +8,12 @@ from moxie.covariance import (
 )
 from numojo import NDArray, Shape, zeros
 from std.testing import assert_equal
+
+
+def covariance_width[E: CovarianceEstimator](estimator: E) raises -> Int:
+    comptime assert E.Input == NDArray[DType.float64]
+    var covariance = rebind_var[NDArray[DType.float64]](estimator.covariance_())
+    return covariance.shape[1]
 
 
 def main() raises:
@@ -31,6 +38,13 @@ def main() raises:
     graphical.fit(X)
     cv.fit(X)
     assert_equal(cv.n_features_in_(), 2)
+    assert_equal(covariance_width(empirical), 2)
+    assert_equal(covariance_width(shrunk), 2)
+    assert_equal(covariance_width(lw), 2)
+    assert_equal(covariance_width(oa), 2)
+    assert_equal(covariance_width(robust), 2)
+    assert_equal(covariance_width(graphical), 2)
+    assert_equal(covariance_width(cv), 2)
     var covariance = empirical_covariance(X)
     _ = shrunk_covariance(covariance)
     _ = log_likelihood(covariance, covariance)

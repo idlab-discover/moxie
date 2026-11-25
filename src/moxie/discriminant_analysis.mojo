@@ -19,6 +19,7 @@ from moxie._discriminant_analysis._qda import (
 )
 from moxie._discriminant_analysis._covariance import (
     CovarianceEstimator,
+    CovarianceEstimatorAdapter,
     NoCovarianceEstimator,
     Shrinkage,
 )

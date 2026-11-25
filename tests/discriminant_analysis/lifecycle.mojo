@@ -1,9 +1,17 @@
 """Lifecycle contracts: params, clone independence, repeat fit, failed-fit reset, estimator copies."""
 from std.testing import assert_true, assert_false, assert_equal, assert_raises, TestSuite
 from std.math import abs
-from numojo import NDArray
+from numojo import NDArray, NDArrayStrides
 from moxie.base import clone
+from moxie.covariance import (
+    CovarianceEstimator as NativeCovarianceEstimator,
+    EmpiricalCovariance,
+    LedoitWolf,
+    OAS,
+    ShrunkCovariance,
+)
 from moxie.discriminant_analysis import (
+    CovarianceEstimatorAdapter,
     LinearDiscriminantAnalysis,
     QuadraticDiscriminantAnalysis,
     Shrinkage,
@@ -145,6 +153,82 @@ def test_fitted_arrays_do_not_alias_input() raises:
     var means = lda.means_.copy()
     X.unsafe_set(0, 100.0)
     assert_close(lda.means_, means, 0.0, "input mutation")
+
+
+def test_native_covariance_adapter_float32_and_clone() raises:
+    var X = toy6()
+    var y = y6()
+    var estimator = OAS[DType.float32](store_precision=False, assume_centered=True)
+    var adapter = CovarianceEstimatorAdapter(estimator.copy())
+    comptime Adapter = type_of(adapter)
+    with assert_raises(contains="NotFittedError"):
+        _ = adapter.covariance()
+
+    var lda = LinearDiscriminantAnalysis[F64, Int, Adapter](
+        solver="lsqr", covariance_estimator=adapter.copy()
+    )
+    _ = lda.fit(X, y)
+    with assert_raises(contains="NotFittedError"):
+        _ = lda.covariance_estimator.value().covariance()
+
+    adapter.fit(X)
+    _ = estimator.fit(X.astype[DType.float32]())
+    assert_close(adapter.covariance(), estimator.covariance_().astype[F64](), 0.0, "Float32 covariance")
+    _ = lda.set_params(covariance_estimator=Optional[Adapter](adapter.copy()))
+    var fresh = clone(lda)
+    assert_false(fresh.__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = fresh.covariance_estimator.value().covariance()
+    _ = fresh.fit(X, y)
+    assert_close(fresh.coef_, lda.coef_, 0.0, "configuration-only clone")
+
+    var qda = QuadraticDiscriminantAnalysis[F64, Int, Adapter](
+        solver="eigen", covariance_estimator=adapter^
+    )
+    _ = qda.fit(X, y)
+    var fresh_qda = clone(qda)
+    assert_false(fresh_qda.__sklearn_is_fitted__())
+    with assert_raises(contains="NotFittedError"):
+        _ = fresh_qda.covariance_estimator.value().covariance()
+    _ = fresh_qda.fit(X, y)
+    assert_close(fresh_qda.predict_proba(X), qda.predict_proba(X), 0.0, "configuration-only clone")
+
+    var reversed = X.view_with_layout(X.shape, NDArrayStrides(-2, 1), 16)
+    var strided_adapter = CovarianceEstimatorAdapter(OAS[DType.float32](store_precision=False))
+    strided_adapter.fit(reversed)
+    var direct = OAS[DType.float32](store_precision=False)
+    _ = direct.fit(reversed.contiguous().astype[DType.float32]())
+    assert_close(strided_adapter.covariance(), direct.covariance_().astype[F64](), 0.0, "strided input")
+
+
+def check_native_covariance_solvers[E: NativeCovarianceEstimator & Copyable & Deinitable](
+    var estimator: E
+) raises:
+    var X = toy6()
+    var y = y6()
+    var adapter = CovarianceEstimatorAdapter(estimator^)
+    comptime Adapter = type_of(adapter)
+    var lsqr = LinearDiscriminantAnalysis[F64, Int, Adapter](
+        solver="lsqr", covariance_estimator=adapter.copy()
+    )
+    var eigen = LinearDiscriminantAnalysis[F64, Int, Adapter](
+        solver="eigen", covariance_estimator=adapter.copy()
+    )
+    var qda = QuadraticDiscriminantAnalysis[F64, Int, Adapter](
+        solver="eigen", covariance_estimator=adapter^, store_covariance=True
+    )
+    _ = lsqr.fit(X, y)
+    _ = eigen.fit(X, y)
+    _ = qda.fit(X, y)
+    assert_close(eigen.covariance_.value(), lsqr.covariance_.value(), 0.0, "pooled covariance")
+    assert_equal(qda.covariance_.value()[0].shape[0], X.shape[1])
+
+
+def test_native_covariance_adapters_in_lda_and_qda() raises:
+    check_native_covariance_solvers(EmpiricalCovariance(store_precision=False))
+    check_native_covariance_solvers(ShrunkCovariance(shrinkage=0.3, store_precision=False))
+    check_native_covariance_solvers(LedoitWolf(store_precision=False))
+    check_native_covariance_solvers(OAS(store_precision=False))
 
 
 def main() raises:

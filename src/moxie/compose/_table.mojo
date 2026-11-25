@@ -77,6 +77,19 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
         self._data = X.copy()
         self._added_columns = List[_AddedColumn]()
 
+    def __init__(
+        out self,
+        *,
+        var _data: NDArray[Self.dtype],
+        var _schema: ColumnSchema,
+        var _locations: List[Int],
+        var _added_columns: List[_AddedColumn],
+    ):
+        self._data = _data^
+        self._schema = _schema^
+        self._locations = _locations^
+        self._added_columns = _added_columns^
+
     def add_numeric[column_dtype: DType](
         mut self, name: String, column: NDArray[column_dtype], *, position: Optional[Int] = None,
     ) raises:
@@ -135,6 +148,39 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
     def rows(self) raises -> Int:
         return self._data.shape[0]
 
+    def take_rows(self, indices: NDArray[DType.int64]) raises -> Self:
+        """Copy selected rows in index order, preserving schema and dictionaries."""
+        self._check_shape()
+        if indices.ndim != 1:
+            raise Error("ValueError: row indices require rank one")
+        var stride = Int(indices.strides[0])
+        var row_count = self.rows()
+        for i in range(indices.size):
+            var row = Int(indices.unsafe_get(i * stride))
+            if row < 0 or row >= row_count:
+                raise Error("ValueError: row index is out of bounds")
+
+        # NuMojo take() copies its entire input into contiguous storage first.
+        # Gather only the requested rows, including from a strided matrix.
+        var width = self._data.shape[1]
+        var data = zeros[Self.dtype](Shape(indices.size, width))
+        var row_stride = Int(self._data.strides[0])
+        var column_stride = Int(self._data.strides[1])
+        for i in range(indices.size):
+            var offset = Int(indices.unsafe_get(i * stride)) * row_stride
+            for j in range(width):
+                data.unsafe_set(i * width + j, self._data.unsafe_get(offset + j * column_stride))
+
+        var added = List[_AddedColumn](capacity=len(self._added_columns))
+        for column in self._added_columns:
+            added.append(_take_added_rows(column, indices))
+        return Self(
+            _data=data^,
+            _schema=self._schema.copy(),
+            _locations=self._locations.copy(),
+            _added_columns=added^,
+        )
+
     def schema(self) raises -> ColumnSchema:
         self._check_shape()
         return self._schema.copy()
@@ -157,6 +203,21 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
             raise Error(String("TypeError: column '", self._schema.names[index],
                                "' has a different categorical domain than this component requires"))
         return column[Column].copy()
+
+    def _string_categories(self, indices: List[Int]) raises -> List[StringColumn]:
+        """Supply explicit string categories or infer them from raw strings."""
+        var result = List[StringColumn](capacity=len(indices))
+        for index in indices:
+            if self._schema.dtypes[index] == "category":
+                result.append(self._copy_category[StringCategories](index))
+                continue
+            self._check_index(index, "string")
+            ref column = self._added_columns[-1 - self._locations[index]][List[String]]
+            var values = List[Optional[String]](capacity=len(column))
+            for value in column:
+                values.append(Optional[String](value.copy()))
+            result.append(categorical_column(values))
+        return result^
 
     def _numeric_categories[column_dtype: DType](
         self, indices: List[Int],
@@ -234,3 +295,29 @@ def _gather_column[source_dtype: DType, dtype: DType](
 ):
     for row in range(column.size):
         result.unsafe_set(row * width + index, column.unsafe_get(row).cast[dtype]())
+
+
+def _take_added_rows(column: _AddedColumn, indices: NDArray[DType.int64]) raises -> _AddedColumn:
+    if column.isa[StringColumn]():
+        return _AddedColumn(column[StringColumn].take(indices))
+    var stride = Int(indices.strides[0])
+    if column.isa[List[String]]():
+        var strings = List[String](capacity=indices.size)
+        for i in range(indices.size):
+            strings.append(column[List[String]][Int(indices.unsafe_get(i * stride))].copy())
+        return _AddedColumn(strings^)
+
+    comptime dtypes = (DType.bool, DType.int64, DType.float32, DType.float64)
+    comptime for i in range(len(dtypes)):
+        comptime dtype = dtypes[i]
+        comptime Category = NumericColumn[dtype]
+        comptime Array = NDArray[dtype]
+        if column.isa[Category]():
+            return _AddedColumn(column[Category].take(indices))
+        if column.isa[Array]():
+            ref source = column[Array]
+            var values = zeros[dtype](Shape(indices.size))
+            for j in range(indices.size):
+                values.unsafe_set(j, source.unsafe_get(Int(indices.unsafe_get(j * stride))))
+            return _AddedColumn(values^)
+    raise Error("TypeError: unsupported table column storage")

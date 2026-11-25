@@ -430,7 +430,7 @@ struct _ColumnSource[dtype: DType, origin: ImmOrigin](Copyable, Movable):
             raise Error("TypeError: categorical components require a ColumnTable")
         if scalar:
             raise Error(_1D_MESSAGE)
-        return self._table.value()[].categorical_columns(indices)
+        return self._table.value()[]._string_categories(indices)
 
     def numeric_categories[column_dtype: DType](
         self, indices: List[Int], scalar: Bool,

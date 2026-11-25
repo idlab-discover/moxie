@@ -88,8 +88,8 @@ def main() raises:
     result.add("after_dtype_change", model.transform(float_test))
     var invalid = ColumnTable(zeros[DType.float64](Shape(3, 1)), ["age"])
     invalid.add_numeric("count", zeros[DType.int64](Shape(3)))
-    invalid.add_strings("color", ["green", "", "red"])
-    with assert_raises(contains="requires category storage"):
+    invalid.add_numeric("color", zeros[DType.int64](Shape(3)))
+    with assert_raises(contains="requires string storage"):
         _ = model.transform(invalid)
     # Keep color selected, but provide a category domain the encoder cannot read.
     var wrong = ColumnTable(zeros[DType.float64](Shape(3, 1)), ["age"])

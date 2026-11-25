@@ -1,11 +1,15 @@
-"""Dense L-BFGS differential checks against the pinned sklearn estimator and loss."""
+"""Dense logistic differential checks against the pinned sklearn estimator and loss."""
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 import subprocess
 import sys
 import warnings
 
 import numpy as np
+from scipy.linalg import LinAlgWarning
 from sklearn import __version__ as support_version
+from sklearn.datasets import make_classification
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import _cd_fast
 from sklearn.utils import _array_api, fixes
@@ -27,7 +31,7 @@ def oracle():
     hashes = verify_reference([LOSS, LOGISTIC, NEWTON])
     print(f"scikit-learn source SHA256 {hashes}, support wheel {support_version}")
     # These symbols let the module import with the locked 1.9.1 support wheel.
-    # None participates in the dense L-BFGS reference calculation.
+    # The dense smooth solvers do not reach these compatibility shims.
     if not hasattr(_cd_fast, "enet_coordinate_descent_sparse"):
         _cd_fast.enet_coordinate_descent_sparse = _cd_fast.sparse_enet_coordinate_descent
     for module, name in [
@@ -36,9 +40,12 @@ def oracle():
         if not hasattr(module, name):
             setattr(module, name, unsupported_oracle_branch)
     loss = load_pinned(LOSS, register=True)
-    load_pinned(NEWTON, register=True)
+    newton = load_pinned(NEWTON, register=True)
     estimator = load_pinned(LOGISTIC)
     pinned_code(loss.LinearModelLoss.loss_gradient, LOSS)
+    pinned_code(loss.LinearModelLoss.gradient_hessian, LOSS)
+    pinned_code(newton.NewtonCholeskySolver.inner_solve, NEWTON)
+    assert estimator.NewtonCholeskySolver is newton.NewtonCholeskySolver
     pinned_code(estimator._logistic_regression_path, LOGISTIC)
     pinned_code(estimator.LogisticRegression.fit, LOGISTIC)
     assert estimator.LinearModelLoss is loss.LinearModelLoss
@@ -81,6 +88,7 @@ def fixtures():
                 if scenario == "warm":
                     params["refit_C"] = 1.8
                 yield f"{bits}-{classes}-{scenario}", bits, params, arrays
+                yield f"{bits}-{classes}-newton-{scenario}", bits, params | {"solver": "newton-cholesky"}, arrays
 
         params = {
             "C": 1.0, "tol": 1e-4, "max_iter": 100, "intercept": 1,
@@ -95,22 +103,55 @@ def fixtures():
         }.items():
             arrays = {"X": X, "y": y, "Z": X} | options
             yield f"{bits}-invalid-{scenario}", bits, params, arrays
+            yield f"{bits}-newton-invalid-{scenario}", bits, params | {"solver": "newton-cholesky"}, arrays
+
+        # Identical columns make the unpenalized Hessian exactly singular.
+        X = np.array([[-2, -2], [-1, -1], [0, 0], [1, 1], [2, 2], [3, 3]], dtype=dtype)
+        y = np.array([-3, -3, 8, -3, 8, 8])
+        params = {
+            "C": 1.0, "tol": 1e-8, "max_iter": 100, "intercept": 1, "weight": "none",
+            "unpenalized": 1, "solver": "newton-cholesky", "singular": 1,
+        }
+        yield f"{bits}-newton-singular", bits, params, {"X": X, "y": y, "Z": X}
+        yield f"{bits}-newton-singular-budget", bits, params | {"max_iter": 2, "exact_iterations": 1}, {"X": X, "y": y, "Z": X}
+        X, y = make_classification(n_samples=10, n_features=20, random_state=42)
+        X = X.astype(dtype)
+        yield f"{bits}-newton-near-singular", bits, params | {
+            "C": 1e30, "unpenalized": 0, "tol": 1e-4, "exact_iterations": 1,
+        }, {"X": X, "y": y, "Z": X}
+
+        line_search_rng = np.random.default_rng(41)
+        X = line_search_rng.integers(-6, 7, (9, 3)) * 2 ** line_search_rng.integers(0, 6, (9, 3))
+        X = X.astype(dtype)
+        y = line_search_rng.permutation(np.arange(9) % 3)
+        sw = (2 ** line_search_rng.integers(0, 6, 9)).astype(dtype)
+        yield f"{bits}-newton-backtracking", bits, {
+            "C": 0.01, "tol": 1e-4, "max_iter": 7, "intercept": 1, "weight": "none",
+            "unpenalized": 0, "solver": "newton-cholesky", "backtracking": 1,
+        }, {"X": X, "y": y, "sw": sw, "Z": X}
 
 
 def reference(model_type, params, arrays):
     model = model_type(
+        solver=params.get("solver", "lbfgs"),
         C=np.inf if params["unpenalized"] else params["C"],
         tol=params["tol"], max_iter=params["max_iter"], fit_intercept=bool(params["intercept"]),
         class_weight={"balanced": "balanced", "explicit": {-3: 2.0}}.get(params["weight"]),
-        warm_start="refit_C" in params,
+        warm_start="refit_C" in params, verbose=2 if params.get("backtracking") else 0,
     )
     X, y, Z = (arrays[key] for key in ("X", "y", "Z"))
-    with warnings.catch_warnings():
+    trace = StringIO()
+    with warnings.catch_warnings(record=True) as diagnostics, redirect_stdout(trace):
         warnings.simplefilter("ignore", ConvergenceWarning)
         warnings.simplefilter("ignore", category=UserWarning)
+        warnings.simplefilter("always", LinAlgWarning)
         model.fit(X, y, sample_weight=arrays.get("sw"))
         if "refit_C" in params:
             model.set_params(C=params["refit_C"]).fit(X, y)
+    if params.get("backtracking"):
+        assert "line search iteration=2" in trace.getvalue()
+    if params.get("singular"):
+        assert any(issubclass(item.category, LinAlgWarning) for item in diagnostics)
     assert model.coef_.dtype == model.intercept_.dtype == X.dtype
     assert model.n_iter_.dtype == np.int32 and model.classes_.dtype == y.dtype
     return {
@@ -134,6 +175,8 @@ def main():
     assert observed.keys() == {case[0] for case in cases}
     maxima = {}
     iteration_difference = 0
+    fit_counts = {}
+    widened_only = 0
     invalid = 0
     for ident, bits, params, arrays in cases:
         if "invalid" in params:
@@ -147,16 +190,41 @@ def main():
             invalid += 1
             continue
 
-        expected = reference(model_type, params, arrays)
+        solver = params.get("solver", "lbfgs")
+        fit_counts[solver] = fit_counts.get(solver, 0) + 1
         assert "error" not in observed[ident], (ident, observed[ident])
-        references = [("native-dtype", expected)]
+        references = []
+        try:
+            expected = reference(model_type, params, arrays)
+        except ValueError as error:
+            # The pinned Newton solver pads the unpenalized multinomial
+            # step with Float64 zeros, promoting Float32 raw predictions.
+            if not (
+                bits == 32 and solver == "newton-cholesky" and params["unpenalized"]
+                and np.unique(arrays["y"]).size > 2
+                and "Buffer dtype mismatch" in str(error)
+            ):
+                raise
+            widened_only += 1
+        else:
+            references.append(("native-dtype", expected))
         if bits == 32:
             widened = {key: value if key == "y" else value.astype(np.float64) for key, value in arrays.items()}
-            references.append(("widened", reference(model_type, params, widened)))
+            widened_result = reference(model_type, params, widened)
+            if widened_result["classes"].size == 2:
+                # Binary inference subtracts a rounded Float32 sigmoid
+                # from one before taking the logarithm of either class.
+                positive = widened_result["probability"][:, 1].astype(np.float32)
+                probability = np.column_stack((1 - positive, positive))
+                widened_result["log_probability"] = np.log(probability)
+            references.append(("widened", widened_result))
+        exact_iterations = (
+            params["max_iter"] <= 1 or params.get("backtracking") or params.get("exact_iterations")
+        )
         for kind, result in references:
             for key, wanted in result.items():
                 actual = observed[ident][key]
-                if key == "iterations" and params["max_iter"] > 1:
+                if key == "iterations" and not exact_iterations:
                     assert actual.shape == wanted.shape == (1,)
                     assert 0 < actual[0] <= params["max_iter"]
                     if kind == "native-dtype":
@@ -173,7 +241,8 @@ def main():
                 error = close(actual, wanted, 0, atol, f"{ident}/{kind}/{key}")
                 group = f"{bits}/{kind}/{key}"
                 maxima[group] = max(maxima.get(group, 0), error)
-    print(f"PASS: {len(cases) - invalid} pinned dense L-BFGS fits and {invalid} input rejections."
+    print(f"PASS: {len(cases) - invalid} pinned dense logistic fits {fit_counts} and {invalid} input rejections."
+          f" {widened_only} fits used only the widened oracle."
           f" Max unconstrained iteration-count difference {iteration_difference}.")
     for key, error in sorted(maxima.items()):
         if error > 0:

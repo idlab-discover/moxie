@@ -8,7 +8,7 @@ from numojo import Shape, zeros
 from std.testing import assert_almost_equal, assert_equal, assert_false
 
 
-def main() raises:
+def check_pipeline(solver: String) raises:
     var X = zeros[DType.float64](Shape(8, 2))
     var y = zeros[DType.int64](Shape(8))
     for i in range(8):
@@ -16,7 +16,7 @@ def main() raises:
         X.unsafe_set(2 * i + 1, Float64((i * 3) % 5))
         y.unsafe_set(i, Int64(i % 3))
 
-    var model = make_pipeline(StandardScaler(), LogisticRegression(tol=1e-9))
+    var model = make_pipeline(StandardScaler(), LogisticRegression(solver=solver.copy(), tol=1e-9))
     var probability = model.fit(X, y).predict_proba(X)
     var scores = model.decision_function(X)
     var predictions = model.predict(X)
@@ -42,4 +42,10 @@ def main() raises:
     assert_equal(fresh.estimator.C, 2.0)
     assert_equal(model.estimator.C, 1.0)
     assert_false(abs(changed.unsafe_get(0) - probability.unsafe_get(0)) < 1e-5)
-    print("PASS: dense LogisticRegression through StandardScaler pipeline")
+    assert_equal(fresh.estimator.solver, solver)
+
+
+def main() raises:
+    check_pipeline("lbfgs")
+    check_pipeline("newton-cholesky")
+    print("PASS: dense LogisticRegression with both solvers through StandardScaler pipeline")

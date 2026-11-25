@@ -179,30 +179,81 @@ def _probability_matrix[T: Movable, dtype: DType](var values: T) raises -> NDArr
         return _dense[T, dtype](values^)
 
 
-def _fit_classifier_component[E: WeightedSupervisedEstimator, dtype: DType, label: DType](
-    mut model: E, X: NDArray[dtype], target: NDArray[label], weights: NDArray[DType.float64],
-) raises:
-    comptime if E.SampleWeight == List[Float64]:
-        if weights.ndim != 1 or weights.shape[0] != X.shape[0]:
-            raise Error("ValueError: sample weights must be a vector with one value per sample")
-        var native_weights = List[Float64](capacity=weights.size)
-        for i in range(weights.size):
-            native_weights.append(weights.item(i))
-        _ = model.fit(rebind[E.Input](X), rebind[E.Target](target), sample_weight=rebind[E.SampleWeight](native_weights))
-    elif E.SampleWeight == NDArray[DType.float32]:
-        var narrow = weights.astype[DType.float32]()
-        _ = model.fit(rebind[E.Input](X), rebind[E.Target](target), sample_weight=rebind[E.SampleWeight](narrow))
+def _list_target[T: Copyable & Deinitable, label: DType](target: NDArray[label]) raises -> List[T]:
+    if target.ndim != 1:
+        raise Error("ValueError: component target must be a vector")
+    comptime if T == Scalar[label]:
+        return rebind_var[List[T]](target.tolist())
     else:
-        comptime assert E.SampleWeight == NDArray[DType.float64], (
-            "classifier component sample weights must be Float32 or Float64 NDArrays or List[Float64]"
+        comptime assert label == DType.int64 and T == Int
+        var values = List[Int](capacity=target.size)
+        for i in range(target.size):
+            values.append(Int(target.item(i)))
+        return rebind_var[List[T]](values^)
+
+
+def _prediction_vector[T: Movable, label: DType](var values: T) raises -> NDArray[label]:
+    comptime if T == NDArray[label]:
+        return rebind_var[NDArray[label]](values^)
+    elif T == List[Scalar[label]]:
+        var labels = rebind_var[List[Scalar[label]]](values^)
+        return nm.array[label](labels, [len(labels)])
+    else:
+        comptime assert label == DType.int64 and T == List[Int]
+        var labels = rebind_var[List[Int]](values^)
+        var result = NDArray[label](Shape(len(labels)))
+        for i in range(len(labels)):
+            result.unsafe_set(i, Scalar[label](labels[i]))
+        return result^
+
+
+def _fit_component[E: SupervisedEstimator, dtype: DType, label: DType](
+    mut model: E, X: NDArray[dtype], target: NDArray[label],
+    weights: Optional[NDArray[DType.float64]] = None,
+) raises:
+    comptime if conforms_to(E, WeightedSupervisedEstimator):
+        comptime if E.SampleWeight == List[Float64]:
+            if weights:
+                ref sample_weight = weights.value()
+                if sample_weight.ndim != 1 or sample_weight.shape[0] != X.shape[0]:
+                    raise Error("ValueError: sample weights must be a vector with one value per sample")
+    comptime if E.Target == NDArray[label]:
+        _fit_native_component(model, rebind[E.Input](X), rebind[E.Target](target), weights)
+    else:
+        comptime NativeLabel = Int if E.Target == List[Int] else Scalar[label]
+        var native_target = _list_target[NativeLabel, label](target)
+        _fit_native_component(
+            model, rebind[E.Input](X), rebind[E.Target](native_target), weights,
         )
-        _ = model.fit(rebind[E.Input](X), rebind[E.Target](target), sample_weight=rebind[E.SampleWeight](weights))
+
+
+def _fit_native_component[E: SupervisedEstimator](
+    mut model: E, X: E.Input, target: E.Target, weights: Optional[NDArray[DType.float64]],
+) raises:
+    if weights:
+        ref sample_weight = weights.value()
+        comptime if conforms_to(E, WeightedSupervisedEstimator):
+            comptime if E.SampleWeight == List[Float64]:
+                var native_weights = sample_weight.tolist()
+                _ = model.fit(X, target, sample_weight=rebind[E.SampleWeight](native_weights))
+            elif E.SampleWeight == NDArray[DType.float32]:
+                var narrow = sample_weight.astype[DType.float32]()
+                _ = model.fit(X, target, sample_weight=rebind[E.SampleWeight](narrow))
+            else:
+                comptime assert E.SampleWeight == NDArray[DType.float64], (
+                    "classifier component weights must be Float32 or Float64 NDArrays or List[Float64]"
+                )
+                _ = model.fit(X, target, sample_weight=rebind[E.SampleWeight](sample_weight))
+        else:
+            raise Error("ValueError: component does not support sample weights")
+    else:
+        _ = model.fit(X, target)
 
 
 def _predict_response[E: Predictor, dtype: DType, label: DType, out: DType](
     estimator: E, X: NDArray[dtype],
 ) raises -> NDArray[out]:
-    var raw = rebind_var[NDArray[label]](estimator.predict(rebind[E.Input](X)))
+    var raw = _prediction_vector[E.Prediction, label](estimator.predict(rebind[E.Input](X)))
     var result = nm.zeros[out](Shape(X.shape[0]))
     if raw.ndim != 1 or raw.shape[0] != X.shape[0]:
         raise Error("ValueError: component prediction must match samples")
@@ -381,7 +432,7 @@ struct _SplitterResponses[
                 fold_classes = encode_column(train_codes).classes.copy()
                 train_y = train_codes.astype[Self.label]()
             var model = clone(estimator)
-            _ = model.fit(rebind[Self.E.Input](train_X), rebind[Self.E.Target](train_y))
+            _fit_component(model, train_X, train_y)
             var predicted = _chain_fold_response[Self.E, Self.dtype, Self.label](
                 model, test_X, method, fold_classes, n_classes,
             )
@@ -619,8 +670,11 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
     def __init__(out self, var estimator: Self.E, *, n_jobs: Optional[Int] = None) raises:
         comptime assert Self.dtype in (DType.float32, DType.float64), "features must use Float32 or Float64"
         comptime assert Self.E.Input == Self.Input, "component Input must match feature dtype"
-        comptime assert Self.E.Target == Self.Target, "component Target must match target dtype"
-        comptime assert Self.E.Prediction == Self.Target, "component Prediction must match target dtype"
+        comptime assert (
+            Self.E.Target == Self.Target or Self.E.Target == List[Scalar[Self.label]]
+            or (Self.label == DType.int64 and Self.E.Target == List[Int])
+        ), "component target must use the wrapper label dtype as an NDArray or a numeric List"
+        comptime assert Self.E.Prediction == Self.E.Target, "component prediction and target types must match"
         self.estimator = estimator^
         self.n_jobs = n_jobs
         self.order = None
@@ -689,13 +743,7 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
             var target = target_column(y, order[j])
             classes.append(_classes(target))
             ref input = X
-            if sample_weight:
-                comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
-                    _fit_classifier_component(models[j], input, target, sample_weight.value())
-                else:
-                    raise Error("ValueError: component does not support sample weights")
-            else:
-                _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target))
+            _fit_component(models[j], input, target, sample_weight)
         self.estimators_ = models^
         self.classes_ = classes^
         self.order_ = order^
@@ -706,8 +754,9 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         self._check(X)
         var columns = List[Self.Target]()
         for j in range(len(self.estimators_)):
-            var column = self.estimators_[j].predict(rebind[Self.E.Input](X))
-            columns.append(rebind_var[Self.Target](column^))
+            columns.append(_prediction_vector[Self.E.Prediction, Self.label](
+                self.estimators_[j].predict(rebind[Self.E.Input](X)),
+            ))
         var result = stack_predictions(columns)
         if result.shape[0] != X.shape[0]:
             raise Error("ValueError: component prediction sample count differs")
@@ -732,7 +781,7 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
         return result^
 
     def partial_fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Self.Input, ref[y_origin] y: Self.Target, classes: Optional[List[Self.Target]] = None) raises -> ref[self] Self where conforms_to(Self.E, IncrementalClassifier):
-        comptime assert Self.E.Classes == Self.Target, "component classes must use the wrapper target array type"
+        comptime assert Self.E.Classes == Self.E.Target, "component classes and target types must match"
         _features(X, self.n_features_in_)
         validate_targets(y, X.shape[0])
         _finite(y)
@@ -748,10 +797,24 @@ struct MultiOutputClassifier[E: SupervisedEstimator & Predictor & Deinitable, dt
             self.estimators_ = clone_outputs(self.estimator, y.shape[1])
         for j in range(y.shape[1]):
             var column = target_column(y, j)
-            var known: Optional[Self.Target] = None
-            if classes:
-                known = classes.value()[j].copy()
-            _ = self.estimators_[j].partial_fit(rebind[Self.E.Input](X), rebind[Self.E.Target](column), rebind[Optional[Self.E.Classes]](known))
+            comptime if Self.E.Target == Self.Target:
+                var known: Optional[Self.Target] = None
+                if classes:
+                    known = classes.value()[j].copy()
+                _ = self.estimators_[j].partial_fit(
+                    rebind[Self.E.Input](X), rebind[Self.E.Target](column),
+                    rebind[Optional[Self.E.Classes]](known),
+                )
+            else:
+                comptime NativeLabel = Int if Self.E.Target == List[Int] else Scalar[Self.label]
+                var known: Optional[List[NativeLabel]] = None
+                if classes:
+                    known = _list_target[NativeLabel, Self.label](classes.value()[j])
+                var native_column = _list_target[NativeLabel, Self.label](column)
+                _ = self.estimators_[j].partial_fit(
+                    rebind[Self.E.Input](X), rebind[Self.E.Target](native_column),
+                    rebind[Optional[Self.E.Classes]](known),
+                )
         if classes:
             var values = List[Self.Target]()
             for j in range(y.shape[1]):
@@ -1017,8 +1080,11 @@ struct ClassifierChain[
         comptime assert Self.Splitter == ChainCV or conforms_to(Self.Splitter, ChainSplitter)
         comptime assert Self.dtype in (DType.float32, DType.float64), "features must use Float32 or Float64"
         comptime assert Self.E.Input == Self.Input, "component Input must match feature dtype"
-        comptime assert Self.E.Target == Self.Target, "component Target must match target dtype"
-        comptime assert Self.E.Prediction == Self.Target, "component Prediction must match target dtype"
+        comptime assert (
+            Self.E.Target == Self.Target or Self.E.Target == List[Scalar[Self.label]]
+            or (Self.label == DType.int64 and Self.E.Target == List[Int])
+        ), "component target must use the wrapper label dtype as an NDArray or a numeric List"
+        comptime assert Self.E.Prediction == Self.E.Target, "component prediction and target types must match"
         self.estimator = estimator^
         self.n_jobs = None
         self.order = order.copy()
@@ -1116,13 +1182,7 @@ struct ClassifierChain[
             classes.append(_classes(target))
             var input = augment_features(X, responses, j)
             var started = perf_counter_ns()
-            if sample_weight:
-                comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
-                    _fit_classifier_component(models[j], input, target, sample_weight.value())
-                else:
-                    raise Error("ValueError: component does not support sample weights")
-            else:
-                _ = models[j].fit(rebind[Self.E.Input](input), rebind[Self.E.Target](target))
+            _fit_component(models[j], input, target, sample_weight)
             if self.verbose:
                 print(_chain_message(j + 1, y.shape[1], order[j], perf_counter_ns() - started))
             if j + 1 < y.shape[1]:
@@ -1146,10 +1206,12 @@ struct ClassifierChain[
         var output = nm.zeros[Self.label](Shape(X.shape[0], len(self.estimators_)))
         for j in range(len(self.estimators_)):
             var input = augment_features(X, responses, j)
-            var column = rebind_var[Self.Target](self.estimators_[j].predict(rebind[Self.E.Input](input)))
+            var column = _prediction_vector[Self.E.Prediction, Self.label](
+                self.estimators_[j].predict(rebind[Self.E.Input](input)),
+            )
             var feature = _response[Self.E, Self.dtype, Self.label](self.estimators_[j], input, self.chain_method_)
             _put_column(responses, j, feature)
-            _put_column(output, self.order_[j], rebind[Self.Target](column))
+            _put_column(output, self.order_[j], column)
         return output^
 
     def score(self, X: Self.Input, y: Self.Target, sample_weight: Optional[Self.SampleWeight] = None) raises -> Float64:

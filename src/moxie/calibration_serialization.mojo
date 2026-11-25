@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-"""Experimental native persistence for calibration with dense LinearSVC and SVC."""
+"""Experimental native persistence for calibration with built-in dense classifier adapters."""
 
 from numojo import Item, Shape
 from std.math import isfinite
@@ -17,8 +17,15 @@ from ._calibration_estimator import (
     validate_integral_labels,
 )
 from ._calibration_splits import CalibrationCV, CalibrationSplit
+from .discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from .discriminant_analysis_serialization import (
+    LinearDiscriminantAnalysisSchema,
+    QuadraticDiscriminantAnalysisSchema,
+)
 from .isotonic_serialization import IsotonicRegressionSchema
 from .model_selection import KFold, LeaveOneOut, StratifiedKFold
+from .naive_bayes import GaussianNB
+from .naive_bayes_serialization import GaussianNBSchema
 from .serialization import BinaryReader, BinaryWriter, ModelArchive, ModelSchema
 from .svm import LinearSVC, SVC
 from .svm.kernel_serialization import SVCSchema
@@ -228,6 +235,79 @@ struct _SVCCodec(_AdapterCodec):
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Adapter:
         return adapt_classifier(SVCSchema[].decode(archive))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().n_features_in_
+
+
+struct _GaussianNBCodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[GaussianNB[]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.GaussianNB"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in GaussianNB adapter"
+            )
+        return GaussianNBSchema[].encode(adapter.estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(GaussianNBSchema[].decode(archive))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().n_features_in_
+
+
+struct _LDACodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[LinearDiscriminantAnalysis[]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.LinearDiscriminantAnalysis"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in LDA adapter"
+            )
+        if adapter.estimator().covariance_estimator:
+            raise Error("ModelSchemaError: calibrated LDA requires covariance_estimator=None")
+        return LinearDiscriminantAnalysisSchema[].encode(adapter.estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(LinearDiscriminantAnalysisSchema[].decode(archive))
+
+    @staticmethod
+    def feature_count(adapter: Self.Adapter) -> Int:
+        return adapter.estimator().n_features_in_
+
+
+struct _QDACodec(_AdapterCodec):
+    comptime Adapter = ClassifierCalibrationAdapter[QuadraticDiscriminantAnalysis[]]
+    comptime TypeId: StaticString = (
+        "moxie.calibration.CalibratedClassifierCV.QuadraticDiscriminantAnalysis"
+    )
+
+    @staticmethod
+    def encode(adapter: Self.Adapter) raises -> ModelArchive:
+        if not adapter._builtin_reader:
+            raise Error(
+                "ModelSchemaError: calibration requires the built-in QDA adapter"
+            )
+        if adapter.estimator().covariance_estimator:
+            raise Error("ModelSchemaError: calibrated QDA requires covariance_estimator=None")
+        return QuadraticDiscriminantAnalysisSchema[].encode(adapter.estimator())
+
+    @staticmethod
+    def decode(archive: ModelArchive) raises -> Self.Adapter:
+        return adapt_classifier(QuadraticDiscriminantAnalysisSchema[].decode(archive))
 
     @staticmethod
     def feature_count(adapter: Self.Adapter) -> Int:
@@ -472,3 +552,6 @@ struct _CalibrationSchema[Codec: _AdapterCodec](ModelSchema):
 # Each concrete schema has a distinct archive identifier.
 comptime CalibratedClassifierCVSchema = _CalibrationSchema[_LinearSVCCodec]
 comptime CalibratedSVCClassifierCVSchema = _CalibrationSchema[_SVCCodec]
+comptime CalibratedGaussianNBClassifierCVSchema = _CalibrationSchema[_GaussianNBCodec]
+comptime CalibratedLDAClassifierCVSchema = _CalibrationSchema[_LDACodec]
+comptime CalibratedQDAClassifierCVSchema = _CalibrationSchema[_QDACodec]

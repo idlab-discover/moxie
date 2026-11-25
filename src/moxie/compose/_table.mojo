@@ -8,13 +8,18 @@ comptime NumericColumn[dtype: DType] = CategoricalColumn[NumericCategories[dtype
 comptime _AddedColumn = Variant[
     StringColumn, NumericColumn[DType.bool], NumericColumn[DType.int64],
     NumericColumn[DType.float32], NumericColumn[DType.float64], List[String],
-    NDArray[DType.float32], NDArray[DType.float64],
+    NDArray[DType.float32], NDArray[DType.float64], NDArray[DType.int64],
 ]
 
 
-def _float_kind[dtype: DType]() -> String:
-    comptime assert dtype == DType.float32 or dtype == DType.float64
-    return "float32" if dtype == DType.float32 else "float64"
+def _numeric_kind[dtype: DType]() -> String:
+    comptime assert (
+        dtype == DType.float32 or dtype == DType.float64 or dtype == DType.int64
+    ), "add_numeric requires Float32, Float64 or Int64"
+    comptime if dtype == DType.int64:
+        return "int64"
+    else:
+        return "float32" if dtype == DType.float32 else "float64"
 
 
 struct ColumnSchema(Copyable, Movable):
@@ -32,8 +37,8 @@ struct ColumnSchema(Copyable, Movable):
                 raise Error("ValueError: native column names must be unique")
             seen[name] = True
         for dtype in dtypes:
-            if dtype not in ("float32", "float64", "category", "string"):
-                raise Error("ValueError: native column schemas support float32, float64, category and string")
+            if dtype not in ("float32", "float64", "int64", "category", "string"):
+                raise Error("ValueError: native column schemas support float32, float64, int64, category and string")
         self.names = names.copy()
         self.dtypes = dtypes.copy()
 
@@ -67,7 +72,7 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
         var dtypes = List[String]()
         self._locations = List[Int]()
         for i in range(len(names)):
-            dtypes.append(_float_kind[Self.dtype]())
+            dtypes.append(_numeric_kind[Self.dtype]())
             self._locations.append(i)
         self._schema = ColumnSchema(names, dtypes)
         self._data = X.copy()
@@ -76,14 +81,14 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
     def add_numeric[column_dtype: DType](
         mut self, name: String, column: NDArray[column_dtype], *, position: Optional[Int] = None,
     ) raises:
-        """Insert an owned rank-one float column and retain its storage dtype."""
-        comptime assert column_dtype == DType.float32 or column_dtype == DType.float64, "add_numeric requires Float32 or Float64"
+        """Insert an owned rank-one numeric column and retain its storage dtype."""
+        var kind = _numeric_kind[column_dtype]()
         if column.ndim != 1:
             raise Error("ValueError: add_numeric requires a rank-1 array")
         var index = self._insertion_index(name, column.shape[0], position)
         # NuMojo's strided copy assumes a nonempty last axis.
         var values = column.contiguous() if column.size > 0 else zeros[column_dtype](Shape(0))
-        self._insert_column(index, name, _float_kind[column_dtype](), _AddedColumn(values^))
+        self._insert_column(index, name, kind, _AddedColumn(values^))
 
     def add_categorical[Domain: CategoryDomain](
         mut self, name: String, column: CategoricalColumn[Domain], *, position: Optional[Int] = None,
@@ -175,9 +180,11 @@ struct ColumnTable[dtype: DType = DType.float64](Copyable, Movable):
                 _gather_column(column[NDArray[DType.float32]], result, output_index, width)
             elif column.isa[NDArray[DType.float64]]():
                 _gather_column(column[NDArray[DType.float64]], result, output_index, width)
+            elif column.isa[NDArray[DType.int64]]():
+                _gather_column(column[NDArray[DType.int64]], result, output_index, width)
             else:
                 raise Error(String("TypeError: column '", self._schema.names[index],
-                                   "' requires float32 or float64 storage for this component"))
+                                   "' requires numeric storage (float32, float64 or int64) for this component"))
         return result^
 
     def _check_index(self, index: Int, expected: String) raises:

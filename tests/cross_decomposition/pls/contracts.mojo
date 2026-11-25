@@ -348,12 +348,15 @@ def test_scaling_coef_recovers_linear_map() raises:
     assert_close(pls.predict(X), y, 1e-8)
 
 
-def test_constant_targets_and_convergence_diagnostics() raises:
-    """Mirror sklearn test_pls_constant_y and test_convergence_fail as native diagnostics."""
+def test_fit_warning_lifecycle() raises:
     var X = pseudo_random(100, 3, 42)
     var y = nm.zeros[F64](nm.Shape(100))
     var pls = PLSRegression()
+    assert_equal(len(pls.fit_warnings), 0)
     pls.fit(X, y)
+    assert_equal(len(pls.fit_warnings), 1)
+    assert_equal(pls.fit_warnings[0].category, "UserWarning")
+    assert_equal(pls.fit_warnings[0].message, "y residual is constant at iteration 0")
     assert_equal(len(pls.diagnostics_), 1)
     assert_equal(pls.diagnostics_[0], "UserWarning: y residual is constant at iteration 0")
     assert_equal(len(pls.n_iter_), 0)
@@ -362,16 +365,32 @@ def test_constant_targets_and_convergence_diagnostics() raises:
     var data = linnerud()
     var capped = PLSCanonical(3, max_iter=2)
     capped.fit(data[0], data[1])
+    assert_true(len(capped.fit_warnings) >= 1)
+    assert_equal(capped.fit_warnings[0].category, "ConvergenceWarning")
+    assert_equal(capped.fit_warnings[0].message, "Maximum number of iterations reached")
     assert_true(len(capped.diagnostics_) >= 1)
     assert_equal(capped.diagnostics_[0], "ConvergenceWarning: Maximum number of iterations reached")
     for n in capped.n_iter_:
         assert_true(n <= 2)
-    # A later successful fit replaces diagnostics.
+    var warning_count = len(capped.fit_warnings)
+    var fitted_copy = capped.copy()
+    assert_equal(len(capped.__sklearn_clone__().fit_warnings), 0)
+    fitted_copy.fit_warnings[0].message = "copy only"
+    assert_equal(capped.fit_warnings[0].message, "Maximum number of iterations reached")
+    capped.set_params(max_iter=0)
+    with assert_raises(contains="max_iter"):
+        _ = capped.fit(data[0], data[1])
+    assert_equal(len(capped.fit_warnings), warning_count)
+    assert_equal(capped.fit_warnings[0].category, "ConvergenceWarning")
+
     capped.set_params(max_iter=500)
     capped.fit(data[0], data[1])
+    assert_equal(len(capped.fit_warnings), 0)
     assert_equal(len(capped.diagnostics_), 0)
+    assert_equal(len(fitted_copy.fit_warnings), warning_count)
     var svd = PLSCanonical(2, algorithm="svd")
     svd.fit(data[0], data[1])
+    assert_equal(len(svd.fit_warnings), 0)
     assert_equal(len(svd.n_iter_), 0)
 
 

@@ -44,7 +44,9 @@ def adapt_classifier(
     def classes(model: GaussianNB[]) raises -> Array:
         return _numeric_classes(model.classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "GaussianNB")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "GaussianNB")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(
@@ -134,7 +136,9 @@ def adapt_classifier(
     def classes(model: LinearDiscriminantAnalysis[]) raises -> Array:
         return _numeric_classes(model.classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "LinearDiscriminantAnalysis")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "LinearDiscriminantAnalysis")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(
@@ -152,7 +156,9 @@ def adapt_classifier(
     def classes(model: QuadraticDiscriminantAnalysis[]) raises -> Array:
         return _numeric_classes(model.classes_)
 
-    return ClassifierCalibrationAdapter(estimator^, classes, "QuadraticDiscriminantAnalysis")
+    var adapter = ClassifierCalibrationAdapter(estimator^, classes, "QuadraticDiscriminantAnalysis")
+    adapter._builtin_reader = True
+    return adapter^
 
 
 def adapt_classifier(
@@ -191,9 +197,9 @@ def adapt_classifier(
     return ClassifierCalibrationAdapter(estimator^, classes, "LogisticRegression")
 
 
-def adapt_classifier(
-    var estimator: LinearSVC[],
-) -> ClassifierCalibrationAdapter[LinearSVC[]]:
+def adapt_classifier[Label: Copyable & Comparable & Deinitable](
+    var estimator: LinearSVC[Label],
+) -> ClassifierCalibrationAdapter[LinearSVC[Label]]:
     return _adapt_linear_svc(estimator^)
 
 

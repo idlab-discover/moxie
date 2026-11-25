@@ -48,7 +48,7 @@ Names are unique within each container. Names, child instances, and typed child
 parameters are available as `transformer_name`, `estimator_name`, `transformer`,
 and `estimator`. Assigning a same-type child replaces that instance, preserving
 its state; changing a static type requires constructing a new pipeline. When
-the pipeline is wrapped in `FrozenEstimator`, [positional step access](../frozen/api.md#positional-access-to-pipeline-steps)
+the pipeline is wrapped in `FrozenEstimator`, [positional and named step access](../frozen/api.md#access-to-pipeline-steps)
 borrows these same children immutably.
 
 `PipelineParams` holds both names and both child parameter records. `deep` is
@@ -252,9 +252,8 @@ final estimator's scores, preserving their type, dtype, shape, order, and signs.
 It does not aggregate scores, call `predict`, or infer density/outlier semantics.
 
 Unsupported final estimators fail at compile time; child errors propagate.
-This addition retains the existing supervised-predictor final-step requirement.
-It does not yet enable unsupervised-only estimators such as LOF or KernelDensity
-as final steps. `score_samples` support also does not imply `score` support.
+Optional-target pipelines also forward `score_samples` through the same trait.
+`score_samples` support does not imply `score` support.
 
 Six exact comparisons with local scikit-learn cover scalar dispatch, cloning
 and refits, fused prefixes, nesting, and dense Float32/Float64 sample order.
@@ -316,10 +315,11 @@ checks training and held-out projections in both dense floating-point dtypes.
 
 `TransformerPipeline(first, last)` is a concrete implementation of the
 `TransformingPipeline` capability. `make_pipeline(first, last)` selects
-it for two copyable transformers with optional-target `fit`. Their target
-types must match exactly, as must the first output and last input. The
-pipeline forwards the optional target to both children and prefers each
-child's `fit_transform` where a transformed result is needed.
+it for two transformers with optional-target `fit`. The pipeline is copyable
+when both children are copyable. The first output and last input must match.
+The optional target follows the final step's type. A prefix with a different
+target type receives `None`. The pipeline prefers each child's `fit_transform`
+where a transformed result is needed.
 
 ```mojo
 from moxie.impute import SimpleImputer
@@ -344,15 +344,57 @@ inverse transform first, then the first child's. The
 and Float64 output before and after refitting against the pinned
 scikit-learn implementation.
 
+## Unsupervised final estimators
+
+`UnsupervisedPipeline(prefix, final)` and `make_pipeline(prefix, final)` compose
+an optional-target transformer with an `UnsupervisedEstimator`. The prefix
+output and final input must have the same type. The prefix receives the final
+estimator's optional target when the types agree and `None` otherwise.
+`UnsupervisedPipeline` and `TransformerPipeline` are two names for the same
+typed engine.
+
+```mojo
+from moxie.cluster import DBSCAN
+from moxie.neighbors import KernelDensity
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
+
+var clusters = make_pipeline(StandardScaler(), DBSCAN(eps=0.5))
+var labels = clusters.fit_predict(X)
+
+var density = make_pipeline(StandardScaler(), KernelDensity(bandwidth=0.5))
+_ = density.fit(X)
+var log_densities = density.score_samples(X_query)
+var log_likelihood = density.score(X_query)
+```
+
+Training prefers the prefix's `fit_transform` and otherwise calls its
+`fit` and `transform`. `fit_predict` delegates through `FitPredictor` and
+returns the final estimator's labels directly. Prediction on unseen rows
+requires `Predictor`, independently of `FitPredictor`. The pipeline forwards
+transformation, per-sample scoring, and decision values when the final
+estimator declares those capabilities. `score` follows `UnsupervisedScorer` and
+uses the final estimator's aggregation. A concrete final-step method beyond
+these traits is accessible on `pipe.estimator`, with input already transformed
+by the caller. Configuration-dependent methods retain final-step validation.
+
+The [parity check](../../tests/pipeline/unsupervised_parity.py) compares Float32
+DBSCAN labels, Float64 nested KMeans labels and distances, KDE log densities
+and their sum, and LocalOutlierFactor novelty predictions and scores against
+the pinned reference. Labels and predictions compare exactly. Distances and
+scores use an absolute tolerance of `1e-12` for floating-point rounding.
+Run the script with Python from an environment where scikit-learn is built
+from the pinned checkout, after building `test_pipeline_cluster.mojo` and
+`test_pipeline_density.mojo` into `builds/tests/pipeline/`.
+
 ## Current boundary
 
-This implementation exposes fit, final-step weighted fit, predict, conditional
-transforms and score, per-sample scores, decision and probability methods,
+This implementation exposes fit, final-step weighted fit, conditional fit_predict,
+predict, conditional transforms and score, per-sample scores, decision and probability methods,
 ordered numeric classes, feature names, input feature counts, configuration,
 cloning and the two factories. The following sklearn Pipeline
 API is **deferred** (absent from the typed API, so use fails at compile time):
 
-- unsupervised-final pipelines and `fit_predict` (e.g. a clusterer final step);
 - `passthrough`/`None` steps, `__len__`, integer/slice `__getitem__` and
   `named_steps` (use the typed `transformer`/`estimator` fields and names);
 - constructor options `memory`, `verbose` and `transform_input`;

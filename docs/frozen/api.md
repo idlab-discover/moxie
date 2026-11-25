@@ -156,7 +156,7 @@ Frozen wrappers therefore still do not conform to that trait. Shared tags and
 a framework-wide identity-only trait remain outside this family change. A
 predictive clusterer's independent `Predictor` capability can still be forwarded.
 
-### Positional access to pipeline steps
+### Access to pipeline steps
 
 For a wrapped `Pipeline` or `TransformerPipeline`, use `frozen.step[0]()`
 for the prefix and `frozen.step[1]()` for the final step. Negative indices
@@ -171,6 +171,13 @@ allocation. See the pipeline contract for [sequential composition](../pipeline/s
 `tests/frozen/compare_composition_width.py` compares indexed step inference
 with the pinned sklearn reference.
 
+For a name supplied at run time, specify the expected concrete type, for
+example `frozen.named_step[StandardScaler[]]("standardscaler")` for a
+Float64 scaler. This returns the same immutable borrow as positional access
+and works when both children have the same type. A missing name raises a
+`KeyError`. A known name with a mismatched type raises a `TypeError`.
+Lookup itself works before fit, just like positional access.
+
 ## Native differences and scope
 
 - Python clone returns the same wrapper object. Mojo clone returns a value
@@ -178,8 +185,8 @@ with the pinned sklearn reference.
   other wrapper values unchanged.
 - Learned attributes and custom read-only methods use `frozen.estimator()`;
   arbitrary attribute forwarding and inference overloads outside the shared
-  traits are not synthesized. Lookup by name, slices, and ColumnTransformer
-  indexing are outside the positional pipeline interface.
+  traits are not synthesized. Pipeline slices and ColumnTransformer indexing
+  remain open.
 - Fit, partial fit, and parameter changes return a mutable borrow of this wrapper.
   Nested parameter rejection occurs at compile time rather than as a Python
   `ValueError`.
@@ -263,7 +270,7 @@ Moxie's `pixi run parity` includes both comparisons automatically.
 | `test_clone_frozen`, `test_check_is_fitted` | `test_frozen.mojo` covers shared allocation, clone lifetime, unfitted errors and repeated no-op fit |
 | `test_frozen_params` | Typed parameter records, restoration, same-type replacement, and compile-time rejection of nested updates |
 | `test_frozen_tags` | Classifier, regressor and outlier trait identity plus recursive cluster identity; arbitrary Python tags are unsupported |
-| `test_frozen_metadata_routing` | Dynamic metadata routing remains open. Positional step access has separate native and sklearn comparison coverage |
+| `test_frozen_metadata_routing` | Dynamic metadata routing remains open. Positional and named step access have separate native and sklearn comparison coverage |
 
 `test_frozen_composition.mojo` wraps production estimators: a fitted
 `LinearDiscriminantAnalysis` (no-op fit on different data, delegated

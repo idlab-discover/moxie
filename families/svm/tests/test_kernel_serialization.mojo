@@ -114,6 +114,59 @@ def _check_other_unfitted(X: Dense) raises:
         _ = one_class.predict(X)
 
 
+def _check_fit_warnings(X: Dense) raises:
+    comptime Schema = SVCSchema[]
+    var y: List[Float64] = [1, 1, 1, 2, 2, 2]
+    var model = SVC(max_iter=1, probability=False)
+    assert_equal(len(model.fit_warnings), 0)
+    _ = model.fit(X, y)
+    assert_equal(len(model.fit_warnings), 2)
+    assert_equal(model.fit_warnings[0].category, String("FutureWarning"))
+    assert_equal(model.fit_warnings[1].category, String("ConvergenceWarning"))
+    assert_equal(len(clone(model).fit_warnings), 0)
+    var fitted_copy = model.copy()
+    _ = fitted_copy.fit_warnings.pop()
+    assert_equal(len(model.fit_warnings), 2)
+
+    _ = model.set_params(max_iter=-1, probability=Probability("deprecated"))
+    with assert_raises():
+        _ = model.fit(X, List[Float64]())
+    assert_equal(len(model.fit_warnings), 2)
+    var restored = _round_trip[Schema](model)
+    assert_equal(restored.max_iter, -1)
+    assert_equal(restored.probability.mode, String("deprecated"))
+    assert_equal(len(restored.fit_warnings), 2)
+    for i in range(2):
+        assert_equal(restored.fit_warnings[i].category, model.fit_warnings[i].category)
+        assert_equal(restored.fit_warnings[i].message, model.fit_warnings[i].message)
+    assert_true("max_iter=1" in restored.fit_warnings[1].message)
+
+    var archive = Schema.encode(model)
+    var invalid = archive.copy()
+    invalid.manifest[len(invalid.manifest) - 8] = 2
+    with assert_raises():
+        _ = Schema.decode(loads(dumps(invalid)))
+    invalid = archive.copy()
+    # The stored cap is one. A cap of two contradicts this uncalibrated fit.
+    invalid.manifest[len(invalid.manifest) - 16] = 2
+    with assert_raises():
+        _ = Schema.decode(loads(dumps(invalid)))
+
+    # Version 1 ended before the three 64-bit diagnostics fields.
+    archive.schema_version = 1
+    for _ in range(24):
+        _ = archive.manifest.pop()
+    var legacy = Schema.decode(loads(dumps(archive)))
+    assert_equal(len(legacy.fit_warnings), 0)
+    assert_equal(legacy.fit_status_, restored.fit_status_)
+    assert_true(legacy.predict(X) == restored.predict(X))
+    var upgraded = _round_trip[Schema](legacy)
+    assert_equal(len(upgraded.fit_warnings), 0)
+
+    _ = restored.fit(X, y)
+    assert_equal(len(restored.fit_warnings), 0)
+
+
 def _check_callable(X: Dense) raises:
     var provider = LinearProvider()
     var labels: List[Int32] = [1, 1, 1, 2, 2, 2]
@@ -136,6 +189,10 @@ def _check_callable(X: Dense) raises:
     var restored_svr = _round_trip[SVRSchema](svr)
     var restored_nsvr = _round_trip[NuSVRSchema](nsvr)
     var restored_one_class = _round_trip[OneClassSVMSchema](one_class)
+    assert_equal(len(restored_svc.fit_warnings), 1)
+    assert_equal(len(restored_nsvc.fit_warnings), 1)
+    assert_equal(restored_svc.fit_warnings[0].category, String("FutureWarning"))
+    assert_equal(restored_nsvc.fit_warnings[0].category, String("FutureWarning"))
     assert_true(restored_svc.predict(X, provider) == svc.predict(X, provider))
     assert_true(restored_nsvc.predict(X, provider) == nsvc.predict(X, provider))
     _equal_array(restored_svc.predict_proba(X, provider), svc.predict_proba(X, provider))
@@ -224,6 +281,7 @@ def main() raises:
     var X = _features()
     _check_classifier(X)
     _check_other_unfitted(X)
+    _check_fit_warnings(X)
     _check_callable(X)
     _check_invalid(X)
     _check_empty_support(X)

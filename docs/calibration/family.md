@@ -76,14 +76,18 @@ are implementation details, not additional public sklearn estimators.
 Use `adapt_classifier(estimator)` with the default type specializations of
 `GaussianNB`, `MultinomialNB`, `ComplementNB`, `BernoulliNB`, `CategoricalNB`,
 `LinearDiscriminantAnalysis`, `QuadraticDiscriminantAnalysis`,
-`LogisticRegression`, `LinearSVC` and `SVC`. Pass the result to
+`LogisticRegression` and `SVC`. For `LinearSVC`, use any of `Int`, `Int64`,
+`Float32` or `Float64` as the label type. Pass the result to
 `CalibratedClassifierCV`.
 Adapters with `predict_proba` also support direct use with
 `CalibrationDisplay.from_estimator` after fitting. The adapter prefers
 `decision_function` for calibration and uses `predict_proba` for displays.
 With Naive Bayes it uses probabilities for both. The adapter converts Float64
 calibration targets to the classifier's native numeric list or Int64 array and
-returns its fitted classes in column order. It forwards explicit weights to
+returns its fitted classes in column order. Integral labels must be exactly
+representable in the component's target type. For example,
+`adapt_classifier(LinearSVC[Float32]())` rejects 16777217 because Float32
+rounds it to 16777216. It forwards explicit weights to
 all five Naive Bayes classifiers, LogisticRegression and LinearSVC. The LDA,
 QDA and SVC adapters reject explicit weights. Standalone SVC calibration expects
 feature input with a built-in kernel. Multiclass SVC requires one-vs-rest
@@ -272,10 +276,16 @@ kwargs, interactive windows and other image formats are not supported.
 
 ## Native model files
 
-Use `CalibratedClassifierCVSchema` for the default calibrated LinearSVC or
-`adapt_classifier(LinearSVC(...))`. Use `CalibratedSVCClassifierCVSchema` from
-the same module for `adapt_classifier(SVC(...))`. Both schemas accept fitted
-and unfitted models.
+Choose the schema from `moxie.calibration_serialization` that matches the
+calibrator's base estimator. Each schema accepts fitted and unfitted models.
+
+| Base estimator | Schema |
+| --- | --- |
+| Default LinearSVC or `adapt_classifier(LinearSVC(...))` | `CalibratedClassifierCVSchema` |
+| `adapt_classifier(SVC(...))` | `CalibratedSVCClassifierCVSchema` |
+| `adapt_classifier(GaussianNB(...))` | `CalibratedGaussianNBClassifierCVSchema` |
+| `adapt_classifier(LinearDiscriminantAnalysis(...))` | `CalibratedLDAClassifierCVSchema` |
+| `adapt_classifier(QuadraticDiscriminantAnalysis(...))` | `CalibratedQDAClassifierCVSchema` |
 
 ```mojo
 from moxie.calibration import CalibratedClassifierCV
@@ -293,10 +303,11 @@ The experimental schema stores current constructor settings, learned class
 order and feature count, and every fitted estimator and calibrator for the
 sigmoid, isotonic and temperature methods. Loading reconstructs independent
 fitted state without refitting. Parameters changed after fit apply to the next
-fit. Each schema requires the matching built-in adapter because custom class
-readers have no representation in the file. Other base estimator types require
-their own calibration schema support. See [native model files](../serialization.md)
-for format and load limits.
+fit. Each schema requires the matching built-in adapter with its default
+feature dtype and label type because custom class readers have no
+representation in the file. The LDA and QDA schemas require
+`covariance_estimator=None`. See [native model files](../serialization.md) for
+format and load limits.
 
 ## Limits and validation
 
@@ -318,13 +329,14 @@ materialized splits, missing classes, default minority-class splits, and
 explicit KFold and seeded shuffled KFold and StratifiedKFold. Production
 classifier cases load GaussianNB, LDA, QDA and LogisticRegression from the
 same revision and check binary and multiclass class order, predictions and
-probabilities. Standalone SVC cases compare all three calibration methods in
-ensemble and pooled modes, with exact probability round trips and a 5e-6
-absolute tolerance against scikit-learn for solver rounding. Default LinearSVC
-cases cover all three calibrators, weighted and unweighted fitting, and every
-ensemble setting. Frozen production cases
-use disjoint training and calibration data and check that cloning preserves
-fitted state and that automatic ensemble selection fits one calibrator.
+probabilities. Standalone SVC, GaussianNB, LDA and QDA cases exercise native
+round trips for all three calibration methods in ensemble and pooled modes.
+Restored probabilities match the original Mojo outputs exactly. Against
+scikit-learn, the allowed difference is `5e-6 * (1 + abs(expected))` for solver
+rounding. Default LinearSVC cases cover all three calibrators, weighted and
+unweighted fitting, and every ensemble setting. Frozen production cases use
+disjoint training and calibration data and check that cloning preserves fitted
+state and that automatic ensemble selection fits one calibrator.
 Float32 estimator cases cover all three calibration methods with both response
 types, pooled and ensemble fitting, and weighted scores. The reference receives
 Float32 features for default LinearSVC and features widened from Float32 for

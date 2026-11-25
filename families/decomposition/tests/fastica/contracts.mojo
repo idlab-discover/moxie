@@ -23,6 +23,32 @@ def rejects[dtype: DType](var model: FastICA[dtype], x: NDArray[dtype]) raises:
     with assert_raises(): model.fit(x)
 
 
+def check_warnings[dtype: DType]() raises:
+    var x = mixed[dtype](60)
+    var model = FastICA[dtype](4, max_iter=1, tol=0, random_state=0)
+    assert_equal(len(model.fit_warnings), 0)
+    _ = model.fit(x)
+    assert_equal(len(model.fit_warnings), 2)
+    assert_equal(model.fit_warnings[0].category, "UserWarning")
+    assert_equal(model.fit_warnings[0].message, "n_components is too large: it will be set to 3")
+    assert_equal(model.fit_warnings[1].category, "ConvergenceWarning")
+    assert_equal(len(clone(model).fit_warnings), 0)
+
+    var bad_weights = zeros[DType.float64](Shape(1, 1))
+    model.w_init = bad_weights^
+    with assert_raises(contains="w_init has invalid shape"):
+        _ = model.fit_transform(x)
+    assert_equal(len(model.fit_warnings), 2)
+    assert_equal(model.fit_warnings[1].category, "ConvergenceWarning")
+
+    model.w_init = None
+    model.n_components = 3
+    model.tol = 2
+    _ = model.fit_transform(x)
+    assert_equal(model.n_iter_, 1)
+    assert_equal(len(model.fit_warnings), 0)
+
+
 def check[dtype: DType]() raises:
     var x = mixed[dtype](60)
     var model = FastICA[dtype](2, random_state=0)
@@ -106,4 +132,6 @@ def check[dtype: DType]() raises:
 def main() raises:
     check[DType.float32]()
     check[DType.float64]()
+    check_warnings[DType.float32]()
+    check_warnings[DType.float64]()
     print("PASS: FastICA contracts in Float32 and Float64")

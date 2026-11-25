@@ -36,8 +36,10 @@ compares default L-BFGS and one-vs-rest classification against the pinned
 reference. The [calibration curve notebook](../../../notebooks/naive_bayes/plot_calibration_curve.ipynb)
 uses LogisticRegression as a baseline. The [digits pipeline notebook](../../../notebooks/cross_family/plot_digits_pipe.ipynb)
 uses LogisticRegression in a stratified grid search over PCA components and
-regularization strength. The breast-cancer feature-selection notebook migration
-remains open. No linear model implements
+regularization strength. The
+[breast-cancer feature-selection notebook](../../../notebooks/feature_selection/plot_select_from_model_diabetes.ipynb)
+uses LogisticRegression in backward selection with stratified ROC AUC scoring
+and in the final pipeline refit. No linear model implements
 `ModelSchema` persistence (see `docs/serialization.md`). The
 `algorithms/ridge_cv` directory is an unbuilt placeholder: its check exits
 with `UNIMPLEMENTED`, and its `EXPORTS.json` is not assembled.

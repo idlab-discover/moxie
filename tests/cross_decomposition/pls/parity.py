@@ -165,6 +165,12 @@ def cases():
     out.append(dict(estimator="CCA", dtype="float64",
                     params=dict(n_components=10, scale=True, max_iter=500, tol=1e-6, copy=True),
                     X=X2, y=y2, Xt=X2[:20], yt=y2[:20], w=None, loose=True, data="cca-converges"))
+    X_rank_one_target = np.array([[-1., -1.], [-1., 1.], [1., -1.], [1., 1.]])
+    y_rank_one = X_rank_one_target[:, 0].copy()
+    out.append(dict(estimator="PLSRegression", dtype="float64",
+                    params=dict(n_components=2, scale=False, max_iter=1, tol=1e-6, copy=True),
+                    X=X_rank_one_target, y=y_rank_one, Xt=X_rank_one_target, yt=y_rank_one,
+                    w=None, loose=False, data="convergence-then-constant-residual"))
     # Invalid inputs and parameters: native errors must match reference errors.
     rng = np.random.RandomState(9)
     Xe, ye = rng.randn(10, 5), rng.randn(10, 3)
@@ -226,7 +232,7 @@ def reference(module, case, perturb=0.0):
     cls = getattr(module, case["estimator"])
     params = dict(case["params"])
     est = cls(**{**params, "copy": True})
-    result = {"diagnostic": []}
+    result = {"diagnostic": [], "warning": []}
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
@@ -237,6 +243,7 @@ def reference(module, case, perturb=0.0):
         if issubclass(w.category, RuntimeWarning):
             continue  # NumPy floating-point warnings have no native analogue
         result["diagnostic"].append(f"{w.category.__name__}: {w.message}")
+        result["warning"].append((w.category.__name__, str(w.message)))
     for attr in ("x_weights_", "y_weights_", "x_loadings_", "y_loadings_", "x_rotations_",
                  "y_rotations_", "coef_", "intercept_"):
         result[attr] = getattr(est, attr)
@@ -271,9 +278,11 @@ def native(fixture):
     results = {}
     for line in lines[:-1]:
         case_id, key, value = line.split("|", 2)
-        entry = results.setdefault(int(case_id), {"diagnostic": []})
+        entry = results.setdefault(int(case_id), {"diagnostic": [], "warning": []})
         if key == "diagnostic":
             entry["diagnostic"].append(value)
+        elif key == "warning":
+            entry["warning"].append(tuple(value.split("|", 1)))
         elif key in ("error", "names"):
             entry[key] = value
         else:
@@ -341,12 +350,16 @@ def compare(case, ref, got, unstable):
     worst = 0.0
     if got.get("names") != ref["names"]:
         return False, worst, f"feature names {got.get('names')} != {ref['names']}"
+    if got["diagnostic"] != ref["diagnostic"]:
+        return False, worst, f"diagnostics {got['diagnostic']} != {ref['diagnostic']}"
+    if got["warning"] != ref["warning"]:
+        return False, worst, f"fit warnings {got['warning']} != {ref['warning']}"
     if unstable:
         # The reference itself changes beyond tolerance under a 1e-13 relative
         # input perturbation, so its vectors are not a well-defined target.
         # Compare shapes, finiteness and the per-component objective values.
         for key, expected in ref.items():
-            if key in ("diagnostic", "names", "n_iter_"):
+            if key in ("diagnostic", "warning", "names", "n_iter_"):
                 continue
             error, _ = array_error(expected, got[key], np.inf)
             if error is None:
@@ -355,10 +368,8 @@ def compare(case, ref, got, unstable):
         error, ok = array_error(objective(ref["x_scores"], ref["y_scores"], cca),
                                 objective(got["x_scores"], got["y_scores"], cca), 1e-6)
         return ok, error, "" if ok else f"component objectives differ by {error:.3e} (unstable case)"
-    if got["diagnostic"] != ref["diagnostic"]:
-        return False, worst, f"diagnostics {got['diagnostic']} != {ref['diagnostic']}"
     for key, expected in ref.items():
-        if key in ("diagnostic", "names"):
+        if key in ("diagnostic", "warning", "names"):
             continue
         if key == "n_iter_":
             a, b = np.asarray(got[key]), np.asarray(expected)

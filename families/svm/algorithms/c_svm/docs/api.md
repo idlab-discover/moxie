@@ -22,6 +22,13 @@ unfitted model. Successful fitting replaces all learned state. Failed fitting
 leaves the prior fitted model intact. Learned public arrays own their storage;
 mutating them cannot change the internal prediction buffers.
 
+Read `fit_warnings` for the last successful fit's native `FitWarning` records.
+For SVC and NuSVC, explicitly passing either boolean to `probability` records
+the pinned reference's `FutureWarning`. The default sentinel leaves it silent.
+A capped solver records `ConvergenceWarning` after any probability warning.
+Each record has a `category` and `message`. An unfitted clone has an empty list,
+and a failed fit preserves the previous list.
+
 Kernel names are `linear`, `poly`, `rbf`, `sigmoid`, `precomputed`, and `callable`.
 `Gamma` accepts numeric values and `scale`/`auto` strings. Precomputed training
 matrices must be square, with prediction columns equal to the training count.
@@ -94,6 +101,9 @@ estimator-owned random stream. Fitted models restore the resolved kernel,
 learned state, and probability calibration without refitting. The loader
 rebuilds the public copies of engine arrays from canonical fitted state.
 Changes to those copies are local to the in-memory estimator.
+Version 2 archives restore fit diagnostics from the original fit's options,
+including when the caller later changes `max_iter` or `probability`. Version 1
+archives still load and start with an empty warning history.
 
 The archive contains the retained training snapshot, including the Gram
 matrix for a precomputed fit. Query columns for a precomputed fit follow
@@ -110,4 +120,5 @@ to `families/svm/builds/public_kernel_driver` with
 `python families/svm/tests/public_kernel_parity.py --round-trip` with the
 pinned sklearn oracle environment. It compares the loaded estimators'
 public arrays and outputs with exact metadata and label checks and
-Float64 tolerances of `rtol=3e-5` and `atol=3e-6` for solver results.
+Float64 tolerances of `rtol=3e-5` and `atol=3e-6` for solver results. Warning
+categories, messages, and order are compared exactly.

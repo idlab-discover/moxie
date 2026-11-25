@@ -1,7 +1,7 @@
 """Estimator-independent lifecycle seam; no CV evaluation engine."""
 from moxie.base import BaseEstimator, Predictor, SupervisedScorer, clone
 from numojo import Item, NDArray
-from std.math import isfinite
+from std.math import abs, isfinite, sqrt
 
 trait TypedScorer(Movable, Deinitable):
     comptime Estimator: BaseEstimator & Deinitable
@@ -19,7 +19,7 @@ struct EstimatorScore[
     XType: Movable & Deinitable,
     YType: Movable & Deinitable,
     Weight: Movable & Deinitable = XType,
-](TypedScorer, Copyable):
+](TypedScorer, Copyable, Defaultable):
     """Delegate scoring to the estimator's default score method."""
 
     comptime Estimator = Self.E
@@ -52,13 +52,14 @@ def _dense_prediction[E: Predictor, X: Movable, dtype: DType](
     return rebind_var[NDArray[dtype]](estimator.predict(rebind[E.Input](X_test)))
 
 
-struct NegMeanSquaredError[
+struct _NegativeRegressionLoss[
+    loss: StaticString,
     E: Predictor & Deinitable,
     XType: Movable & Deinitable,
     dtype: DType = DType.float64,
     predict: def(E, XType) thin raises -> NDArray[dtype] = _dense_prediction[E, XType, dtype],
-](TypedScorer, Copyable):
-    """Score dense regression predictions with negated, uniform-average MSE."""
+](TypedScorer, Copyable, Defaultable):
+    """Negate a uniform-average loss over dense regression outputs."""
 
     comptime Estimator = Self.E
     comptime Input = Self.XType
@@ -101,21 +102,55 @@ struct NegMeanSquaredError[
             if weight_sum == 0.0:
                 raise Error("ZeroDivisionError: weights sum to zero")
 
-        var loss: Float64 = 0.0
+        var total: Float64 = 0.0
         for output in range(outputs):
-            var squared_error: Float64 = 0.0
+            var error: Float64 = 0.0
             for row in range(rows):
                 var observed = y[Item(row)] if y.ndim == 1 else y[Item(row, output)]
                 var estimate = predicted[Item(row)] if predicted.ndim == 1 else predicted[Item(row, output)]
                 if not isfinite(observed) or not isfinite(estimate):
                     raise Error("ValueError: regression targets and predictions must be finite")
                 var residual = observed - estimate
-                var term = residual * residual
+                var term: Scalar[Self.dtype]
+                comptime if Self.loss == "absolute":
+                    term = abs(residual)
+                else:
+                    term = residual * residual
                 if metadata:
                     term *= metadata.value()[Item(row)]
-                squared_error += Float64(term)
-            loss += squared_error / weight_sum
-        return -(loss / Float64(outputs))
+                error += Float64(term)
+            var average = error / weight_sum
+            comptime if Self.loss == "root_squared":
+                average = sqrt(average)
+            total += average
+        return -(total / Float64(outputs))
+
+
+# Negated mean squared error.
+comptime NegMeanSquaredError[
+    E: Predictor & Deinitable,
+    XType: Movable & Deinitable,
+    dtype: DType = DType.float64,
+    predict: def(E, XType) thin raises -> NDArray[dtype] = _dense_prediction[E, XType, dtype],
+] = _NegativeRegressionLoss["squared", E, XType, dtype, predict]
+
+
+# Negated mean absolute error.
+comptime NegMeanAbsoluteError[
+    E: Predictor & Deinitable,
+    XType: Movable & Deinitable,
+    dtype: DType = DType.float64,
+    predict: def(E, XType) thin raises -> NDArray[dtype] = _dense_prediction[E, XType, dtype],
+] = _NegativeRegressionLoss["absolute", E, XType, dtype, predict]
+
+
+# Negated root mean squared error, taking the root per output.
+comptime NegRootMeanSquaredError[
+    E: Predictor & Deinitable,
+    XType: Movable & Deinitable,
+    dtype: DType = DType.float64,
+    predict: def(E, XType) thin raises -> NDArray[dtype] = _dense_prediction[E, XType, dtype],
+] = _NegativeRegressionLoss["root_squared", E, XType, dtype, predict]
 
 
 trait FitAdapter(Movable):

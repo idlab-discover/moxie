@@ -169,7 +169,7 @@ def distance_checks():
         for metric in (
             "euclidean", "l2", "manhattan", "l1", "cityblock", "cosine", "sqeuclidean",
             "minkowski", "chebyshev", "correlation", "mahalanobis", "seuclidean",
-            "canberra", "precomputed", "hamming", "haversine", "nan_euclidean", "callable",
+            "braycurtis", "canberra", "precomputed", "hamming", "haversine", "nan_euclidean", "callable",
             *boolean_metrics,
         ):
             data = X
@@ -236,9 +236,9 @@ def fit_checks(reference):
     return len(cases)
 
 
-def callable_fit_checks(reference):
+def metric_fit_checks(reference, metric, reference_metric, feature_count):
     rng = np.random.RandomState(74)
-    X = rng.normal(size=(36, 5))
+    X = rng.normal(size=(36, feature_count))
     initial = rng.normal(scale=0.1, size=(len(X), 2))
     count = 0
     for dtype in (np.float32, np.float64):
@@ -246,13 +246,13 @@ def callable_fit_checks(reference):
             data = X.astype(dtype)
             init = initial.astype(np.float32)
             model = reference.TSNE(
-                method=method, angle=angle, metric=weighted_distance, init=init.copy(),
+                method=method, angle=angle, metric=reference_metric, init=init.copy(),
                 perplexity=4, max_iter=275, early_exaggeration=1, learning_rate=0.5,
                 min_grad_norm=0, random_state=0,
             )
             expected = model.fit_transform(data)
             iteration, kl, rate, features, got = native_fit(
-                data, init, method=method, angle=angle, metric="callable", max_iter=275, lr=0.5,
+                data, init, method=method, angle=angle, metric=metric, max_iter=275, lr=0.5,
             )
             assert (iteration, rate, features) == (model.n_iter_, model.learning_rate_, model.n_features_in_)
             # Native and sklearn accumulate gradients in different orders.
@@ -381,7 +381,15 @@ def main():
     print(f"PASS: {objective_checks(reference)} exact P, KL and gradient comparisons")
     print(f"PASS: {distance_checks()} dense distance comparisons")
     print(f"PASS: {fit_checks(reference)} explicit-initialization fits, including stopping edges")
-    print(f"PASS: {callable_fit_checks(reference)} exact and Barnes–Hut callable metric fits")
+    callable_count = metric_fit_checks(reference, "callable", weighted_distance, 5)
+    print(f"PASS: {callable_count} exact and Barnes–Hut callable metric fits")
+    # For 36 samples at perplexity 4, sklearn chooses BallTree at width 5
+    # and the brute-force reduction backend at width 16.
+    bray_curtis_count = sum(
+        metric_fit_checks(reference, "braycurtis", "braycurtis", width)
+        for width in (5, 16)
+    )
+    print(f"PASS: {bray_curtis_count} exact and Barnes–Hut Bray–Curtis fits on signed inputs")
     patience_check(reference)
     print("PASS: no-progress stopping against pinned sklearn gradient descent")
     draws, seeds = initialization_checks(reference)

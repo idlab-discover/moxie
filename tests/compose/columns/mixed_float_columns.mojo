@@ -95,7 +95,7 @@ def main() raises:
     var colors: List[Optional[String]] = ["red", "red", "blue"]
     wrong.add_categorical("color", categorical_column(colors))
     wrong.add_strings("rating", ["fast", "slow", "fast"])
-    with assert_raises(contains="requires float32 or float64 storage"):
+    with assert_raises(contains="requires numeric storage"):
         _ = model.transform(wrong)
     var invalid = ColumnTable(zeros[DType.float64](Shape(3, 1)), ["age"])
     wide_rating.unsafe_set(0, inf[DType.float64]())

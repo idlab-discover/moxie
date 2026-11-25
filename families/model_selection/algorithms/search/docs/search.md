@@ -29,7 +29,7 @@ The example's `configure` function applies each candidate dictionary to the
 estimator's constructor parameters. It uses the same adapter for both searches
 and for `cross_val_score[RegressionAdapter](model, X, y, adapter)`.
 
-`DenseSupervisedAdapter[E, Y, dtype, V, weight_dtype]` works with ordinary
+`DenseSupervisedAdapter[E, Y, dtype, V, weight_dtype, S]` works with ordinary
 row-oriented NDArray inputs. It takes a concrete estimator type and the concrete
 target type when it differs from Float64 NDArray. Specify the feature dtype
 when it differs from Float64 and the weight dtype when it differs from the
@@ -37,14 +37,27 @@ feature dtype. Array targets support rank one or two with Float32, Float64
 or Int64 elements. List targets support String, Int, Int64, Float32 or Float64.
 Each fold preserves target layout and dtype.
 
-The adapter calls the estimator's default score. The optional
+The adapter calls the estimator's default score unless you supply a scorer type
+as `S`. A custom scorer must match the estimator, input, target, and optional
+weight type. The adapter constructs a defaultable scorer or accepts an instance
+with `scoring=`. The selected scorer works for validation and search.
+
+```mojo
+comptime Model = DummyRegressor[]
+comptime Dense = NDArray[DType.float64]
+comptime MAE = NegMeanAbsoluteError[Model, Dense]
+comptime MAEAdapter = DenseSupervisedAdapter[Model, S=MAE]
+var scores = cross_val_score[MAEAdapter](model, X, y, MAEAdapter())
+```
+
+The optional
 `apply_params` argument accepts a noncapturing Mojo function with signature
 `def(mut E, Dict[String, V]) thin raises`. `V` defaults to Float64. An empty
 parameter dictionary evaluates the original configuration. Nonempty candidate
 dictionaries require an applier that rejects unsupported names.
 Fit and score metadata are separate optional rank-one weight arrays. Weighted
-fit requires `WeightedSupervisedEstimator`; score weights use the estimator's
-scoring signature.
+fit requires `WeightedSupervisedEstimator`. The configured scorer receives
+score weights.
 
 Omitting `cv` generates five unshuffled folds from the current fit data.
 Classifiers use stratification for binary and multiclass targets. An estimator

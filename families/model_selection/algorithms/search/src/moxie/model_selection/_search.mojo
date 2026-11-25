@@ -46,12 +46,13 @@ struct DenseSupervisedAdapter[
     dtype: DType = DType.float64,
     V: Copyable & Deinitable = Float64,
     weight_dtype: DType = dtype,
+    S: TypedScorer & Copyable = EstimatorScore[E, NDArray[dtype], Y, NDArray[weight_dtype]],
 ](SearchAdapter):
     """Ordinary dense samples with array or list targets and optional weights."""
 
     comptime X = NDArray[Self.dtype]
     comptime Weight = NDArray[Self.weight_dtype]
-    comptime Scorer = EstimatorScore[Self.E, Self.X, Self.Y, Self.Weight]
+    comptime Scorer = Self.S
     comptime Value = Self.V
     comptime _IsArray = (
         Self.Y == NDArray[DType.float32] or Self.Y == NDArray[DType.float64]
@@ -70,13 +71,29 @@ struct DenseSupervisedAdapter[
 
     var _apply_params: Optional[_ParameterApplier[Self.E, Self.V]]
     var _classifier: Bool
+    var _scoring: Self.Scorer
 
     def __init__(
         out self,
         apply_params: Optional[_ParameterApplier[Self.E, Self.V]] = None,
         *,
         classifier: Bool = conforms_to(Self.E, ClassifierMixin),
+    ) where conforms_to(Self.Scorer, Defaultable):
+        self = Self(apply_params, classifier=classifier, scoring=Self.Scorer())
+
+    def __init__(
+        out self,
+        apply_params: Optional[_ParameterApplier[Self.E, Self.V]] = None,
+        *,
+        classifier: Bool = conforms_to(Self.E, ClassifierMixin),
+        var scoring: Self.Scorer,
     ):
+        comptime assert Self.Scorer.Estimator == Self.E, "Scorer must match the estimator"
+        comptime assert Self.Scorer.Input == Self.X, "Scorer must match the dense input"
+        comptime assert Self.Scorer.Target == Self.Y, "Scorer must match the target"
+        comptime assert Self.Scorer.Metadata == Optional[Self.Weight], (
+            "Scorer metadata must be an optional sample weight array"
+        )
         comptime assert Self.X == Self.E.Input, "Dense input must match the estimator"
         comptime assert Self.Y == Self.E.Target, "Target must match the estimator"
         comptime assert Self.Weight == Self.E.SampleWeight, "Weight must match the estimator"
@@ -85,9 +102,11 @@ struct DenseSupervisedAdapter[
         )
         self._apply_params = apply_params
         self._classifier = classifier
+        self._scoring = scoring^
 
-    def n_samples(self, X: Self.X, y: Self.Y) raises -> Int:
-        if X.ndim != 2:
+    def n_samples(self, X: Self.Scorer.Input, y: Self.Scorer.Target) raises -> Int:
+        ref features = rebind[Self.X](X)
+        if features.ndim != 2:
             raise Error("ValueError: dense CV expects a rank-two feature matrix")
         var n: Int
         comptime if Self._IsArray:
@@ -97,58 +116,66 @@ struct DenseSupervisedAdapter[
             n = target.shape[0]
         else:
             n = len(rebind[List[Self._Label]](y))
-        if X.shape[0] != n:
+        if features.shape[0] != n:
             raise Error("ValueError: inconsistent sample counts")
         return n
 
-    def input_rows(self, X: Self.X, rows: IndexArray, train: IndexArray) raises -> Self.X:
-        return select_rows(X, rows)
+    def input_rows(self, X: Self.Scorer.Input, rows: IndexArray, train: IndexArray) raises -> Self.Scorer.Input:
+        return rebind_var[Self.Scorer.Input](select_rows(rebind[Self.X](X), rows))
 
-    def target_rows(self, y: Self.Y, rows: IndexArray) raises -> Self.Y:
+    def target_rows(self, y: Self.Scorer.Target, rows: IndexArray) raises -> Self.Scorer.Target:
         comptime if Self._IsArray:
-            return rebind_var[Self.Y](select_rows(rebind[NDArray[Self._ArrayDType]](y), rows))
+            return rebind_var[Self.Scorer.Target](select_rows(rebind[NDArray[Self._ArrayDType]](y), rows))
         else:
-            return rebind_var[Self.Y](select_rows(rebind[List[Self._Label]](y), rows))
+            return rebind_var[Self.Scorer.Target](select_rows(rebind[List[Self._Label]](y), rows))
 
-    def validate_metadata(self, metadata: Optional[Self.Weight], n_samples: Int) raises:
-        if metadata:
-            ref weights = metadata.value()
+    def validate_metadata(self, metadata: Self.Scorer.Metadata, n_samples: Int) raises:
+        ref sample_weight = rebind[Optional[Self.Weight]](metadata)
+        if sample_weight:
+            ref weights = sample_weight.value()
             if weights.ndim != 1 or weights.shape[0] != n_samples:
                 raise Error("ValueError: sample weights require one value per sample")
 
-    def metadata_rows(self, metadata: Optional[Self.Weight], rows: IndexArray) raises -> Optional[Self.Weight]:
-        if metadata:
-            return select_rows(metadata.value(), rows)
-        return None
+    def metadata_rows(self, metadata: Self.Scorer.Metadata, rows: IndexArray) raises -> Self.Scorer.Metadata:
+        var selected: Optional[Self.Weight] = None
+        ref sample_weight = rebind[Optional[Self.Weight]](metadata)
+        if sample_weight:
+            selected = select_rows(sample_weight.value(), rows)
+        return rebind_var[Self.Scorer.Metadata](selected^)
 
-    def fit(self, mut estimator: Self.E, X: Self.X, y: Self.Y, metadata: Optional[Self.Weight]) raises:
-        if metadata:
+    def fit(
+        self, mut estimator: Self.Scorer.Estimator, X: Self.Scorer.Input,
+        y: Self.Scorer.Target, metadata: Self.Scorer.Metadata,
+    ) raises:
+        ref model = rebind[Self.E](estimator)
+        ref sample_weight = rebind[Optional[Self.Weight]](metadata)
+        if sample_weight:
             self.validate_metadata(metadata, self.n_samples(X, y))
             comptime if conforms_to(Self.E, WeightedSupervisedEstimator):
                 comptime assert Self.Weight == Self.E.SampleWeight
-                _ = estimator.fit(
+                _ = model.fit(
                     rebind[Self.E.Input](X), rebind[Self.E.Target](y),
-                    sample_weight=rebind[Self.E.SampleWeight](metadata.value()),
+                    sample_weight=rebind[Self.E.SampleWeight](sample_weight.value()),
                 )
             else:
                 raise Error("ValueError: estimator does not support weighted fit")
         else:
-            _ = estimator.fit(rebind[Self.E.Input](X), rebind[Self.E.Target](y))
+            _ = model.fit(rebind[Self.E.Input](X), rebind[Self.E.Target](y))
 
-    def configure(self, mut estimator: Self.E, params: Dict[String, Self.V]) raises:
+    def configure(self, mut estimator: Self.Scorer.Estimator, params: Dict[String, Self.V]) raises:
         if self._apply_params:
-            self._apply_params.value()(estimator, params)
+            self._apply_params.value()(rebind[Self.E](estimator), params)
         elif len(params) != 0:
             raise Error("ValueError: nonempty parameters require an apply_params function")
 
     def default_scorer(self) -> Self.Scorer:
-        return Self.Scorer()
+        return self._scoring.copy()
 
-    def default_cv(self, X: Self.X, y: Self.Y) raises -> List[IndexSplit]:
+    def default_cv(self, X: Self.Scorer.Input, y: Self.Scorer.Target) raises -> List[IndexSplit]:
         var n = self.n_samples(X, y)
         if not self._classifier:
             return _collect_splits(KFold(5).split(n))
-        var labels = self._split_labels(y)
+        var labels = self._split_labels(rebind[Self.Y](y))
         return _collect_splits(check_cv(None, labels, classifier=True).split(n, labels))
 
     @staticmethod

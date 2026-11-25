@@ -218,11 +218,43 @@ def callable_metric_contract(method: String) raises:
     assert_equal(model.embedding_.value().unsafe_get(0), expected.unsafe_get(0))
 
 
+def bray_curtis_contract[dtype: DType]() raises:
+    var X = points[dtype]()
+    for feature in range(3):
+        X.unsafe_set(feature, -X.unsafe_get(3 + feature))
+    var model = TSNE[dtype](
+        method="exact", metric="braycurtis", init="random", perplexity=2,
+        random_state=17, max_iter=260, learning_rate=2.0,
+    )
+    # Opposite rows have a zero SciPy denominator but a valid neighbor distance.
+    with assert_raises(contains="finite nonnegative squared distances"):
+        _ = model.fit(X)
+    assert_false(model.__sklearn_is_fitted__())
+    var fitted = model.set_params(method="barnes_hut").fit_transform(X)
+    assert_true(isfinite(model.kl_divergence_))
+    assert_equal(fitted.shape[0], 6)
+
+    X.unsafe_set(0, -2)
+    var reversed = X.view_with_layout(Shape(6, 3), NDArrayStrides(-3, 1), 15)
+    var packed = zeros[dtype](Shape(6, 3))
+    for row in range(6):
+        for feature in range(3):
+            packed.unsafe_set(row * 3 + feature, X.unsafe_get((5 - row) * 3 + feature))
+    for method in ["exact", "barnes_hut"]:
+        _ = model.set_params(method=method)
+        var from_view = model.fit_transform(reversed)
+        var from_packed = model.fit_transform(packed)
+        for i in range(from_view.size):
+            assert_equal(from_view.unsafe_get(i), from_packed.unsafe_get(i))
+
+
 def main() raises:
     for method in ["exact", "barnes_hut"]:
         repeat_and_clone[DType.float64](method)
         repeat_and_clone[DType.float32](method)
         callable_metric_contract(method)
+    bray_curtis_contract[DType.float32]()
+    bray_curtis_contract[DType.float64]()
     explicit_configuration()
     fit_validation()
     barnes_hut_bounds()

@@ -43,10 +43,16 @@ struct EstimatorCVScore[E: SupervisedScorer & Copyable & Deinitable, dt: DType =
     comptime Target: Copyable & Deinitable = Self.E.Target
     comptime Metadata = Optional[Self.Input]
 
-    def __init__(out self):
-        pass
+    comptime ScoreFunction = def(Self.Estimator, Self.Input, Self.Target, Self.Metadata) thin raises -> Float64
+    var _score: Optional[Self.ScoreFunction]
+
+    def __init__(out self, score: Optional[Self.ScoreFunction] = None):
+        self._score = score
 
     def score(self, estimator: Self.E, X: Self.Input, y: Self.Target, metadata: Self.Metadata) raises -> Float64:
+        if self._score:
+            var score = self._score.value()
+            return score(estimator, X, y, metadata)
         return estimator.score(rebind[Self.E.Input](X), rebind[Self.E.Target](y), rebind[Optional[Self.E.SampleWeight]](metadata))
 
 

@@ -24,6 +24,9 @@ var auto = make_column_transformer(ColumnEntry(MyScaler(), [0]), ColumnEntry("pa
 # names: "myscaler", "passthrough" (duplicates get -1, -2, ...)
 ```
 
+The factory uses the public class name for components that declare
+`EstimatorClassName`, including aliases such as `PLSRegression`.
+
 ## Constructor (sklearn names and defaults)
 
 | Parameter | Default | Notes |

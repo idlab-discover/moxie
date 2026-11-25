@@ -139,6 +139,18 @@ def test_zero_candidates_and_invalid_metadata() raises:
             monotonic,
             allowed_features=Span(features),
         )
+    with assert_raises(contains="mask must match"):
+        _ = find_node_split(
+            histograms,
+            total,
+            0,
+            counts,
+            no,
+            no,
+            monotonic,
+            allowed_features=Span(features),
+            feature_mask=[True, False],
+        )
     var excluded = compute_histograms(
         X,
         3,

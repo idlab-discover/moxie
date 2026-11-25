@@ -6,7 +6,10 @@ from .decomposition._pca import PCA, ComponentCount, IteratedPower
 from .decomposition._incremental_pca import IncrementalPCA
 from .decomposition._truncated_svd import TruncatedSVD
 from .decomposition._factor_analysis import FactorAnalysis, _FA_CONVERGENCE_MESSAGE
-from .decomposition._fastica import FastICA, WhitenOption
+from .decomposition._fastica import (
+    FastICA, WhitenOption, _ica_clipped_components, _ICA_IGNORED_COMPONENTS,
+    _ICA_SMALL_SINGULAR_VALUES, _ICA_CONVERGENCE,
+)
 from .decomposition._kernel_pca import KernelPCA, KernelPower
 from .decomposition._lda import LatentDirichletAllocation, LatentDirichletAllocationParams
 from .decomposition._sparse_coding import SparseCoder
@@ -632,15 +635,50 @@ def _check_ica_state(state: _ComponentState, iterations: Int, centered: Bool) ra
         raise Error("ModelSchemaError: unfitted FastICA has learned metadata")
 
 
+def _ica_warning_flags(warnings: List[FitWarning], state: _ComponentState, centered: Bool) raises -> UInt64:
+    var flags: UInt64 = 0
+    var previous: UInt64 = 0
+    var component_message = _ica_clipped_components(state.rank) if centered else String(_ICA_IGNORED_COMPONENTS)
+    for warning in warnings:
+        var flag: UInt64
+        if warning.category == "UserWarning" and warning.message == component_message:
+            flag = 1
+        elif centered and warning.category == "UserWarning" and warning.message == _ICA_SMALL_SINGULAR_VALUES:
+            flag = 2
+        elif warning.category == "ConvergenceWarning" and warning.message == _ICA_CONVERGENCE:
+            flag = 4
+        else:
+            raise Error("ModelSchemaError: invalid FastICA fit warnings")
+        if not state.fitted or flag <= previous:
+            raise Error("ModelSchemaError: invalid FastICA fit warnings")
+        flags |= flag
+        previous = flag
+    return flags
+
+
+def _read_ica_warnings(flags: UInt64, state: _ComponentState, centered: Bool) raises -> List[FitWarning]:
+    if flags > 7 or (flags != 0 and not state.fitted) or (flags & 2 != 0 and not centered):
+        raise Error("ModelSchemaError: invalid FastICA fit warnings")
+    var warnings: List[FitWarning] = []
+    if flags & 1 != 0:
+        var message = _ica_clipped_components(state.rank) if centered else String(_ICA_IGNORED_COMPONENTS)
+        warnings.append(FitWarning("UserWarning", message))
+    if flags & 2 != 0:
+        warnings.append(FitWarning("UserWarning", _ICA_SMALL_SINGULAR_VALUES))
+    if flags & 4 != 0:
+        warnings.append(FitWarning("ConvergenceWarning", _ICA_CONVERGENCE))
+    return warnings^
+
+
 struct FastICASchema[dtype: DType = DType.float64](ModelSchema):
-    """Version 1 of dense FastICA state, including the private unmixing matrix."""
+    """Version 2 of dense FastICA state, including unmixing and fit warnings."""
 
     comptime Model = FastICA[Self.dtype]
     comptime _type_id = "moxie.decomposition.FastICA"
 
     @staticmethod
     def encode(model: Self.Model) raises -> ModelArchive:
-        var archive = ModelArchive(Self._type_id, 1)
+        var archive = ModelArchive(Self._type_id, 2)
         var writer = BinaryWriter()
         writer.uint(UInt64(dtype_code[Self.dtype]()))
         _write_optional_int(writer, model.n_components)
@@ -666,6 +704,7 @@ struct FastICASchema[dtype: DType = DType.float64](ModelSchema):
         state.write(writer)
         writer.integer(model.n_iter_)
         writer.boolean(centered)
+        writer.uint(_ica_warning_flags(model.fit_warnings, state, centered))
         archive.manifest = writer^.finish()
         _write_array(archive, "components_", model.components_, state.fitted, [state.rank, state.features])
         _write_array(archive, "mixing_", model.mixing_, state.fitted, [state.features, state.rank])
@@ -676,7 +715,7 @@ struct FastICASchema[dtype: DType = DType.float64](ModelSchema):
 
     @staticmethod
     def decode(archive: ModelArchive) raises -> Self.Model:
-        archive.expect(Self._type_id, 1)
+        archive.expect(Self._type_id, 1 if archive.schema_version == 1 else 2)
         archive.validate()
         var reader = BinaryReader(archive.manifest)
         _check_dtype[Self.dtype](reader)
@@ -698,8 +737,10 @@ struct FastICASchema[dtype: DType = DType.float64](ModelSchema):
         var state = _ComponentState.read(reader)
         model.n_iter_ = reader.integer()
         var centered = reader.boolean()
-        reader.finish()
         _check_ica_state(state, model.n_iter_, centered)
+        if archive.schema_version == 2:
+            model.fit_warnings = _read_ica_warnings(reader.uint(), state, centered)
+        reader.finish()
         if len(archive.payloads) != Int(has_init) + 3 * Int(state.fitted) + 2 * Int(centered):
             raise Error("ModelSchemaError: unexpected FastICA array count")
         model.n_features_in_ = state.features

@@ -91,6 +91,8 @@ def _canonical_dtype(dtype: String) -> String:
         return "float64"
     if dtype == "single":
         return "float32"
+    if dtype == "int":
+        return "int64"
     return dtype
 
 
@@ -105,8 +107,12 @@ def _validate_dtype(dtype: String) raises:
 
 
 def _dtype_matches(filter: String, actual: String) -> Bool:
-    if filter == "number" or filter == "floating":
+    if filter == "number":
+        return actual == "float32" or actual == "float64" or actual == "int64"
+    if filter == "floating":
         return actual == "float32" or actual == "float64"
+    if filter == "integer" or filter == "signedinteger":
+        return actual == "int64"
     return _canonical_dtype(filter) == actual
 
 

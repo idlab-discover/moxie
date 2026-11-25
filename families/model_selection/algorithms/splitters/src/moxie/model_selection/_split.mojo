@@ -432,7 +432,7 @@ def _encode(values: IndexArray, unique: IndexArray) raises -> IndexArray:
     return result^
 
 
-struct PredefinedSplit(BaseCrossValidator):
+struct PredefinedSplit(BaseCrossValidator, Copyable):
     comptime Input = Int
     comptime Target = IndexArray
     comptime Groups = IndexArray

@@ -33,6 +33,16 @@ target (StringTarget or Int64/Float32/Float64 array). No family importance trait
 is required. Estimator-specific restrictions, including the adopted Lasso and
 ElasticNet solver options, still apply.
 
+With `DenseSupervisedCV[Estimator]`, pass
+`scoring=EstimatorCVScore[Estimator](score_function)` to use a native scoring
+function. Its signature takes the fitted estimator, held-out features and
+targets, and optional held-out sample weights, and returns Float64. For Float32
+features, specialize both types with `DType.float32`. The function is a
+non-capturing Mojo function and can raise. Omitting `scoring` uses the
+estimator's score. The
+[breast-cancer example](../../notebooks/feature_selection/plot_select_from_model_diabetes.ipynb)
+uses a typed ROC AUC scorer with logistic regression.
+
 Constructor keywords retain the reference defaults:
 
 | Parameter | Behavior |

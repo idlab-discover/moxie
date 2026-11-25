@@ -21,7 +21,7 @@ from harness import Driver, oracle
 oracle()
 from sklearn import config_context
 from sklearn.model_selection import (
-    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, StratifiedGroupKFold, StratifiedKFold,
+    GroupKFold, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, StratifiedGroupKFold, StratifiedKFold,
 )
 from sklearn.preprocessing import TargetEncoder
 
@@ -38,7 +38,7 @@ def expect(case, name, value, kind='array'):
 d.prelude('''
 from moxie._categorical import categorical_column, CategoricalColumn, StringCategories, NumericCategories
 from moxie._random import seed_global_random_state, RandomState
-from moxie.model_selection import GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, SplitLabels, StratifiedGroupKFold, StratifiedKFold
+from moxie.model_selection import GroupKFold, IndexSplit, KFold, LeaveOneGroupOut, LeaveOneOut, PredefinedSplit, SplitLabels, StratifiedGroupKFold, StratifiedKFold
 from moxie.preprocessing._vocabulary import CategoryKind, StringKind, StringNaNKind, NumericKind
 from moxie.preprocessing._label import LabelKind, StringLabels, NumericLabels
 from moxie.preprocessing._target_encoder import kfold_test_folds, stratified_kfold_test_folds
@@ -190,6 +190,8 @@ def native_args(kind, kw):
             parts.append(f'cv={type(v).__name__}({v.n_splits}, shuffle={shuffle}, random_state={v.random_state})')
         elif k == 'cv' and isinstance(v, (LeaveOneOut, LeaveOneGroupOut)):
             parts.append(f'cv={type(v).__name__}()')
+        elif k == 'cv' and isinstance(v, PredefinedSplit):
+            parts.append(f'cv=PredefinedSplit({d.input(v.test_fold)})')
         elif k == 'cv' and isinstance(v, list):
             indices = ', '.join(f'IndexSplit({d.input(train)}, {d.input(test)})' for train, test in v)
             parts.append(f'cv=TargetEncoderSplits([{indices}])')
@@ -323,6 +325,11 @@ run_case('stratified_group_kfold_shuffled', 's', y_bin, dict(cv=StratifiedGroupK
 run_case('leave_one_out', 's', y_cont, dict(cv=LeaveOneOut()))
 run_case('leave_one_group_out', 's', y_multi_s,
          dict(cv=LeaveOneGroupOut(), categories=[['red'], ['x'], ['a']]), groups=group_names[::-1])
+predefined = np.resize(np.array([8, -2, 4, 8], dtype=np.int64), n)
+run_case('predefined_continuous', 's', y_cont, dict(cv=PredefinedSplit(predefined)))
+run_case('predefined_multiclass', 's', y_multi_s,
+         dict(cv=PredefinedSplit(predefined), categories=[['red'], ['x'], ['a']]))
+run_case('predefined_one_fold', 's', y_cont, dict(cv=PredefinedSplit(np.zeros_like(predefined))))
 test_parts = [np.arange(start, n, 3, dtype=np.int64)[::-1] for start in range(3)]
 custom_cv = [
     (np.resize(test_parts[(i + 1) % 3][::2], 13), test)
@@ -440,6 +447,19 @@ for tag, splits in [
            f'var enc = TargetEncoder({native_args("s", dict(cv=splits))})\n'
            f'_ = enc.fit_transform(X, {d.input(y_cont)})')
     expect(f'err_{tag}', 'error', 'must cover each sample index exactly once', 'error')
+
+for tag, test_fold, needle in [
+    ('predefined_short', predefined[:-1], 'one test_fold entry per input row'),
+    ('predefined_long', np.append(predefined, 8), 'one test_fold entry per input row'),
+    ('predefined_training_only', np.where(predefined == -2, -1, predefined), 'must cover each sample index exactly once'),
+]:
+    splitter = PredefinedSplit(test_fold)
+    sk_raises(lambda: TargetEncoder(cv=splitter).fit_transform(S, y_cont))
+    d.case(f'err_{tag}',
+           f'var X: List[CategoricalColumn[StringCategories]] = {columns("s", S)}\n'
+           f'var enc = TargetEncoder({native_args("s", dict(cv=splitter))})\n'
+           f'_ = enc.fit_transform(X, {d.input(y_cont)})')
+    expect(f'err_{tag}', 'error', needle, 'error')
 
 for tag, splitter, groups, needle in [
     ('group_missing', GroupKFold(4), None, 'groups are required'),

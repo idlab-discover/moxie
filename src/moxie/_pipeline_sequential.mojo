@@ -1,5 +1,5 @@
 # Adapted from scikit-learn pipeline.py; BSD-3-Clause, see LICENSES/scikit-learn.txt.
-"""Typed supervised two-stage composition, using existing estimator capabilities."""
+"""Typed two-stage composition, using existing estimator capabilities."""
 from std.iter import downcast
 from moxie._feature_metadata import InputFeatureCount
 from moxie.base import (
@@ -7,9 +7,10 @@ from moxie.base import (
     TransformerMixin, FitTransformer, InverseTransformer, SupervisedScorer, ClassifierMixin, clone,
     ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, SampleScorer,
     NumericClassifierClasses, WeightedSupervisedEstimator,
+    ClusterMixin, DensityMixin, FitPredictor, OutlierMixin, UnsupervisedScorer,
 )
 from moxie._pipeline import validate_names
-from moxie._pipeline_contracts import PipelineSteps, PredictivePipeline, TransformingPipeline
+from moxie._pipeline_contracts import PipelineEstimator, PipelineSteps, PredictivePipeline, TransformingPipeline
 from moxie._pipeline_union import UnionFeatureNames, UnionInputFeatures
 from moxie.utils.validation import check_is_fitted
 
@@ -58,6 +59,15 @@ def _fit_transform[P: TransformerMixin, T: Copyable & Deinitable](
 
 def _validate_pipeline_names(first: String, last: String) raises:
     validate_names([first, last], ["steps", "memory", "verbose", "transform_input"])
+
+
+def _named_step_index(name: StringSpan, first: String, last: String) raises -> Int:
+    # If public field edits introduce duplicate names, sklearn selects the last.
+    if name == last:
+        return 1
+    if name == first:
+        return 0
+    raise Error(t"KeyError: no pipeline step named '{name}'")
 
 
 def _pipeline_feature_names[P: TransformerMixin, E: BaseEstimator](
@@ -117,6 +127,9 @@ struct Pipeline[
     var estimator_name: String
     var transformer: Self.P
     var estimator: Self.E
+
+    def _step_index(self, name: StringSpan) raises -> Int:
+        return _named_step_index(name, self.transformer_name, self.estimator_name)
 
     # Each stored step lives for the supplied immutable borrow of the pipeline.
     def _prefix_step[origin: ImmOrigin](
@@ -321,39 +334,65 @@ struct Pipeline[
 def _fit_optional_step[P: TransformerMixin & UnsupervisedEstimator, T: Copyable & Deinitable](
     mut step: P, X: P.Input, y: Optional[T],
 ) raises -> P.Transformed:
-    comptime assert P.Target == T, "transformer pipeline target types must match"
+    comptime if P.Target == T:
+        return _fit_optional_transform(step, X, rebind[Optional[P.Target]](y))
+    else:
+        var none = Optional[downcast[P.Target, Movable & Deinitable]](None)
+        return _fit_optional_transform(step, X, rebind[Optional[P.Target]](none))
+
+
+def _fit_optional_transform[P: TransformerMixin & UnsupervisedEstimator](
+    mut step: P, X: P.Input, y: Optional[P.Target],
+) raises -> P.Transformed:
     comptime if conforms_to(P, FitTransformer):
         return step.fit_transform(X, rebind[Optional[P.Target]](y))
     else:
-        _ = step.fit(X, rebind[Optional[P.Target]](y))
+        _ = step.fit(X, y)
         return step.transform(X)
 
 
 struct TransformerPipeline[
-    P: TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable,
-    E: TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable,
+    P: TransformerMixin & UnsupervisedEstimator & Deinitable,
+    E: UnsupervisedEstimator & Deinitable,
 ](
-    TransformingPipeline,
+    PipelineEstimator,
     PipelineSteps,
-    TransformerMixin,
     UnsupervisedEstimator,
-    FitTransformer,
-    Copyable,
+    Copyable where conforms_to(P, Copyable) and conforms_to(E, Copyable),
     UnionFeatureNames,
+    Predictor where conforms_to(E, Predictor),
+    PredictivePipeline where conforms_to(E, Predictor),
+    TransformerMixin where conforms_to(E, TransformerMixin),
+    TransformingPipeline where conforms_to(E, TransformerMixin),
+    FitTransformer where conforms_to(E, TransformerMixin),
+    FitPredictor where conforms_to(E, FitPredictor),
+    ClusterMixin where conforms_to(E, ClusterMixin),
+    SampleScorer where conforms_to(E, SampleScorer),
+    DensityMixin where conforms_to(E, DensityMixin),
+    UnsupervisedScorer where conforms_to(E, UnsupervisedScorer),
+    DecisionFunction where conforms_to(E, DecisionFunction),
+    OutlierMixin where conforms_to(E, OutlierMixin),
     InverseTransformer where conforms_to(P, InverseTransformer) and conforms_to(E, InverseTransformer),
 ):
-    """Two named transformer stages, nestable as ordinary transformers."""
+    """An optional-target transformer followed by an unsupervised estimator."""
 
     comptime Prefix = Self.P
     comptime Final = Self.E
     comptime Input = Self.P.Input
     comptime Target = Self.E.Target
-    comptime Transformed = Self.E.Transformed
+    comptime Transformed where conforms_to(Self.E, TransformerMixin) = Self.E.Transformed
+    comptime Labels where conforms_to(Self.E, FitPredictor) = Self.E.Labels
+    comptime Prediction where conforms_to(Self.E, Predictor) = Self.E.Prediction
+    comptime SampleScores where conforms_to(Self.E, SampleScorer) = Self.E.SampleScores
+    comptime Decision where conforms_to(Self.E, DecisionFunction) = Self.E.Decision
     comptime Params = PipelineParams[Self.P.Params, Self.E.Params]
     var transformer_name: String
     var estimator_name: String
     var transformer: Self.P
     var estimator: Self.E
+
+    def _step_index(self, name: StringSpan) raises -> Int:
+        return _named_step_index(name, self.transformer_name, self.estimator_name)
 
     # Each stored step lives for the supplied immutable borrow of the pipeline.
     def _prefix_step[origin: ImmOrigin](
@@ -371,7 +410,6 @@ struct TransformerPipeline[
         *, transformer_name: String = "transformer", estimator_name: String = "estimator",
     ) raises:
         comptime assert Self.P.Transformed == Self.E.Input, "pipeline intermediate types must match"
-        comptime assert Self.P.Target == Self.E.Target, "transformer pipeline target types must match"
         self.transformer_name = transformer_name
         self.estimator_name = estimator_name
         self.transformer = transformer^
@@ -422,7 +460,19 @@ struct TransformerPipeline[
             comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
         return self
 
-    def fit_transform(mut self, X: Self.Input, y: Optional[Self.Target] = None) raises -> Self.Transformed:
+    def fit_predict(
+        mut self, X: Self.Input, y: Optional[Self.Target] = None,
+    ) raises -> Self.Labels where conforms_to(Self.E, FitPredictor):
+        self._validate_names()
+        comptime if conforms_to(Self.Target, Copyable & Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = _fit_optional_step(self.transformer, X, y)
+            return self.estimator.fit_predict(rebind[Self.E.Input](transformed), y)
+        else:
+            comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
+
+    def fit_transform(
+        mut self, X: Self.Input, y: Optional[Self.Target] = None,
+    ) raises -> Self.Transformed where conforms_to(Self.E, TransformerMixin):
         self._validate_names()
         comptime if conforms_to(Self.Target, Copyable & Deinitable) and conforms_to(Self.P.Transformed, Deinitable):
             var transformed = _fit_optional_step(self.transformer, X, y)
@@ -430,11 +480,53 @@ struct TransformerPipeline[
         else:
             comptime assert False, "pipeline needs copyable targets and destructible intermediate values"
 
-    def transform(self, X: Self.Input) raises -> Self.Transformed:
+    def transform(
+        self, X: Self.Input,
+    ) raises -> Self.Transformed where conforms_to(Self.E, TransformerMixin):
         check_is_fitted(self)
         comptime if conforms_to(Self.P.Transformed, Deinitable):
             var transformed = self.transformer.transform(X)
             return self.estimator.transform(rebind[Self.E.Input](transformed))
+        else:
+            comptime assert False, "pipeline needs destructible intermediate values"
+
+    def predict(
+        self, X: Self.Input,
+    ) raises -> Self.Prediction where conforms_to(Self.E, Predictor):
+        check_is_fitted(self)
+        comptime if conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = self.transformer.transform(X)
+            return self.estimator.predict(rebind[Self.E.Input](transformed))
+        else:
+            comptime assert False, "pipeline needs destructible intermediate values"
+
+    def decision_function(
+        self, X: Self.Input,
+    ) raises -> Self.Decision where conforms_to(Self.E, DecisionFunction):
+        check_is_fitted(self)
+        comptime if conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = self.transformer.transform(X)
+            return self.estimator.decision_function(rebind[Self.E.Input](transformed))
+        else:
+            comptime assert False, "pipeline needs destructible intermediate values"
+
+    def score_samples(
+        self, X: Self.Input,
+    ) raises -> Self.SampleScores where conforms_to(Self.E, SampleScorer):
+        check_is_fitted(self)
+        comptime if conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = self.transformer.transform(X)
+            return self.estimator.score_samples(rebind[Self.E.Input](transformed))
+        else:
+            comptime assert False, "pipeline needs destructible intermediate values"
+
+    def score(
+        self, X: Self.Input, y: Optional[Self.Target] = None,
+    ) raises -> Float64 where conforms_to(Self.E, UnsupervisedScorer):
+        check_is_fitted(self)
+        comptime if conforms_to(Self.P.Transformed, Deinitable):
+            var transformed = self.transformer.transform(X)
+            return self.estimator.score(rebind[Self.E.Input](transformed), y)
         else:
             comptime assert False, "pipeline needs destructible intermediate values"
 
@@ -453,3 +545,9 @@ struct TransformerPipeline[
         return _pipeline_feature_names(
             self.transformer, self.estimator, self.transformer_name, self.estimator_name, input_features,
         )
+
+
+comptime UnsupervisedPipeline[
+    P: TransformerMixin & UnsupervisedEstimator & Deinitable,
+    E: UnsupervisedEstimator & Deinitable,
+] = TransformerPipeline[P, E]

@@ -54,10 +54,17 @@ adapter takes a `None` target and selects fold rows with the public
 `select_rows` function. It uses the estimator's own `score(X)` and five
 unshuffled folds, matching scikit-learn's defaults. The notebook compares
 individual fold scores, mean scores, and the winning grid entry.
-A covariance estimator or `EllipticEnvelope` cannot be the final step of a
-`moxie.pipeline.Pipeline`: that step must be a `SupervisedEstimator & Predictor`,
-so `make_pipeline(StandardScaler(), EllipticEnvelope())` fails to compile
-(`notebooks/covariance/plot_mahalanobis_distances.ipynb`).
+
+`make_pipeline(StandardScaler(), EllipticEnvelope())` forwards `fit_predict`,
+`predict`, `decision_function` and `score_samples`. It gives the scaler
+`None` because the detector's optional target has Int64 labels and the scaler
+declares a floating-point target. A covariance estimator such as
+`LedoitWolf()` exposes its target-free log-likelihood `score(X)` through the
+same factory. `EllipticEnvelope.score(X, y)` computes labeled accuracy and is
+available directly on the final estimator, with features already transformed.
+See the [Mahalanobis distances notebook](../../../notebooks/covariance/plot_mahalanobis_distances.ipynb)
+for parity on training labels, grid predictions and decisions, and held-out
+covariance scoring.
 
 See [feature parity](parity.md) for algorithm-specific limitations and validation
 commands. Graphical solvers and cross-validation support `mode="cd"` and

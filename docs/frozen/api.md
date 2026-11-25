@@ -74,6 +74,7 @@ also rejected. This is deliberately stricter than Python's mutable
 | `FeatureNamesOut` (`moxie._feature_metadata`) | `get_feature_names_out(input_features=None)`, so `Pipeline.get_feature_names_out` works through a frozen step |
 | `InputFeatureCount` | `get_n_features_in()`, the native counterpart of delegated `n_features_in_` |
 | `EstimatorTagsProvider` | `get_tags(frozen)` from `moxie.base` returns the child's native tags with `_skip_test=True` |
+| `FitScoreMetadataRequestProvider` | `get_metadata_routing()` returns the child's fit and score sample-weight requests |
 
 Wrapped `Pipeline` and `FeatureUnion` instances expose the first child's input
 width through `get_n_features_in()`. The query uses the child's learned state.
@@ -165,6 +166,24 @@ wrappers. The snapshot preserves the child's input-rank flags and sets
 `_skip_test=True` for the wrapper. Editing the snapshot leaves the child and
 subsequent queries unchanged. Wrapping an estimator without the optional tag
 trait leaves the tag query unavailable at compile time.
+
+### Sample-weight requests
+
+Configure the estimator's fit and score requests before transferring it to
+`FrozenEstimator(model^)`. If the child implements
+[`FitScoreMetadataRequestProvider`](../interfaces.md#sample-weight-requests),
+`frozen.get_metadata_routing()` returns its independent request snapshot.
+The query works before fit and through clones and nested wrappers. A caller
+can resolve each method's request with `route(metadata)` and pass the resolved
+`sample_weight` by keyword. Weighted fit checks fitted state and ignores the
+weight. Score forwards the resolved weight to the child.
+
+The native snapshot has fixed fit and score fields. Each unconfigured request
+is unset. The Python wrapper initially reports an empty routing record until
+its child stores explicit requests. Native request setters are called on the
+child before wrapping, since the wrapper exposes the child by immutable borrow.
+Automatic routing through compositions and arbitrary per-method metadata
+remain open in the shared routing and composition contracts.
 
 ### Access to pipeline steps
 
@@ -304,9 +323,12 @@ Python environment.
 
 ```sh
 pixi run python tests/frozen/compare_frozen_updates.py --sklearn-root ../scikit-learn
+pixi run python tests/frozen/compare_metadata_routing.py --sklearn-root ../scikit-learn
 ```
 
-Moxie's `pixi run parity` includes both comparisons automatically.
+The sample-weight comparison checks both aliases, a frozen prediction after
+weighted fit, and the score using the resolved score weight. The fixtures use
+exactly representable values. Moxie's parity task includes these comparisons.
 
 ## Upstream test coverage
 
@@ -317,7 +339,7 @@ Moxie's `pixi run parity` includes both comparisons automatically.
 | `test_clone_frozen`, `test_check_is_fitted` | `test_frozen.mojo` covers shared allocation, clone lifetime, unfitted errors and repeated no-op fit |
 | `test_frozen_params` | Typed parameter records, restoration, same-type replacement, and compile-time rejection of nested updates |
 | `test_frozen_tags` | Native input tags and wrapper-only `_skip_test` in `test_frozen_updates.mojo`, plus trait identity in capability and cluster probes |
-| `test_frozen_metadata_routing` | Dynamic metadata routing remains open. Positional and named step access have separate native and sklearn comparison coverage |
+| `test_frozen_metadata_routing` | `test_frozen_metadata.mojo` and `compare_metadata_routing.py` cover fit and score sample-weight discovery, alias resolution, no-op fit and weighted score over a production IsotonicRegression. Arbitrary prediction metadata remains open |
 
 `test_frozen_composition.mojo` wraps production estimators: a fitted
 `LinearDiscriminantAnalysis` (no-op fit on different data, delegated

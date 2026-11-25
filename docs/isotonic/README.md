@@ -4,6 +4,8 @@ Moxie owns `IsotonicRegression`, `isotonic_regression`, and `check_increasing`
 in `src/moxie/isotonic.mojo`. Import them from `moxie.isotonic`.
 The estimator accepts Float32 and Float64 NDArrays and supports one-column
 pipelines. Concrete List overloads and List thresholds are also available.
+The [labeled transform methods](api.md#labeled-transforms) return an owned,
+one-column native table.
 
 `IsotonicCVAdapter` and `IsotonicScorer` support KFold scoring and typed
 parameter search with NDArrays or one-dimensional Lists.
@@ -29,10 +31,10 @@ verify the assembled module matches the Moxie source.
 The parity runner executes the clean local scikit-learn source at
 `4358542a1bd39af2e7e1cbace8b9fed067473c5b`, including its compiled Cython tie
 engine. The installed scikit-learn wheel supplies validation infrastructure.
-It generates 720 Float64 and 553 Float32 cases, including scaler pipeline
-predictions, schema reconstruction with sample-weight requests, warnings from
-fit, direct direction checks and singleton scores, and validation edges for
-`check_increasing` and `f_`.
+It generates 858 Float64 and 721 Float32 cases, including scaler pipeline
+predictions, labeled transforms, schema reconstruction with sample-weight
+requests, warnings from fit, direct direction checks and singleton scores,
+and validation edges for `check_increasing` and `f_`.
 The respective tolerances are `2e-12` and
 `2e-6`. Threshold counts, X thresholds, domain, direction and NaN locations
 must match exactly. Evidence is written to ignored `builds/isotonic/parity/`.

@@ -175,6 +175,13 @@ def exercise_output[dtype: DType]() raises:
             _ = model.set_output(transform=mode)
     assert_equal(model.set_output(transform=None).transform(x), y)
     assert_equal(model.predict(x), y)
+    var backing: List[Scalar[dtype]] = [0, 99, 1, 99, 2]
+    var base = array(backing, [len(backing)])
+    var queries = base.view_with_layout(Shape(3), NDArrayStrides(-2), 4)
+    var table = model.transform_table(queries)
+    _ = model.fit(x, x)
+    var expected: List[Scalar[dtype]] = [4, 2, 1]
+    assert_equal(table.values().tolist(), expected)
 
 
 def main() raises:

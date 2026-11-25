@@ -1,11 +1,18 @@
 # Native named columns
 
 `ColumnTable[dtype]` adds column names to an owned NuMojo matrix. It accepts
-rank-2 Float32 or Float64 data, preserves its dtype, and copies the input data
-and names. Copying the table owns another independent snapshot. `values()`
-borrows the existing matrix without materializing it; `schema()` returns an
-independent `ColumnSchema` snapshot. Schema metadata must retain matching name
-and dtype lengths; its dtype names describe actual storage.
+rank-2 Float32 or Float64 data and copies the input matrix and names.
+`add_categorical(name, column, position=None)` copies a
+`CategoricalColumn[StringCategories]` into the same table. The position is
+zero-based and defaults to the end. The name must be unique and the row
+count must match the numeric block. A matrix with shape `(rows, 0)` can
+seed a categorical-only table. All numeric columns share the matrix dtype.
+
+Copying a table creates an independent snapshot. `schema()` returns its own
+`ColumnSchema` with actual storage kinds (`float32`, `float64`, `category`).
+`values()` borrows the numeric matrix for numeric-only tables and raises on
+mixed tables. `categorical_columns(indices)` copies categorical columns in
+selection order, preserving the dictionaries and missing codes.
 
 ```mojo
 from moxie.compose import ColumnTable, ColumnTransformer, ColumnEntry, make_column_selector
@@ -25,7 +32,7 @@ var output_names = model.get_feature_names_out()
 Named keys accept one name (rank-1 component input), a name list (rank-2), or
 `ColumnKey.name_slice(start, stop, step)` with inclusive endpoints (`step` must be None or 1, as in sklearn). Position
 lists, masks and numeric slices also work. Duplicate input names are rejected at table construction. Components receive selected
-numeric arrays. The output remains an NDArray; use `get_feature_names_out()`
+numeric arrays or typed categorical columns. The output remains an NDArray; use `get_feature_names_out()`
 for its names.
 
 A named fit records `feature_names_in_`. At transform time, named inputs may
@@ -36,19 +43,51 @@ A subsequent array fit clears learned names; failed fits preserve previous
 state. Supplied `get_feature_names_out(input_features)` must match fitted names.
 
 `make_column_selector(dtype_include=..., dtype_exclude=...)` returns a named
-key from a table or schema. Filters accept lists of numeric dtype names, such
-as `float32`, `float64`, `floating`, and `number`; include and exclude are
-combined. Since a table currently stores one homogeneous matrix, every column
-has that matrix's actual dtype. Mixed-type and string columns are not yet
-provided. Regex `pattern` raises an explicit unsupported-capability error.
+key from a table or schema. Use `["number"]` for the numeric block or
+`["category"]` for string categorical columns. `"floating"`, `"float32"`
+and `"float64"` also match their respective numeric storage. Typed selectors
+take lists of dtype names. Regex `pattern` raises an unsupported-capability error.
 
-TransformedTargetRegressor's matrix-regressor overloads accept the same table
-for fit, weighted fit, predict and score. They store names and validate their
-order at prediction; regression does not reorder features automatically.
+## Mixed numeric and categorical preprocessing
 
-No pandas/polars runtime or binding is involved. The named-column parity suite
-uses pandas solely to construct equivalent inputs for the Python sklearn
-oracle. Run `pixi run test` and `pixi run parity` from the Moxie root.
+```mojo
+from moxie._categorical import categorical_column
+from moxie.compose import ColumnEntry, ColumnTable, ColumnTransformer, make_column_selector
+from moxie.impute import SimpleImputer
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import OneHotEncoder, StandardScaler
+
+# X is a three-row Float64 matrix with column names in names.
+var table = ColumnTable(X, names)
+var cells: List[Optional[String]] = ["red", "blue", "red"]
+table.add_categorical("color", categorical_column(cells))
+var numeric_dtypes: List[String] = ["number"]
+var categorical_dtypes: List[String] = ["category"]
+var model = ColumnTransformer(
+    ColumnEntry("num", make_pipeline(SimpleImputer(strategy="median"), StandardScaler()),
+                make_column_selector(dtype_include=numeric_dtypes^)),
+    ColumnEntry("cat", OneHotEncoder(sparse_output=False, handle_unknown="ignore"),
+                make_column_selector(dtype_include=categorical_dtypes^)),
+)
+var result = model.fit_transform(table)
+```
+
+A categorical component receives `List[CategoricalColumn[StringCategories]]`
+when its associated input declares that type. Select those columns using
+a list, mask, slice or dtype selector so the component gets a collection of
+features. The component's target and dense result dtype must match the table
+dtype. Numeric components, including `"passthrough"`, accept only numeric
+selections. Use `"drop"` for unused categorical columns. A callable taking
+an NDArray requires a numeric-only table. Invalid selections and type changes
+on fitted columns raise errors.
+
+The matrix-regressor overloads of TransformedTargetRegressor accept
+numeric-only tables. They store names and validate their order at prediction.
+
+Native composition runs in Mojo. The named and mixed column parity suites
+use pandas solely for Python oracle inputs. The mixed parity case
+compares a single ColumnTransformer with median imputation, scaling and one-hot
+encoding, including reordered inputs, unknown categories, names and output spans.
 
 Table overloads supplement the existing NDArray-associated estimator traits;
 generic pipeline wrappers do not automatically acquire schema routing. Native

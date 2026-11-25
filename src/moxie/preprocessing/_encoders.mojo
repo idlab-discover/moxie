@@ -266,7 +266,7 @@ struct OneHotEncoderParams[K: CategoryKind](Copyable):
     var feature_name_combiner: String
 
 
-struct OneHotEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut):
+struct OneHotEncoder[K: CategoryKind = StringKind, dtype: DType = DType.float64](InvertiblePreprocessor, NativeFeatureNamesOut, Copyable):
     """Encode categorical features as a dense one-hot matrix.
 
     `sparse_output` must be False: sparse output is deferred. `dtype` is the

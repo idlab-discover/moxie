@@ -106,9 +106,9 @@ same steps give by hand.
   `copy()`, so sklearn's `copy` parameter is stored in a field named
   `copy_input`, as in the `Params` records. The constructor keyword remains
   `copy=`.
-* OneHotEncoder, OrdinalEncoder and TargetEncoder take typed categorical
-  columns rather than an `NDArray`, so they are not ColumnTransformer
-  components either.
+* String OneHotEncoder can be used as a ColumnTransformer component with
+  `sparse_output=False` and Float64 output. Select the typed categorical
+  columns from a [native table](../../../docs/compose/named-columns.md).
 * `moxie.model_selection.cross_val_score` with a `Pipeline` estimator crashes
   the Mojo 1.0 compiler during parameter inference. A plain estimator compiles.
 

@@ -42,8 +42,9 @@ repeats kept), `Slice(start, stop, step)`, a boolean mask, or a callable
 `make_column_selector` work on native `ColumnTable` inputs. They raise on
 unnamed arrays as sklearn does. Regex patterns are not yet supported. See
 [the native table guide](../named-columns.md). A component is
-any `TransformerMixin & UnsupervisedEstimator` with `NDArray[dtype]`
-Input/Target/Transformed; it is fitted with `fit_transform` when it conforms to
+a copyable `TransformerMixin & UnsupervisedEstimator` with `NDArray[dtype]`
+target and result. Its input is `NDArray[dtype]` for numeric selections or
+`List[CategoricalColumn[StringCategories]]` for categorical selections; it is fitted with `fit_transform` when it conforms to
 `FitTransformer`, otherwise `fit` then `transform`, and receives `y`.
 
 ## Learned state and methods
@@ -68,6 +69,8 @@ TypeError), `get_feature_names_out(input_features)`, `fit`, `fit_transform`,
   its declared type (or `"drop"`/`"passthrough"`); declare
   `ColumnEntry[MyScaler]("a", "drop", cols)` to switch it to an estimator later.
   Entries written with only a mode have the placeholder type `NoTransformer`.
+  In dtype-generic code use `ColumnEntry[Component, dtype](name, component, [0])`
+  so literal positions convert to `Columns[dtype]`; the default is Float64.
   More than 8 entries need nested `ColumnCons` values passed to the primary
   constructor.
 - `named_transformers_` and `__getitem__` are the typed method

@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """make_pipeline/make_union: typed constructors with sklearn's automatic step names."""
 from std.reflection import reflect
-from moxie.base import TransformerMixin, SupervisedEstimator, Predictor
-from moxie._pipeline_sequential import Pipeline
+from moxie.base import TransformerMixin, SupervisedEstimator, UnsupervisedEstimator, Predictor
+from moxie._pipeline_sequential import Pipeline, TransformerPipeline
 from moxie._pipeline_union import FeatureUnion, UnionStep, UnionPair, union_step
 
 
@@ -47,6 +47,15 @@ def make_pipeline[P: TransformerMixin & Deinitable, E: SupervisedEstimator & Pre
     """
     var names = _name_estimators([_type_name[P](), _type_name[E]()])
     return Pipeline(transformer^, estimator^, transformer_name=names[0], estimator_name=names[1])
+
+
+def make_pipeline[
+    P: TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable,
+    E: TransformerMixin & UnsupervisedEstimator & Copyable & Deinitable,
+](var transformer: P, var estimator: E) raises -> TransformerPipeline[P, E]:
+    """Make a transformer-only pipeline with inferred sklearn step names."""
+    var names = _name_estimators([_type_name[P](), _type_name[E]()])
+    return TransformerPipeline(transformer^, estimator^, transformer_name=names[0], estimator_name=names[1])
 
 
 def make_union[A: TransformerMixin & Deinitable, B: TransformerMixin & Deinitable, //, dtype: DType = DType.float64](

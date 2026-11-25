@@ -246,6 +246,31 @@ inner names. `memory`, `transform_input` and `verbose` are not accepted
 because Pipeline does not implement them. Four naming cases compare exactly
 with the pinned factories.
 
+## Transformer-only pipelines
+
+`TransformerPipeline(first, last)` is a concrete implementation of the
+`TransformingPipeline` capability. `make_pipeline(first, last)` selects
+it for two copyable transformers with optional-target `fit`. Their target
+types must match exactly, as must the first output and last input. The
+pipeline forwards the optional target to both children and prefers each
+child's `fit_transform` where a transformed result is needed.
+
+```mojo
+from moxie.impute import SimpleImputer
+from moxie.pipeline import make_pipeline
+from moxie.preprocessing import StandardScaler
+
+var numeric = make_pipeline(SimpleImputer(strategy="median"), StandardScaler())
+var transformed = numeric.fit_transform(X)
+var names = numeric.get_feature_names_out()
+```
+
+Use the transformer-only pipeline as a ColumnTransformer branch or nest
+two pipelines for more steps. It shares the predictive pipeline's typed
+parameter records, clone semantics and feature-name forwarding. The fitted
+query follows the final step. `fit` fits that step and `fit_transform`
+also returns its result.
+
 ## Current boundary
 
 This implementation exposes fit, predict, conditional score, per-sample scores,
@@ -253,9 +278,7 @@ decision and probability methods, feature names, input feature counts,
 configuration, cloning and the two factories. The following sklearn Pipeline
 API is **deferred** (absent from the typed API, so use fails at compile time):
 
-- transformer-final pipelines: `transform`, `fit_transform`, `inverse_transform`
-  (a Pipeline therefore cannot be a FeatureUnion/ColumnTransformer branch or
-  a Pipeline prefix);
+- `inverse_transform` on transformer-only pipelines;
 - unsupervised-final pipelines and `fit_predict` (e.g. a clusterer final step);
 - `classes_` forwarding (read `pipe.estimator.classes_`);
 - `passthrough`/`None` steps, `__len__`, integer/slice `__getitem__` and

@@ -2,9 +2,11 @@
 # See families/ensemble/LICENSES/scikit-learn.txt.
 """Public dense histogram gradient boosting classification."""
 
+from std.collections import Set
 from std.math import isfinite
 from std.utils import Variant
 
+from numax.core.libm import log
 from numojo import NDArray, Shape, arange
 
 from moxie._labels import LabelIndex, StringTarget, encode_column
@@ -36,7 +38,7 @@ from .common import (
     _uses_early_stopping,
 )
 from .grower import grow_tree
-from .losses import _ClassificationLoss
+from .losses import _ClassificationLoss, _weighted_mean
 from .predictor import _RawTree, make_raw_tree
 from .splitting import _SplitOptions
 
@@ -97,6 +99,56 @@ struct _ClassScoringData(Movable):
                 ref w = weights.value()
                 score_weights = w.view_with_layout(w.shape, w.strides, w.offset)
         return Self(targets^, score_weights^, rows^)
+
+
+def _probability_score(
+    scoring: String,
+    loss: _ClassificationLoss,
+    raw: _Values,
+    sample: _ClassScoringData,
+    brier_target: Optional[Int],
+) raises -> Float64:
+    var log_loss = scoring == "neg_log_loss"
+    # Binomial predictions have two columns even for a one-class fit.
+    var n_classes = max(2, loss._n_classes)
+    if log_loss or n_classes > 2:
+        var seen = Set[Int64]()
+        for i in range(sample.targets.size):
+            seen.add(sample.targets.unsafe_get(i * sample.targets.strides[0]))
+        if len(seen) != n_classes:
+            raise Error(
+                "ValueError: probability scoring requires all fitted classes"
+                " and at least two classes in the scoring targets"
+            )
+
+    var probabilities: _Values
+    if sample.rows:
+        ref rows = sample.rows.value()
+        probabilities = loss.predict_proba(_take_rows(raw, rows, 0, rows.size))
+    else:
+        probabilities = loss.predict_proba(raw)
+
+    comptime epsilon: Float64 = 2.220446049250313e-16
+    var row_scores = _Values(Shape(sample.targets.size))
+    for i in range(row_scores.size):
+        var target = Int(sample.targets.unsafe_get(i * sample.targets.strides[0]))
+        if log_loss:
+            var probability = probabilities.unsafe_get(i * n_classes + target)
+            if not isfinite(probability):
+                raise Error("ValueError: probability scoring requires finite probabilities")
+            row_scores.unsafe_set(i, log(probability.clamp(epsilon, 1.0 - epsilon)))
+        else:
+            target = brier_target.or_else(target)
+            var row_loss: Float64 = 0.0
+            for k in range(n_classes):
+                var probability = probabilities.unsafe_get(i * n_classes + k)
+                if not isfinite(probability):
+                    raise Error("ValueError: probability scoring requires finite probabilities")
+                var residual = Float64(k == target) - probability
+                row_loss += residual * residual
+            row_scores.unsafe_set(i, -row_loss)
+    var score = _weighted_mean(row_scores, sample.weights)
+    return score * 0.5 if not log_loss and n_classes == 2 else score
 
 
 @fieldwise_init
@@ -411,7 +463,9 @@ struct HistGradientBoostingClassifier[
         Self._check_target(y, X.shape[0])
         var early = _uses_early_stopping(params.early_stopping, X.shape[0])
         var scoring = params.scoring.or_else("accuracy")
-        if early and scoring not in ("loss", "accuracy", "balanced_accuracy"):
+        if early and scoring not in (
+            "loss", "accuracy", "balanced_accuracy", "neg_log_loss", "neg_brier_score",
+        ):
             raise Error(
                 "NotImplementedError: unsupported histogram classification scorer"
             )
@@ -559,6 +613,7 @@ struct HistGradientBoostingClassifier[
                 random^,
                 resume,
                 encoder^,
+                classes,
             )
         else:
             self._fit(
@@ -571,6 +626,7 @@ struct HistGradientBoostingClassifier[
                 random^,
                 resume,
                 encoder^,
+                classes,
             )
         self.classes_ = classes^
 
@@ -618,6 +674,7 @@ struct HistGradientBoostingClassifier[
         var random: _FitRandomState,
         resume: Bool,
         var encoder: _CategoryEncoder,
+        classes: Self.Classes,
     ) raises:
         ref params = self._params
         var scoring = params.scoring.or_else("accuracy")
@@ -669,7 +726,7 @@ struct HistGradientBoostingClassifier[
         if early and not resume:
             train_scores.append(
                 Self._stopping_score(
-                    scoring, loss, y, raw, weights, train_scoring
+                    scoring, loss, y, raw, weights, train_scoring, classes
                 )
             )
         if validation:
@@ -682,7 +739,7 @@ struct HistGradientBoostingClassifier[
                     validation_scores.append(
                         Self._stopping_score(
                             scoring, loss, val_data.y, raw_val,
-                            val_data.weights, validation_scoring,
+                            val_data.weights, validation_scoring, classes,
                         )
                     )
 
@@ -734,7 +791,7 @@ struct HistGradientBoostingClassifier[
             if early:
                 train_scores.append(
                     Self._stopping_score(
-                        scoring, loss, y, raw, weights, train_scoring
+                        scoring, loss, y, raw, weights, train_scoring, classes
                     )
                 )
                 if validation:
@@ -742,7 +799,7 @@ struct HistGradientBoostingClassifier[
                     validation_scores.append(
                         Self._stopping_score(
                             scoring, loss, val_data.y, raw_val,
-                            val_data.weights, validation_scoring,
+                            val_data.weights, validation_scoring, classes,
                         )
                     )
                 ref scores = validation_scores if validation else train_scores
@@ -809,13 +866,40 @@ struct HistGradientBoostingClassifier[
         return best
 
     @staticmethod
+    def _binary_brier_target(
+        targets: _Codes, classes: Self.Classes, n_classes: Int,
+    ) raises -> Optional[Int]:
+        comptime if Self.string_labels:
+            raise Error("ValueError: binary Brier scoring cannot infer a positive string label")
+        else:
+            var first = targets.unsafe_get(0)
+            for i in range(1, targets.size):
+                if targets.unsafe_get(i * targets.strides[0]) != first:
+                    return None
+            ref labels = rebind[NDArray[Self.label_dtype]](classes)
+            var observed = labels.unsafe_get(Int(first))
+            # The scorer uses label 1 for conventional binary labels and the
+            # observed label for other numeric singletons.
+            var positive = observed != 0 and observed != -1
+            # The probability response selects column zero for a one-class fit.
+            return Int(positive) if n_classes == 2 else Int(not positive)
+
+    @staticmethod
     def _stopping_score(
         scoring: String, loss: _ClassificationLoss, y: _Values, raw: _Values,
         weights: Optional[_Values], data: Optional[_ClassScoringData],
+        classes: Self.Classes,
     ) raises -> Float64:
         if not data:
             return -loss.mean_loss(y, raw, weights)
         ref sample = data.value()
+        if scoring in ("neg_log_loss", "neg_brier_score"):
+            var brier_target: Optional[Int] = None
+            if scoring == "neg_brier_score" and loss._n_classes <= 2:
+                brier_target = Self._binary_brier_target(
+                    sample.targets, classes, loss._n_classes
+                )
+            return _probability_score(scoring, loss, raw, sample, brier_target)
         var prediction = _Codes(Shape(sample.targets.size))
         var columns = raw.shape[1]
         for i in range(prediction.size):

@@ -13,6 +13,7 @@ from threadpoolctl import threadpool_limits
 from hgb_splitting_parity import bits64
 
 BUILDS = Path(__file__).resolve().parents[1] / "builds"
+SCORERS = ("loss", None, "accuracy", "balanced_accuracy", "neg_log_loss", "neg_brier_score")
 
 
 @dataclass
@@ -30,9 +31,12 @@ class Case:
     initial: int = 0
     categories: int = 0
     scoring: int = 0
+    validation_class: int | None = None
 
     def explicit_validation(self):
         y_val = (np.arange(len(self.query)) % self.classes) * 11 - 7
+        if self.validation_class is not None:
+            y_val.fill(self.validation_class * 11 - 7)
         return y_val, np.linspace(0.5, 2, len(self.query))
 
     def fixture(self):
@@ -63,7 +67,7 @@ class Case:
             random_state=self.seed, max_features=0.65 if self.sampled else 1.0,
             early_stopping="auto" if self.mode == 5 else self.mode != 0,
             validation_fraction=validation_size, n_iter_no_change=3, tol=0.02,
-            scoring=("loss", None, "accuracy", "balanced_accuracy")[self.scoring],
+            scoring=SCORERS[self.scoring],
             categorical_features=[
                 bool(self.categories & (1 << i)) for i in range(self.X.shape[1])
             ],
@@ -136,8 +140,9 @@ def cases():
 
     X = np.arange(25, dtype=np.float64).reshape(-1, 1)
     yield Case(X, X, np.full(len(X), -7), 1, None, 0, 0, 0, False, 7)
-    for scoring in (1, 2, 3):
+    for scoring in (1, 2, 3, 5):
         yield Case(X, X, np.full(len(X), -7), 1, None, 0, 1, 0, False, 7, scoring=scoring)
+    yield Case(X, X, np.zeros(len(X)), 1, None, 0, 1, 0, False, 7, scoring=5)
     X = np.zeros((10_001, 1))
     y = np.arange(len(X)) % 2 * 11 - 7
     yield Case(X, X[:5], y, 2, None, 0, 5, 0, False, 8)
@@ -150,10 +155,15 @@ def cases():
     for classes in (2, 3):
         signal = X[:, 0] + 0.5 * X[:, 2] + rng.normal(size=len(X))
         y = np.searchsorted(np.linspace(-0.4, 1.2, classes - 1), signal) * 11 - 7
-        for scoring in (1, 2, 3):
+        for scoring in (1, 2, 3, 4, 5):
             for mode, class_weight, initial in ((0, 0, 0), (1, 0, 0), (2, 1, 0), (3, 2, 3)):
                 yield Case(X, X[:25], y, classes, weights, class_weight, mode, 0, True,
                            17, initial=initial, scoring=scoring)
+
+    y = (X[:, 0] > 0) * 11 - 7
+    for validation_class in (0, 1):
+        yield Case(X, X[:25], y, 2, weights, 0, 3, 0, False, 17,
+                   scoring=5, validation_class=validation_class)
 
     # Equal class counts exercise random tie-breaking in the subset allocation.
     for classes, rows, mode in ((2, 10_002, 1), (3, 11_400, 5)):
@@ -162,7 +172,7 @@ def cases():
         y = np.empty(rows)
         y[order] = np.repeat(np.arange(classes) * 11 - 7, rows // classes)
         weights = rng.integers(1, 17, rows) / 8
-        for scoring in (1, 2, 3):
+        for scoring in (1, 2, 3, 4, 5):
             yield Case(X, X[:17], y, classes, weights, 0, mode, 0, False,
                        21, initial=2, scoring=scoring)
 

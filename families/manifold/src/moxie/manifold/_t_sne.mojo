@@ -528,7 +528,9 @@ def _squared_distances[dtype: DType](
                     squared.unsafe_set(i * n + j, converted)
         return squared^
 
-    var kernel = _metric(name, options, squared_euclidean=True)
+    # SciPy's exact pairwise path accepts "matching" as an alias for Hamming.
+    # NearestNeighbors does not accept the alias in the Barnes–Hut path.
+    var kernel = _metric("hamming" if name == "matching" else name, options, squared_euclidean=True)
     kernel.validate_features(X.shape[1])
     kernel = kernel.self_query_metric(X)
     return _symmetric_squared_distances(kernel, X, name)

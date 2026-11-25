@@ -248,6 +248,24 @@ def bray_curtis_contract[dtype: DType]() raises:
             assert_equal(from_view.unsafe_get(i), from_packed.unsafe_get(i))
 
 
+def matching_contract[dtype: DType]() raises:
+    var X = points[dtype]()
+    var model = TSNE[dtype](
+        method="exact", metric="matching", init="random", perplexity=2,
+        random_state=17, max_iter=260, learning_rate=2.0,
+    )
+    var matching = model.fit_transform(X)
+    var matching_kl = model.kl_divergence_
+    _ = model.set_params(method="barnes_hut")
+    with assert_raises(contains="unsupported dense TSNE metric: matching"):
+        _ = model.fit(X)
+    assert_equal(model.kl_divergence_, matching_kl)
+    var hamming = model.set_params(method="exact", metric="hamming").fit_transform(X)
+    assert_equal(model.kl_divergence_, matching_kl)
+    for i in range(matching.size):
+        assert_equal(matching.unsafe_get(i), hamming.unsafe_get(i))
+
+
 def main() raises:
     for method in ["exact", "barnes_hut"]:
         repeat_and_clone[DType.float64](method)
@@ -255,6 +273,8 @@ def main() raises:
         callable_metric_contract(method)
     bray_curtis_contract[DType.float32]()
     bray_curtis_contract[DType.float64]()
+    matching_contract[DType.float32]()
+    matching_contract[DType.float64]()
     explicit_configuration()
     fit_validation()
     barnes_hut_bounds()

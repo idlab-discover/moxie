@@ -15,6 +15,8 @@ import sklearn
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.frozen import FrozenEstimator
 from sklearn.model_selection import KFold, StratifiedKFold, ShuffleSplit
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.utils.metaestimators import available_if
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -367,6 +369,15 @@ def main():
         )
         add('production_frozen_logistic', X[45:], y[45:], w[45:], q, model.predict_proba(q),
             'sigmoid', 'auto', model.predict(q), model.classes_, X[:45], y[:45])
+        for method in ('sigmoid', 'isotonic', 'temperature'):
+            y = codes if method == 'temperature' else 5 * codes - 7
+            prefit = make_pipeline(StandardScaler(), lda()).fit(X[:45], y[:45])
+            model = ref.CalibratedClassifierCV(
+                ref.FrozenEstimator(prefit), method=method, cv=3,
+            ).fit(X[45:], y[45:], sample_weight=w[45:])
+            add('production_frozen_pipeline', X[45:], y[45:], w[45:], q,
+                model.predict_proba(q), method, 'auto', model.predict(q),
+                model.classes_, X[:45], y[:45])
         for method in ('sigmoid', 'isotonic', 'temperature'):
             y = codes if method == 'temperature' else 5 * codes - 7
             for ensemble in ('auto', False, True):

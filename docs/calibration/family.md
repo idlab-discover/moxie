@@ -126,19 +126,29 @@ a Float64 vector. `estimator()` borrows the fitted classifier for inspection.
 Copies share a read-only snapshot, and fitting replaces the snapshot on
 success. For classifiers without fitted copying, such as QDA, updating adapter
 parameters creates an unfitted snapshot. Ordinary clones are unfitted.
-For all five fitted default Naive Bayes specializations,
-`LinearDiscriminantAnalysis[]`, `QuadraticDiscriminantAnalysis[]` and
-`LogisticRegression[]`, pass the `FrozenEstimator` handle directly to
-`adapt_classifier`.
+Pass a `FrozenEstimator` handle directly to `adapt_classifier` for all five
+fitted default Naive Bayes specializations, `LinearDiscriminantAnalysis[]`,
+`QuadraticDiscriminantAnalysis[]` and `LogisticRegression[]`. The same overload
+works for other classifiers implementing `NumericClassifierClasses`, including
+a fitted pipeline whose final step implements that trait.
 
 ```mojo
 var calibrated = CalibratedClassifierCV(adapt_classifier(frozen.copy()))
 _ = calibrated.fit(X_calibration, y_calibration)
 ```
 
-The calibration targets use a Float64 array. Copying the frozen handle shares
-the fitted estimator. Cloning the adapter preserves that handle, fitting keeps
-the base estimator frozen, and `ensemble="auto"` fits one pooled calibrator.
+The generic overload uses Float64 NDArray features and the classifier's
+Float64 decision scores or probabilities, preferring decision scores when
+both traits are available. It reads class labels in the order returned by
+`get_classes()`. Class storage can be a supported numeric list or a
+one-dimensional Int64, Float32 or Float64 NDArray. Labels must be integral
+and have magnitude at most `2**53 - 1`. The calibration targets still use a
+Float64 array. A classifier without the class metadata trait can supply a
+reader to `ClassifierCalibrationAdapter`.
+
+Copying the frozen handle shares the fitted estimator. Cloning the adapter
+preserves that handle. Fitting keeps the base estimator frozen, and
+`ensemble="auto"` fits one pooled calibrator.
 Explicit sample weights affect only the calibration fit for a frozen model.
 
 `CalibrationEstimator` extends the shared configuration/clone contract. It

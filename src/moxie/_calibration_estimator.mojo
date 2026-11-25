@@ -91,10 +91,11 @@ struct ClassifierCalibrationAdapter[E: ClassifierMixin & Deinitable](
         var name: String,
     ):
         comptime assert Self.E.Input == Array, "Calibration requires Float64 features"
-        comptime assert (
-            Self._domain.supported
-            or Self.E.Target == nm.NDArray[DType.int64]
-        ), "Calibration requires a numeric List or Int64 array target"
+        comptime if not conforms_to(Self.E, FrozenEstimatorAPI):
+            comptime assert (
+                Self._domain.supported
+                or Self.E.Target == nm.NDArray[DType.int64]
+            ), "Calibration requires a numeric List or Int64 array target"
         comptime assert conforms_to(Self.E, DecisionFunction) or conforms_to(
             Self.E, ProbabilityPredictor
         ), "Calibration requires decision_function or predict_proba"

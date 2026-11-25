@@ -14,7 +14,7 @@ Named kernels are sklearn's `PAIRWISE_KERNEL_FUNCTIONS` (`additive_chi2`,
 gamma 1.0, degree 3, coef0 1). `fit` draws `RandomState.permutation(n)` and keeps
 its first `k = min(n_components, n_samples)` entries as `component_indices_`
 (Int64), copies those rows into `components_` `(k, p)`, evaluates the basis
-Gram with the kernel_ridge engine, factors it with mojo-linalg `svd` and stores
+Gram with the kernel_ridge engine, factors it with mojo-linalg and stores
 `normalization_ = U / sqrt(max(S, 1e-12)) @ Vt` `(k, k)`. `transform(X)`
 returns `K(X, components_) @ normalization_.T` `(n, k)`. The output dtype matches
 the input except for sequential Float32 Laplacian, which uses Float64 (see below).
@@ -54,17 +54,26 @@ Language adaptations (tested in `tests/kernel_approximation/nystroem/contracts.m
 - Typed `get_params()`/`set_params`, `clone` (unfitted, copies the callable),
   `nystroem<k>` feature names.
 
-SVD: economy one-sided Jacobi (Float64 work, input-dtype output), not LAPACK
-gesdd. Singular vectors are unique only up to sign and within repeated or
-clipped subspaces, so `normalization_` of rank-deficient bases differs from
-sklearn's entrywise; the feature Gram `Z_B Z_B^T` is basis-independent.
+Exactly symmetric RBF basis matrices use mojo-linalg's `symmetric_eigh` when
+every eigenvalue clears the clipping floor by a roundoff margin. For these
+positive-definite matrices the two singular bases coincide, so the symmetric
+eigenbasis gives the same inverse square root. Other kernels, RBF matrices
+that are asymmetric or have small or nonpositive eigenvalues, and failed
+eigensolves use the economy one-sided Jacobi SVD. Both solvers work in Float64
+and return factors in the input dtype. Numax requires compile-time matrix
+dimensions for Array and CPU Tensor `eigh` and `svd`. Nystroem selects its basis
+size at runtime.
+For a rank-deficient basis, choices of singular vectors in the null space
+can change entries of `normalization_` while preserving the feature Gram
+`Z_B Z_B^T`.
 
 ## Validation
 
 `pixi run parity` executes the unedited pinned sklearn methods and pairwise
 kernel functions (revision 4358542a, support wheel for Cython helpers).
 It covers named kernels, default/explicit parameters, tall/wide/tiny/duplicated
-inputs, precomputed shapes, parameter/domain errors, seeds and parallel job counts.
+inputs, precomputed shapes, parameter/domain errors, seeds, parallel job counts,
+and the notebook's 270-component digits RBF basis in both dtypes.
 Indices and subsequent RNG draws must match exactly. Well-conditioned cases
 bound normalization and transform error by `64 eps kappa max(1, max|ref|)`.
 Laplacian promotion is checked at Float64 precision.
@@ -77,5 +86,3 @@ An independent analytic suite checks 36 diagonal spectra in both dtypes, with
 scales 1e-8 through 1e8 and singular values above, at and below the 1e-12 floor,
 including zero. Held-out rows excite every mode; feature Grams must match
 `Y diag(s / max(s, 1e-12)) Y.T` within `128 eps max(1, max|expected|)`.
-These checks establish accuracy on those spectra, not arbitrary ill-conditioned
-matrices. No speedup is claimed.

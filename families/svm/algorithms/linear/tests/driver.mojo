@@ -3,6 +3,8 @@ from std.sys import argv
 import numojo as nm
 from moxie.svm import LinearSVC, LinearSVR, Dual, ClassWeight
 from moxie.svm._contracts import Dense
+from moxie.serialization import dumps, loads
+from moxie.svm.linear_serialization import LinearSVCSchema, LinearSVRSchema
 
 def emit(a: Dense) raises:
     for i in range(a.size):
@@ -59,6 +61,7 @@ def main() raises:
             model.fit(x.astype[DType.float32](), y, sw.copy())
         else:
             model.fit(x, y, sw.copy())
+        model = LinearSVRSchema.decode(loads(dumps(LinearSVRSchema.encode(model))))
         print("RESULT", 1, p, model.n_iter_, model.fit_status_)
         emit(model.coef_)
         emit(model.intercept_)
@@ -70,6 +73,7 @@ def main() raises:
             model.fit(x.astype[DType.float32](), labels, sw.copy())
         else:
             model.fit(x, labels, sw.copy())
+        model = LinearSVCSchema[Float64].decode(loads(dumps(LinearSVCSchema[Float64].encode(model))))
         print("RESULT", model.coef_.shape[0], p, model.n_iter_, model.fit_status_)
         emit(model.coef_)
         emit(model.intercept_)

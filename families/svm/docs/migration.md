@@ -19,7 +19,9 @@ reuse binaries produced by `svm-build`; root shared checks use these actions
 after building. Raw outputs stay in ignored `builds/` and `docs/private/`.
 
 The complete dense contract is described in [scope](scope.md). Sparse inputs,
-Python runtime integration, metadata routing and persistence remain excluded.
+Python runtime integration and metadata routing remain excluded. See the
+[linear model file API](../algorithms/linear/docs/api.md#native-model-files) for
+LinearSVC and LinearSVR persistence.
 The retirement record in the sibling checkout identifies the integration commit.
 
 ## Acceptance evidence

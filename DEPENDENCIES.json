@@ -2625,6 +2625,9 @@
         },
         "moxie.svm._linear": {
           "file": "src/moxie/svm/_linear.mojo"
+        },
+        "moxie.svm.linear_serialization": {
+          "file": "src/moxie/svm/linear_serialization.mojo"
         }
       },
       "path": "families/svm/algorithms/linear"

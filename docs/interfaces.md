@@ -249,9 +249,10 @@ dense affinity, centroid, density, linkage and Birch implementations. Spectral
 clustering, biclustering, HDBSCAN and sparse inputs remain deferred.
 
 [SVM estimators](../families/svm/README.md) are owned by Moxie, including all seven
-dense estimators, l1_min_c and both native engines. Sparse input, Python runtime
-integration and persistence remain outside the supported contract. The retired
-standalone checkout is not a build dependency.
+dense estimators, l1_min_c and both native engines. LinearSVC and LinearSVR
+support [native model files](../families/svm/algorithms/linear/docs/api.md#native-model-files).
+The [family scope](../families/svm/docs/scope.md) lists supported capabilities
+and exclusions.
 
 [Neural networks](../families/neural_network/README.md) are owned by Moxie, with a
 dense BernoulliRBM subset and private MLP parameter helpers. MLP estimators remain

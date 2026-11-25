@@ -16,7 +16,13 @@ def sources():
 
 def ownership():
     receipt = json.loads((DEPS / 'ASSEMBLY.json').read_text())
-    for relative in ['random_projection.mojo', '_projection/matrix.mojo', '_projection/linalg.mojo', '_projection/math.mojo']:
+    for relative in [
+        'random_projection.mojo',
+        'random_projection_serialization.mojo',
+        '_projection/matrix.mojo',
+        '_projection/linalg.mojo',
+        '_projection/math.mojo',
+    ]:
         module = 'moxie.' + relative.removesuffix('.mojo').replace('/', '.')
         assert receipt['modules'][module] == ['moxie']
         assert (DEPS / 'moxie' / relative).read_bytes() == (ROOT / 'src/moxie' / relative).read_bytes()

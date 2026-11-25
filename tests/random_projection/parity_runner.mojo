@@ -16,6 +16,11 @@ from moxie.random_projection import (
     _sparse_random_matrix,
 )
 from moxie._projection.linalg import pseudoinverse
+from moxie.random_projection_serialization import (
+    GaussianRandomProjectionSchema,
+    SparseRandomProjectionSchema,
+)
+from moxie.serialization import ModelSchema, dumps, loads
 
 
 def vector[dtype: DType](text: String) raises -> List[Scalar[dtype]]:
@@ -100,6 +105,11 @@ def same_dense[dtype: DType](
         assert_equal(actual.unsafe_get(i), matrix.data[i])
 
 
+def round_trip[Schema: ModelSchema](model: Schema.Model) raises -> Schema.Model:
+    var bytes = dumps(Schema.encode(model))
+    return Schema.decode(loads(bytes))
+
+
 def model_case[dtype: DType](fields: List[String]) raises:
     var rows = Int(fields[3])
     var cols = Int(fields[4])
@@ -125,7 +135,9 @@ def model_case[dtype: DType](fields: List[String]) raises:
             compute_inverse_components=cached,
             random_state=seed,
         )
-        var transformed = model.fit_transform(X)
+        _ = model.fit(X)
+        model = round_trip[GaussianRandomProjectionSchema[dtype]](model)
+        var transformed = model.transform(X)
         compare(model.components_, fields[14], expected_count, cols, tolerance)
         compare(transformed, fields[15], rows, expected_count, tolerance)
         var reconstructed = model.inverse_transform(transformed)
@@ -162,7 +174,10 @@ def model_case[dtype: DType](fields: List[String]) raises:
             compute_inverse_components=cached,
             random_state=seed,
         )
-        var transformed = model.fit_transform(X)
+        _ = model.fit(X)
+        if not model.components_.is_sparse:
+            model = round_trip[SparseRandomProjectionSchema[dtype]](model)
+        var transformed = model.transform(X)
         compare(model.components_, fields[14], expected_count, cols, tolerance)
         compare(transformed, fields[15], rows, expected_count, tolerance)
         var reconstructed = model.inverse_transform(transformed)

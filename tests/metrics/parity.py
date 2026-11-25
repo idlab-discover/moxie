@@ -7,7 +7,14 @@ import warnings
 import numpy as np
 import sklearn
 from sklearn import config_context
-from sklearn.metrics import accuracy_score, hamming_loss, make_scorer, zero_one_loss
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    confusion_matrix,
+    hamming_loss,
+    make_scorer,
+    zero_one_loss,
+)
 from sklearn.model_selection import KFold, cross_val_score
 from sklearn.naive_bayes import GaussianNB
 
@@ -88,12 +95,115 @@ def classification_cases():
     return expected
 
 
-def cv_scores():
+def confusion_cases():
+    truth = [2, 0, 2, 2, 0, 1]
+    predicted = [0, 0, 2, 2, 0, 2]
+    weights = np.array([0.5, 1.0, 0.0, 1.0, 1.5, 3.0])
+    strings = ["é", "", "a", "Ω"]
+    predicted_strings = ["é", "x", "a", "Ω"]
+    column = np.array([-0.0, 3, 0.0], dtype=np.float32)[:, None]
+    strided = np.array([3, 99, -0.0, 99, 0.0], dtype=np.float32)[::-2]
+    extremes = np.array([2**63 - 2, 2**63 - 1], dtype=np.int64)
+    signed = [1.0, -1.0]
+    overflow = ([0, 0, 0, 1], [0, 0, 1, 0])
+    huge_weights = [1.5e308, 1.5e308, 0.25, 0.5]
+    matrices = {
+        "confusion_counts": (truth, predicted, {}),
+        "confusion_subset": (truth, predicted, {"labels": [2, 0, 3]}),
+        "confusion_duplicate": (truth, predicted, {"labels": [2, 0, 2]}),
+        "confusion_no_pairs": (truth, predicted, {"labels": [1]}),
+        "confusion_weights": (truth, predicted, {"sample_weight": weights[::-1]}),
+        "confusion_true": (truth, predicted, {
+            "normalize": "true", "labels": [2, 0, 1, 3], "sample_weight": weights
+        }),
+        "confusion_pred": (truth, predicted, {"normalize": "pred"}),
+        "confusion_all": (truth, predicted, {"normalize": "all"}),
+        "confusion_optional_weights": (truth, predicted, {}),
+        "confusion_string_order": (strings, predicted_strings, {}),
+        "confusion_string_target": (np.array(strings)[:, None], predicted_strings, {
+            "labels": ["Ω", "", "x", "é"], "sample_weight": [1.0, 2.0, 3.0, 4.0]
+        }),
+        "confusion_strided": (column, strided, {}),
+        "confusion_signed_zero": (column, strided, {
+            "labels": np.array([3, -0.0], dtype=np.float32), "normalize": "true"
+        }),
+        "confusion_int64": (extremes, extremes[::-1], {}),
+        "confusion_cancelling": ([0, 0], [0, 1], {
+            "normalize": "true", "sample_weight": signed
+        }),
+        "confusion_overflow": (*overflow, {"sample_weight": huge_weights}),
+        "confusion_normalized_overflow": (*overflow, {
+            "normalize": "true", "sample_weight": huge_weights
+        }),
+    }
+    scores = {
+        "balanced_overflow": [(*overflow, {"sample_weight": huge_weights})],
+        "balanced_weighted": [
+            (truth, predicted, {"sample_weight": weights, "adjusted": adjusted})
+            for adjusted in (False, True)
+        ],
+        "balanced_strings": [
+            (np.array(strings)[:, None], predicted_strings, {}),
+            (strings, predicted_strings, {"adjusted": True}),
+        ],
+        "balanced_int64": [(extremes, extremes[::-1], {"adjusted": True})],
+        "balanced_single": [
+            ([0, 0], [0, 0], {"adjusted": True}),
+            ([0, 0], [0, 1], {"adjusted": True}),
+        ],
+        "balanced_cancelling": [
+            ([0, 0], [0, 1], {"sample_weight": signed, "adjusted": True}),
+            ([0, 0], [1, 1], {"sample_weight": signed}),
+        ],
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        warnings.simplefilter("ignore", RuntimeWarning)
+        result = {
+            name: confusion_matrix(y, pred, **kwargs).ravel()
+            for name, (y, pred, kwargs) in matrices.items()
+        }
+        result.update({
+            name: [balanced_accuracy_score(y, pred, **kwargs) for y, pred, kwargs in cases]
+            for name, cases in scores.items()
+        })
+    return result
+
+
+def check_confusion_reference_errors():
+    y = [0, 0]
+    unseen = [0, 1]
+    indicator = np.zeros((3, 2), dtype=np.int64)
+    cases = [
+        (confusion_matrix, ([], []), {}),
+        (confusion_matrix, (y, [0, 1, 2]), {}),
+        (confusion_matrix, (y, unseen), {"labels": []}),
+        (confusion_matrix, (y, unseen), {"labels": [1]}),
+        (confusion_matrix, (y, unseen), {"normalize": "rows"}),
+        (confusion_matrix, (y, unseen), {"sample_weight": [1.0]}),
+        (confusion_matrix, (y, unseen), {"sample_weight": [0.0, 0.0]}),
+        (confusion_matrix, (y, unseen), {"sample_weight": np.ones((2, 1))}),
+        (balanced_accuracy_score, (y, unseen), {"sample_weight": [1.0, np.inf]}),
+        (confusion_matrix, (indicator, indicator), {}),
+        (confusion_matrix, ([0.5, 1.5], [0.5, 1.5]), {}),
+    ]
+    for metric, args, kwargs in cases:
+        with np.testing.assert_raises(ValueError):
+            metric(*args, **kwargs)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        warnings.simplefilter("ignore", RuntimeWarning)
+        with np.testing.assert_raises(ZeroDivisionError):
+            balanced_accuracy_score(y, [1, 1], adjusted=True, sample_weight=[1.0, -1.0])
+    return len(cases) + 1
+
+
+def cv_scores(metric):
     X = np.array([0, 1, 7, 8, 2, 3, 6, 9, 0.5, 2.5, 7.5, 9.5])[:, None]
     y = np.array([0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 1])
     with config_context(enable_metadata_routing=True):
         estimator = GaussianNB().set_fit_request(sample_weight=False)
-        scorer = make_scorer(accuracy_score).set_score_request(sample_weight=True)
+        scorer = make_scorer(metric).set_score_request(sample_weight=True)
         return cross_val_score(
             estimator, X, y, cv=KFold(3), scoring=scorer, error_score="raise",
             params={"sample_weight": np.arange(1.0, 13.0)},
@@ -145,14 +255,14 @@ def main():
     parser.add_argument("scorer", type=Path)
     args = parser.parse_args()
     verify_oracle()
-    cases = classification_cases()
+    cases = classification_cases() | confusion_cases()
     compare(native_output(args.classification), cases)
-    errors = check_reference_errors()
-    scores = cv_scores()
-    compare(native_output(args.scorer), {"cv": scores})
+    errors = check_reference_errors() + check_confusion_reference_errors()
+    scores = {"cv": cv_scores(accuracy_score), "cv_balanced": cv_scores(balanced_accuracy_score)}
+    compare(native_output(args.scorer), scores)
     print(
         f"Matched {sum(map(len, cases.values()))} metric values, {errors} error cases "
-        f"and {len(scores)} CV scores against sklearn {REVISION}"
+        f"and {sum(map(len, scores.values()))} CV scores against sklearn {REVISION}"
     )
 
 

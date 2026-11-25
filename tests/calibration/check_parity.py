@@ -388,13 +388,14 @@ def main():
             'sigmoid', 'auto', model.predict(q), model.classes_, X[:45], y[:45])
         for method in ('sigmoid', 'isotonic', 'temperature'):
             y = codes if method == 'temperature' else 5 * codes - 7
-            prefit = make_pipeline(StandardScaler(), lda()).fit(X[:45], y[:45])
-            model = ref.CalibratedClassifierCV(
-                ref.FrozenEstimator(prefit), method=method, cv=3,
-            ).fit(X[45:], y[45:], sample_weight=w[45:])
-            add('production_frozen_pipeline', X[45:], y[45:], w[45:], q,
-                model.predict_proba(q), method, 'auto', model.predict(q),
-                model.classes_, X[:45], y[:45])
+            for name, classifier in (('pipeline', lda()), ('qda_pipeline', qda())):
+                prefit = make_pipeline(StandardScaler(), classifier).fit(X[:45], y[:45])
+                model = ref.CalibratedClassifierCV(
+                    ref.FrozenEstimator(prefit), method=method, cv=3,
+                ).fit(X[45:], y[45:], sample_weight=w[45:])
+                add(f'production_frozen_{name}', X[45:], y[45:], w[45:], q,
+                    model.predict_proba(q), method, 'auto', model.predict(q),
+                    model.classes_, X[:45], y[:45])
         for method in ('sigmoid', 'isotonic', 'temperature'):
             y = codes if method == 'temperature' else 5 * codes - 7
             for ensemble in ('auto', False, True):
@@ -413,11 +414,12 @@ def main():
             y = codes if method == 'temperature' else 5 * codes - 7
             for name, estimator in (
                 ('pipeline32', make_pipeline(StandardScaler(), lda())),
+                ('qda_pipeline32', make_pipeline(StandardScaler(), qda())),
                 ('gaussian32', gaussian()),
             ):
                 prefit = estimator.fit(X32[:45], y[:45])
                 # Match the native adapter's Float64 calibration boundary.
-                response_name = 'decision_function' if name == 'pipeline32' else 'predict_proba'
+                response_name = 'predict_proba' if name == 'gaussian32' else 'decision_function'
                 setattr(prefit, response_name, widen_response(getattr(prefit, response_name)))
                 model = ref.CalibratedClassifierCV(
                     FrozenEstimator(prefit), method=method, cv=3,

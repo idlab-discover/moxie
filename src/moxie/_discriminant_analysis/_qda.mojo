@@ -3,7 +3,8 @@
 """QuadraticDiscriminantAnalysis: per-class 'svd' and 'eigen' factorizations."""
 from std.math import sqrt
 from numojo import NDArray, Shape, zeros
-from moxie.utils.validation import FittedState
+from moxie.base import NumericClassifierClasses
+from moxie.utils.validation import FittedState, check_is_fitted
 from moxie.compose._table import ColumnTable
 from moxie.metadata_routing import (
     FitScoreMetadataRequest,
@@ -125,7 +126,12 @@ struct QuadraticDiscriminantAnalysis[
     dtype: DType = DType.float64,
     L: ClassLabel = Int,
     C: CovarianceEstimator = NoCovarianceEstimator,
-](DiscriminantClassifier, InputFeatureCount, FitScoreMetadataRequestProvider):
+](
+    DiscriminantClassifier,
+    InputFeatureCount,
+    FitScoreMetadataRequestProvider,
+    NumericClassifierClasses where L == Int,
+):
     """Quadratic Discriminant Analysis (sklearn.discriminant_analysis.QuadraticDiscriminantAnalysis).
 
     Fits one Gaussian per class and classifies with Bayes' rule (quadratic boundary).
@@ -147,6 +153,7 @@ struct QuadraticDiscriminantAnalysis[
     comptime Input = NDArray[Self.dtype]
     comptime Target = List[Self.L]
     comptime Prediction = List[Self.L]
+    comptime ClassLabelDType = DType.int64
     comptime SampleWeight = NDArray[Self.dtype]
     comptime Probabilities = NDArray[Self.dtype]
     comptime Decision = NDArray[Self.dtype]
@@ -286,6 +293,11 @@ struct QuadraticDiscriminantAnalysis[
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self._state.is_fitted()
+
+    def get_classes(self) raises -> Self.Target where Self.L == Int:
+        """Return an owned copy of the fitted class order."""
+        check_is_fitted(self)
+        return self.classes_.copy()
 
     def get_n_features_in(self) raises -> Int:
         """sklearn's `n_features_in_` through the shared InputFeatureCount contract; raises before fit."""

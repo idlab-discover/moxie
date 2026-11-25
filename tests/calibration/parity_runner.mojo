@@ -24,6 +24,7 @@ from moxie.calibration_serialization import (
     CalibratedClassifierCVSchema,
     CalibratedGaussianNBClassifierCVSchema,
     CalibratedLDAClassifierCVSchema,
+    CalibratedMultinomialNBClassifierCVSchema,
     CalibratedQDAClassifierCVSchema,
     CalibratedSVCClassifierCVSchema,
 )
@@ -31,7 +32,7 @@ from moxie.serialization import ModelSchema, dumps, loads
 from moxie.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from moxie.frozen import FrozenEstimator
 from moxie.linear_model import LogisticRegression
-from moxie.naive_bayes import GaussianNB
+from moxie.naive_bayes import GaussianNB, MultinomialNB
 from moxie.svm import LinearSVC, SVC
 from calibration_centroid import Centroid
 
@@ -352,6 +353,11 @@ def main() raises:
         elif kind == "production_gaussian":
             compare_serialized[CalibratedGaussianNBClassifierCVSchema](
                 adapt_classifier(GaussianNB()),
+                x, y, w, q, expected, fields, context,
+            )
+        elif kind == "serialized_multinomial":
+            compare_serialized[CalibratedMultinomialNBClassifierCVSchema](
+                adapt_classifier(MultinomialNB(alpha=0.25)),
                 x, y, w, q, expected, fields, context,
             )
         elif kind == "production_lda":

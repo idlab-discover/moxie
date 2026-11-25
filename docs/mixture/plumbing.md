@@ -129,7 +129,7 @@ posterior state. Bayesian special functions/updates stay in its own module.
 
 Native adaptations retain fluent in-place fit, typed parameter records and descriptive
 Mojo Error prefixes from the foundation. Dtype is static; Python reflection,
-metadata routing, pandas, serialization and plotting are separate binding work.
+metadata routing, pandas, pickle and plotting are separate binding work.
 random_state integer resets where sklearn check_random_state does; mutable
 RandomState is borrowed and advanced; None uses `entropy_state()` per call. Gaussian sampling must validate its exact
 normal draw/factorization sequence; sharing a seed alone does not prove parity.

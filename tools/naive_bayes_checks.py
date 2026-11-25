@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / 'tests/naive_bayes'
 DEPS = ROOT / 'builds/deps'
 MODULES = ('naive_bayes', '_naive_bayes_common', '_naive_bayes_dense',
-           '_nb_gaussian', '_nb_counts', '_nb_bernoulli', '_nb_categorical')
+           'naive_bayes_serialization', '_nb_gaussian', '_nb_counts', '_nb_bernoulli', '_nb_categorical')
 
 
 def sources():

@@ -16,8 +16,9 @@ See [the API](family.md), [coverage](api-surface.md),
 [Gaussian arithmetic](gaussian/api.md), and [internal contracts](plumbing.md).
 Dense boolean, integer and floating inputs, numeric/string labels, weights,
 incremental fitting, probabilities, cloning and fitted copying remain supported.
-Sparse input and Python-specific facilities remain deferred. This migration adds
-no serialization. The API documents intentional validation and dtype differences.
+See [GaussianNB persistence](gaussian/api.md#persistence) for native model files
+and [scope](scope.md) for pending capabilities.
+The API documents intentional validation and dtype differences.
 Bernoulli per-feature alpha deliberately corrects the pinned reference's
 broadcasting bug and uses independent scalar sklearn fits as its oracle.
 

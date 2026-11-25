@@ -257,6 +257,9 @@
         "moxie.naive_bayes": {
           "file": "src/moxie/naive_bayes.mojo"
         },
+        "moxie.naive_bayes_serialization": {
+          "file": "src/moxie/naive_bayes_serialization.mojo"
+        },
         "moxie._naive_bayes_common": {
           "file": "src/moxie/_naive_bayes_common.mojo"
         },

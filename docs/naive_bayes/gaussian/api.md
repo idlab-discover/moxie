@@ -96,3 +96,34 @@ accidental Float64 accumulation; learned and output dtypes are compile-checked.
 Nonfinite results are checked explicitly. Contracts cover invalid ranks, feature counts, nonfinite
 inputs, continuous labels, failed updates, repeat fits, clone/copy and strides.
 No performance or exhaustive sklearn compatibility claim is made.
+
+## Persistence
+
+Use `GaussianNBSchema[D, dtype]` from `moxie.naive_bayes_serialization` with the
+[experimental native archive API](../../serialization.md). Select the same
+label domain and dtype at load time. The schema defaults to `IntListDomain`
+and Float64, like the estimator.
+
+```mojo
+from moxie.naive_bayes_serialization import GaussianNBSchema
+from moxie.serialization import load_model, save_model
+
+comptime Schema = GaussianNBSchema[]
+save_model[Schema](model, "gaussian-nb.moxie")
+var restored = load_model[Schema]("gaussian-nb.moxie")
+```
+
+The schema supports the built-in List, String and Int64/Float32/Float64 numeric
+label domains and both Gaussian arithmetic dtypes. Fitted archives preserve the
+learned arrays, class order, feature count and epsilon separately from current
+`priors` and `var_smoothing` settings. Loading rebuilds the internal label
+domain and owns its arrays independently, so the model can predict and resume
+`partial_fit` immediately. Float payloads retain their original bit patterns,
+including nonfinite moments produced by arithmetic overflow. Unfitted archives
+preserve configuration and retain the usual fitted-state checks.
+
+The focused test in `tests/naive_bayes/test_serialization.mojo` covers native
+files, malformed state and independent updates. Run
+`tests/naive_bayes/gaussian/parity.py --round-trip` with the pinned scikit-learn
+environment to restore an archive between each fit or update and the existing
+differential comparisons.

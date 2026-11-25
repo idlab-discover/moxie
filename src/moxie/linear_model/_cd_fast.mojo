@@ -63,107 +63,166 @@ def _dual_gap[dtype: DType](
     return gap
 
 
-def coordinate_descent[dtype: DType](X: NDArray[dtype], y: NDArray[dtype], initial: NDArray[dtype], alpha: Float64, beta: Float64, max_iter: Int, tol: Float64, positive: Bool = False, *, early_stopping: Bool = True) raises -> CoordinateResult[dtype]:
-    """Solve 0.5||y-Xw||² + alpha||w||₁ + 0.5 beta||w||².
+struct _CoordinateDesign[dtype: DType](Movable):
+    var columns: NDArray[Self.dtype]
+    var norms: NDArray[Self.dtype]
+    var target: NDArray[Self.dtype]
+    var target_norm: Scalar[Self.dtype]
 
-    X/y are already centered/rescaled. Penalties are unnormalized. The returned
-    coefficient vector owns storage. Scratch is one column-major X plus O(n+p).
-    Cyclic updates match the pinned reference's screening/early-stop policy.
-    """
-    validate_xy(X, y)
-    if y.ndim != 1 or initial.ndim != 1 or initial.shape[0] != X.shape[1]:
-        raise Error("ValueError: coordinate solver needs vector y and coef (n_features,)")
-    if not isfinite(alpha) or not isfinite(beta) or alpha < 0 or beta < 0 or not isfinite(tol) or tol < 0 or max_iter < 1:
-        raise Error("ValueError: invalid coordinate penalties, tolerance or iteration limit")
-    check_finite(X, "X", "coordinate_descent")
-    check_finite(y, "y", "coordinate_descent")
-    check_finite(initial, "initial", "coordinate_descent")
-    var n = X.shape[0]
-    var p = X.shape[1]
-    var columns = zeros[dtype](Shape(p, n))
-    var norms = zeros[dtype](Shape(p))
-    var w = compact_vector(initial)
-    var target = compact_vector(y)
-    var residual = target.copy()
-    var correlations = zeros[dtype](Shape(p))
-    var active = List[Int]()
-    var yy = Scalar[dtype](0)
-    for i in range(n):
-        yy += target.unsafe_get(i) * target.unsafe_get(i)
-    for j in range(p):
-        var norm = Scalar[dtype](0)
+    def __init__(
+        out self, X: NDArray[Self.dtype], y: NDArray[Self.dtype]
+    ) raises:
+        validate_xy(X, y)
+        if y.ndim != 1:
+            raise Error("ValueError: coordinate solver needs vector y")
+        check_finite(X, "X", "coordinate_descent")
+        check_finite(y, "y", "coordinate_descent")
+        var n = X.shape[0]
+        var p = X.shape[1]
+        self.columns = zeros[Self.dtype](Shape(p, n))
+        self.norms = zeros[Self.dtype](Shape(p))
+        self.target = compact_vector(y)
+        self.target_norm = 0
         for i in range(n):
-            var x = X.unsafe_get(i * Int(X.strides[0]) + j * Int(X.strides[1]))
-            columns.unsafe_set(j * n + i, x)
-            norm += x * x
-            residual.unsafe_set(i, residual.unsafe_get(i) - x * w.unsafe_get(j))
-        norms.unsafe_set(j, norm)
-        active.append(j)
-    var a = Scalar[dtype](alpha)
-    var b = Scalar[dtype](beta)
-    var threshold = Scalar[dtype](tol) * yy
-    var pair = _gap(columns, target, w, residual, a, b, positive, False, correlations)
-    var gap = pair[0]
-    var dualnorm = pair[1]
-    if early_stopping and gap <= threshold:
-        return CoordinateResult[dtype](w^, Float64(gap), 0, True)
-    var iterations = 0
-    var converged = False
-    # Screening at initialization and after each dual-gap check.
-    var screen = True
-    for iteration in range(max_iter):
-        if screen and a > 0:
-            var retained = List[Int]()
+            self.target_norm += self.target.unsafe_get(i) * self.target.unsafe_get(i)
+        for j in range(p):
+            var norm = Scalar[Self.dtype](0)
+            for i in range(n):
+                var x = X.unsafe_get(i * Int(X.strides[0]) + j * Int(X.strides[1]))
+                self.columns.unsafe_set(j * n + i, x)
+                norm += x * x
+            self.norms.unsafe_set(j, norm)
+
+    def max_correlation(self, positive: Bool) raises -> Float64:
+        var n = self.target.shape[0]
+        var largest = Float64(0)
+        for j in range(self.columns.shape[0]):
+            var correlation = Float64(0)
+            for i in range(n):
+                correlation += Float64(self.columns.unsafe_get(j * n + i)) * Float64(
+                    self.target.unsafe_get(i)
+                )
+            largest = max(largest, correlation if positive else abs(correlation))
+        return largest
+
+    def solve(
+        self,
+        initial: NDArray[Self.dtype],
+        alpha: Float64,
+        beta: Float64,
+        max_iter: Int,
+        tol: Float64,
+        positive: Bool,
+        *,
+        early_stopping: Bool = True,
+    ) raises -> CoordinateResult[Self.dtype]:
+        var n = self.target.shape[0]
+        var p = self.columns.shape[0]
+        if initial.ndim != 1 or initial.shape[0] != p:
+            raise Error("ValueError: coordinate solver needs coef (n_features,)")
+        if not isfinite(alpha) or not isfinite(beta) or alpha < 0 or beta < 0 or not isfinite(tol) or tol < 0 or max_iter < 1:
+            raise Error("ValueError: invalid coordinate penalties, tolerance or iteration limit")
+        check_finite(initial, "initial", "coordinate_descent")
+        ref columns = self.columns
+        ref target = self.target
+        ref norms = self.norms
+        var w = compact_vector(initial)
+        var residual = target.copy()
+        var correlations = zeros[Self.dtype](Shape(p))
+        var active = List[Int]()
+        for j in range(p):
+            active.append(j)
+            var coefficient = w.unsafe_get(j)
+            if coefficient != 0:
+                for i in range(n):
+                    var x = columns.unsafe_get(j * n + i)
+                    residual.unsafe_set(i, residual.unsafe_get(i) - x * coefficient)
+        var a = Scalar[Self.dtype](alpha)
+        var b = Scalar[Self.dtype](beta)
+        var threshold = Scalar[Self.dtype](tol) * self.target_norm
+        var pair = _gap(columns, target, w, residual, a, b, positive, False, correlations)
+        var gap = pair[0]
+        var dualnorm = pair[1]
+        if early_stopping and gap <= threshold:
+            return CoordinateResult[Self.dtype](w^, Float64(gap), 0, True)
+        var iterations = 0
+        var converged = False
+        # Screening at initialization and after each dual-gap check.
+        var screen = True
+        for iteration in range(max_iter):
+            if screen and a > 0:
+                var retained = List[Int]()
+                for j in active:
+                    var norm = norms.unsafe_get(j)
+                    var keep = False
+                    if norm > 0:
+                        var theta = correlations.unsafe_get(j) / max(a, dualnorm)
+                        var distance = (1 - abs(theta)) / sqrt(norm + b)
+                        keep = distance <= sqrt(max(Scalar[Self.dtype](0), 2 * gap)) / a
+                    if keep:
+                        retained.append(j)
+                    else:
+                        var old = w.unsafe_get(j)
+                        for i in range(n):
+                            residual.unsafe_set(i, residual.unsafe_get(i) + old * columns.unsafe_get(j * n + i))
+                        w.unsafe_set(j, 0)
+                active = retained^
+            screen = False
+            var largest = Scalar[Self.dtype](0)
+            var change = Scalar[Self.dtype](0)
             for j in active:
                 var norm = norms.unsafe_get(j)
-                var keep = False
-                if norm > 0:
-                    var theta = correlations.unsafe_get(j) / max(a, dualnorm)
-                    var distance = (1 - abs(theta)) / sqrt(norm + b)
-                    keep = distance <= sqrt(max(Scalar[dtype](0), 2 * gap)) / a
-                if keep:
-                    retained.append(j)
-                else:
-                    var old = w.unsafe_get(j)
-                    for i in range(n):
-                        residual.unsafe_set(i, residual.unsafe_get(i) + old * columns.unsafe_get(j * n + i))
-                    w.unsafe_set(j, 0)
-            active = retained^
-        screen = False
-        var largest = Scalar[dtype](0)
-        var change = Scalar[dtype](0)
-        for j in active:
-            var norm = norms.unsafe_get(j)
-            if norm == 0:
-                continue
-            var old = w.unsafe_get(j)
-            var corr = Scalar[dtype](0)
-            for i in range(n):
-                corr += columns.unsafe_get(j * n + i) * residual.unsafe_get(i)
-            corr += old * norm
-            var value = Scalar[dtype](0)
-            if not positive or corr >= 0:
-                var sign = Scalar[dtype](1 if corr >= 0 else -1)
-                value = sign * max(abs(corr) - a, Scalar[dtype](0)) / (norm + b)
-            w.unsafe_set(j, value)
-            if value != old:
+                if norm == 0:
+                    continue
+                var old = w.unsafe_get(j)
+                var corr = Scalar[Self.dtype](0)
                 for i in range(n):
-                    residual.unsafe_set(i, residual.unsafe_get(i) + (old - value) * columns.unsafe_get(j * n + i))
-            change = max(change, abs(value - old))
-            largest = max(largest, abs(value))
-        iterations = iteration + 1
-        if largest == 0 or change <= Scalar[dtype](tol) * largest or iterations == max_iter or len(active) <= 1:
-            pair = _gap(columns, target, w, residual, a, b, positive, True, correlations)
-            gap = pair[0]
-            dualnorm = pair[1]
-            if gap <= threshold:
-                converged = True
-                break
-            screen = True
-    check_finite(w, "coef", "coordinate_descent")
-    if not isfinite(gap):
-        raise Error("ValueError: coordinate descent produced a nonfinite dual gap")
-    return CoordinateResult[dtype](w^, Float64(gap), iterations, converged)
+                    corr += columns.unsafe_get(j * n + i) * residual.unsafe_get(i)
+                corr += old * norm
+                var value = Scalar[Self.dtype](0)
+                if not positive or corr >= 0:
+                    var sign = Scalar[Self.dtype](1 if corr >= 0 else -1)
+                    value = sign * max(abs(corr) - a, Scalar[Self.dtype](0)) / (norm + b)
+                w.unsafe_set(j, value)
+                if value != old:
+                    for i in range(n):
+                        residual.unsafe_set(i, residual.unsafe_get(i) + (old - value) * columns.unsafe_get(j * n + i))
+                change = max(change, abs(value - old))
+                largest = max(largest, abs(value))
+            iterations = iteration + 1
+            if largest == 0 or change <= Scalar[Self.dtype](tol) * largest or iterations == max_iter or len(active) <= 1:
+                pair = _gap(columns, target, w, residual, a, b, positive, True, correlations)
+                gap = pair[0]
+                dualnorm = pair[1]
+                if gap <= threshold:
+                    converged = True
+                    break
+                screen = True
+        check_finite(w, "coef", "coordinate_descent")
+        if not isfinite(gap):
+            raise Error("ValueError: coordinate descent produced a nonfinite dual gap")
+        return CoordinateResult[Self.dtype](w^, Float64(gap), iterations, converged)
+
+
+
+def coordinate_descent[dtype: DType](
+    X: NDArray[dtype],
+    y: NDArray[dtype],
+    initial: NDArray[dtype],
+    alpha: Float64,
+    beta: Float64,
+    max_iter: Int,
+    tol: Float64,
+    positive: Bool = False,
+    *,
+    early_stopping: Bool = True,
+) raises -> CoordinateResult[dtype]:
+    """Solve 0.5||y-Xw||² + alpha||w||₁ + 0.5 beta||w||².
+
+    X and y are already centered/rescaled. Penalties are unnormalized.
+    """
+    var design = _CoordinateDesign[dtype](X, y)
+    return design.solve(initial, alpha, beta, max_iter, tol, positive, early_stopping=early_stopping)
 
 
 def _gram_gap(

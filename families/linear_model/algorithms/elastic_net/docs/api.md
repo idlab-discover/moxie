@@ -31,9 +31,42 @@ starts reuse coefficients and reconstruct the intercept with the new means;
 incompatible feature/output counts raise. A converged warm start may take
 zero iterations, as in the pinned local reference.
 
-Unsupported: selection="random" (shared our_rand_r missing), precompute=True
-(Gram engine unfinished), supplied Gram arrays, multi-task group penalties,
-path functions and CV variants. Random_state accepts None or a 32-bit unsigned
-seed represented as Int; mutable RandomState objects are not exposed. These
-are unfinished dense branches, not sparse deferrals. Python check_input=False,
-metadata routing and feature names have no native interface.
+Open dense work includes random selection, Gram precomputation and supplied
+Gram arrays, multi-task group penalties, and CV variants. `random_state`
+accepts None or a 32-bit unsigned seed represented as Int. Python
+`check_input=False`, mutable RandomState objects, metadata routing and
+feature names have no native interface.
+
+## Single-target regularization paths
+
+Import `enet_path` and `lasso_path` from `moxie.linear_model`, or call
+`ElasticNet[dtype].path` and `Lasso[dtype].path`. The path takes a dense
+Float32 or Float64 feature matrix and a same-dtype target vector. It uses the
+data as supplied. Center the inputs first when a fit with an intercept is
+required. The same cyclic residual solver runs at every alpha and starts
+from the preceding solution. Optional `coef_init` is a same-dtype vector with
+one entry per feature. Pass a view (for example, `coef_init=initial.view()`)
+to supply an optional array while retaining the original handle. The path
+preserves caller inputs. It packs the feature
+matrix by column once and reuses that buffer for the full path.
+
+Use `n_alphas` for the automatic grid count (default 100). Its first point
+is the maximum absolute feature–target correlation divided by
+`n_samples * l1_ratio`, with a one-sided maximum when `positive=True`.
+`eps` (default `1e-3`) scales the last point. Correlations accumulate in
+Float64, and grids below the Float64 resolution floor use the constant value
+`1e-15`. `alphas` accepts an explicit Float64 vector and takes precedence over
+the generated grid. For a reusable grid, pass `alphas=grid.view()`. Explicit alphas are sorted descending and duplicates are
+retained. Set `l1_ratio=0` with an explicit grid to compute a pure L2 path. The
+default ratio is 0.5 for `enet_path` and 1 for `lasso_path`.
+
+The native `CoordinatePathResult[dtype]` always contains `alphas` (Float64,
+`(n_alphas,)`), `coefs` (input dtype, `(n_features, n_alphas)`) and
+`dual_gaps` (Float64, `(n_alphas,)`). `n_iters` is an
+`Optional[List[Int]]` populated by `return_n_iter=True`. Set
+`early_stopping=False` to perform a sweep even when the initial coefficients
+meet the gap criterion. Each gap uses the average-loss scale of the public
+objective.
+
+The native path uses the residual engine and always validates inputs.
+The dense multi-task, Gram and random-selection path engines remain open.

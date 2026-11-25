@@ -10,6 +10,7 @@ from moxie.metadata_routing import (
 )
 from moxie.warnings import FitWarning
 from moxie.svm._contracts import Dense, LinearModel, LinearOptions, validate_matrix, validate_vector
+from moxie.svm._contracts import _check_feature_names, _check_feature_names_width
 from moxie.svm._liblinear import LibLinear
 from moxie.svm._base import SupportVectorClassifier, SupportVectorRegressor
 from moxie._random import RandomState, entropy_state
@@ -197,27 +198,6 @@ def _decision(X: Dense, coef: Dense, intercept: Dense, n_features: Int) raises -
     if rows == 1:
         return result.reshape(nm.Shape(X.shape[0]))
     return result^
-
-
-def _check_feature_names_width[dtype: DType](
-    X: nm.NDArray[dtype], names: List[String],
-) raises:
-    if X.ndim != 2 or len(names) != X.shape[1]:
-        raise Error("ValueError: feature_names length must match X columns")
-
-
-def _check_feature_names[dtype: DType](
-    X: nm.NDArray[dtype],
-    names: List[String],
-    fitted_names: Optional[List[String]],
-    fitted: Bool,
-) raises:
-    if not fitted:
-        raise Error("NotFittedError: linear SVM is not fitted")
-    _check_feature_names_width(X, names)
-    if fitted_names:
-        if names != fitted_names.value():
-            raise Error("ValueError: feature names must match those passed during fit, in the same order")
 
 
 @fieldwise_init

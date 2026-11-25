@@ -218,7 +218,7 @@ def _write_feature_names(
     if names:
         ref values = names.value()
         if features <= 0 or len(values) != features:
-            raise Error("ModelSchemaError: invalid linear SVM feature names count")
+            raise Error("ModelSchemaError: invalid SVM feature names count")
         writer.uint(UInt64(len(values)))
         for name in values:
             writer.string(name)
@@ -231,7 +231,7 @@ def _read_feature_names(
         return None
     var count = reader.count(max(0, reader.remaining() - 8) // 8)
     if features <= 0 or count != features:
-        raise Error("ModelSchemaError: invalid linear SVM feature names count")
+        raise Error("ModelSchemaError: invalid SVM feature names count")
     var names = List[String](capacity=count)
     for _ in range(count):
         names.append(reader.string(reader.remaining()))

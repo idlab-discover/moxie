@@ -13,6 +13,7 @@ import subprocess
 import warnings
 
 import numpy as np
+import pandas as pd
 from sklearn import config_context
 import sklearn.svm._base as installed_base
 import sklearn.svm._classes as installed_classes
@@ -121,11 +122,14 @@ def native(x, y, sw, query, kind, config, single=False, expect_error=False, roun
         return None
     assert result.returncode == 0, result.stdout + result.stderr
     lines = iter(result.stdout.splitlines())
-    arrays = {"fit_warnings": [], "requests": {}}
+    arrays = {"fit_warnings": [], "requests": {}, "feature_names": []}
     assert not any(line.startswith(("ConvergenceWarning:", "FutureWarning:"))
                    for line in result.stdout.splitlines())
     assert not result.stderr, result.stderr
     for line in lines:
+        if line.startswith("FEATURE "):
+            arrays["feature_names"].append(line.removeprefix("FEATURE "))
+            continue
         if line.startswith("WARNING "):
             _, category, message = line.split(" ", 2)
             arrays["fit_warnings"].append((category, message))
@@ -153,6 +157,7 @@ def compare_fit_warnings(expected, got):
 
 
 def compare(expected, got, query, kind, config):
+    np.testing.assert_array_equal(got["feature_names"], expected.feature_names_in_)
     routing = expected.get_metadata_routing()
     requests = {"fit": str(routing.fit.requests["sample_weight"])}
     if kind != 2:
@@ -194,6 +199,11 @@ def configure_metadata(model, kind):
     return model
 
 
+def named_inputs(x, query):
+    names = [f"column_{i}" for i in range(x.shape[1])]
+    return pd.DataFrame(x, columns=names), pd.DataFrame(query, columns=names)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--round-trip", action="store_true", help="compare restored native models")
@@ -227,6 +237,7 @@ def main():
                     query, x = query @ x.T, x @ x.T
                 if single:
                     x, query = x.astype(np.float32), query.astype(np.float32)
+                x, query = named_inputs(x, query)
                 print(name, kernel, variant, flush=True)
                 with warnings.catch_warnings(record=True) as fit_warnings:
                     warnings.simplefilter("always")
@@ -257,6 +268,7 @@ def main():
                     config["probability"] = False
             if kind in (1, 2, 4):
                 config["nu"] = .3
+            x, query = named_inputs(x, query)
             print(name, edge, flush=True)
             with warnings.catch_warnings(record=True) as fit_warnings:
                 warnings.simplefilter("always")

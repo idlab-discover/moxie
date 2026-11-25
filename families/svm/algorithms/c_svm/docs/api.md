@@ -9,6 +9,8 @@ Disabled probability methods raise `AttributeError`-prefixed Mojo errors; enabli
 `probability` after a fit without it raises a `NotFittedError`-prefixed error, as in sklearn.
 
 Matrices use `numojo.NDArray[float64]` or Float32 inputs converted to Float64.
+Noncontiguous inputs requiring conversion are packed in logical row order
+before casting.
 Regressor targets are Float64 vectors. Classification accepts `List[Label]`,
 with `Label=Float64` by default, or numeric NDArrays for Float64 labels.
 `SVC[String]` and `NuSVC[String]` retain sorted string class labels.
@@ -97,6 +99,31 @@ unfitted clone preserves the configured requests. Native setters are always
 available. Direct calls to fit and score accept explicit weights independently
 of requests. Composition parents own automatic forwarding.
 
+## Feature names
+
+Pass `feature_names=names` with a `List[String]` in column order when fitting
+a dense kernel estimator. The fluent fit stores an owned copy in
+`feature_names_in_: Optional[List[String]]`. A failed fit preserves the
+previous names. A successful unnamed fit clears them. Copies preserve names
+and unfitted clones start without them.
+
+```mojo
+var names: List[String] = ["length", "width"]
+var model = SVC(kernel="rbf")
+var predictions = model.fit(X, y, feature_names=names).predict(
+    X_query, feature_names=names,
+)
+```
+
+Named prediction, decision values, scoring, probabilities, and one-class
+`fit_predict` and `score_samples` use the same keyword on their supported
+methods. The list length must match the number of columns, and named queries
+must use the fitted names in the same order when names were recorded.
+Named and unnamed calls can be mixed without warnings. For precomputed
+kernels, the names identify Gram matrix columns in training-row order.
+Callable-kernel fit and provider-based inference use the array directly,
+matching the reference callable path.
+
 ## Native model files
 
 Use the experimental [model-file API](../../../../../docs/serialization.md)
@@ -123,10 +150,11 @@ estimator-owned random stream. Fitted models restore the resolved kernel,
 learned state, and probability calibration without refitting. The loader
 rebuilds the public copies of engine arrays from canonical fitted state.
 Changes to those copies are local to the in-memory estimator.
-Version 3 preserves sample-weight requests. Versions 1 and 2 load with unset
-requests. Versions 2 and 3 restore diagnostics from the original fit's options,
-even after changes to `max_iter` or `probability`. Version 1 loads with an empty
-warning history.
+Version 4 preserves fitted feature names. Versions 1 through 3 load with names
+unset. Versions 3 and 4 preserve sample-weight requests. Versions 1 and 2 load
+with unset requests. Versions 2 through 4 restore diagnostics from the original
+fit's options, even after changes to `max_iter` or `probability`. Version 1 loads
+with an empty warning history.
 
 The archive contains the retained training snapshot, including the Gram
 matrix for a precomputed fit. Query columns for a precomputed fit follow

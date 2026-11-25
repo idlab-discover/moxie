@@ -3,6 +3,9 @@
 import numojo as nm
 from std.math import log
 from moxie.svm._contracts import Dense, Indices, KernelModel, KernelSpec, KernelOptions, KernelProvider, TrainingSnapshot, validate_matrix, validate_vector
+from moxie.svm._contracts import (
+    _check_feature_names, _check_feature_names_width, _kernel_float64,
+)
 from moxie.svm._libsvm import LibSVM
 from moxie.svm._classification import Gamma, Probability, class_scores, support_counts, linear_coefficients, public_support, checked_int32, _KernelFitDiagnostics
 from moxie.svm._linear import ClassWeight, _labels, _codes, _weights, _class_weights
@@ -62,6 +65,7 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
     var dual_coef_: Dense
     var intercept_: Dense
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var n_iter_: nm.NDArray[DType.int32]
     var fit_status_: Int
     var _metadata: FitScoreMetadataRequest
@@ -100,6 +104,7 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         self.dual_coef_ = nm.zeros[DType.float64](nm.Shape(0))
         self.intercept_ = nm.zeros[DType.float64](nm.Shape(0))
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self.n_iter_ = nm.zeros[DType.int32](nm.Shape(0))
         self.fit_status_ = 0
         self._metadata = FitScoreMetadataRequest(
@@ -217,6 +222,47 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
             self._rng = rng^
         return self
 
+    def fit[
+        dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: nm.NDArray[dtype],
+        ref[y_origin] y: Self.Target,
+        *,
+        feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        _check_feature_names_width(X, feature_names)
+        var names = feature_names.copy()
+        comptime if dtype == DType.float64:
+            _ = self.fit(rebind[Dense](X), y, sample_weight)
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            _ = self.fit(rebind[nm.NDArray[DType.float32]](X), y, sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
+    def fit[
+        dtype: DType, target_dtype: DType,
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: nm.NDArray[dtype],
+        ref[y_origin] y: nm.NDArray[target_dtype],
+        *,
+        feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        _check_feature_names_width(X, feature_names)
+        var names = feature_names.copy()
+        comptime if dtype == DType.float64:
+            _ = self.fit(rebind[Dense](X), y, sample_weight)
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            _ = self.fit(rebind[nm.NDArray[DType.float32]](X), y, sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
     def fit_with_random_state[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Dense, ref[y_origin] y: Self.Target, mut rng: RandomState, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
         if self.kernel == "callable":
             raise Error("ValueError: callable kernel requires fit_with_kernel")
@@ -252,6 +298,7 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         self.probB_ = model.prob_b.copy()
         self.n_iter_ = checked_int32(model.iterations)
         self.n_features_in_ = X.shape[1]
+        self.feature_names_in_ = None
         self.shape_fit_ = nm.Shape(X.shape[0], X.shape[1])
         self.fit_status_ = model.fit_status
         self._gamma = gamma
@@ -281,6 +328,67 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         if not self._model:
             raise Error("NotFittedError: estimator is not fitted")
         return linear_coefficients(self._model.value(), self._kernel, len(self.classes_))
+
+    def predict[dtype: DType](
+        self, X: nm.NDArray[dtype], *, feature_names: List[String],
+    ) raises -> Self.Prediction:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.predict(rebind[Dense](X))
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            return self.predict(_kernel_float64(X))
+
+    def decision_function[dtype: DType](
+        self, X: nm.NDArray[dtype], *, feature_names: List[String],
+    ) raises -> Dense:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.decision_function(rebind[Dense](X))
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            return self.decision_function(_kernel_float64(X))
+
+    def predict_proba[dtype: DType](
+        self, X: nm.NDArray[dtype], *, feature_names: List[String],
+    ) raises -> Dense:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.predict_proba(rebind[Dense](X))
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            return self.predict_proba(_kernel_float64(X))
+
+    def predict_log_proba[dtype: DType](
+        self, X: nm.NDArray[dtype], *, feature_names: List[String],
+    ) raises -> Dense:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.predict_log_proba(rebind[Dense](X))
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            return self.predict_log_proba(_kernel_float64(X))
+
+    def score[dtype: DType](
+        self, X: nm.NDArray[dtype], y: Self.Target, *, feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> Float64:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.score(rebind[Dense](X), y, sample_weight)
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            return self.score(_kernel_float64(X), y, sample_weight)
 
     def decision_function(self, X: Dense) raises -> Dense:
         var result = self._raw_decisions(X)
@@ -354,7 +462,7 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
 
 
     def score(self, X: nm.NDArray[DType.float32], y: Self.Target, sample_weight: Optional[Dense] = None) raises -> Float64:
-        return self.score(X.astype[DType.float64](), y, sample_weight)
+        return self.score(_kernel_float64(X), y, sample_weight)
 
     def fit_with_kernel[Provider: KernelProvider, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Dense, ref[y_origin] y: Self.Target, provider: Provider, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
         if self.kernel != "callable":
@@ -434,24 +542,24 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
 
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: nm.NDArray[DType.float32], ref[y_origin] y: Self.Target, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
-        _ = self.fit(X.astype[DType.float64](), y, sample_weight)
+        _ = self.fit(_kernel_float64(X), y, sample_weight)
         return self
 
     def predict(self, X: nm.NDArray[DType.float32]) raises -> Self.Prediction:
-        return self.predict(X.astype[DType.float64]())
+        return self.predict(_kernel_float64(X))
 
     def decision_function(self, X: nm.NDArray[DType.float32]) raises -> Dense:
-        return self.decision_function(X.astype[DType.float64]())
+        return self.decision_function(_kernel_float64(X))
 
     def predict_proba(self, X: nm.NDArray[DType.float32]) raises -> Dense:
-        return self.predict_proba(X.astype[DType.float64]())
+        return self.predict_proba(_kernel_float64(X))
 
     def predict_log_proba(self, X: nm.NDArray[DType.float32]) raises -> Dense:
-        return self.predict_log_proba(X.astype[DType.float64]())
+        return self.predict_log_proba(_kernel_float64(X))
 
     def fit[dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Dense, ref[y_origin] y: nm.NDArray[dtype], sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
         comptime assert Self.Label == Float64, "Numeric arrays require Float64 labels"
-        var target = y.astype[DType.float64]()
+        var target = _kernel_float64(y)
         validate_vector(target, X.shape[0])
         var labels = List[Self.Label]()
         for i in range(target.shape[0]):
@@ -460,27 +568,27 @@ struct NuSVC[Label: Copyable & Comparable & Deinitable = Float64](ProbabilisticS
         return self
 
     def fit[dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: nm.NDArray[DType.float32], ref[y_origin] y: nm.NDArray[dtype], sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
-        _ = self.fit(X.astype[DType.float64](), y.astype[DType.float64](), sample_weight)
+        _ = self.fit(_kernel_float64(X), y, sample_weight)
         return self
 
     def fit_with_kernel[Provider: KernelProvider, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: nm.NDArray[DType.float32], ref[y_origin] y: Self.Target, provider: Provider, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
-        _ = self.fit_with_kernel(X.astype[DType.float64](), y, provider, sample_weight)
+        _ = self.fit_with_kernel(_kernel_float64(X), y, provider, sample_weight)
         return self
 
     def predict[Provider: KernelProvider](self, X: nm.NDArray[DType.float32], provider: Provider) raises -> Self.Prediction:
-        return self.predict(X.astype[DType.float64](), provider)
+        return self.predict(_kernel_float64(X), provider)
 
     def decision_function[Provider: KernelProvider](self, X: nm.NDArray[DType.float32], provider: Provider) raises -> Dense:
-        return self.decision_function(X.astype[DType.float64](), provider)
+        return self.decision_function(_kernel_float64(X), provider)
 
     def predict_proba[Provider: KernelProvider](self, X: nm.NDArray[DType.float32], provider: Provider) raises -> Dense:
-        return self.predict_proba(X.astype[DType.float64](), provider)
+        return self.predict_proba(_kernel_float64(X), provider)
 
     def predict_log_proba[Provider: KernelProvider](self, X: nm.NDArray[DType.float32], provider: Provider) raises -> Dense:
-        return self.predict_log_proba(X.astype[DType.float64](), provider)
+        return self.predict_log_proba(_kernel_float64(X), provider)
 
     def score[Provider: KernelProvider](self, X: nm.NDArray[DType.float32], y: Self.Target, provider: Provider, sample_weight: Optional[Dense] = None) raises -> Float64:
-        return self.score(X.astype[DType.float64](), y, provider, sample_weight)
+        return self.score(_kernel_float64(X), y, provider, sample_weight)
 
 
 @fieldwise_init
@@ -524,6 +632,7 @@ struct NuSVR(SupportVectorRegressor):
     var dual_coef_: Dense
     var intercept_: Dense
     var n_features_in_: Int
+    var feature_names_in_: Optional[List[String]]
     var n_iter_: Int
     var fit_status_: Int
     var _metadata: FitScoreMetadataRequest
@@ -554,6 +663,7 @@ struct NuSVR(SupportVectorRegressor):
         self.dual_coef_ = nm.zeros[DType.float64](nm.Shape(0))
         self.intercept_ = nm.zeros[DType.float64](nm.Shape(0))
         self.n_features_in_ = 0
+        self.feature_names_in_ = None
         self.n_iter_ = 0
         self.fit_status_ = 0
         self._metadata = FitScoreMetadataRequest(
@@ -650,6 +760,30 @@ struct NuSVR(SupportVectorRegressor):
         self._rng = rng^
         return self
 
+    def fit[
+        dtype: DType, target_dtype: DType,
+        origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin,
+    ](
+        ref[origin] self,
+        ref[x_origin] X: nm.NDArray[dtype],
+        ref[y_origin] y: nm.NDArray[target_dtype],
+        *,
+        feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> ref[self] Self:
+        _check_feature_names_width(X, feature_names)
+        var names = feature_names.copy()
+        comptime if dtype == DType.float64:
+            comptime if target_dtype == DType.float64:
+                _ = self.fit(rebind[Dense](X), rebind[Dense](y), sample_weight)
+            else:
+                _ = self.fit(rebind[Dense](X), _kernel_float64(y), sample_weight)
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            _ = self.fit(rebind[nm.NDArray[DType.float32]](X), y, sample_weight)
+        self.feature_names_in_ = names^
+        return self
+
     def fit_with_random_state[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Dense, ref[y_origin] y: Self.Target, mut rng: RandomState, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
         if self.kernel == "callable":
             raise Error("ValueError: callable kernel requires fit_with_kernel")
@@ -671,6 +805,7 @@ struct NuSVR(SupportVectorRegressor):
         self.intercept_ = model.rho * Float64(-1)
         self.n_iter_ = Int(model.iterations.unsafe_get(0))
         self.n_features_in_ = X.shape[1]
+        self.feature_names_in_ = None
         self.shape_fit_ = nm.Shape(X.shape[0], X.shape[1])
         self.fit_status_ = model.fit_status
         self._gamma = gamma
@@ -700,6 +835,43 @@ struct NuSVR(SupportVectorRegressor):
         if not self._model:
             raise Error("NotFittedError: estimator is not fitted")
         return linear_coefficients(self._model.value(), self._kernel, 0)
+
+    def predict[dtype: DType](
+        self, X: nm.NDArray[dtype], *, feature_names: List[String],
+    ) raises -> Self.Prediction:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.predict(rebind[Dense](X))
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            return self.predict(_kernel_float64(X))
+
+    def decision_function[dtype: DType](
+        self, X: nm.NDArray[dtype], *, feature_names: List[String],
+    ) raises -> Dense:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.decision_function(rebind[Dense](X))
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            return self.decision_function(_kernel_float64(X))
+
+    def score[dtype: DType](
+        self, X: nm.NDArray[dtype], y: Self.Target, *, feature_names: List[String],
+        sample_weight: Optional[Dense] = None,
+    ) raises -> Float64:
+        _check_feature_names(
+            X, feature_names, self.feature_names_in_, self.__sklearn_is_fitted__()
+        )
+        comptime if dtype == DType.float64:
+            return self.score(rebind[Dense](X), y, sample_weight)
+        else:
+            comptime assert dtype == DType.float32, "SVM requires Float32 or Float64 features"
+            return self.score(_kernel_float64(X), y, sample_weight)
 
     def decision_function(self, X: Dense) raises -> Dense:
         var result = self._raw_decisions(X)
@@ -771,7 +943,7 @@ struct NuSVR(SupportVectorRegressor):
 
 
     def score(self, X: nm.NDArray[DType.float32], y: Self.Target, sample_weight: Optional[Dense] = None) raises -> Float64:
-        return self.score(X.astype[DType.float64](), y, sample_weight)
+        return self.score(_kernel_float64(X), y, sample_weight)
 
     def fit_with_kernel[Provider: KernelProvider, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: Dense, ref[y_origin] y: Self.Target, provider: Provider, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
         if self.kernel != "callable":
@@ -819,28 +991,28 @@ struct NuSVR(SupportVectorRegressor):
 
 
     def fit[origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: nm.NDArray[DType.float32], ref[y_origin] y: Self.Target, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
-        _ = self.fit(X.astype[DType.float64](), y, sample_weight)
+        _ = self.fit(_kernel_float64(X), y, sample_weight)
         return self
 
     def predict(self, X: nm.NDArray[DType.float32]) raises -> Self.Prediction:
-        return self.predict(X.astype[DType.float64]())
+        return self.predict(_kernel_float64(X))
 
     def decision_function(self, X: nm.NDArray[DType.float32]) raises -> Dense:
-        return self.decision_function(X.astype[DType.float64]())
+        return self.decision_function(_kernel_float64(X))
 
     def fit[dtype: DType, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: nm.NDArray[DType.float32], ref[y_origin] y: nm.NDArray[dtype], sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
-        _ = self.fit(X.astype[DType.float64](), y.astype[DType.float64](), sample_weight)
+        _ = self.fit(_kernel_float64(X), _kernel_float64(y), sample_weight)
         return self
 
     def fit_with_kernel[Provider: KernelProvider, origin: MutOrigin, x_origin: ImmOrigin, y_origin: ImmOrigin](ref[origin] self, ref[x_origin] X: nm.NDArray[DType.float32], ref[y_origin] y: Self.Target, provider: Provider, sample_weight: Optional[Dense] = None) raises -> ref[self] Self:
-        _ = self.fit_with_kernel(X.astype[DType.float64](), y, provider, sample_weight)
+        _ = self.fit_with_kernel(_kernel_float64(X), y, provider, sample_weight)
         return self
 
     def predict[Provider: KernelProvider](self, X: nm.NDArray[DType.float32], provider: Provider) raises -> Self.Prediction:
-        return self.predict(X.astype[DType.float64](), provider)
+        return self.predict(_kernel_float64(X), provider)
 
     def decision_function[Provider: KernelProvider](self, X: nm.NDArray[DType.float32], provider: Provider) raises -> Dense:
-        return self.decision_function(X.astype[DType.float64](), provider)
+        return self.decision_function(_kernel_float64(X), provider)
 
     def score[Provider: KernelProvider](self, X: nm.NDArray[DType.float32], y: Self.Target, provider: Provider, sample_weight: Optional[Dense] = None) raises -> Float64:
-        return self.score(X.astype[DType.float64](), y, provider, sample_weight)
+        return self.score(_kernel_float64(X), y, provider, sample_weight)

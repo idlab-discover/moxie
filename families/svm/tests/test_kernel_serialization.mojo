@@ -1,6 +1,7 @@
 """Lifecycle and malformed-state contracts for native dense kernel archives."""
 
 import numojo as nm
+from moxie._random import RandomState
 from std.math import inf
 from std.testing import assert_equal, assert_raises, assert_true
 from moxie.base import clone
@@ -12,12 +13,12 @@ from moxie.svm.kernel_serialization import (
 )
 
 
-def _features() raises -> Dense:
+def _features[dtype: DType = DType.float64]() raises -> nm.NDArray[dtype]:
     var values: List[Float64] = [-3, -1, -2, -1, -1, -2, 1, 1, 2, 2, 3, 1]
-    var storage = nm.zeros[DType.float64](nm.Shape(6, 3))
+    var storage = nm.zeros[dtype](nm.Shape(6, 3))
     for i in range(6):
-        storage.unsafe_set(3 * i + 1, values[2 * i])
-        storage.unsafe_set(3 * i + 2, values[2 * i + 1])
+        storage.unsafe_set(3 * i + 1, values[2 * i].cast[dtype]())
+        storage.unsafe_set(3 * i + 2, values[2 * i + 1].cast[dtype]())
     return storage.view_with_layout(nm.Shape(6, 2), storage.strides, 1)
 
 
@@ -142,6 +143,13 @@ def _check_fit_warnings(X: Dense) raises:
     assert_true("max_iter=1" in restored.fit_warnings[1].message)
 
     var archive = Schema.encode(model)
+    # Version 3 ended before the flag for absent feature names.
+    archive.schema_version = 3
+    for _ in range(8):
+        _ = archive.manifest.pop()
+    var v3 = Schema.decode(loads(dumps(archive)))
+    assert_true(not v3.feature_names_in_)
+    assert_equal(len(v3.fit_warnings), 2)
     # Version 2 ended before the two unset request tags.
     archive.schema_version = 2
     for _ in range(16):
@@ -211,10 +219,59 @@ def _check_requests() raises:
     assert_true(not restored.get_metadata_routing().score.route(metadata))
 
     var invalid = Schema.encode(model)
-    # Score is False, stored as the final 64-bit tag. Tag four is invalid.
-    invalid.manifest[len(invalid.manifest) - 8] = 4
+    # Score is False, stored just before the feature-names flag.
+    invalid.manifest[len(invalid.manifest) - 16] = 4
     with assert_raises(contains="metadata request tag"):
         _ = Schema.decode(loads(dumps(invalid)))
+
+
+def _check_feature_names(X: Dense) raises:
+    comptime Schema = SVCSchema[]
+    var names: List[String] = ["length", "β\x00"]
+    var reordered: List[String] = ["β\x00", "length"]
+    var y: List[Float64] = [1, 1, 1, 2, 2, 2]
+    var model = SVC(kernel="linear", random_state=42)
+    with assert_raises(contains="NotFittedError"):
+        _ = model.predict(X, feature_names=names)
+    assert_true(not model.feature_names_in_)
+    var expected = model.fit(X, y, feature_names=names).predict(X, feature_names=names)
+    assert_true(model.predict(X) == expected)
+    with assert_raises(contains="same order"):
+        _ = model.decision_function(X, feature_names=reordered)
+    with assert_raises(contains="length must match"):
+        _ = model.fit(X, y, feature_names=["length"])
+    with assert_raises(contains="inconsistent target"):
+        _ = model.fit(X, List[Float64](), feature_names=reordered)
+    assert_true(model.feature_names_in_.value() == names)
+    assert_true(not clone(model).feature_names_in_)
+
+    var fitted_copy = model.copy()
+    fitted_copy.feature_names_in_ = reordered.copy()
+    assert_true(model.feature_names_in_.value() == names)
+    with assert_raises(contains="feature names count"):
+        fitted_copy.feature_names_in_ = List[String]()
+        _ = Schema.encode(fitted_copy)
+    var restored = _round_trip[Schema](model)
+    assert_true(restored.feature_names_in_.value() == names)
+    assert_true(restored.predict(_features[DType.float32](), feature_names=names) == expected)
+    var truncated = Schema.encode(model)
+    _ = truncated.manifest.pop()
+    with assert_raises():
+        _ = Schema.decode(loads(dumps(truncated)))
+
+    var rng = RandomState(42)
+    _ = restored.fit_with_random_state(X, y, rng)
+    assert_true(not restored.feature_names_in_)
+    _ = restored.fit(X, y, feature_names=reordered)
+    assert_true(restored.feature_names_in_.value() == reordered)
+    _ = restored.fit(X, y)
+    assert_true(not restored.feature_names_in_)
+    assert_true(restored.predict(X, feature_names=reordered) == restored.predict(X))
+
+    var one_class = OneClassSVM(kernel="linear")
+    var fit_labels = one_class.fit_predict(X, feature_names=names)
+    _equal_array(fit_labels, one_class.predict(X, feature_names=names))
+    assert_true(one_class.feature_names_in_.value() == names)
 
 
 def _check_callable(X: Dense) raises:
@@ -223,7 +280,7 @@ def _check_callable(X: Dense) raises:
     var target = nm.zeros[DType.float64](nm.Shape(6))
     for i in range(6):
         target.unsafe_set(i, Float64(labels[i]))
-    var x32 = X.astype[DType.float32]()
+    var x32 = _features[DType.float32]()
     var svc = SVC[Int32](kernel="callable", probability=True, random_state=42)
     var nsvc = NuSVC[Int32](kernel="callable", probability=True, random_state=42)
     var svr = SVR(kernel="callable")
@@ -244,6 +301,11 @@ def _check_callable(X: Dense) raises:
     var restored_svr = _round_trip[SVRSchema](svr)
     var restored_nsvr = _round_trip[NuSVRSchema](nsvr)
     var restored_one_class = _round_trip[OneClassSVMSchema](one_class)
+    assert_true(not restored_svc.feature_names_in_)
+    assert_true(not restored_nsvc.feature_names_in_)
+    assert_true(not restored_svr.feature_names_in_)
+    assert_true(not restored_nsvr.feature_names_in_)
+    assert_true(not restored_one_class.feature_names_in_)
     var metadata = Dict[String, Int]()
     metadata["sample_weight"] = 3
     assert_equal(restored_svc.get_metadata_routing().fit.route(metadata).or_else(-1), 3)
@@ -345,6 +407,7 @@ def main() raises:
     _check_other_unfitted(X)
     _check_fit_warnings(X)
     _check_requests()
+    _check_feature_names(X)
     _check_callable(X)
     _check_invalid(X)
     _check_empty_support(X)

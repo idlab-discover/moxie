@@ -186,9 +186,10 @@ QDA: `means_` `(K, p)`, `priors_`, `rotations_` (List of `(p, n_k)`), `scalings_
   Native adapters clone the wrapped estimator's configuration for fitting and cloning.
   Custom implementations of the discriminant-analysis trait can override
   `clone_configuration()` to discard any fitted state. Its default copies the value.
-- `transform` rejects `solver='lsqr'` from the current parameter, like sklearn, but subtracts
-  `xbar_` according to the solver used at fit time. sklearn reads the current `solver`, so after
-  `set_params(solver='eigen')` on an svd fit without refitting it skips the centering.
+- `transform` rejects a current `solver='lsqr'`, as in sklearn. Changing between `svd` and
+  `eigen` keeps the projection learned at fit time, including whether to subtract `xbar_`.
+  sklearn selects centering from the current `solver`. A model fitted with `lsqr` needs a
+  new fit with `svd` or `eigen` before it can transform.
 - Python warnings do not exist: LDA priors that do not sum to 1 are renormalized silently
   (sklearn also emits `UserWarning`).
 - `priors` whose length differs from the number of classes raise `ValueError` (sklearn fails

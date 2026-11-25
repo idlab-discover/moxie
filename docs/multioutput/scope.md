@@ -54,11 +54,13 @@ original sample order.
   log probabilities and decisions are Float64:
   sklearn's chains return Float64 matrices, and `MultiOutputClassifier` keeps
   each component's values exactly (a Float32 component's probabilities are
-  widened, where sklearn would return Float32 arrays). Chain feature responses
-  use the feature dtype; sklearn's `hstack` promotes Float32 features and
-  float64 responses to a Float64 augmented matrix, so a chain over a Float32
-  component that does not cast its input itself fits in Float32 here and in
-  Float64 in sklearn.
+  widened, where sklearn would return Float32 arrays). Chains use the
+  declared augmentation dtype throughout training, CV and inference.
+  Set `feature_dtype=DType.float64` on a chain with Float32 inputs
+  to reproduce Float64 augmentation with a compatible component. With dense
+  inputs, sklearn's CV and inference buffers promote Float32 features to
+  Float64. Its ordinary fit instead follows NumPy promotion of the feature
+  and target dtypes. Mojo components use one static feature dtype.
   Wrapper sample weights are Float64 and are narrowed for Float32-weight
   components. Classifier wrappers also accept components with List[Float64]
   weights, validating the wrapper weights as a vector before conversion.

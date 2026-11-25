@@ -22,7 +22,7 @@ with `ValueError` prefixes for invalid shape or order. `dtype` is a compile-time
 | `ChainOrder(order: List[Int], outputs: Int)` | Owns copied permutation and inverse; rejects duplicates, missing/out-of-range indices; `column(position)` and `position(column)` check bounds |
 | `target_column[dtype](y, column) -> NDArray[dtype]` | Matrix to independent contiguous rank-1 `(n,)` copy; valid zero rows permitted |
 | `stack_predictions[dtype](columns: List[NDArray[dtype]]) -> NDArray[dtype]` | Nonempty equal-length rank-1 columns to owned row-major `(n, q)`; zero rows permitted; input order is output order |
-| `augment_features[dtype](x, responses, prefix: Int) -> NDArray[dtype]` | Both rank 2 with equal rows; `0 <= prefix <= response_width`; independent row-major `[x, responses[:,:prefix]]`, `(n,p+prefix)` |
+| `augment_features[dtype, input_dtype](x, responses, prefix: Int) -> NDArray[dtype]` | Both rank 2 with equal rows; `0 <= prefix <= response_width`; independent row-major `[x, responses[:,:prefix]]`, `(n,p+prefix)`, with features cast to the response dtype during the copy |
 | `ChainResponses` | Associated `Estimator: BaseEstimator`, `Input`, `Target`, `Response: Movable`; `cross_val_response(self, estimator, X, y, method: String) raises -> Response` |
 
 NuMojo owns allocation, shape, strides, offsets and lifetime. Input arrays may be
@@ -32,6 +32,10 @@ adapters, not alternative numerical kernels: no reductions or replacement
 container. Work/memory: column O(n), stack O(nq), augmentation O(n(p+k)), permutation
 O(q). No speed claim is made; any future replacement of an accepted numerical
 operation requires the shared evaluation/measurement process.
+NuMojo's `hstack` and `concatenate` require a common dtype. Composing either
+with `NDArray.astype` would materialize the widened input before copying it
+into the augmented matrix. The existing layout copy widens only the feature
+values it writes, including when the input is a strided view.
 
 Use `numojo.NDArray[DType.float32/float64]`, `Shape`, `Item` directly for numeric
 features/responses. Numeric label layout helpers also preserve Int64 exactly.
@@ -68,9 +72,9 @@ tasks succeed. Later incremental batches update the fitted models in place.
 
 ## CV response contract
 
-`ChainResponses` specializes Input to a dense feature matrix, Target to a
-single target vector and Response to an owned feature-dtype vector. A provider
-must return exactly one out-of-fold response for each original sample, in its
+`ChainResponses` specializes Input to an augmented feature matrix, Target to a
+single target vector and Response to an owned vector in the augmentation dtype.
+A provider must return exactly one out-of-fold response for each original sample, in its
 original position. It owns splitting, fold cloning, coverage validation and
 leakage prevention. Unsupported modes must raise rather than fabricate values.
 The wrappers fit a separate full-data component at every position and request

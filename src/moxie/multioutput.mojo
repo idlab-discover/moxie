@@ -882,12 +882,14 @@ struct RegressorChain[
     dtype: DType = DType.float64,
     label: DType = dtype,
     Splitter: Copyable & Deinitable = ChainCV,
+    feature_dtype: DType = dtype,
 ](
     MultiOutputRegressorAPI,
     Copyable where conforms_to(E, Copyable),
     WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
 ):
     comptime Input = NDArray[Self.dtype]
+    comptime _AugmentedInput = NDArray[Self.feature_dtype]
     comptime Target = NDArray[Self.label]
     comptime Prediction = Self.Target
     comptime SampleWeight = NDArray[DType.float64]
@@ -925,7 +927,10 @@ struct RegressorChain[
     ):
         comptime assert Self.Splitter == ChainCV or conforms_to(Self.Splitter, ChainSplitter)
         comptime assert Self.dtype in (DType.float32, DType.float64), "features must use Float32 or Float64"
-        comptime assert Self.E.Input == Self.Input, "component Input must match feature dtype"
+        comptime assert Self.feature_dtype == Self.dtype or Self.feature_dtype == DType.float64, (
+            "chain feature dtype must preserve or widen the input dtype"
+        )
+        comptime assert Self.E.Input == Self._AugmentedInput, "component Input must match chain feature dtype"
         comptime assert Self.E.Target == Self.Target, "component Target must match target dtype"
         comptime assert Self.E.Prediction == Self.Target, "component Prediction must match target dtype"
         self.estimator = estimator^
@@ -995,7 +1000,7 @@ struct RegressorChain[
         var use_cv = True
         comptime if C == ChainCV:
             use_cv = not rebind[ChainCV](cv).isa[type_of(None)]()
-        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label, C](cv^)
+        var provider = _SplitterResponses[Self.E, Self.feature_dtype, Self.label, C](cv^)
         self._fit(X, y, sample_weight, provider, use_cv=use_cv)
 
     def _fit[CV: ChainResponses](
@@ -1003,9 +1008,9 @@ struct RegressorChain[
         *, use_cv: Bool = True,
     ) raises:
         comptime assert CV.Estimator == Self.E, "CV provider estimator type mismatch"
-        comptime assert CV.Input == Self.Input, "CV provider input type mismatch"
+        comptime assert CV.Input == Self._AugmentedInput, "CV provider input must match chain feature dtype"
         comptime assert CV.Target == Self.Target, "CV provider target type mismatch"
-        comptime assert CV.Response == Self.Input, "CV provider returns a feature-dtype vector"
+        comptime assert CV.Response == Self._AugmentedInput, "CV provider returns a chain feature-dtype vector"
         _features(X)
         _finite(X)
         validate_targets(y, X.shape[0])
@@ -1031,7 +1036,7 @@ struct RegressorChain[
         var checked = ChainOrder(order, y.shape[1])
         var models = clone_outputs(self.estimator, y.shape[1])
         var classes = List[NDArray[Self.label]]()
-        var responses = nm.zeros[Self.dtype](Shape(X.shape[0], y.shape[1]))
+        var responses = nm.zeros[Self.feature_dtype](Shape(X.shape[0], y.shape[1]))
         for j in range(y.shape[1]):
             var target = target_column(y, order[j])
             var input = augment_features(X, responses, j)
@@ -1052,7 +1057,7 @@ struct RegressorChain[
                 print(_chain_message(j + 1, y.shape[1], order[j], perf_counter_ns() - started))
             if j + 1 < y.shape[1]:
                 if use_cv:
-                    var response = rebind_var[Self.Input](cv.cross_val_response(
+                    var response = rebind_var[Self._AugmentedInput](cv.cross_val_response(
                         rebind[CV.Estimator](self.estimator), rebind[CV.Input](input),
                         rebind[CV.Target](target), self.chain_method,
                     ))
@@ -1067,7 +1072,7 @@ struct RegressorChain[
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check(X)
-        var responses = nm.zeros[Self.dtype](Shape(X.shape[0], len(self.estimators_)))
+        var responses = nm.zeros[Self.feature_dtype](Shape(X.shape[0], len(self.estimators_)))
         var output = nm.zeros[Self.label](Shape(X.shape[0], len(self.estimators_)))
         for j in range(len(self.estimators_)):
             var input = augment_features(X, responses, j)
@@ -1099,6 +1104,7 @@ struct ClassifierChain[
     dtype: DType = DType.float64,
     label: DType = DType.int64,
     Splitter: Copyable & Deinitable = ChainCV,
+    feature_dtype: DType = dtype,
 ](
     MultiOutputClassifierAPI,
     Copyable where conforms_to(E, Copyable),
@@ -1106,6 +1112,7 @@ struct ClassifierChain[
     MultiOutputProbability where conforms_to(E, ProbabilityPredictor),
 ):
     comptime Input = NDArray[Self.dtype]
+    comptime _AugmentedInput = NDArray[Self.feature_dtype]
     comptime Target = NDArray[Self.label]
     comptime Prediction = Self.Target
     comptime Probabilities = NDArray[DType.float64]
@@ -1156,7 +1163,10 @@ struct ClassifierChain[
     ):
         comptime assert Self.Splitter == ChainCV or conforms_to(Self.Splitter, ChainSplitter)
         comptime assert Self.dtype in (DType.float32, DType.float64), "features must use Float32 or Float64"
-        comptime assert Self.E.Input == Self.Input, "component Input must match feature dtype"
+        comptime assert Self.feature_dtype == Self.dtype or Self.feature_dtype == DType.float64, (
+            "chain feature dtype must preserve or widen the input dtype"
+        )
+        comptime assert Self.E.Input == Self._AugmentedInput, "component Input must match chain feature dtype"
         comptime assert (
             Self.E.Target == Self.Target or Self.E.Target == List[Scalar[Self.label]]
             or (Self.label == DType.int64 and Self.E.Target == List[Int])
@@ -1233,7 +1243,7 @@ struct ClassifierChain[
         var use_cv = True
         comptime if C == ChainCV:
             use_cv = not rebind[ChainCV](cv).isa[type_of(None)]()
-        var provider = _SplitterResponses[Self.E, Self.dtype, Self.label, C](cv^)
+        var provider = _SplitterResponses[Self.E, Self.feature_dtype, Self.label, C](cv^)
         self._fit(X, y, sample_weight, provider, use_cv=use_cv)
 
     def _fit[CV: ChainResponses](
@@ -1241,9 +1251,9 @@ struct ClassifierChain[
         *, use_cv: Bool = True,
     ) raises:
         comptime assert CV.Estimator == Self.E, "CV provider estimator type mismatch"
-        comptime assert CV.Input == Self.Input, "CV provider input type mismatch"
+        comptime assert CV.Input == Self._AugmentedInput, "CV provider input must match chain feature dtype"
         comptime assert CV.Target == Self.Target, "CV provider target type mismatch"
-        comptime assert CV.Response == Self.Input, "CV provider returns a feature-dtype vector"
+        comptime assert CV.Response == Self._AugmentedInput, "CV provider returns a chain feature-dtype vector"
         _features(X)
         _finite(X)
         validate_targets(y, X.shape[0])
@@ -1268,7 +1278,7 @@ struct ClassifierChain[
         var checked = ChainOrder(order, y.shape[1])
         var models = clone_outputs(self.estimator, y.shape[1])
         var classes = List[NDArray[Self.label]]()
-        var responses = nm.zeros[Self.dtype](Shape(X.shape[0], y.shape[1]))
+        var responses = nm.zeros[Self.feature_dtype](Shape(X.shape[0], y.shape[1]))
         for j in range(y.shape[1]):
             var target = target_column(y, order[j])
             classes.append(_classes(target))
@@ -1279,7 +1289,7 @@ struct ClassifierChain[
                 print(_chain_message(j + 1, y.shape[1], order[j], perf_counter_ns() - started))
             if j + 1 < y.shape[1]:
                 if use_cv:
-                    var response = rebind_var[Self.Input](cv.cross_val_response(
+                    var response = rebind_var[Self._AugmentedInput](cv.cross_val_response(
                         rebind[CV.Estimator](self.estimator), rebind[CV.Input](input),
                         rebind[CV.Target](target), method,
                     ))
@@ -1294,14 +1304,14 @@ struct ClassifierChain[
 
     def predict(self, X: Self.Input) raises -> Self.Prediction:
         self._check(X)
-        var responses = nm.zeros[Self.dtype](Shape(X.shape[0], len(self.estimators_)))
+        var responses = nm.zeros[Self.feature_dtype](Shape(X.shape[0], len(self.estimators_)))
         var output = nm.zeros[Self.label](Shape(X.shape[0], len(self.estimators_)))
         for j in range(len(self.estimators_)):
             var input = augment_features(X, responses, j)
             var column = _prediction_vector[Self.E.Prediction, Self.label](
                 self.estimators_[j].predict(rebind[Self.E.Input](input)),
             )
-            var feature = _response[Self.E, Self.dtype, Self.label](self.estimators_[j], input, self.chain_method_)
+            var feature = _response[Self.E, Self.feature_dtype, Self.label](self.estimators_[j], input, self.chain_method_)
             _put_column(responses, j, feature)
             _put_column(output, self.order_[j], column)
         return output^
@@ -1313,12 +1323,12 @@ struct ClassifierChain[
     def _outputs(self, X: Self.Input, method: String) raises -> NDArray[DType.float64]:
         """sklearn `_get_predictions`: Float64 outputs in original target order."""
         self._check(X)
-        var responses = nm.zeros[Self.dtype](Shape(X.shape[0], len(self.estimators_)))
+        var responses = nm.zeros[Self.feature_dtype](Shape(X.shape[0], len(self.estimators_)))
         var result = nm.zeros[DType.float64](Shape(X.shape[0], len(self.estimators_)))
         for j in range(len(self.estimators_)):
             var input = augment_features(X, responses, j)
-            var feature = _response[Self.E, Self.dtype, Self.label](self.estimators_[j], input, self.chain_method_)
-            var output = _response[Self.E, Self.dtype, Self.label, DType.float64](self.estimators_[j], input, method)
+            var feature = _response[Self.E, Self.feature_dtype, Self.label](self.estimators_[j], input, self.chain_method_)
+            var output = _response[Self.E, Self.feature_dtype, Self.label, DType.float64](self.estimators_[j], input, method)
             _put_column(responses, j, feature)
             _put_column(result, self.order_[j], output)
         return result^

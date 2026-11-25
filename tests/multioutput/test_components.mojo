@@ -98,6 +98,33 @@ def logistic_components() raises:
     parity("ComponentsLogisticChainCVProba", chain.predict_proba(X))
 
 
+def widened_chain_features() raises:
+    var X = features[DType.float32]()
+    var y = targets[DType.float64]()
+    var w = weights()
+    var regressor = RegressorChain[Ridge[], DType.float32, DType.float64, feature_dtype=DType.float64](
+        Ridge(0.5), order=List[Int]([2, 0, 1]), cv=3,
+    )
+    var prediction = regressor.fit(X, y, sample_weight=w).predict(X)
+    comptime assert type_of(prediction) == NDArray[DType.float64]
+    assert_equal(regressor.n_features_in_.value(), FEATURES)
+    parity("ComponentsWidenedRegressorChainCV", prediction)
+    var fresh = clone(regressor)
+    assert_false(fresh.__sklearn_is_fitted__())
+    assert_same(fresh.fit(X, y, sample_weight=w).predict(X), prediction)
+    parity("ComponentsWidenedRegressorChain", regressor.fit(X, y, cv=None).predict(X))
+
+    var binary = labels[DType.int64](False)
+    var classifier = ClassifierChain[RidgeClassifier[], DType.float32, feature_dtype=DType.float64](
+        RidgeClassifier(), order=List[Int]([1, 0, 2]), chain_method="decision_function", cv=3,
+    )
+    _ = classifier.fit(X, binary, cv=None)
+    parity("ComponentsWidenedClassifierChainDecision", classifier.decision_function(X))
+    _ = classifier.fit(X, binary)
+    parity("ComponentsWidenedClassifierChainCVDecision", classifier.decision_function(X))
+    parity("ComponentsWidenedClassifierChainCVLabels", classifier.predict(X))
+
+
 @fieldwise_init
 struct PerLinkKFold[label: DType](ChainSplitter):
     comptime Input = NDArray[DType.float64]
@@ -276,6 +303,7 @@ def chain_cv() raises:
 
 
 def main() raises:
+    widened_chain_features()
     var X = features[DType.float64]()
     var Y = targets[DType.float64]()
     var w = weights()

@@ -31,8 +31,10 @@ labels, all with `n_jobs=2`. Float64 LDA probabilities use
 1e-12 for differences in the SVD and probability normalization.
 Chain CV parity exercises native KFold and integer CV for both chain types,
 including stratified classifier responses and missing classes in forest and
-tree folds. Fit metadata parity covers standard-name regression weights and
-aliased GaussianNB weights with independent fits and chain CV.
+tree folds. Mixed-dtype parity covers Float32 input with Float64 augmentation
+using Ridge and RidgeClassifier, with the same 1e-12 tolerance as the other
+Float64 Ridge cases. Fit metadata parity covers standard-name regression
+weights and aliased GaussianNB weights with independent fits and chain CV.
 Side-by-side notebooks for the gallery examples live in `notebooks/multioutput/`.
 The classifier-chain notebook uses dense logistic regression for independent
 fits and the ten-chain probability ensemble, with seeded synthetic count data

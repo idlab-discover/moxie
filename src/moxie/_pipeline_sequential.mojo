@@ -6,7 +6,7 @@ from moxie.base import (
     BaseEstimator, SupervisedEstimator, UnsupervisedEstimator, Predictor,
     TransformerMixin, FitTransformer, InverseTransformer, SupervisedScorer, ClassifierMixin, clone,
     ProbabilityPredictor, LogProbabilityPredictor, DecisionFunction, SampleScorer,
-    WeightedSupervisedEstimator,
+    NumericClassifierClasses, WeightedSupervisedEstimator,
 )
 from moxie._pipeline import validate_names
 from moxie._pipeline_contracts import PredictivePipeline, TransformingPipeline
@@ -82,6 +82,7 @@ struct Pipeline[
   FitTransformer where conforms_to(E, TransformerMixin),
   SupervisedScorer where conforms_to(E, SupervisedScorer),
   ClassifierMixin where conforms_to(E, ClassifierMixin),
+  NumericClassifierClasses where conforms_to(E, NumericClassifierClasses),
   WeightedSupervisedEstimator where conforms_to(E, WeightedSupervisedEstimator),
   ProbabilityPredictor where conforms_to(E, ProbabilityPredictor),
   LogProbabilityPredictor where conforms_to(E, LogProbabilityPredictor),
@@ -99,6 +100,9 @@ struct Pipeline[
     comptime Input = Self.P.Input
     comptime Target = Self.E.Target
     comptime Prediction = Self.E.Prediction
+    comptime ClassLabelDType where conforms_to(
+        Self.E, NumericClassifierClasses
+    ) = Self.E.ClassLabelDType
     comptime Transformed where conforms_to(Self.E, TransformerMixin) = Self.E.Transformed
     comptime SampleWeight = Self.E.SampleWeight if conforms_to(Self.E, WeightedSupervisedEstimator) else (
         Self.E.SampleWeight if conforms_to(Self.E, SupervisedScorer) else Int
@@ -150,6 +154,17 @@ struct Pipeline[
 
     def __sklearn_is_fitted__(self) -> Bool:
         return self.estimator.__sklearn_is_fitted__()
+
+    def classes_(self) raises -> Self.Target where conforms_to(
+        Self.E, NumericClassifierClasses
+    ):
+        """Return the final classifier's fitted classes in probability-column order."""
+        return self.estimator.get_classes()
+
+    def get_classes(self) raises -> Self.Target where conforms_to(
+        Self.E, NumericClassifierClasses
+    ):
+        return self.classes_()
 
     def n_features_in_(self) raises -> Int:
         """Delegate to the first step without duplicating its learned state."""

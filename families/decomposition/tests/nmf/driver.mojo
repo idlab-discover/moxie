@@ -4,6 +4,8 @@ from std.sys import argv
 from numojo import NDArray
 from moxie.decomposition import NMF, MiniBatchNMF, non_negative_factorization
 from moxie.decomposition._nmf import NMFComponents, BetaLoss, AlphaH
+from moxie.decomposition_serialization import NMFSchema, MiniBatchNMFSchema
+from moxie.serialization import dumps, loads
 from decomposition_testing import emit, emit_scalar, read_matrix
 
 
@@ -54,6 +56,7 @@ def evaluate[dtype: DType]() raises:
         var model = NMF[dtype](k, init=init, solver=solver, beta_loss=beta, tol=tol, max_iter=max_iter,
             random_state=seed, alpha_W=alpha_w, alpha_H=alpha_h, l1_ratio=l1, shuffle=shuffle)
         emit("W", model.fit_transform(x, w_given, h_given))
+        model = NMFSchema[dtype].decode(loads(dumps(NMFSchema[dtype].encode(model))))
         emit("H", model.components_.value())
         emit_scalar("n_iter", Float64(model.n_iter_))
         emit_scalar("err", model.reconstruction_err_)
@@ -65,11 +68,13 @@ def evaluate[dtype: DType]() raises:
         if kind == "partial":
             # Two online steps on the full X (the oracle mirrors this exactly).
             model.partial_fit(x, w_given, h_given)
+            model = MiniBatchNMFSchema[dtype].decode(loads(dumps(MiniBatchNMFSchema[dtype].encode(model))))
             model.partial_fit(x)
             emit("H", model.components_.value())
             emit_scalar("n_steps", Float64(model.n_steps_))
         else:
             emit("W", model.fit_transform(x, w_given, h_given))
+            model = MiniBatchNMFSchema[dtype].decode(loads(dumps(MiniBatchNMFSchema[dtype].encode(model))))
             emit("H", model.components_.value())
             emit_scalar("n_iter", Float64(model.n_iter_))
             emit_scalar("n_steps", Float64(model.n_steps_))
